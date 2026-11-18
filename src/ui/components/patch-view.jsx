@@ -4,7 +4,7 @@
 // loads on first use and is skipped past MAX_HIGHLIGHT lines so a big diff stays quick.
 import { createElement, useMemo } from 'react';
 import { useHighlight } from '@/lib/use-highlight.js';
-import { patchRows, beforeRows, splitPairs, lineAt } from '@/lib/patch-rows.js';
+import { patchRows, beforeRows, splitPairs, lineAt, fileRows } from '@/lib/patch-rows.js';
 import { cn } from '@/lib/utils.js';
 
 export const MAX_HIGHLIGHT = 8000;
@@ -65,6 +65,31 @@ export function PatchView({ text, path, name, view = 'unified', side = 'after', 
             if (r.kind === 'hunk' || r.kind === 'meta') return full(r, i);
             const at = lineAt(r, old ? 'old' : 'new');
             return <div key={i}><Cell r={r} no={at.line} at={at} onLine={onLine} lineLabel={lineLabel} />{under(at)}</div>;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// «Antes» / «Después» with the whole file: its text, a number beside every line and the changed lines marked (`patch` only
+// tells which). side: 'before' | 'after'. Same comment hooks as PatchView.
+export function FileView({ text, patch, path, name, side = 'after', onLine, below, lineLabel, className, bodyClass = 'max-h-96' }) {
+  const hl = useHighlight(Boolean(text));
+  const parsed = useMemo(() => fileRows(text, patch, side) ?? [], [text, patch, side]); // null: too long, the caller does not draw it
+  const rows = useMemo(() => {
+    if (!hl || parsed.length > MAX_HIGHLIGHT) return parsed;
+    const lang = hl.languageFor(path);
+    return parsed.map((r) => (r.body ? { ...r, code: hl.highlightLine(r.body, lang, createElement) } : r));
+  }, [parsed, hl, path]);
+  return (
+    <div className={cn('diff border-border overflow-hidden rounded-card border font-mono text-caption leading-[1.7]', className)} data-testid="file-view" data-side={side}>
+      <div className="hd bg-secondary text-muted-foreground px-2.5 py-1.5 whitespace-pre">{name ?? baseName(path)} · {rows.length}</div>
+      <div className={cn('code-surface overflow-auto', bodyClass)}>
+        <div className="w-max min-w-full">
+          {rows.map((r, i) => {
+            const at = lineAt(r, side === 'before' ? 'old' : 'new');
+            return <div key={i}><Cell r={r} no={at.line} at={at} onLine={onLine} lineLabel={lineLabel} />{below ? below(at) : null}</div>;
           })}
         </div>
       </div>

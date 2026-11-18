@@ -80,6 +80,8 @@ export default {
   'tools.explorer': 'Explorador de archivos',
   'tools.files': 'Gestor de archivos',
   'tools.openIn': 'Abrir en {app}',
+  'tools.openFile': 'Abrir en el editor',
+  'tools.openFileIn': 'Abrir este archivo en {app}',
   'tools.openWith': 'Abrir con…',
   'tools.actions': 'Acciones',
   'tools.actionsOf': 'Acciones de {name}',

@@ -8,8 +8,10 @@ import { DiffLines } from '@/components/diff-view.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, Textarea } from '@/components/ui/basic.jsx';
 import { SearchInput, Segmented } from '@/components/ui/primitives.jsx';
-import { PatchView } from '@/components/patch-view.jsx';
-import { OpenInMenu } from '@/components/project-tools.jsx';
+import { PatchView, FileView } from '@/components/patch-view.jsx';
+import { firstChangeLine, fileTooLong } from '@/lib/patch-rows.js';
+import { emptyReason, diffOf } from '@/lib/changes-empty.js';
+import { OpenInMenu, OpenFileButton } from '@/components/project-tools.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
 import { call, useStore } from '@/lib/store.js';
 import { useT, currentLocale } from '@/lib/i18n.js';
@@ -53,6 +55,44 @@ export function useTaskDiff(taskId, version, enabled = true) {
     return () => { alive = false; };
   }, [taskId, version, enabled]);
   return data;
+}
+// The answer of tasks.diff as it is (also when there is nothing to show), so the Cambios tab can say why it is empty.
+// null while it is read or when there was nothing to ask.
+export function useTaskDiffRaw(taskId, version, enabled = true) {
+  const [raw, setRaw] = useState(null);
+  useEffect(() => {
+    setRaw(null); // never the previous task's files while this one loads
+    if (!enabled || taskId == null) return undefined;
+    let alive = true;
+    call('tasks.diff', { id: taskId }).then((r) => alive && setRaw(r ?? { available: false })).catch(() => alive && setRaw({ available: false, reason: 'error' }));
+    return () => { alive = false; };
+  }, [taskId, version, enabled]);
+  return raw;
+}
+export { diffOf };
+
+// One file whole, before and after (tasks.diff {file}); asked only while `enabled` (a file open in «Antes» or «Archivo entero»).
+// → { loading } | { error } | { file: { binary, tooBig, before, after } }
+function useWholeFile(taskId, path, enabled, version) {
+  const [state, setState] = useState({ loading: true });
+  useEffect(() => {
+    if (!enabled) return undefined;
+    let alive = true;
+    setState({ loading: true });
+    call('tasks.diff', { id: taskId, file: path }).then((r) => alive && setState(r?.available === false ? { error: true } : { file: r })).catch(() => alive && setState({ error: true }));
+    return () => { alive = false; };
+  }, [taskId, path, enabled, version]);
+  return state;
+}
+
+export function ChangesEmpty({ task, raw, canUndo, className }) {
+  const t = useT();
+  const reason = emptyReason(task, raw, canUndo);
+  return (
+    <div className={cn('text-muted-foreground rounded-card border border-dashed px-4 py-6 text-center text-control', className)} data-testid="task-changes-empty" data-reason={reason} aria-busy={reason === 'loading' || undefined}>
+      {reason === 'loading' ? null : reason === 'protected' ? t(`tasks.changes.empty.protected${raw.hidden === 1 ? 'One' : 'Other'}`, { n: raw.hidden }) : t(`tasks.changes.empty.${reason}`)}
+    </div>
+  );
 }
 const sumOf = (data) => ({ added: data.files.reduce((n, f) => n + f.added, 0), removed: data.files.reduce((n, f) => n + f.removed, 0), count: data.files.length + data.more });
 const filesLabel = (t, n) => t(n === 1 ? 'tasks.changes.filesOne' : 'tasks.changes.filesOther', { n });
@@ -165,11 +205,12 @@ function Writer({ onAdd, onCancel }) {
 
 // The diff of the file chosen: its name and numbers, «Visto», copying its path and, when the task has a conversation of its
 // own, a «+» on each line to write a comment that goes with the next message there (lib/turn-comments.js).
-function PanelDiff({ f, seen, onSeen, sessionId, project }) {
+function PanelDiff({ f, seen, onSeen, sessionId, project, fileProject, taskId }) {
   const t = useT();
   const [lay] = useDiffLayout();
   const comments = useComments(sessionId ?? '');
   const [writing, setWriting] = useState(null);
+  const [whole, setWhole] = useState(false);
   const copy = () => navigator.clipboard?.writeText(f.path).then(() => notifyOk(t('tasks.changes.copied'))).catch(() => notifyError(t('app.copyFailed')));
   const note = f.binary ? t('tasks.changes.binary') : f.cut ? t('tasks.changes.tooBig') : !f.patch ? t('tasks.changes.noText') : null;
   const mine = sessionId ? comments.filter((c) => c.path === f.path) : [];
@@ -183,6 +224,22 @@ function PanelDiff({ f, seen, onSeen, sessionId, project }) {
     ))}
     {writing && same(writing, r) ? <Writer onCancel={() => setWriting(null)} onAdd={(text) => { addComment(sessionId, { path: f.path, ...writing, text }); setWriting(null); }} /> : null}
   </>);
+  const side = lay.side;
+  // «Antes» (and «Después» with «Archivo entero») ask for the whole file, only now that this file is open in that mode.
+  const wantFile = taskId != null && !f.binary && (side === 'before' || whole);
+  const wf = useWholeFile(taskId, f.path, wantFile);
+  const hint = (text, testid) => <p className="text-muted-foreground m-0 text-caption" data-testid={testid}>{text}</p>;
+  const patchEl = note ? hint(note) : <PatchView text={f.patch} path={f.path} view={lay.view} side={side} onLine={sessionId ? setWriting : undefined} below={sessionId ? below : undefined} lineLabel={t('turns.comment')} />;
+  let body = patchEl;
+  if (wantFile) {
+    if (wf.loading) body = hint(t('tasks.changes.fileLoading'), 'task-file-loading');
+    else if (wf.error) body = <>{hint(t('tasks.changes.fileFailed'), 'task-file-note')}{patchEl}</>;
+    else if (wf.file.tooBig) body = <>{hint(t('tasks.changes.fileBig'), 'task-file-note')}{patchEl}</>;
+    else if (fileTooLong(wf.file[side])) body = <>{hint(t('tasks.changes.fileLong'), 'task-file-note')}{patchEl}</>;
+    else if (wf.file.binary) body = hint(t('tasks.changes.binary'), 'task-file-note');
+    else if (wf.file[side] == null) body = hint(t(side === 'before' ? 'tasks.changes.noBefore' : 'tasks.changes.noAfter'), 'task-file-note');
+    else body = <FileView text={wf.file[side]} patch={f.patch} path={f.path} side={side} onLine={sessionId ? setWriting : undefined} below={sessionId ? below : undefined} lineLabel={t('turns.comment')} />;
+  }
   return (
     <div className="grid gap-2" data-testid="task-diff">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-control">
@@ -191,20 +248,23 @@ function PanelDiff({ f, seen, onSeen, sessionId, project }) {
         <span className="ml-auto flex shrink-0 items-center gap-1">
           <Tip label={t('tasks.changes.copyPath')}><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.copyPath')} onClick={copy}><Copy /></Button></Tip>
           <Button size="xs" variant={seen ? 'soft' : 'ghost'} onClick={onSeen} aria-pressed={seen} data-testid="task-change-seen"><Check />{t('tasks.changes.seen')}</Button>
+          {taskId != null && lay.side === 'after' && !f.binary ? <Button size="xs" variant={whole ? 'soft' : 'ghost'} onClick={() => setWhole((w) => !w)} aria-pressed={whole} data-testid="task-change-whole">{t('tasks.changes.whole')}</Button> : null}
+          {fileProject && f.status !== 'D' ? <OpenFileButton project={fileProject} file={f.path} line={firstChangeLine(f.patch)} /> : null}
           {project ? <OpenInMenu project={project} /> : null}
         </span>
       </div>
-      {note ? <p className="text-muted-foreground m-0 text-caption">{note}</p>
-        : <PatchView text={f.patch} path={f.path} view={lay.view} side={lay.side} onLine={sessionId ? setWriting : undefined} below={sessionId ? below : undefined} lineLabel={t('turns.comment')} />}
+      {body}
     </div>
   );
 }
 
 // The files a task changed as the mock-up's .flist: a letter for what happened to each and its numbers; the one chosen shows its diff below.
-export function ChangesFiles({ data, sessionId, project, className }) {
+// workdir: the folder of an isolated task not joined yet (its files are there, not in the project folder): the editor opens files from it.
+export function ChangesFiles({ data, sessionId, project, taskId, workdir, className }) {
   const t = useT();
   const projects = useStore((st) => st.projects);
   const proj = project ? (typeof project === 'string' ? (projects ?? []).find((p) => p.name === project) : project) : null;
+  const fileProject = proj && workdir ? { ...proj, path: workdir } : proj;
   const [query, setQuery] = useState('');
   const [pick, setPick] = useState(null);
   const [seen, setSeen] = useState(() => new Set());
@@ -231,7 +291,7 @@ export function ChangesFiles({ data, sessionId, project, className }) {
         {data.more && !q ? <p className="text-muted-foreground border-border m-0 border-t px-3 py-2 text-control">{t('tasks.changes.more', { n: data.more })}</p> : null}
       </div>
       <p className="text-faint-foreground m-0 text-caption">{t('tasks.changes.legend')}</p>
-      {current ? <PanelDiff key={current.path} f={current} seen={seen.has(current.path)} onSeen={() => toggle(current.path)} sessionId={sessionId} project={proj} /> : null}
+      {current ? <PanelDiff key={current.path} f={current} seen={seen.has(current.path)} onSeen={() => toggle(current.path)} sessionId={sessionId} project={proj} fileProject={fileProject} taskId={taskId} /> : null}
     </div>
   );
 }

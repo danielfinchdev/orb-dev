@@ -47,3 +47,36 @@ export function splitPairs(rows) {
 
 // The comment a line takes: the number and side the engine and the next message use (the old side for a removed line).
 export const lineAt = (r, side) => (side === 'old' || r.kind === 'del' ? { line: r.oldNo, side: 'old' } : { line: r.newNo, side: 'new' });
+
+// A whole file as rows for «Antes» / «Después»: every line with its number, the ones the patch added (side 'after') or removed
+// (side 'before') marked like the diff marks them. `patch` is only read for those numbers.
+// A longer file is not drawn whole (a row per line would freeze the window): fileRows answers null and the caller shows the patch.
+export const MAX_FILE_LINES = 8000;
+export function fileTooLong(text) {
+  const s = String(text ?? ''); let n = 0;
+  for (let i = s.indexOf('\n'); i !== -1; i = s.indexOf('\n', i + 1)) if (++n > MAX_FILE_LINES) return true;
+  return n + (s === '' || s.endsWith('\n') ? 0 : 1) > MAX_FILE_LINES;
+}
+export function fileRows(text, patch, side) {
+  if (fileTooLong(text)) return null;
+  const before = side === 'before';
+  const marked = new Set(patchRows(patch).filter((r) => r.kind === (before ? 'del' : 'add')).map((r) => (before ? r.oldNo : r.newNo)));
+  const lines = String(text ?? '').split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines.map((l, i) => {
+    const no = i + 1; const hit = marked.has(no);
+    const body = l.replace(/\r$/, '');
+    return { kind: hit ? (before ? 'del' : 'add') : 'ctx', sign: hit ? (before ? '-' : '+') : ' ', body, ...(before ? { oldNo: no } : { newNo: no }) };
+  });
+}
+
+// The line of the file where its first change is, for «Abrir en el editor» (null when the patch has none).
+export function firstChangeLine(patch) {
+  const rows = patchRows(patch);
+  const i = rows.findIndex((r) => r.kind === 'add' || r.kind === 'del');
+  if (i < 0) return null;
+  const r = rows[i];
+  if (r.kind === 'add') return r.newNo;
+  const next = rows.slice(i).find((x) => x.newNo != null);
+  return next?.newNo ?? r.oldNo ?? null;
+}

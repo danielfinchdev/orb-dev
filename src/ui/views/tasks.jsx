@@ -10,7 +10,7 @@ import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-t
 import { modelsOf } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
-import { TaskChanges, ChangesSummary, ChangesFiles, ChangesMeta, DiffStat, useDiffStat, useTaskDiff } from '@/components/task-changes.jsx';
+import { TaskChanges, ChangesSummary, ChangesFiles, ChangesMeta, DiffStat, useDiffStat, useTaskDiffRaw, diffOf, ChangesEmpty } from '@/components/task-changes.jsx';
 import { useComments } from '@/lib/turn-comments.js';
 import { HeldCard, PausedNote, TaskStatus, waitText, setQueuePaused, acceptHeld, undoHeld, undoTask } from '@/components/task-state.jsx';
 import { ChatPanel } from '@/components/chat-panel.jsx';
@@ -317,6 +317,17 @@ function MoreActions({ items, label }) {
   );
 }
 
+// «Firma»: what tasks.get says its own check found about the OK of the task (the scheduler's check, run now).
+const signState = (a) => (!a.required ? 'none' : !a.signed ? 'unsigned' : a.verified === true ? 'verified' : a.verified === false ? 'invalid' : 'unknown');
+function signText(tr, a) {
+  const state = signState(a);
+  if (state === 'verified' || state === 'invalid' || state === 'unknown') {
+    const by = a.by === 'usuario' ? tr('tasks.sign.you') : a.by ?? tr('tasks.sign.you');
+    return tr(`tasks.sign.${state}`, { by });
+  }
+  return tr(`tasks.sign.${state}`);
+}
+
 // The Detalle tab of the panel. `live`: the running task's progress; `diff`: what it changed, for the summary.
 function TaskPanelDetail({ t, live, diff, onChanges }) {
   const tr = useT();
@@ -401,6 +412,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
         {t.children?.length ? <KvRow icon={GitBranch} label={tr('tasks.subtasks')}>{t.children.map((c) => <button key={c.id} onClick={() => go({ view: 'tasks', id: c.id })} className="cursor-pointer"><Badge variant={STATUS[c.status]?.[1] ?? 'secondary'} className="gap-1"><GitBranch className="size-3" />#{c.id} {AGENT[c.assigned_to ?? c.agent] ?? c.agent} · <TaskStatus task={c} plain /></Badge></button>)}</KvRow> : null}
         {t.dependencies?.length ? <KvRow icon={Link} label={tr('tasks.dependsOn')}>{t.dependencies.filter(Boolean).map((d) => <Badge key={d.id} variant="secondary">#{d.id} <TaskStatus task={d} plain /></Badge>)}</KvRow> : null}
         {t.sensitivity.length ? <KvRow icon={BadgeCheck} label={tr('tasks.approval')}>{t.sensitivity.map((s) => <Badge key={s} variant="warning">{SENSITIVE[s] ?? s}</Badge>)}</KvRow> : null}
+        {t.approval ? <KvRow icon={BadgeCheck} label={tr('tasks.sign')}><span data-testid="task-sign" data-state={signState(t.approval)} className={signState(t.approval) === 'invalid' ? 'text-warning-ink' : signState(t.approval) === 'verified' ? 'text-success' : undefined}>{signText(tr, t.approval)}</span></KvRow> : null}
         {review ? <KvRow icon={ScanSearch} label={tr('tasks.crossReview')}><AgentMark agent={review.agent}>{AGENT[review.agent] ?? review.agent}: {verdictLabel(review.verdict)}</AgentMark><Button size="xs" variant="ghost" onClick={() => go({ view: 'tasks', id: review.task })}>{tr('tasks.review.see', { id: review.task })}</Button></KvRow> : null}
       </Kv>
 
@@ -424,7 +436,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
 }
 
 // The Cambios tab of the panel: the actions that act on the work and, under them, the files it changed.
-function TaskPanelChanges({ t, diff }) {
+function TaskPanelChanges({ t, diff, raw }) {
   const tr = useT();
   const { createPr, undo, merge } = taskActions(t, tr);
   const [busy, run] = useBusy();
@@ -447,8 +459,10 @@ function TaskPanelChanges({ t, diff }) {
           <Button disabled={busy} onClick={run(merge)}><GitMerge className="size-3.5" />{tr('tasks.merge')}</Button>
         </>) : null}
       </div>
-      <ChangesMeta data={diff} reviewer={t.review ? (AGENT[t.review.agent] ?? t.review.agent) : null} photoAt={photoAt} canUndo={canUndo} className="mb-2" />
-      <ChangesFiles data={diff} sessionId={t.session_id} project={t.project} />
+      {diff ? (<>
+        <ChangesMeta data={diff} reviewer={t.review ? (AGENT[t.review.agent] ?? t.review.agent) : null} photoAt={photoAt} canUndo={canUndo} className="mb-2" />
+        <ChangesFiles data={diff} sessionId={t.session_id} project={t.project} taskId={t.id} workdir={t.branch && t.workdir ? t.workdir : undefined} />
+      </>) : <ChangesEmpty task={t} raw={raw} canUndo={canUndo} />}
     </div>
   );
 }
@@ -580,11 +594,12 @@ function TasksPc({ route }) {
   // here, not in an effect, so a row is never marked while the panel still has nothing to show for it.
   const current = rows.some((x) => x.id === selected) ? selected : panelOpen && rows.length ? rows[0].id : selected;
   const [sel, loadingSel] = useTaskDetailState(panelOpen ? current : null);
-  const diff = useTaskDiff(sel?.id, `${sel?.status}:${sel?.updated_at}`, Boolean(sel?.hasCheckpoint && sel.status !== 'running'));
-  const shownTab = tab === 'changes' && diff ? 'changes' : 'info';
+  const raw = useTaskDiffRaw(sel?.id, `${sel?.status}:${sel?.updated_at}`, Boolean(sel?.hasCheckpoint && sel.status !== 'running'));
+  const diff = diffOf(raw);
+  const shownTab = tab === 'changes' ? 'changes' : 'info';
   const open = (x) => { setSelected(x.id); setPanelOpen(true); setTab('info'); };
   const filtering = project !== ALL || agent !== ALL || Boolean(q);
-  const tabs = [{ value: 'info', icon: Info, label: tr('tasks.panel.detail'), testid: 'task-panel-tab-detail' }, ...(diff ? [{ value: 'changes', icon: FileDiff, label: tr('tasks.panel.changes'), testid: 'task-panel-tab-changes' }] : [])];
+  const tabs = [{ value: 'info', icon: Info, label: tr('tasks.panel.detail'), testid: 'task-panel-tab-detail' }, { value: 'changes', icon: FileDiff, label: tr('tasks.panel.changes'), testid: 'task-panel-tab-changes' }];
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -628,7 +643,7 @@ function TasksPc({ route }) {
       </div>
       <ChatPanel open={panelOpen && current != null} tab={shownTab} onTab={setTab} onClose={() => setPanelOpen(false)} tabs={tabs} label={tr('tasks.panel.label')} closeLabel={tr('tasks.panel.close')} closeTestId="task-panel-close">
         {!sel ? (loadingSel ? <div aria-busy="true" data-testid="task-panel-loading" /> : <Empty icon={ClipboardCheck} title={tr('tasks.pick')}>{tr('tasks.pickHint')}</Empty>)
-          : shownTab === 'changes' ? <TaskPanelChanges t={sel} diff={diff} />
+          : shownTab === 'changes' ? <TaskPanelChanges t={sel} diff={diff} raw={raw} />
             : <TaskPanelDetail t={sel} live={liveOf(live, sel.id)} diff={diff} onChanges={() => setTab('changes')} />}
       </ChatPanel>
     </div>

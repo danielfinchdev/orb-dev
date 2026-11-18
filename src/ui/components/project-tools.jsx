@@ -45,6 +45,18 @@ export function OpenInMenu({ project, labelClassName }) {
   );
 }
 
+// «Abrir en el editor» of one file (and its line): the first installed editor, the same one OpenInMenu's main button uses.
+// Nothing when no editor is installed (the file manager cannot open a file at a line).
+export function OpenFileButton({ project, file, line }) {
+  const t = useT();
+  const editors = useEditors();
+  const first = EDITOR_ORDER.find((w) => editors[w]);
+  if (!project?.path || !bridge.openFileIn || !first || !file) return null;
+  const NAME = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' };
+  const label = t('tools.openFileIn', { app: NAME[first] });
+  return <Button size="xs" variant="ghost" onClick={() => act(bridge.openFileIn(first, project.path, file, line))} aria-label={label} title={label} data-testid="open-file-in"><Code2 />{t('tools.openFile')}</Button>;
+}
+
 // «Abrir en…» of the projects' list and page: one menu with the editors installed, the file manager and a terminal.
 // `page`: the header's button (with its icon, VS Code first); otherwise the row's compact one.
 export function ProjectOpenMenu({ project, page = false }) {
