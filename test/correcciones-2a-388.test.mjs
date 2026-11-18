@@ -47,7 +47,7 @@ test('7: narrow window: the queue card stacks, the filters wrap, the header drop
   const tasks = read('src/ui/views/tasks.jsx');
   assert.match(tasks, /qbar @container flex-row flex-wrap/);
   assert.match(tasks, /@max-\[17rem\]:w-full/);
-  assert.match(tasks, /className="h-auto min-h-\(--ctl\) flex-wrap" data-testid="task-filters"/);
+  assert.match(tasks, /className="h-auto min-h-\(--ctl\) flex-nowrap [^"]*@max-\[44rem\]\/tasks:flex-wrap [^"]*" data-testid="task-filters"/);
   assert.match(css, /container: bar \/ inline-size/);
   assert.match(css, /@container bar \(max-width: 560px\) \{ \.bar \.bar-clock-date \{ display: none; \} \}/);
 });

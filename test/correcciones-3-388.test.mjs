@@ -16,7 +16,7 @@ test('1a: in a narrow window the date goes first and then the whole clock, so th
 });
 
 test('1b: the held-task card breaks a long path instead of leaving the card', () => {
-  assert.match(read('src/ui/components/task-state.jsx'), /\[overflow-wrap:anywhere\]">\{h\.folder/);
+  assert.match(read('src/ui/components/task-state.jsx'), /\[overflow-wrap:anywhere\]" title=\{h\.folder \|\| undefined\}>\{h\.folder/);
   assert.match(read('src/ui/views/tasks.jsx'), /@max-\[44rem\]\/tasks:absolute!/);
 });
 

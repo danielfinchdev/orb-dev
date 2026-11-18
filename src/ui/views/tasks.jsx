@@ -24,7 +24,7 @@ import { Note, IconButton, MoreButton, ListCard, ListRow, SectionLabel, SearchIn
 import { useStore, call, act, go, bridge, phoneLayout, fullPc, refresh } from '@/lib/store.js';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
 import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels.js';
-import { ago, fmtTime, cn } from '@/lib/utils.js';
+import { ago, fmtTime, cn, shortPath } from '@/lib/utils.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
 
@@ -362,7 +362,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
       {approval && !t.held ? <p className="text-muted-foreground m-0 mt-2.5 text-control" data-testid="task-summary">{t.sensitivity.length ? tr('tasks.summary.approvalWhy', { why: t.sensitivity.map((x) => SENSITIVE[x] ?? x).join(', ') }) : tr('tasks.summary.approval')}</p> : null}
 
       {t.held ? (
-        <Note tone="warning" icon={ShieldAlert} className="my-2.5 [overflow-wrap:anywhere]" data-testid="task-held">{t.held.folder ? tr('tasks.held.line', { reasons: t.held.reasons, folder: t.held.folder }) : tr('tasks.held.lineNoFolder', { reasons: t.held.reasons })}</Note>
+        <Note tone="warning" icon={ShieldAlert} className="my-2.5 [overflow-wrap:anywhere]" data-testid="task-held" title={t.held.folder || undefined}>{t.held.folder ? tr('tasks.held.line', { reasons: t.held.reasons, folder: shortPath(t.held.folder) }) : tr('tasks.held.lineNoFolder', { reasons: t.held.reasons })}</Note>
       ) : null}
       {t.status === 'queued' && t.waiting?.kind === 'paused' ? <PausedNote className="my-2.5" /> : null}
       {t.status === 'queued' && t.waiting?.kind === 'manual' ? <Note tone="warning" icon={Clock} className="my-2.5" data-testid="task-wait-manual">{tr('tasks.wait.manualNote')}</Note> : null}
@@ -628,10 +628,11 @@ function TasksPc({ route }) {
             <QueueCard tasks={all} />
             <div className="toolbar flex flex-wrap items-center gap-1.5">
               <Tabs value={filter} onValueChange={setFilter} className="max-w-full min-w-0 overflow-x-auto">
-                <TabsList className="h-auto min-h-(--ctl) flex-wrap" data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
+                <TabsList className="h-auto min-h-(--ctl) flex-nowrap px-1 @max-[44rem]/tasks:flex-wrap @max-[44rem]/tasks:px-0.5 [&>*]:shrink-0" data-testid="task-filters">{PC_FILTERS.map(([key, label, fn]) => { const n = narrowed.filter(fn).length; return <TabsTrigger key={key} value={key}>{tr(label)}{key !== 'todas' ? <span className="n text-micro text-faint-foreground tabular-nums">{n}</span> : null}</TabsTrigger>; })}</TabsList>
               </Tabs>
               {/* One group: it sits beside the tabs when there is room and otherwise takes the next line whole; the search is what gives way. */}
-              <div className="flex min-w-0 flex-[1_1_440px] items-center justify-end gap-1.5">
+              {/* Overflow scrolls instead of clipping: first-child auto margin keeps the right alignment without the negative overflow that justify-end causes. */}
+              <div className="flex min-w-0 flex-[1_1_440px] items-center gap-1.5 overflow-x-auto [scrollbar-width:none] [&>button]:shrink-0 [&>:first-child]:ml-auto">
               <Select value={project} onValueChange={setProject} prefix={tr('tasks.fProjectKey')} title={tr('tasks.fProject')} data-testid="task-filter-project"
                 options={[{ value: ALL, label: tr('tasks.fAll') }, ...projects.map((name) => ({ value: name, label: name, icon: <ProjectIcon name={name} small /> }))]} />
               <Select value={agent} onValueChange={setAgent} prefix={tr('tasks.fAgentKey')} title={tr('tasks.fAgent')} data-testid="task-filter-agent"

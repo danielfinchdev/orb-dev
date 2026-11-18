@@ -20,7 +20,7 @@ test('the project and agent filters are Orb menus, never the system select', () 
 
 test('the state tabs are a segmented control with a counter and do not wrap', () => {
   for (const key of ['todas', 'encurso', 'aprobar', 'encola', 'incidencias', 'hechas']) assert.match(pc, new RegExp(`\\['${key}', 'tasks\\.filter\\.`), key);
-  assert.match(pc, /<TabsList className="h-auto min-h-\(--ctl\) flex-wrap" data-testid="task-filters">/);
+  assert.match(pc, /<TabsList className="h-auto min-h-\(--ctl\) flex-nowrap [^"]*@max-\[44rem\]\/tasks:flex-wrap [^"]*" data-testid="task-filters">/);
   assert.match(pc, /<span className="n [^"]*tabular-nums">\{n\}<\/span>/);
 });
 
@@ -148,7 +148,7 @@ test('step 6D: the buttons of a list or panel are disabled while their action ru
 
 test('step 7C2: the filters are one group that sits beside the tabs or takes the next line whole, and the search is what gives way', () => {
   assert.doesNotMatch(pc, /<span className="grow" \/>/);
-  assert.match(pc, /<div className="flex min-w-0 flex-\[1_1_440px\] items-center justify-end gap-1\.5">/);
+  assert.match(pc, /<div className="flex min-w-0 flex-\[1_1_440px\] items-center gap-1\.5 overflow-x-auto /);
   assert.match(pc, /<SearchInput className="w-auto min-w-24 flex-\[0_1_220px\]"/);
 });
 

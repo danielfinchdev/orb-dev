@@ -145,6 +145,7 @@ export default {
   'activity.say.note': '{actor} noted on task {task} {title}: {detail}',
   'activity.say.git_commit': '{actor} saved the changes of task {task} {title}',
   'activity.say.files_changed': 'Task {task} {title} changed files: {detail}',
+  'activity.say.files_changed_none': 'Task {task} {title} changed no files',
   'activity.say.files_given': 'Task {task} {title} handed over files: {detail}',
   'activity.say.message_delivered': '{actor} delivered a message to task {task} {title}: {detail}',
   'activity.say.user_message': 'You wrote to task {task} {title}: {detail}',

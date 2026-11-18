@@ -14,7 +14,7 @@ import { STATUS } from '@/lib/labels.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { confirm } from './dialogs.jsx';
 import { call, act, go, setState } from '@/lib/store.js';
-import { cn } from '@/lib/utils.js';
+import { cn, shortPath } from '@/lib/utils.js';
 import { useT, currentLocale } from '@/lib/i18n.js';
 import { Note } from './ui/primitives.jsx';
 
@@ -122,7 +122,7 @@ export function HeldCard({ task, link = false, className }) {
         <ShieldAlert className="text-warning-ink mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           {link ? <div className="font-semibold">{t('orbchats.taskN', { id: task.id })} · <span className="font-normal">{task.title}</span></div> : null}
-          <div className="[overflow-wrap:anywhere]">{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: h.folder }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>
+          <div className="[overflow-wrap:anywhere]" title={h.folder || undefined}>{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: shortPath(h.folder) }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 pl-6">

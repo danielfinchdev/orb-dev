@@ -141,7 +141,11 @@ export function activitySentence(t, row, locale, agents = {}, max = 0) {
     raw = kind === 'project.renamed' ? raw.replace(' -> ', ` ${t('activity.renamedTo')} `) : kind === 'project.moved' ? raw.split(':')[0] : raw.split(' -> ')[0];
     if (kind === 'project.active' && /^(ninguno|none)$/i.test(raw)) { name = 'project_active_none'; raw = ''; }
   } else if (kind === 'log.merged') raw = raw.replace(/:\s*BITACORA\.md$/, '');
-  else if (kind === 'files.changed') raw = raw.replace(/(^|, )(?:[A-Z]{1,2}|\?\?) (?=\S)/g, '$1');
+  else if (kind === 'files.changed') {
+    // the engine stores «ningún archivo» (or nothing) when the task left the folder as it was
+    if (!raw || /^(ningún archivo|no files)$/i.test(raw)) { name = 'files_changed_none'; raw = ''; }
+    else raw = raw.replace(/(^|, )(?:[A-Z]{1,2}|\?\?) (?=\S)/g, '$1');
+  }
   else if (kind === 'task.delegated') raw = raw.replace(/ · ([a-z_]+)$/, (m0, w) => { const label = stateLabel(t, w); return label === w ? m0 : ` · ${String(label).toLowerCase()}`; });
   else if (kind === 'agent.reply') {
     const reply = /^(hecha|fallida|bloqueada|cancelada|done|failed|blocked|cancelled)(?::\s*([\s\S]*))?$/i.exec(raw);

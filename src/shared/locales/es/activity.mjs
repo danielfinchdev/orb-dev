@@ -154,6 +154,7 @@ export default {
   'activity.say.note.you': 'Anotaste en la tarea {task} {title}: {detail}',
   'activity.say.git_commit': '{actor} guardó los cambios de la tarea {task} {title}',
   'activity.say.files_changed': 'La tarea {task} {title} cambió archivos: {detail}',
+  'activity.say.files_changed_none': 'La tarea {task} {title} no cambió ningún archivo',
   'activity.say.files_given': 'La tarea {task} {title} entregó archivos: {detail}',
   'activity.say.message_delivered': '{actor} entregó un mensaje a la tarea {task} {title}: {detail}',
   'activity.say.user_message': 'Escribiste a la tarea {task} {title}: {detail}',
