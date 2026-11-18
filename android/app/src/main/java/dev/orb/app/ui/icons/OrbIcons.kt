@@ -23,6 +23,20 @@ private fun lucide(name: String, vararg paths: String): ImageVector =
 private fun circle(cx: Float, cy: Float, r: Float) = "M${cx - r} $cy a$r $r 0 1 0 ${2 * r} 0 a$r $r 0 1 0 ${-2 * r} 0"
 
 object OrbIcons {
+    val Circle by lazy { lucide("circle", circle(12f, 12f, 10f)) }
+    val CircleCheck by lazy { lucide("circle-check", circle(12f, 12f, 10f), "m9 12 2 2 4-4") }
+    val CircleDot by lazy { lucide("circle-dot", circle(12f, 12f, 10f), circle(12f, 12f, 1f)) }
+    val Bot by lazy {
+        lucide("bot", "M12 8V4H8", "M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z", "M2 14h2", "M20 14h2", "M15 13v2", "M9 13v2")
+    }
+    val Brain by lazy {
+        lucide(
+            "brain", "M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z",
+            "M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z", "M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4",
+            "M17.599 6.5a3 3 0 0 0 .399-1.375", "M6.003 5.125A3 3 0 0 0 6.401 6.5", "M3.477 10.896a4 4 0 0 1 .585-.396", "M19.938 10.5a4 4 0 0 1 .585.396",
+            "M6 18a4 4 0 0 1-1.967-.516", "M19.967 17.484A4 4 0 0 1 18 18",
+        )
+    }
     val Menu by lazy { lucide("menu", "M4 5h16", "M4 12h16", "M4 19h16") }
     val Search by lazy { lucide("search", "m21 21-4.34-4.34", circle(11f, 11f, 8f)) }
     val Plus by lazy { lucide("plus", "M5 12h14", "M12 5v14") }

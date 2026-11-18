@@ -12,6 +12,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import dev.orb.app.ui.chats.ChatSection
@@ -32,6 +35,14 @@ import dev.orb.app.ui.chats.SearchResults
 import dev.orb.app.ui.chats.SearchScreen
 import dev.orb.app.ui.chats.SearchTask
 import dev.orb.app.ui.chats.SearchViewModel
+import dev.orb.app.ui.chats.AgentOption
+import dev.orb.app.ui.chats.FakeNewChatBackend
+import dev.orb.app.ui.chats.ModelOption
+import dev.orb.app.ui.chats.NewChatOptions
+import dev.orb.app.ui.chats.NewChatSheet
+import dev.orb.app.ui.chats.NewChatViewModel
+import dev.orb.app.ui.chats.ProjectOption
+import dev.orb.app.ui.chats.offline
 import dev.orb.app.ui.chats.Speaker
 import dev.orb.app.ui.chats.row
 import dev.orb.app.ui.icons.OrbIcons
@@ -139,6 +150,51 @@ class ChatsShotsTest {
             }
         }
     }
+
+    /** Screen 12: the sheet over the mockup's list, with the mockup's projects; [steps] walks to each variant. */
+    private fun newChat(palette: OrbPaletteChoice, suffix: String, steps: () -> Unit = {}, setup: (NewChatViewModel, FakeNewChatBackend) -> Unit = { _, _ -> }, brain: Boolean = true) {
+        Shots.assumeEnabled()
+        val b = FakeNewChatBackend().apply {
+            optionsResult = Result.success(
+                NewChatOptions(
+                    agents = listOf(
+                        AgentOption("claude", "Claude", "opus", listOf(ModelOption("opus", "Opus", true, listOf("bajo", "alto")), ModelOption("sonnet", "Sonnet", false, listOf("medio")), ModelOption("haiku", "Haiku", false, emptyList()))),
+                        AgentOption("codex", "Codex", null, listOf(ModelOption("gpt", "Modelo por defecto", false, emptyList()))),
+                        AgentOption("cursor", "Cursor", null, listOf(ModelOption("auto", "Modelo por defecto", false, emptyList()))),
+                    ),
+                    projects = listOf(ProjectOption("app-movil", false), ProjectOption("api-pagos", true), ProjectOption("tienda-online", false)),
+                    activeProject = "api-pagos",
+                ),
+            )
+        }
+        val vm = NewChatViewModel(b)
+        val list = ChatListViewModel(backend(mockupRows()), dispatcher = Dispatchers.Unconfined)
+        setup(vm, b)
+        if (brain) vm.pickBrain("claude", "opus", "alto")
+        twoModes("12-nuevo-chat", palette, suffix, after = steps) {
+            Column(Modifier.fillMaxSize()) {
+                Box(Modifier.weight(1f).fillMaxWidth()) {
+                    ChatListScreen(list, ChatsMenu(onMenu = {}, unreadNotices = 2, onNotices = {}), onOpenChat = {}, onSearch = {}, onNewChat = {})
+                }
+                OrbBottomBar(tabs, "chats", {})
+            }
+            NewChatSheet(vm, onDismiss = {}, onOutcome = {})
+        }
+    }
+
+    @Test fun newChatGrafito() = newChat(OrbPaletteChoice.Grafito, "")
+    @Test fun newChatOceano() = newChat(OrbPaletteChoice.Oceano, "")
+    @Test fun newChatDirect() = newChat(OrbPaletteChoice.Grafito, "-directo", { click("Directo con un agente") })
+    @Test fun newChatDirectWithoutProject() = newChat(OrbPaletteChoice.Grafito, "-directo-sin-proyecto", { click("Directo con un agente"); clickLast("Sin proyecto") })
+    @Test fun newChatBrain() = newChat(OrbPaletteChoice.Grafito, "-cerebro", { click("Claude · Opus · alto") })
+    @Test fun newChatBrainDirect() = newChat(OrbPaletteChoice.Grafito, "-cerebro-directo", { click("Directo con un agente"); click("Claude · El del PC") }, brain = false)
+    @Test fun newChatProject() = newChat(OrbPaletteChoice.Grafito, "-proyecto", { clickLast("Nuevo") })
+    @Test fun newChatOffline() = newChat(OrbPaletteChoice.Grafito, "-sin-conexion", setup = { _, b -> b.connectionState.value = ConnectionState.Offline(null, null) })
+    @Test fun newChatFailedOptions() = newChat(OrbPaletteChoice.Grafito, "-error-pc", setup = { _, b -> b.optionsResult = offline() })
+    @Test fun newChatOldPc() = newChat(OrbPaletteChoice.Grafito, "-pc-antiguo", setup = { _, b -> b.missing += "models.catalog" })
+
+    /** The chip of the sheet when the list behind has the same words; chips past the edge are scrolled into view first. */
+    private fun clickLast(text: String) { rule.onAllNodesWithText(text).onLast().performScrollTo().performClick(); rule.waitForIdle() }
 
     private fun click(text: String) { rule.onNodeWithText(text).performClick(); rule.waitForIdle() }
 

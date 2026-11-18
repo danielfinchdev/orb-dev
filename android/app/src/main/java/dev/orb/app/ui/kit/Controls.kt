@@ -139,9 +139,12 @@ fun OrbSwitch(checked: Boolean, onCheckedChange: ((Boolean) -> Unit)?, modifier:
     }
 }
 
-/** A filter chip (`.chip`): 32 dp, round; pressed it takes the neutral primary. [count] is the small number. */
+/** A filter chip (`.chip`): 32 dp, round; pressed it takes the neutral primary. [count] is the small number and [lead] a mark before the text. */
 @Composable
-fun OrbChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, count: Int? = null) {
+fun OrbChip(
+    label: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, count: Int? = null,
+    lead: (@Composable () -> Unit)? = null,
+) {
     val bg = if (selected) OrbKit.primary else OrbKit.card
     val fg = if (selected) OrbKit.primaryForeground else OrbKit.mutedForeground
     Box(
@@ -153,6 +156,7 @@ fun OrbChip(label: String, selected: Boolean, onClick: () -> Unit, modifier: Mod
                 .then(if (selected) Modifier else Modifier.border(1.dp, OrbKit.border, CircleShape)).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            if (lead != null) lead()
             Text(label, color = fg, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1)
             if (count != null) Text(count.toString(), color = fg.copy(alpha = 0.75f), fontSize = 11.sp, lineHeight = 16.sp)
         }

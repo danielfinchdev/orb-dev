@@ -103,6 +103,7 @@ fun OrbSheetItem(
     meta: String? = null,
     danger: Boolean = false,
     checked: Boolean? = null,
+    chevron: Boolean = false,
 ) {
     val tone = if (danger) OrbKit.destructive else OrbKit.foreground
     val click = if (checked != null) Modifier.selectable(selected = checked, role = Role.RadioButton, onClick = onClick)
@@ -118,6 +119,40 @@ fun OrbSheetItem(
         )
         if (meta != null) Text(meta, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
         if (checked == true) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.foreground)
+        if (chevron) Icon(OrbIcons.ChevronRight, null, Modifier.size(20.dp), tint = OrbKit.faintForeground)
+    }
+}
+
+/**
+ * A two-line choice of a sheet (the mockups' 64 dp radio `.it`): a mark, a title with a line of explanation and, at the
+ * end, a filled check circle while chosen or an empty one.
+ */
+@Composable
+fun OrbSheetChoice(title: String, hint: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    Row(
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(icon, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+        Column(Modifier.weight(1f)) {
+            Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+            Text(hint, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
+        }
+        Icon(if (selected) OrbIcons.CircleCheck else OrbIcons.Circle, null, Modifier.size(20.dp), tint = if (selected) OrbKit.foreground else OrbKit.faintForeground)
+    }
+}
+
+/** A row of a sheet that only tells something (no tap): a mark, the text and a quiet remark at the end. */
+@Composable
+fun OrbSheetInfo(text: String, icon: ImageVector, modifier: Modifier = Modifier, meta: String? = null) {
+    Row(
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 44.dp).padding(horizontal = 20.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Icon(icon, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+        Text(text, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        if (meta != null) Text(meta, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
     }
 }
 
@@ -134,7 +169,7 @@ fun OrbSheetLabel(text: String) {
 }
 
 /** A button of an [OrbDialog]; [danger] paints the main action in the destructive colour. */
-class OrbDialogAction(val label: String, val onClick: () -> Unit, val danger: Boolean = false)
+class OrbDialogAction(val label: String, val onClick: () -> Unit, val danger: Boolean = false, val enabled: Boolean = true)
 
 /**
  * `.mdlg`: a confirmation dialog in its own window. The buttons sit on the right and the main action is the last,
@@ -165,7 +200,7 @@ fun OrbDialog(
                 if (content != null) Column(Modifier.padding(bottom = 16.dp), content = content)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     if (dismiss != null) OrbButton(dismiss.label, dismiss.onClick, kind = OrbButtonKind.Ghost)
-                    OrbButton(confirm.label, confirm.onClick, kind = if (confirm.danger) OrbButtonKind.Danger else OrbButtonKind.Primary)
+                    OrbButton(confirm.label, confirm.onClick, enabled = confirm.enabled, kind = if (confirm.danger) OrbButtonKind.Danger else OrbButtonKind.Primary)
                 }
             }
         }

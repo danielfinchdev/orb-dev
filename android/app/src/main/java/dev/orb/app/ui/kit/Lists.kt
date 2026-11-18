@@ -124,7 +124,11 @@ fun OrbGroupHeader(
         Icon(OrbIcons.ChevronDown, null, Modifier.size(14.dp).graphicsLayer { rotationZ = turn }, tint = OrbKit.mutedForeground)
     }
     Row(
-        modifier.fillMaxWidth().then(click).padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp),
+        // A header that folds is a 48 dp touch zone; its text sits where the 40 dp drawing had it, give or take a dp.
+        modifier.fillMaxWidth().then(click).then(
+            if (onClick != null) Modifier.defaultMinSize(minHeight = 48.dp).padding(horizontal = 16.dp)
+            else Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp),
+        ),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (collapsed != null && !chevronAtEnd) chevron()

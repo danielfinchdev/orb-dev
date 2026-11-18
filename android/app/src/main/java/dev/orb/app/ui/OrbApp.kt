@@ -29,8 +29,13 @@ import androidx.navigation.compose.rememberNavController
 import dev.orb.app.AppContainer
 import androidx.compose.runtime.LaunchedEffect
 import dev.orb.app.ui.chats.ChatTexts
-import dev.orb.app.ui.chats.NewChatScreen
+import dev.orb.app.ui.chats.Brain
+import dev.orb.app.ui.chats.NewChatOutcome
+import dev.orb.app.ui.chats.NewChatSheet
 import dev.orb.app.ui.chats.NewChatViewModel
+import dev.orb.app.ui.chats.OrbeDraft
+import dev.orb.app.ui.chats.OrbeDraftScreen
+import dev.orb.app.ui.chats.OrbeDraftViewModel
 import dev.orb.app.ui.chats.DirectChatScreen
 import dev.orb.app.ui.chats.DirectChatViewModel
 import dev.orb.app.ui.chats.SearchScreen
@@ -94,7 +99,11 @@ import kotlinx.serialization.Serializable
 @Serializable data object Home
 @Serializable data object LinkTest
 @Serializable data object Search
-@Serializable data object NewChat
+
+/** An Orbe chat that the PC creates with the first message; the choices of the new-chat sheet travel in the route. */
+@Serializable data class OrbeDraftRoute(
+    val setProject: Boolean, val project: String?, val brainAgent: String? = null, val brainModel: String? = null, val brainEffort: String? = null,
+)
 
 /** An Orbe conversation (`kind` = conversation) or a direct chat with an agent (`kind` = session). */
 @Serializable data class ChatRoute(val kind: String, val id: String)
@@ -166,6 +175,9 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val home = viewModel<HomeViewModel>(factory = viewModelFactory { initializer { HomeViewModel(container) } })
             val homeState by home.state.collectAsStateWithLifecycle()
             var confirming by rememberSaveable { mutableStateOf(false) }
+            // Each opening of the sheet gets its own view model, so a closed sheet never comes back with old choices.
+            var newChatSheet by rememberSaveable { mutableStateOf(0) }
+            var newChatOpen by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(homeState.unlinked) { if (homeState.unlinked) nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } }
             if (backend != null) {
                 val tasksBackend = remember { container.tasksBackend() }
@@ -184,7 +196,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     ShellActions(
                         onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
                         onSearch = { nav.navigate(Search) },
-                        onNewChat = { nav.navigate(NewChat) },
+                        onNewChat = { newChatSheet++; newChatOpen = true },
                         onAppearance = { appearance = true },
                         onLinkTest = { nav.navigate(LinkTest) },
                         onUnlink = { confirming = true },
@@ -205,6 +217,24 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     notes = notesBackend,
                 )
             }
+            if (newChatOpen && backend != null) {
+                val newChatBackend = remember { container.newChatBackend() }
+                if (newChatBackend != null) {
+                    val vm = viewModel<NewChatViewModel>(key = "newchat:$newChatSheet", factory = viewModelFactory { initializer { NewChatViewModel(newChatBackend) } })
+                    NewChatSheet(
+                        vm, onDismiss = { newChatOpen = false },
+                        onOutcome = { outcome ->
+                            newChatOpen = false
+                            when (outcome) {
+                                is NewChatOutcome.Session -> nav.navigate(ChatRoute("session", outcome.id))
+                                is NewChatOutcome.Draft -> with(outcome.draft) {
+                                    nav.navigate(OrbeDraftRoute(setProject, project, brain?.agent, brain?.model, brain?.reasoning))
+                                }
+                            }
+                        },
+                    )
+                }
+            }
             if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
         }
         composable<Search> {
@@ -217,18 +247,20 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 )
             }
         }
-        composable<NewChat>(
-            // A sheet-like screen: it rises from below and goes back down, unlike the side-by-side chat screens.
+        composable<OrbeDraftRoute>(
+            // Sheet-like: it rises from below and goes back down, unlike the side-by-side chat screens.
             enterTransition = { slideInVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
             popExitTransition = { slideOutVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
-        ) {
+        ) { entry ->
+            val route = entry.toRoute<OrbeDraftRoute>()
             val backend = remember { container.newChatBackend() }
             if (backend != null) {
-                val vm = viewModel<NewChatViewModel>(factory = viewModelFactory { initializer { NewChatViewModel(backend) } })
-                NewChatScreen(
-                    vm, onClose = { nav.popBackStack() },
-                    // The new chat takes the place of this screen, so back from it returns to the list.
-                    onCreated = { nav.navigate(ChatRoute(it.kind, it.id)) { popUpTo<NewChat> { inclusive = true } } },
+                val brain = route.brainAgent?.let { Brain(it, route.brainModel, route.brainEffort) }
+                val vm = viewModel<OrbeDraftViewModel>(factory = viewModelFactory { initializer { OrbeDraftViewModel(backend, OrbeDraft(route.setProject, route.project, brain)) } })
+                OrbeDraftScreen(
+                    vm, onBack = { nav.popBackStack() },
+                    // The created conversation takes the draft's place, so back from it returns to the list.
+                    onCreated = { nav.navigate(ChatRoute("conversation", it.toString())) { popUpTo<OrbeDraftRoute> { inclusive = true } } },
                 )
             }
         }

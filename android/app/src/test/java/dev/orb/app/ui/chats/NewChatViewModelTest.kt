@@ -1,8 +1,7 @@
 package dev.orb.app.ui.chats
 
 import dev.orb.app.link.net.ConnectionState
-import dev.orb.app.link.net.LinkError
-import dev.orb.app.link.net.LinkException
+import dev.orb.app.link.net.PcVersions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
@@ -17,6 +16,7 @@ import kotlinx.serialization.json.JsonNull
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -29,13 +29,14 @@ class NewChatViewModelTest {
     @Before fun setUp() = kotlinx.coroutines.Dispatchers.setMain(dispatcher)
     @After fun tearDown() = kotlinx.coroutines.Dispatchers.resetMain()
 
-    private class Seen(val created: ArrayList<NewChatCreated> = ArrayList(), val said: ArrayList<String> = ArrayList())
+    private class Seen(val outcomes: ArrayList<NewChatOutcome> = ArrayList(), val said: ArrayList<String> = ArrayList())
+
+    private fun onlineState() = ConnectionState.Online("http://pc", "PC", PcVersions(1, 1, "3.8.4"))
 
     private fun TestScope.vm(b: FakeNewChatBackend): Pair<NewChatViewModel, Seen> {
-        val ids = generateSequence(1) { it + 1 }.map { "c$it" }.iterator()
-        val vm = NewChatViewModel(b, newId = { ids.next() })
+        val vm = NewChatViewModel(b)
         val seen = Seen()
-        backgroundScope.launch { vm.created.collect { seen.created += it } }
+        backgroundScope.launch { vm.outcome.collect { seen.outcomes += it } }
         backgroundScope.launch { vm.messages.collect { seen.said += it } }
         backgroundScope.launch { vm.state.collect { } }
         runCurrent()
@@ -45,143 +46,245 @@ class NewChatViewModelTest {
     @Test fun startsOnOrbeWithTheActiveProjectAndTheAgentsOfThePc() = runTest(dispatcher) {
         val (vm, _) = vm(FakeNewChatBackend())
         val s = vm.state.value
-        assertNull(s.agent)
+        assertFalse(s.direct)
         assertEquals("tienda-online", s.project)
         assertEquals(listOf("claude", "codex"), s.options.agents.map { it.id })
         assertEquals(OptionsStatus.Ready, s.optionsStatus)
+        assertTrue(s.canStart)
     }
 
-    @Test fun orbeSendsWithoutConversationAndOnlyWhatWasChosen() = runTest(dispatcher) {
+    @Test fun startingOrbeWithoutTypingOpensADraftAndDoesNotCallThePc() = runTest(dispatcher) {
         val b = FakeNewChatBackend()
         val (vm, seen) = vm(b)
-        vm.setText("  Haz el carrito  ")
-        vm.create()
+        vm.start()
         runCurrent()
-        assertEquals(listOf("orbe text=Haz el carrito setProject=false project=tienda-online brain=null"), b.calls)
-        assertEquals(listOf(NewChatCreated("conversation", "41")), seen.created)
+        assertTrue(b.calls.isEmpty())
+        assertEquals(listOf<NewChatOutcome>(NewChatOutcome.Draft(OrbeDraft(setProject = false, project = "tienda-online", brain = null))), seen.outcomes)
     }
 
-    @Test fun orbeSendsTheChosenProjectAndBrain() = runTest(dispatcher) {
+    @Test fun theDraftCarriesTheChosenProjectAndBrain() = runTest(dispatcher) {
         val b = FakeNewChatBackend()
-        val (vm, _) = vm(b)
+        val (vm, seen) = vm(b)
         vm.pickProject("api-pagos")
         vm.pickBrain("claude", "opus", "high")
-        vm.setText("hola")
-        vm.create()
+        vm.start()
         runCurrent()
-        assertEquals(listOf("orbe text=hola setProject=true project=api-pagos brain=claude/opus/high"), b.calls)
+        assertTrue(b.calls.isEmpty())
+        assertEquals(NewChatOutcome.Draft(OrbeDraft(true, "api-pagos", Brain("claude", "opus", "high"))), seen.outcomes.single())
     }
 
-    @Test fun orbeWithNoProjectSaysSoExplicitly() = runTest(dispatcher) {
-        val b = FakeNewChatBackend()
-        val (vm, _) = vm(b)
+    @Test fun noProjectIsSaidExplicitlyInTheDraft() = runTest(dispatcher) {
+        val (vm, seen) = vm(FakeNewChatBackend())
         vm.pickProject(null)
-        vm.setText("hola")
-        vm.create()
+        vm.start()
         runCurrent()
-        assertEquals(listOf("orbe text=hola setProject=true project=null brain=null"), b.calls)
+        assertEquals(NewChatOutcome.Draft(OrbeDraft(true, null, null)), seen.outcomes.single())
     }
 
-    @Test fun anAgentChatGetsItsFirstLineAndOpensAsASession() = runTest(dispatcher) {
+    @Test fun aDirectChatIsCreatedAtOnceWithoutAFirstLine() = runTest(dispatcher) {
         val b = FakeNewChatBackend()
         val (vm, seen) = vm(b)
         vm.selectAgent("codex")
         vm.pickProject(null)
-        vm.setText("mira esto")
-        vm.create()
+        vm.start()
         runCurrent()
-        assertEquals(listOf("create agent=codex project=null model=null reasoning=null", "send s9 mira esto"), b.calls)
-        assertEquals(listOf(NewChatCreated("session", "s9")), seen.created)
+        assertEquals(listOf("create agent=codex project=null model=null reasoning=null"), b.calls)
+        assertEquals(listOf<NewChatOutcome>(NewChatOutcome.Session("s9")), seen.outcomes)
     }
 
-    @Test fun anAgentChatUsesTheChosenModelAndTheActiveProject() = runTest(dispatcher) {
+    @Test fun aDirectChatUsesTheChosenModelAndTheActiveProject() = runTest(dispatcher) {
         val b = FakeNewChatBackend()
         val (vm, _) = vm(b)
         vm.selectAgent("claude")
-        vm.pickBrain("claude", "opus", "low")
-        vm.setText("hola")
-        vm.create()
+        vm.pickBrain("claude", "opus", "high")
+        vm.start()
         runCurrent()
-        assertEquals("create agent=claude project=tienda-online model=opus reasoning=low", b.calls.first())
+        assertEquals(listOf("create agent=claude project=tienda-online model=opus reasoning=high"), b.calls)
     }
 
-    @Test fun anErrorKeepsTheTextAndARetryReusesWhatTheFirstTryMade() = runTest(dispatcher) {
-        val b = FakeNewChatBackend().apply { sendResult = offline() }
-        val (vm, seen) = vm(b)
-        vm.selectAgent("claude")
-        vm.setText("hola")
-        vm.create()
-        runCurrent()
-        assertEquals("hola", vm.state.value.text)
-        assertFalse(vm.state.value.sending)
-        assertTrue(seen.said.single().startsWith("No se pudo crear el chat en el PC"))
-        assertTrue(seen.created.isEmpty())
-        b.sendResult = Result.success(Unit)
-        vm.create()
-        runCurrent()
-        // One session was created; the retry only sent the line again, with the same client id.
-        assertEquals(1, b.calls.count { it.startsWith("create") })
-        assertEquals(2, b.calls.count { it.startsWith("send") })
-        assertEquals(1, b.clientIds.toSet().size)
-        assertEquals(listOf(NewChatCreated("session", "s9")), seen.created)
+    @Test fun choosingDirectTakesTheFirstAgentThePcCanRun() = runTest(dispatcher) {
+        val (vm, _) = vm(FakeNewChatBackend())
+        vm.selectDirect()
+        assertTrue(vm.state.value.direct)
+        assertEquals("claude", vm.state.value.agent)
+        vm.selectOrbe()
+        assertFalse(vm.state.value.direct)
     }
 
-    @Test fun anOrbeErrorKeepsTheTextAndTheClientId() = runTest(dispatcher) {
-        val b = FakeNewChatBackend().apply { orbeResult = Result.failure(LinkException(LinkError.Timeout)) }
-        val (vm, seen) = vm(b)
-        vm.setText("hola")
-        vm.create()
-        runCurrent()
-        assertEquals("hola", vm.state.value.text)
-        b.orbeResult = Result.success(7L)
-        vm.create()
-        runCurrent()
-        assertEquals(1, b.clientIds.toSet().size)
-        assertEquals(listOf(NewChatCreated("conversation", "7")), seen.created)
-    }
-
-    @Test fun aSecondTapWhileOneIsOnItsWayDoesNothing() = runTest(dispatcher) {
-        val gate = CompletableDeferred<Unit>()
-        val b = FakeNewChatBackend().apply { this.gate = gate }
-        val (vm, seen) = vm(b)
-        vm.setText("hola")
-        vm.create()
-        vm.create()
-        runCurrent()
-        assertTrue(vm.state.value.sending)
-        vm.create()
-        runCurrent()
-        assertEquals(1, b.calls.size)
-        gate.complete(Unit)
-        runCurrent()
-        assertEquals(1, seen.created.size)
-    }
-
-    @Test fun withoutTheLinkTheChatCannotBeCreated() = runTest(dispatcher) {
+    @Test fun directChosenBeforeThePcAnswersGetsAnAgentWhenItDoes() = runTest(dispatcher) {
         val b = FakeNewChatBackend()
         b.connectionState.value = ConnectionState.Offline(null, null)
         val (vm, _) = vm(b)
-        vm.setText("hola")
-        assertFalse(vm.state.value.online)
-        assertFalse(vm.state.value.canCreate)
-        vm.create()
+        vm.selectDirect()
+        assertNull(vm.state.value.agent)
+        assertFalse(vm.state.value.canStart)
+        b.connectionState.value = onlineState()
         runCurrent()
+        assertEquals("claude", vm.state.value.agent)
+        assertTrue(vm.state.value.canStart)
+    }
+
+    @Test fun onlyTheAgentsThePcCanRunAreOffered() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.optionsResult = Result.success(sampleOptions.copy(agents = sampleOptions.agents.filter { it.id == "codex" }))
+        val (vm, _) = vm(b)
+        assertEquals(listOf("codex"), vm.state.value.options.agents.map { it.id })
+        vm.selectDirect()
+        assertEquals("codex", vm.state.value.agent)
+    }
+
+    @Test fun aDirectChatWithoutAnyAgentCannotStart() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.optionsResult = Result.success(sampleOptions.copy(agents = emptyList()))
+        val (vm, _) = vm(b)
+        vm.selectDirect()
+        assertFalse(vm.state.value.canStart)
+        vm.selectOrbe()
+        assertTrue(vm.state.value.canStart)
+    }
+
+    @Test fun aRefusedDirectChatTellsWhyAndCanBeTriedAgain() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.agentResult = offline()
+        val (vm, seen) = vm(b)
+        vm.selectAgent("claude")
+        vm.start()
+        runCurrent()
+        assertEquals(1, seen.said.size)
+        assertTrue(seen.said[0].startsWith("No se pudo crear el chat en el PC."))
+        assertFalse(vm.state.value.starting)
+        b.agentResult = Result.success("s10")
+        vm.start()
+        runCurrent()
+        assertEquals(listOf<NewChatOutcome>(NewChatOutcome.Session("s10")), seen.outcomes)
+    }
+
+    @Test fun aSecondTapWhileOneIsOnItsWayDoesNothing() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.gate = CompletableDeferred()
+        val (vm, seen) = vm(b)
+        vm.selectAgent("claude")
+        vm.start()
+        runCurrent()
+        assertTrue(vm.state.value.starting)
+        vm.start()
+        runCurrent()
+        assertEquals(1, b.calls.size)
+        b.gate!!.complete(Unit)
+        runCurrent()
+        assertEquals(1, seen.outcomes.size)
+    }
+
+    @Test fun withoutTheLinkNothingStarts() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        val (vm, seen) = vm(b)
+        assertFalse(vm.state.value.canStart)
+        vm.start()
+        runCurrent()
+        assertTrue(seen.outcomes.isEmpty())
         assertTrue(b.calls.isEmpty())
     }
 
-    @Test fun aBlankTextCannotBeSent() = runTest(dispatcher) {
-        val (vm, _) = vm(FakeNewChatBackend())
-        vm.setText("   ")
-        assertFalse(vm.state.value.canCreate)
+    @Test fun failedOptionsStillAllowOrbe() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.optionsResult = offline()
+        val (vm, seen) = vm(b)
+        assertEquals(OptionsStatus.Failed, vm.state.value.optionsStatus)
+        assertTrue(vm.state.value.options.agents.isEmpty())
+        vm.start()
+        runCurrent()
+        assertTrue(seen.outcomes.single() is NewChatOutcome.Draft)
     }
 
-    @Test fun failedOptionsStillAllowOrbe() = runTest(dispatcher) {
-        val b = FakeNewChatBackend().apply { optionsResult = offline() }
+    @Test fun retryingTheOptionsRecoversThem() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.optionsResult = offline()
         val (vm, _) = vm(b)
-        assertEquals(OptionsStatus.Failed, vm.state.value.optionsStatus)
-        vm.setText("hola")
-        assertTrue(vm.state.value.canCreate)
-        assertTrue(vm.state.value.options.agents.isEmpty())
+        b.optionsResult = Result.success(sampleOptions)
+        vm.reload()
+        runCurrent()
+        assertEquals(OptionsStatus.Ready, vm.state.value.optionsStatus)
+        assertEquals(2, vm.state.value.options.agents.size)
+    }
+
+    @Test fun anOldPcWithoutTheCatalogSaysSoAndKeepsOrbe() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.missing += "models.catalog"
+        val (vm, seen) = vm(b)
+        assertEquals(OptionsStatus.Unsupported, vm.state.value.optionsStatus)
+        vm.start()
+        runCurrent()
+        assertTrue(seen.outcomes.single() is NewChatOutcome.Draft)
+    }
+
+    @Test fun whileThereIsNoLinkTheOptionsStayLoading() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        val (vm, _) = vm(b)
+        assertEquals(OptionsStatus.Loading, vm.state.value.optionsStatus)
+    }
+
+    // --- «Nuevo» project ---
+
+    @Test fun aNewProjectIsCreatedOnThePcAndChosen() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        val (vm, _) = vm(b)
+        vm.openNewProject()
+        assertNotNull(vm.state.value.newProject)
+        vm.createProject("  tienda-nueva ")
+        runCurrent()
+        assertEquals(listOf("project tienda-nueva"), b.calls)
+        assertNull(vm.state.value.newProject)
+        assertEquals("tienda-nueva", vm.state.value.project)
+        assertTrue(vm.state.value.options.projects.any { it.name == "tienda-nueva" })
+    }
+
+    @Test fun aNewProjectNeedsANameAndTheLink() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        val (vm, _) = vm(b)
+        vm.openNewProject()
+        vm.createProject("   ")
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        runCurrent()
+        vm.createProject("x")
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+        assertEquals(ChatTexts.NEW_CHAT_PROJECT_OFFLINE, vm.state.value.newProject?.error)
+    }
+
+    @Test fun aRefusedNewProjectKeepsTheDialogWithTheReason() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.projectResult = offline()
+        val (vm, _) = vm(b)
+        vm.openNewProject()
+        vm.createProject("x")
+        runCurrent()
+        assertNotNull(vm.state.value.newProject)
+        assertFalse(vm.state.value.newProject!!.saving)
+        assertEquals("Sin conexión con el PC.", vm.state.value.newProject!!.error)
+        assertEquals("tienda-online", vm.state.value.project)
+    }
+
+    @Test fun theNewProjectOptionIsMissingOnAPcThatCannotCreateProjects() = runTest(dispatcher) {
+        val b = FakeNewChatBackend()
+        b.missing += "projects.create"
+        val (vm, _) = vm(b)
+        assertFalse(vm.state.value.canCreateProject)
+        vm.openNewProject()
+        assertNull(vm.state.value.newProject)
+    }
+
+    @Test fun theBrainOfADirectChatIsItsAgentsModel() = runTest(dispatcher) {
+        val (vm, _) = vm(FakeNewChatBackend())
+        vm.selectAgent("claude")
+        assertEquals("Claude Code", vm.state.value.brainLabel)
+        vm.pickBrain("claude", "opus", "high")
+        assertEquals("Claude Code · Opus · high", vm.state.value.brainLabel)
+        vm.selectOrbe()
+        assertNull(vm.state.value.brainLabel)
     }
 
     @Test fun orbeRequestHasNoConversationAndProjectAndBrainOnlyWhenChosen() {

@@ -119,6 +119,17 @@ class KitTest {
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "2"))
     }
 
+    @Test fun aFoldingGroupHeaderIsAFingerSizedTouchZone() {
+        show {
+            Column {
+                OrbGroupHeader("api-pagos", project = "api-pagos", count = 2, collapsed = false, onClick = {})
+                OrbGroupHeader("Fijados", icon = OrbIcons.Pin)
+            }
+        }
+        rule.onNodeWithText("api-pagos").assertIsDisplayed()
+        rule.onNode(SemanticsMatcher.keyIsDefined(androidx.compose.ui.semantics.SemanticsActions.OnClick)).assertHeightIsAtLeast(48.dp)
+    }
+
     @Test fun topBarHasATitleAndALine() {
         var back = 0
         show { OrbTopBar("Programadas", sub = "3 activas", leading = { OrbIconButton(OrbIcons.ArrowLeft, "Volver", { back++ }) }) }
