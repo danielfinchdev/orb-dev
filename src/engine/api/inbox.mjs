@@ -11,6 +11,7 @@ import * as I from '../../domain/conversations/inbox.mjs';
 import { dayDigest, morningDue } from '../../domain/activity/day-digest.mjs';
 import { ctx } from '../../platform/context.mjs';
 import { localDay, ownerTz } from '../../shared/tz.mjs';
+import { activityLine } from '../../domain/conversations/live-line.mjs';
 import { fail, str, int, oneOf } from './common.mjs';
 
 export function inboxMethods({ board, emit, orchestrator }) {
@@ -50,9 +51,13 @@ export function inboxMethods({ board, emit, orchestrator }) {
     const running = new Set(board.all("SELECT DISTINCT conversation_id AS c FROM tasks WHERE conversation_id IS NOT NULL AND status = 'running'").map((r) => r.c));
     const paused = board.setting('paused') === '1';
     for (const c of conversations) {
-      const busy = Boolean(orchestrator?.state?.(c.id)?.busy) || running.has(c.id);
+      const live = orchestrator?.state?.(c.id);
+      const busy = Boolean(live?.busy) || running.has(c.id);
+      // what the assistant does now (the short line of its live view); only while it works
+      const step = live?.busy ? live.tools?.at?.(-1) : null;
+      const activity = step?.name ? activityLine(step.name, step.target) : null;
       add('conversation', c.id, { title: c.title, project: c.project ?? null, done: c.status === 'done', avatar: c.project ? { type: 'project', project: c.project } : { type: 'orbe' },
-        state: busy ? 'working' : paused ? 'paused' : 'idle', at: c.updated_at }, c.id);
+        state: busy ? 'working' : paused ? 'paused' : 'idle', ...(activity ? { activity } : {}), at: c.updated_at }, c.id);
     }
     // the marks of the direct conversations with an agent (pinned, muted); their rows are built by the window.
     for (const [key, m] of marks) {

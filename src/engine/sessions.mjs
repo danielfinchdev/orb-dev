@@ -38,6 +38,7 @@ import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } f
 import { goalAfterTurn, goalFailed, goalSteered, debugOn } from './modes.mjs';
 import { SideChats } from './side.mjs';
 import { Suggester } from './suggest.mjs';
+import { liveStep, activityLine } from '../domain/conversations/live-line.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -247,6 +248,8 @@ export class Sessions {
   }
 
   isRunning(id) { return this.running.has(id); }
+  // What a running chat does now in one short phrase («Editando styles.css»); null when it is idle or has done nothing yet.
+  liveLine(id) { const step = this.running.get(id)?.step; return step ? activityLine(step.name, step.target) : null; }
   // What a running turn is doing right now (null when it is not running).
   live(id) { const r = this.running.get(id); return r ? { startedAt: r.startedAt, lastAt: r.lastAt, steps: r.steps, last: r.last, waiting: this.pendingApprovals(id).length } : null; }
   runningCount(agent) { return [...this.running.values()].filter((r) => !agent || r.agent === agent).length; }
@@ -393,7 +396,12 @@ export class Sessions {
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
       if (ev.stop) this.tellStop(id, ev.stop.cause, { why: ev.stop.why, body: ev.body });
-      if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
+      if (run) {
+        const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++;
+        // the same step kept apart, without paths, for the list rows (liveLine)
+        if (ev.kind === 'tool') run.step = liveStep(ev.body?.name, ev.body?.input);
+        else if (ev.kind === 'file') run.step = liveStep('edit', ev.body?.path);
+      }
       return;
     }
     // something «Auto» let through that «Preguntar» would have asked: one quiet line in the chat (and the task's

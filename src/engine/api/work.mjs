@@ -145,7 +145,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const currentBranch = (dir) => { const live = liveBranch(dir); return live === undefined ? cachedBranch(dir) : live; };
       const list = sessions.list({ archived: Boolean(archived) });
       let trees = null;
-      return list.map((s) => {
+      // `activity`: the short line of what a running chat does now (no paths); absent when it is not working.
+      const withLine = (s) => { const activity = s.kind === 'chat' ? sessions.liveLine?.(s.id) : null; return activity ? { ...s, activity } : s; };
+      return list.map((s0) => {
+        const s = withLine(s0);
         if (s.kind !== 'chat' || !s.project) return s;
         trees ??= new Map(chatTrees.all().filter((r) => !r.removed).map((r) => [r.id, r]));
         const tree = trees.get(s.id);
