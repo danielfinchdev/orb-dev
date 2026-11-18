@@ -1,5 +1,6 @@
-// the engine's log as a line anyone can read: «Uso de la tarea · 1 min», «Tarea lanzada · Cursor», instead of
+// The engine's log as a line anyone can read: «Uso de la tarea · 1 min», «Tarea lanzada · Cursor», instead of
 // «task.usage {"minutes":1,"tokens":0,"costUsd":null}». The raw event stays for copying and on hover.
+// Every view that draws an event goes through activityDetail: JSON and the engine's own names never reach the screen.
 
 const json = (s) => { if (!/^\s*[{[]/.test(String(s ?? ''))) return null; try { return JSON.parse(s); } catch { return null; } };
 
@@ -10,31 +11,65 @@ export function activityLabel(t, kind) {
   return label === key ? kind : label;
 }
 
+// The tools of Orb in plain words; the families collapse (every orb_browser_* is «usar el navegador»).
+function toolLabel(t, name) {
+  const short = name.replace(/^orb_/, '').replace(/^browser_.*/, 'browser').replace(/^android_.*/, 'android');
+  const key = `activity.tool.${short}`;
+  const label = t(key);
+  return label === key ? t('activity.tool') : label;
+}
+
+// Task states travel as internal words («done», «blocked»); they are told with the labels the Tareas view uses.
+function stateLabel(t, v) {
+  if (typeof v !== 'string' || !/^[a-z_]+$/.test(v)) return v;
+  const key = `status.${v}`;
+  const label = t(key);
+  return label === key ? v : label;
+}
+
+const oneLine = (s, max) => {
+  const flat = String(s).replace(/\s+/g, ' ').trim();
+  return max && flat.length > max ? `${flat.slice(0, max).trimEnd()}…` : flat;
+};
+
+// A text the engine or an agent wrote: Orb's tool names and the quoted states inside it are told in words.
+// max: cut to that many characters with «…» on one line (the Actividad list keeps one line per event).
+export function activityText(t, raw, max = 0) {
+  const text = String(raw ?? '')
+    .replace(/\s*\(refs\/[^)]+\)/g, '') // git references mean nothing to a person
+    .replace(/\brefs\/orb\/\S+/g, '')
+    .replace(/\b(orb_[a-z_]+)\b(?:\s+(?:con\s+)?status:?\s*"?([a-z_]+)"?)?/g, (_, name, st) => `${toolLabel(t, name)}${st ? ` · ${String(stateLabel(t, st)).toLowerCase()}` : ''}`)
+    .replace(/"([a-z_]+)"/g, (m, w) => { const label = stateLabel(t, w); return label === w ? m : String(label).toLowerCase(); })
+    .replace(/\bnull\b/g, '')
+    .trim();
+  return oneLine(stateLabel(t, text), max);
+}
+
 // What happened, in a short line (empty when the raw detail says nothing to a person).
 // agents: the names of the agents (labels.js AGENT), passed in so this stays free of the app's store.
-export function activityDetail(t, row, locale, agents = {}) {
+export function activityDetail(t, row, locale, agents = {}, max = 0) {
   const raw = String(row?.detail ?? '').trim();
   const data = json(raw);
-  const num = (n) => Number(n).toLocaleString(locale);
-  if (row?.kind === 'task.usage' && data) {
-    const parts = [];
-    if (data.minutes != null) parts.push(t('activity.minutes', { n: num(data.minutes) }));
-    if (data.tokens) parts.push(t('activity.tokens', { n: num(data.tokens) }));
-    if (data.costUsd != null) parts.push(`$${Number(data.costUsd).toFixed(2)}`);
-    return parts.join(' · ');
-  }
-  if (row?.kind === 'task.launch_options' && data) {
-    const who = agents[data.agent] ?? data.agent;
-    return [who, data.model, data.reasoning ? t('activity.reasoning', { level: t(`reasoning.${data.reasoning}`).toLowerCase() }) : null].filter(Boolean).join(' · ');
-  }
-  // Task states travel as internal words («done», «blocked»); they are told with the labels the Tareas view uses.
-  const state = (v) => { if (typeof v !== 'string' || !/^[a-z_]+$/.test(v)) return v; const key = `status.${v}`; const label = t(key); return label === key ? v : label; };
+  // A cut-off object (the engine clips long details) is still JSON: it says nothing to a person.
+  if (!data && /^(\{\s*"|\[\s*[{"\d])/.test(raw)) return '';
+  const num = (n, opts) => Number(n).toLocaleString(locale, opts);
   if (data) {
-    // Any other JSON: its simple values, as «name: value».
-    if (Array.isArray(data)) return data.filter((v) => ['string', 'number'].includes(typeof v)).map(state).join(', ');
-    return Object.entries(data).filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) && v !== '').slice(0, 4).map(([k, v]) => `${k}: ${state(v)}`).join(' · ');
+    // Only the two events that carry an object have a sentence; any other object or list says nothing to a person.
+    if (Array.isArray(data) || typeof data !== 'object') return '';
+    if (row?.kind === 'task.usage') {
+      const parts = [];
+      if (data.minutes != null) parts.push(data.minutes < 1 ? `<1 ${t('activity.min')}` : t('activity.minutes', { n: num(Math.round(data.minutes)) }));
+      if (data.tokens) parts.push(t('activity.tokens', { n: num(data.tokens) }));
+      if (data.costUsd) parts.push(`$${num(data.costUsd, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+      return parts.join(' · ');
+    }
+    if (row?.kind === 'task.launch_options') {
+      const who = agents[data.agent] ?? data.agent;
+      const account = data.account && data.account !== data.agent ? t('activity.account', { account: agents[data.account] ?? data.account }) : null;
+      const level = data.reasoning ? t('activity.reasoning', { level: String(t(`reasoning.${data.reasoning}`)).toLowerCase() }) : null;
+      return [who, account, data.model ? t('activity.model', { model: data.model }) : null, level].filter(Boolean).join(' · ');
+    }
+    return '';
   }
-  // Git references and ids that mean nothing to a person (refs/orb/t24-1791970229048).
-  // Names of Orb's own tools (orb_update_task) belong to the engine, not to the person.
-  return state(raw.replace(/\s*\(refs\/[^)]+\)/g, '').replace(/\brefs\/orb\/\S+/g, '').replace(/\borb_[a-z_]+\b/g, t('activity.tool')).trim());
+  return activityText(t, raw, max);
 }

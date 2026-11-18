@@ -18,6 +18,7 @@ import { forgetInfo } from '@/lib/use-project-info.js';
 import { cn } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
 import { t, useT } from '@/lib/i18n.js';
+import { branchList } from '@/lib/branches.js';
 
 // Branches of the project (read again when `version` changes): { name, current, date, upstream }.
 export function useBranches(project, version) {
@@ -248,7 +249,7 @@ export function BranchMenu({ project, st, changes, version, reload }) {
     <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild><Button variant="ghost" size="sm" className="min-w-0 shrink" title={t2('expert.git.branches')} data-testid="expert-branch"><GitBranch /><span className="truncate">{st.branch}</span><ChevronDown className="opacity-60" /></Button></DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-60" data-testid="expert-branch-menu">
-        {(branches ?? []).filter((b) => !b.orb).slice(0, 30).map((b) => <DropdownMenuItem key={b.name} aria-current={b.current ? 'true' : undefined} onSelect={() => { if (!b.current) switchFlow(project, b.name, st.branch, dirty, reload); }}><GitBranch /><span className="min-w-0 flex-1 truncate font-mono">{b.name}</span>{b.current ? <Check className="text-primary-text size-3.5" aria-label={t2('expert.git.current')} /> : null}</DropdownMenuItem>)}
+        {branchList(branches, st.branch).map((b) => <DropdownMenuItem key={b.name} aria-current={b.current ? 'true' : undefined} onSelect={() => { if (!b.current) switchFlow(project, b.name, st.branch, dirty, reload); }}><GitBranch /><span className="min-w-0 flex-1 truncate font-mono">{b.name}</span>{b.current ? <Check className="text-primary-text size-3.5" aria-label={t2('expert.git.current')} /> : null}</DropdownMenuItem>)}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => newBranchFlow(project, reload)} data-testid="expert-branch-new"><Plus />{t2('expert.git.newBranch')}</DropdownMenuItem>
       </DropdownMenuContent>

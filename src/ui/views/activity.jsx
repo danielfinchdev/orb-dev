@@ -32,6 +32,8 @@ const hourOf = (at) => (at ? new Date(at).toLocaleTimeString([], { hour: '2-digi
 const levelOn = (level, l) => LEVELS.indexOf(l) >= LEVELS.indexOf(level);
 const nextLevel = (level, l) => (l === level ? LEVELS[Math.min(LEVELS.indexOf(level) + 1, LEVELS.length - 1)] : l);
 const CHIP = 'inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-ring';
+// characters of one event line in the list
+const LINE = 140;
 const COLS = 'grid-cols-[52px_150px_72px_150px_minmax(0,1fr)]';
 
 export function ActivityView({ tabs }) {
@@ -120,7 +122,7 @@ export function ActivityView({ tabs }) {
           </div>
         ) : null}
         {items.length ? items.map((r) => (paged
-          ? <PagedRow key={r.id} r={r} t={t} open={open === r.id} onOpen={() => setOpen((o) => (o === r.id ? null : r.id))} marked={moment?.id === r.id} canMark={canReport} onMark={() => setMoment((m) => (m?.id === r.id ? null : r))} />
+          ? <PagedRow key={r.id} r={r} t={t} locale={locale} open={open === r.id} onOpen={() => setOpen((o) => (o === r.id ? null : r.id))} marked={moment?.id === r.id} canMark={canReport} onMark={() => setMoment((m) => (m?.id === r.id ? null : r))} />
           : <LegacyRow key={r.id} r={r.legacy} t={t} locale={locale} />)) : <Empty icon={Activity} title={t('activity.empty')} />}
       </ListCard>
       {paged ? (
@@ -142,13 +144,22 @@ function LegacyRow({ r, t, locale }) {
       <span className="text-muted-foreground">{fmtTime(r.at)}</span>
       <span className="truncate">{AGENT[r.actor] ?? r.actor}</span>
       {/* each event in words; the raw one on hover and in «Copiar». */}
-      <span className="min-w-0" title={`${r.kind}${r.detail ? ` ${r.detail}` : ''}`}><span className="font-medium">{activityLabel(t, r.kind)}</span>{r.task_id ? <span className="text-muted-foreground"> · #{r.task_id} {r.title ?? ''}</span> : null}{activityDetail(t, r, locale, AGENT) ? <span className="text-muted-foreground block break-words">{activityDetail(t, r, locale, AGENT)}</span> : null}</span>
+      <span className="min-w-0" title={`${r.kind}${r.detail ? ` ${r.detail}` : ''}`}><span className="font-medium">{activityLabel(t, r.kind)}</span>{r.task_id ? <span className="text-muted-foreground"> · #{r.task_id} {r.title ?? ''}</span> : null}{activityDetail(t, r, locale, AGENT, LINE) ? <span className="text-muted-foreground block break-words">{activityDetail(t, r, locale, AGENT, LINE)}</span> : null}</span>
     </div>
   );
 }
 
+// What a line of the paged reader says, in words: an event of the agents from its own parts, any other line as text.
+// r.text stays as the engine wrote it (hover and «Copiar»).
+function what(r, t, locale, max = 0) {
+  if (r.source === 'subagentes' && r.actor !== undefined) {
+    return [AGENT[r.actor] ?? r.actor, r.title, activityDetail(t, { kind: r.kind, detail: r.detail }, locale, AGENT, max)].filter(Boolean).join(' · ');
+  }
+  return activityDetail(t, { kind: r.kind, detail: r.text }, locale, AGENT, max) || activityLabel(t, r.kind);
+}
+
 // A line of the paged reader; it opens to show where it came from. Its text is plain text, never markup.
-function PagedRow({ r, t, open, onOpen, marked, canMark, onMark }) {
+function PagedRow({ r, t, locale, open, onOpen, marked, canMark, onMark }) {
   const SrcIcon = SOURCE_ICON[r.source] ?? Monitor;
   return (
     <div className={cn('border-border border-b last:border-b-0', marked && 'bg-accent/60')} data-level={r.level} data-testid="activity-row">
@@ -157,7 +168,7 @@ function PagedRow({ r, t, open, onOpen, marked, canMark, onMark }) {
         <span className="src inline-flex items-center gap-1.5 truncate text-control"><SrcIcon className="text-muted-foreground size-3.5 shrink-0" />{t(`logbooks.source.${r.source}`)}</span>
         <Badge variant={LEVEL_BADGE[r.level] ?? 'info'} className="w-full justify-center">{t(`logbooks.level.${r.level}`)}</Badge>
         <span className="proj text-muted-foreground inline-flex min-w-0 items-center gap-1.5 text-caption">{r.project ? <ProjectIcon name={r.project} /> : null}<span className="truncate">{r.project ?? t('logbooks.noProject')}</span></span>
-        <span className="what min-w-0 text-control break-words whitespace-pre-wrap">{r.text}</span>
+        <span className="what min-w-0 text-control break-words whitespace-pre-wrap" title={r.text}>{what(r, t, locale, LINE)}</span>
       </button>
       {open ? (
         <div className="detail bg-secondary border-border border-t px-3.5 pt-3 pb-3.5 pl-16" data-testid="activity-detail">
@@ -167,7 +178,7 @@ function PagedRow({ r, t, open, onOpen, marked, canMark, onMark }) {
             {r.task != null ? <><dt className="text-muted-foreground">{t('logbooks.task')}</dt><dd className="m-0" data-testid="activity-task">#{r.task}</dd></> : null}
             <dt className="text-muted-foreground">{t('logbooks.project')}</dt><dd className="m-0">{r.project ?? t('logbooks.noProject')}</dd>
           </dl>
-          <pre className="bg-card border-border rounded-ctl m-0 mb-2.5 border px-2.5 py-2 text-caption whitespace-pre-wrap break-words"><code>{r.text}</code></pre>
+          <pre className="bg-card border-border rounded-ctl m-0 mb-2.5 border px-2.5 py-2 text-caption whitespace-pre-wrap break-words"><code>{what(r, t, locale)}</code></pre>
           {(canMark && r.at) || r.task != null ? (
             <div className="flex justify-end gap-1.5">
               {canMark && r.at ? <Button variant="outline" aria-pressed={marked} onClick={onMark} title={marked ? t('logbooks.marked') : t('logbooks.mark')} data-testid="activity-mark">{marked ? <SquareCheck /> : <Bug />}{t(marked ? 'logbooks.marked' : 'logbooks.markShort')}</Button> : null}

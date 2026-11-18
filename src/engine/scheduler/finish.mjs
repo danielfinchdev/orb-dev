@@ -15,6 +15,16 @@ import { logTask } from '../../domain/journal/journal.mjs';
 import { scheduleEndMeta } from '../../domain/schedules/schedules.mjs';
 import { STATUS_ES, whoRan, mainStatusAsync } from './common.mjs';
 
+// The reason shown in the chat line and the notice: an agent that closed on its own is told in plain words and the
+// exit code stays in the task's result. Anything else is the agent's own message, with a capital letter.
+export function plainWhy(result, minutes) {
+  const closed = /^(.{1,40}?) (?:se cerró|closed) \((?:código|code) -?\d+\)\.?\s*([\s\S]*)$/.exec(result);
+  const cap = (x) => { const v = oneLine(x, 160); return v ? `${v.charAt(0).toUpperCase()}${v.slice(1)}${/[.!?…]$/.test(v) ? '' : '.'}` : ''; };
+  if (!closed) return cap(result);
+  const when = minutes != null && minutes >= 1 ? tr('msg.scheduler.whenMin', { n: Math.round(minutes) }) : tr('msg.scheduler.whenSoon');
+  return [tr('msg.scheduler.whyClosed', { name: closed[1], when }), cap(closed[2])].filter(Boolean).join(' ');
+}
+
 export class FinishPart {
   // Closing a task: git runs off the event loop, so the project stays held (nothing starts in it, nobody undoes the task)
   // until the close is over. The promise never rejects. A close that was already under way when the app began to close is
@@ -166,10 +176,11 @@ export class FinishPart {
     if (task.status === 'queued' || task.status === 'limited') return; // handed to another agent, or waiting for the reset (already told)
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
     let spent = '';
-    try { const u = this.runUsage(task); if (u) { spent = this.usageLine(u); board.event(task.id, 'orb', 'task.usage', JSON.stringify({ ...u, minutes: Math.round(u.minutes * 10) / 10 })); } } catch (error) { this.log(`uso #${task.id}: ${error.message}`); }
+    let ranMinutes = null;
+    try { const u = this.runUsage(task); if (u) { ranMinutes = u.minutes; spent = this.usageLine(u, { plain: true }); board.event(task.id, 'orb', 'task.usage', JSON.stringify({ ...u, minutes: Math.round(u.minutes * 10) / 10 })); } } catch (error) { this.log(`uso #${task.id}: ${error.message}`); }
     // one clear line for the user; what the agent reported (technical) goes folded under it (meta.result).
     // (A task that failed or got blocked says why in a short line: that is what the user needs to decide.)
-    const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${oneLine(redactSecrets(task.result), 160)}` : '';
+    const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${plainWhy(redactSecrets(task.result), ranMinutes)}` : '';
     board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
       { kind: 'task-end', task: task.id, status: task.status, ...scheduleEndMeta(board, task), ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);

@@ -137,3 +137,12 @@ test('a runtime that never lets the page start falls back to the classic install
   assert.match(js, /case 'stuck':/);
   assert.match(js, /t\.closeThis/);
 });
+
+test('English texts use English quotes and Spanish ones keep the guillemets', () => {
+  const sandbox = { window: {} };
+  new Function('window', read('src-tauri', 'installer', 'ui', 'i18n.js'))(sandbox.window);
+  const { es, en } = sandbox.window.ORB_TEXTS;
+  const strings = (o) => Object.values(o).flatMap((v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v : typeof v === 'object' ? strings(v) : []));
+  for (const s of strings(en)) assert.doesNotMatch(s, /[«»]/, `English text with guillemets: ${s}`);
+  assert.ok(strings(es).some((s) => /«.+»/.test(s)));
+});

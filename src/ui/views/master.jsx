@@ -331,8 +331,8 @@ export function MasterLocked({ onDone, state = null }) {
       </div>
       <div className="pointer-events-none fixed inset-0 z-[46] bg-black/32 backdrop-blur-[10px]" aria-hidden="true" />
       <div className="pointer-events-none fixed inset-0 z-[47] flex overflow-auto p-6">
-        <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border pointer-events-auto m-auto grid w-full max-w-[440px] gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined} data-mode={inCode ? 'code' : undefined}>
-            <div className="flex items-center gap-4">
+        <form onSubmit={submit} data-slot="dialog-content" className="dialog bg-background text-foreground rounded-card border-border pointer-events-auto m-auto grid w-[440px] max-w-full shrink-0 gap-3 border p-[18px]" data-testid="master-locked" data-screen={screen ? '1' : undefined} data-mode={inCode ? 'code' : undefined}>
+            <div className="flex h-12 items-center gap-4">
               <LockMark busy={busy} lost={lost} />
               <div className="min-w-0">
                 <h1 className="font-(family-name:--title) text-lg leading-tight font-semibold">{t(lost ? 'master.lostTitle' : screen ? 'master.screenTitle' : 'master.lockedTitle')}</h1>
@@ -341,7 +341,7 @@ export function MasterLocked({ onDone, state = null }) {
             </div>
             {lost ? null : (<>
               <div className="grid gap-1.5">
-                <Label htmlFor={fieldId}>{t(inCode ? 'master.forgotCode' : 'master.password')}</Label>
+                <Label htmlFor={fieldId} className="text-[13px] leading-[1.45]">{t(inCode ? 'master.forgotCode' : 'master.password')}</Label>
                 <div className="border-border bg-card text-muted-foreground rounded-ctl focus-within:border-input flex h-[calc(var(--ctl)+2px)] items-center gap-2 border px-2.5 transition-[border-color]">
                   {inCode ? <LifeBuoy className="size-3.5 shrink-0" /> : <Lock className="size-3.5 shrink-0" />}
                   {inCode
@@ -352,7 +352,7 @@ export function MasterLocked({ onDone, state = null }) {
                 {inCode ? <p className="text-muted-foreground m-0 text-xs leading-snug" data-testid="master-code-note">{t('master.codeNote')}</p> : null}
               </div>
               {error ? <p className="text-destructive flex items-center gap-1.5 text-xs" role="alert" data-testid="master-error"><CircleAlert className="size-3.5 shrink-0" />{error}</p> : null}
-              <Button type="submit" className="w-full" disabled={busy} data-testid="master-unlock">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t(inCode ? 'master.unlockWithCode' : 'master.unlock')}</Button>
+              <Button type="submit" className="h-(--ctl) w-full" disabled={busy} data-testid="master-unlock">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t(inCode ? 'master.unlockWithCode' : 'master.unlock')}</Button>
             </>)}
             {withCode ? (
               <div className="text-muted-foreground grid justify-items-center gap-1 text-center text-xs">
@@ -360,7 +360,7 @@ export function MasterLocked({ onDone, state = null }) {
                   <button type="button" className={linkClass} disabled={busy} onClick={() => switchTo('password')} data-testid="master-use-password">{t('master.useMaster')}</button>
                   <button type="button" className={linkClass} onClick={() => openDialog(resetFlow)} data-testid="master-no-code">{t('master.noCode')}</button>
                 </>) : (
-                  <span>{t('master.forgotAsk')} <button type="button" className={linkClass} disabled={busy} onClick={() => switchTo('code')} data-testid="master-use-code">{t('master.useCode')}</button></span>
+                  <span className="flex h-6 items-center gap-1">{t('master.forgotAsk')} <button type="button" className={linkClass} disabled={busy} onClick={() => switchTo('code')} data-testid="master-use-code">{t('master.useCode')}</button></span>
                 )}
               </div>
             ) : (
@@ -416,8 +416,8 @@ function LockStatus() {
   if (!working && !asking) return null;
   return (
     <div className="flex flex-wrap gap-1.5" data-testid="master-screen-status">
-      {working ? <Badge><Loader />{t('master.screenWorking', { n: working })}</Badge> : null}
-      {asking ? <Badge variant="warning"><ShieldQuestion />{t(asking === 1 ? 'master.screenAskingOne' : 'master.screenAsking', { n: asking })}</Badge> : null}
+      {working ? <Badge className="h-5"><Loader />{t('master.screenWorking', { n: working })}</Badge> : null}
+      {asking ? <Badge variant="warning" className="h-5"><ShieldQuestion />{t(asking === 1 ? 'master.screenAskingOne' : 'master.screenAsking', { n: asking })}</Badge> : null}
     </div>
   );
 }

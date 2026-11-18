@@ -88,3 +88,51 @@ test('activityDetail translates internal task states and hides the process numbe
   // free text stays as it is
   assert.equal(activityDetail(t, { kind: 'project.finished', detail: 'web-antigua' }, 'es'), 'web-antigua');
 });
+
+// The real cases that showed JSON and the engine's own names in Actividad.
+const tr = (k, v) => { let s = es[k] ?? k; for (const [a, b] of Object.entries(v ?? {})) s = s.replace(`{${a}}`, b); return s; };
+const AGENTS = { codex: 'Codex', claude: 'Claude' };
+const detail = (kind, d, max) => activityDetail(tr, { kind, detail: d }, 'es', AGENTS, max);
+
+test('task usage and launch options are told as a sentence', () => {
+  assert.equal(detail('task.usage', '{"minutes":0,"tokens":null,"costUsd":null}'), '<1 min');
+  assert.equal(detail('task.usage', '{"minutes":3,"tokens":12400,"costUsd":0.04}'), `3 min · ${(12400).toLocaleString('es')} tokens · $0,04`);
+  assert.equal(detail('task.launch_options', '{"agent":"codex","account":"codex","model":"fake-codex-1","reasoning":null,"fast":false}'), 'Codex · modelo fake-codex-1');
+  assert.equal(detail('task.launch_options', '{"agent":"codex","account":"codex-2","model":null}'), 'Codex · cuenta codex-2');
+});
+
+test('an object of an unknown kind says nothing; a cut-off one neither', () => {
+  assert.equal(detail('task.other', '{"a":1,"b":"x"}'), '');
+  assert.equal(detail('task.other', '["a","b"]'), '');
+  assert.equal(detail('task.usage', '{"minutes":3,"tok'), '');
+});
+
+test('tool names and quoted states are told in words, and long texts are cut to one line', () => {
+  assert.equal(detail('files.given', 'orb_give_files'), es['activity.tool.give_files']);
+  const out = detail('user.message', 'AVISO DEL SISTEMA (no es Alex): pasa archivos con orb_give_files y vuelve a ponerla en cola con orb_update_task status "queued", o propón otro agente. '.repeat(3), 100);
+  assert.ok(out.length <= 101 && out.endsWith('…') && !out.includes('\n'));
+  assert.doesNotMatch(out, /orb_|"queued"/);
+  assert.match(detail('x.y', 'orb_update_task status "queued"'), /actualizar la tarea · en cola/);
+});
+
+test('no detail shows JSON, null, a tool name or an internal state', () => {
+  const battery = ['{"minutes":0,"tokens":null,"costUsd":null}', '{"agent":"codex","model":null}', '[1,2,{"a":null}]', '{"x":', 'orb_ask', 'orb_browser_click ref 3', 'orb_update_task status "blocked"', 'status "failed" y "done"', 'orb_cosa_nueva', 'null', '"queued"', 'running'];
+  for (const kind of ['task.usage', 'task.launch_options', 'task.updated', 'note']) {
+    for (const d of battery) {
+      const out = detail(kind, d);
+      assert.doesNotMatch(out, /[{}\[\]]|\bnull\b|orb_/, `${kind} ${d} → ${out}`);
+      assert.doesNotMatch(out, /"/, `${kind} ${d} → ${out}`);
+      assert.doesNotMatch(out, /\b(queued|running|failed|blocked|done)\b/, `${kind} ${d} → ${out}`);
+    }
+  }
+});
+
+test('every orb_ tool of the MCP server has a label in es and en', () => {
+  const server = fs.readFileSync(path.join(SRC, 'mcp', 'server.mjs'), 'utf8') + fs.readdirSync(path.join(SRC, 'mcp')).map((f) => fs.readFileSync(path.join(SRC, 'mcp', f), 'utf8')).join('');
+  const names = [...new Set([...server.matchAll(/name: '(orb_[a-z_]+)'/g)].map((m) => m[1]))];
+  assert.ok(names.length > 20);
+  for (const n of names) {
+    const short = n.replace(/^orb_/, '').replace(/^browser_.*/, 'browser').replace(/^android_.*/, 'android');
+    assert.ok(es[`activity.tool.${short}`] && en[`activity.tool.${short}`], n);
+  }
+});

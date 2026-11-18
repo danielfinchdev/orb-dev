@@ -195,7 +195,7 @@ function eventItem(e) {
   const detail = eventText(e.detail);
   const failed = FAIL_KIND.test(e.kind) || (e.kind === 'task.updated' && /^failed$/i.test(String(e.detail)));
   const text = clip(`${e.actor}${e.title ? ` · ${e.title}` : ''}${detail ? ` · ${detail}` : ''}`);
-  return { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: 'subagentes', level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, stream: 'events', pos: e.id, ...(e.task != null ? { task: e.task } : {}) };
+  return { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: 'subagentes', level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, actor: e.actor, title: e.title ?? null, detail: clip(detail ?? ''), stream: 'events', pos: e.id, ...(e.task != null ? { task: e.task } : {}) };
 }
 
 // → how many lines each source and each level hold under the other filters: a source's number follows the level, project,

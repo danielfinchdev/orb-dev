@@ -33,10 +33,10 @@ export class ReportsPart {
       .map((r) => { try { return Number(JSON.parse(r.body).costUsd) || 0; } catch { return 0; } })[0] ?? 0;
     return { minutes: Math.max(0, (Date.now() - Date.parse(launched)) / 60_000), tokens: measured ? tokens : null, costUsd: cost == null ? null : Math.max(0, cost - before) };
   }
-  usageLine(u) {
+  usageLine(u, { plain = false } = {}) {
     if (!u) return '';
     const tok = u.tokens >= 1e6 ? `${(u.tokens / 1e6).toFixed(1)} M` : u.tokens >= 1e3 ? `${Math.round(u.tokens / 1e3)} k` : String(u.tokens);
-    return [`${u.minutes < 1 ? '<1' : Math.round(u.minutes)} min`, u.tokens == null ? tr('msg.scheduler.noTokenData') : u.tokens ? `${tok} tokens` : null, u.costUsd ? `${u.costUsd.toFixed(2)} $` : null].filter(Boolean).join(' · ');
+    return [`${u.minutes < 1 ? '<1' : Math.round(u.minutes)} min`, u.tokens == null ? (plain ? null : tr('msg.scheduler.noTokenData')) : u.tokens ? `${tok} tokens` : null, u.costUsd ? `${u.costUsd.toFixed(2)} $` : null].filter(Boolean).join(' · ');
   }
 
   // Returns the task updated with a clear reason, or null when the failure is not one we recognise.

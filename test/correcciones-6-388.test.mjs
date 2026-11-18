@@ -24,7 +24,7 @@ test('1: no JSON.stringify reaches a text node of a view or a component; engine 
   assert.equal((tasks.match(/activityLabel\(tr, e\.kind\)/g) ?? []).length, 2);
   assert.equal((tasks.match(/title=\{e\.detail\}/g) ?? []).length, 2);
   const act = read('src/ui/lib/activity.js');
-  assert.match(act, /replace\(\/\\borb_\[a-z_\]\+\\b\/g, t\('activity\.tool'\)\)/);
+  assert.match(act, /toolLabel\(t, name\)/);
   for (const lang of ['es', 'en']) {
     assert.match(locale(lang, 'activity.mjs'), /'activity\.tool'/);
     assert.match(locale(lang, 'session.mjs'), /'session\.unknownEvent'/);
