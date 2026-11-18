@@ -19,7 +19,7 @@ test('the headphones open the player, which holds every control', () => {
   assert.match(player, /onClick=\{back\}/);
   assert.match(player, /const back = \(\) => \(s\.playing \? skipBack\(\) :/);
   assert.match(player, /onClick=\{\(\) => toggleMusic\(\)\}/);
-  assert.match(sidebar, /const skip = \(\) => \(s\.playing \? skipTrack\(\) :/);
+  assert.match(sidebar, /const skip = \(\) => \(s\.playing \? skipTheme\(\) :/);
   assert.match(sidebar, /onClick=\{skip\}/);
   assert.match(player, /onCheckedChange=\{\(on\) => setMusicReactive\(!on\)\}/, '«Manual» is the music that does not react');
   assert.match(player, /setMusicIntensity\(n, \{ save: true \}\)/);
@@ -30,7 +30,7 @@ test('nothing starts the music without a click', () => {
   // The only way to start it is toggleMusic, inside the play button's handler; nothing runs it from an effect or on mount.
   assert.equal((player.match(/toggleMusic\(/g) ?? []).length, 1);
   assert.equal((sidebar.match(/toggleMusic/g) ?? []).length, 0);
-  for (const src of [player, sidebar]) for (const m of src.matchAll(/useEffect\(([\s\S]*?)\n?\s*\}?, \[[^\]]*\]\)/g)) assert.doesNotMatch(m[1], /toggleMusic|startMusic|skipTrack|skipBack|setMusicMode/);
+  for (const src of [player, sidebar]) for (const m of src.matchAll(/useEffect\(([\s\S]*?)\n?\s*\}?, \[[^\]]*\]\)/g)) assert.doesNotMatch(m[1], /toggleMusic|startMusic|skipTheme|skipBack|setMusicMode/);
   assert.doesNotMatch(player, /startMusic|playNow|autoPlay|autoplay/);
 });
 

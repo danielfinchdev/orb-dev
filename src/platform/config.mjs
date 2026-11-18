@@ -8,7 +8,7 @@ import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, migrateAppearance } from '../shared/appearance.mjs';
-import { MUSIC_MODES, ADAPTIVE_THEMES } from '../shared/music.mjs';
+import { ADAPTIVE_THEMES } from '../shared/music.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
@@ -147,12 +147,11 @@ export function validateConfig(c) {
   bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset'); bool(c.continuity?.switchAccount, 'continuity.switchAccount');
   bool(c.suggestNext, 'suggestNext');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
-  // the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
+  // the background music (Windows; src/ui/lib/music.js; any other key, such as the source an earlier version saved, is ignored) and the games' own music (gameMusic: false = muted).
   const music = c.ui?.music;
   if (music !== undefined && (!music || typeof music !== 'object' || Array.isArray(music) || (music.on !== undefined && typeof music.on !== 'boolean')
     || (music.volume !== undefined && !(typeof music.volume === 'number' && music.volume >= 0 && music.volume <= 1))
-    || (music.track !== undefined && (typeof music.track !== 'string' || music.track.length > 40))
-    || (music.mode !== undefined && !MUSIC_MODES.includes(music.mode)) || (music.theme !== undefined && !ADAPTIVE_THEMES.includes(music.theme))
+    || (music.theme !== undefined && !ADAPTIVE_THEMES.includes(music.theme))
     || (music.reactive !== undefined && typeof music.reactive !== 'boolean')
     || (music.intensity !== undefined && !(typeof music.intensity === 'number' && music.intensity >= 0 && music.intensity <= 1)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
   bool(c.ui?.gameMusic, 'ui.gameMusic');

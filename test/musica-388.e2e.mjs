@@ -130,11 +130,10 @@ try {
   await until(async () => (await music()).theme === 'orbita', 'the theme chosen in Ajustes');
   assert.equal((await contexts())[0].state, 'running', 'still playing through every change');
 
-  step('the switch in Ajustes stops it: its context is closed; both sources stay on offer under «Más opciones»');
+  step('the switch in Ajustes stops it: its context is closed; there is no source to choose');
   const onOff = page.locator('[data-testid=music-on]');
-  const mode = page.locator('[data-testid=music-mode]');
   assert.equal(await onOff.getAttribute('aria-checked'), 'true', 'the switch follows the button');
-  assert.equal(await mode.count(), 1, 'the source can always be chosen: the adaptive music or the free tracks');
+  assert.equal(await page.locator('[data-testid=music-mode]').count(), 0, 'Orb makes the only music there is: no source to choose');
   await onOff.click();
   await until(async () => (await contexts())[0].state === 'closed', 'the adaptive music let go');
   await until(async () => (await music()).on === false, 'remembered as off');
@@ -164,26 +163,29 @@ try {
   assert.equal(await play.getAttribute('aria-label'), 'Reproducir música');
   await closePlayer();
 
-  step('the free tracks left chosen by an earlier version: the source shows, to go back to the adaptive music');
-  // Written to orb.json the way 3.8.7 left it: Ajustes no longer has a way to choose the tracks.
-  await orb.call('config.save', { patch: { ui: { music: { ...(await music()), mode: 'tracks' } } } });
-  await until(async () => (await music()).mode === 'tracks', 'the tracks saved');
+  step('a profile from 3.8.7 with the free tracks plays the adaptive music, with its volume and style, and starts nothing');
+  // Written to orb.json the way 3.8.7 left it, with the source and the track it had.
+  await orb.call('config.save', { patch: { ui: { music: { on: false, volume: 0.6, theme: 'marfil', reactive: true, intensity: 0.35, mode: 'tracks', track: 'gathu' } } } });
+  await until(async () => (await music()).mode === 'tracks', 'the old profile saved');
   await page.click('[data-testid=nav-settings]');
-  await mode.waitFor();
-  assert.equal(await page.locator('[data-testid=music-theme]').count(), 0, 'the themes belong to the adaptive music');
-  await mode.click();
-  await page.getByRole('option', { name: 'Adaptativa' }).click();
-  await until(async () => (await music()).mode === 'adaptive', 'the source saved');
-  await mode.waitFor({ state: 'detached' });
   await page.locator('[data-testid=music-theme]').waitFor();
+  assert.equal(await page.locator('[data-testid=music-mode]').count(), 0, 'no source to choose');
+  assert.match(await page.locator('[data-testid=music-theme]').innerText(), /Marfil/, 'the style it had');
+  assert.equal(await page.locator('[data-testid=music-volume]').inputValue(), '0.6', 'the volume it had');
+  assert.equal(await page.locator('[data-testid=music-on]').getAttribute('aria-checked'), 'false', 'it was off and stays off');
   await closeSettings();
-  assert.equal((await contexts()).length, 2, 'choosing the source starts nothing');
+  assert.equal((await contexts()).length, 2, 'reading the profile starts nothing');
   assert.equal(await button.getAttribute('aria-pressed'), 'false');
-
-  step('the lock stops it and it does not come back by itself');
+  // Its first play is the adaptive music with that style.
   await openPlayer();
   await play.click();
-  await until(async () => { const c = await contexts(); return c.length === 3 && c[2].state === 'running'; }, 'playing before the lock');
+  await until(async () => { const c = await contexts(); return c.length === 3 && c[2].state === 'running'; }, 'the adaptive music plays');
+  await until(async () => (await music()).on === true, 'remembered as on');
+  assert.deepEqual([(await music()).theme, (await music()).volume], ['marfil', 0.6]);
+  // It keeps playing until the lock.
+  await closePlayer();
+
+  step('the lock stops it and it does not come back by itself');
   await orb.call('master.lock', { reason: 'hand' });
   await until(async () => (await contexts())[2].state === 'closed', 'stopped by the lock');
   await page.waitForTimeout(1500);

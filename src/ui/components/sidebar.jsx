@@ -12,8 +12,8 @@ import { useT } from '@/lib/i18n.js';
 import { PRODUCT } from '../../shared/product.mjs';
 import { BrowserSettingsMenu } from './browser-settings-menu.jsx';
 import { OrbInbox } from '@/views/orb/inbox.jsx';
-import { available as musicAvailable, musicState, subscribe as onMusic, skipTrack, setMusicTheme } from '@/lib/music.js';
-import { trackOf, musicPrefs, nextTheme } from '../../shared/music.mjs';
+import { available as musicAvailable, musicState, subscribe as onMusic, skipTheme, setMusicTheme } from '@/lib/music.js';
+import { musicPrefs, nextTheme } from '../../shared/music.mjs';
 
 // The assistant's wordmark ORB·E, drawn its own way in each theme (app.css .wordmark): spaced capitals with a dot of the
 // theme's colour in Orb, a techno one underlined in Vaporwave…
@@ -100,18 +100,12 @@ function MusicButtons() {
   const t = useT();
   const [s, setS] = useState(musicState);
   // the engine also reports how far the music has risen, several times a second: the foot only needs what it draws
-  useEffect(() => onMusic((n) => setS((o) => (o.playing === n.playing && o.loading === n.loading && o.error === n.error && o.track === n.track && o.theme === n.theme ? o : n))), []);
-  // While it plays, what plays; before, what the player would start (Ajustes › Apariencia).
-  const chosen = useStore((st) => musicPrefs(st.app?.config?.ui).mode === 'adaptive');
+  useEffect(() => onMusic((n) => setS((o) => (o.playing === n.playing && o.loading === n.loading && o.error === n.error && o.theme === n.theme ? o : n))), []);
   const theme = useStore((st) => musicPrefs(st.app?.config?.ui).theme);
-  const adaptive = s.playing || s.loading ? Boolean(s.theme) : chosen;
-  const now = trackOf(s.track);
-  const text = adaptive
-    ? (s.error ? t('nav.musicErrorAdaptive') : s.playing ? t('nav.musicNowAdaptive', { theme: t(`nav.musicTheme.${s.theme}`) }) : t('nav.musicHintAdaptive'))
-    : s.error ? t('nav.musicError') : s.loading ? t('nav.musicLoading') : s.playing && now ? t('nav.musicNow', { title: now.title, author: now.author }) : t('nav.musicHint');
-  const next = t(adaptive ? 'nav.musicNextTheme' : 'nav.musicNext');
+  const text = s.error ? t('nav.musicErrorAdaptive') : s.playing ? t('nav.musicNowAdaptive', { theme: t(`nav.musicTheme.${s.theme}`) }) : t('nav.musicHintAdaptive');
+  const next = t('nav.musicNextTheme');
   // While it plays the engine moves on by itself; before, the arrow only chooses the style the next play starts with.
-  const skip = () => (s.playing ? skipTrack() : setMusicTheme(nextTheme(theme)));
+  const skip = () => (s.playing ? skipTheme() : setMusicTheme(nextTheme(theme)));
   return (
     <MusicPlayer next={<IconButton label={next} onClick={skip} data-testid="nav-music-next"><SkipForward className="size-4" /></IconButton>}>
       <BubbleTip title={t('nav.music')} text={text} side="top">

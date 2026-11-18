@@ -62,7 +62,7 @@ export default {
   'about.developer': 'Developer',
   'about.license': 'Licence',
   'about.music': 'Music',
-  'about.musicSummary': '{n} free tracks (CC0)',
+  'about.musicSummary': '{n} free tracks for the minigames (CC0)',
   'about.musicTrack': '“{title}” by {author}',
   'about.musicAdaptive': 'Adaptive music: made by Orb on the spot, with no audio files',
   // Texts that pointed to the old sections

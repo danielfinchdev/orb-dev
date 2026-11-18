@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { validateConfig } from '../src/platform/config.mjs';
-import { DEFAULT_CONFIG, merge } from '../src/platform/config-file.mjs';
-import { ADAPTIVE_THEMES, MUSIC_MODES, DEFAULT_INTENSITY, DEFAULT_VOLUME, BACKGROUND, musicPrefs, nextTheme, previousTheme, nextTrack, previousTrack } from '../src/shared/music.mjs';
+import { DEFAULT_CONFIG, merge, configFrom } from '../src/platform/config-file.mjs';
+import { ADAPTIVE_THEMES, DEFAULT_INTENSITY, DEFAULT_VOLUME, musicPrefs, nextTheme, previousTheme } from '../src/shared/music.mjs';
 import { THEME_IDS, SIGNALS, createAdaptiveMusic } from '../src/ui/lib/adaptive-music.js';
 import { createSignals, isTyping, levelOf, TYPING_MS, EVENT_MS, IDLE_MS, WORKING_MS, LEVEL_MS } from '../src/ui/lib/music-signals.js';
 import { textMood, chatMood, waitsForUser } from '../src/ui/lib/chat-mood.js';
@@ -43,22 +43,36 @@ function run(music, ctx, seconds, each = () => {}) {
   while (ctx.currentTime < end) { ctx.currentTime += 0.05; each(ctx.currentTime); music._tick(ctx.currentTime); }
 }
 
-test('its settings: adaptive by default, a theme, whether it reacts and an intensity for when it does not', () => {
-  assert.deepEqual(MUSIC_MODES, ['adaptive', 'tracks']);
-  assert.deepEqual(musicPrefs({}), { on: false, volume: DEFAULT_VOLUME, track: BACKGROUND[0].id, mode: 'adaptive', theme: ADAPTIVE_THEMES[0], reactive: true, intensity: DEFAULT_INTENSITY });
-  assert.deepEqual(musicPrefs({ music: { mode: 'tracks', theme: 'orbita', reactive: false, intensity: 0.8 } }), { on: false, volume: DEFAULT_VOLUME, track: BACKGROUND[0].id, mode: 'tracks', theme: 'orbita', reactive: false, intensity: 0.8 });
+test('its settings: a theme, whether it reacts and an intensity for when it does not', () => {
+  assert.deepEqual(musicPrefs({}), { on: false, volume: DEFAULT_VOLUME, theme: ADAPTIVE_THEMES[0], reactive: true, intensity: DEFAULT_INTENSITY });
+  assert.deepEqual(musicPrefs({ music: { theme: 'orbita', reactive: false, intensity: 0.8 } }), { on: false, volume: DEFAULT_VOLUME, theme: 'orbita', reactive: false, intensity: 0.8 });
   // Anything else is read as the default, never passed on to the engine.
-  const odd = musicPrefs({ music: { mode: 'radio', theme: '__proto__', reactive: 'no', intensity: 7 } });
-  assert.equal(odd.mode, 'adaptive'); assert.equal(odd.theme, 'bruma'); assert.equal(odd.reactive, true); assert.equal(odd.intensity, 1);
+  const odd = musicPrefs({ music: { theme: '__proto__', reactive: 'no', intensity: 7 } });
+  assert.equal(odd.theme, 'bruma'); assert.equal(odd.reactive, true); assert.equal(odd.intensity, 1);
   assert.equal(musicPrefs({ music: { intensity: NaN } }).intensity, DEFAULT_INTENSITY);
   assert.ok(DEFAULT_INTENSITY > 0 && DEFAULT_INTENSITY < 0.6, 'calm unless asked otherwise');
   // The «next» button goes through the themes and starts again.
   assert.equal(nextTheme('bruma'), 'neon'); assert.equal(nextTheme(ADAPTIVE_THEMES.at(-1)), ADAPTIVE_THEMES[0]); assert.equal(nextTheme('nope'), ADAPTIVE_THEMES[0]);
   // orb.json takes them and refuses anything else.
   const withUi = (ui) => merge(structuredClone(DEFAULT_CONFIG), { ui });
-  validateConfig(withUi({ music: { on: true, mode: 'adaptive', theme: 'marfil', reactive: false, intensity: 0.5 } }));
-  validateConfig(withUi({ music: { mode: 'tracks' } }));
-  for (const bad of [{ mode: 'radio' }, { theme: 'jazz' }, { reactive: 1 }, { intensity: 2 }, { intensity: '0.5' }]) assert.throws(() => validateConfig(withUi({ music: bad })), /ui\.music/, JSON.stringify(bad));
+  validateConfig(withUi({ music: { on: true, theme: 'marfil', reactive: false, intensity: 0.5 } }));
+  // A profile an earlier version saved, with the source and track it had, still loads.
+  validateConfig(withUi({ music: { mode: 'tracks', track: 'gathu' } }));
+  for (const bad of [{ theme: 'jazz' }, { reactive: 1 }, { intensity: 2 }, { intensity: '0.5' }]) assert.throws(() => validateConfig(withUi({ music: bad })), /ui.music/, JSON.stringify(bad));
+});
+
+test('a profile that had the free tracks now plays the adaptive music and keeps the rest', () => {
+  const old = { music: { on: true, volume: 0.62, mode: 'tracks', track: 'lofi-again', theme: 'neon', reactive: false, intensity: 0.7 } };
+  const prefs = musicPrefs({ music: old.music });
+  assert.deepEqual(prefs, { on: true, volume: 0.62, theme: 'neon', reactive: false, intensity: 0.7 }, 'volume, style and on/off stay; the source and the track are dropped');
+  assert.ok(!('mode' in prefs) && !('track' in prefs));
+  // Saving what was read (as lib/music.js does on every change) writes neither key.
+  assert.deepEqual(Object.keys({ ...musicPrefs({ music: old.music }), on: false }).sort(), ['intensity', 'on', 'reactive', 'theme', 'volume']);
+  // Loading orb.json drops them and keeps the rest.
+  assert.deepEqual(configFrom({ ui: { music: old.music } }).ui.music, { on: true, volume: 0.62, theme: 'neon', reactive: false, intensity: 0.7 });
+  // Off stays off, and a profile without those keys reads the same as always.
+  assert.equal(musicPrefs({ music: { mode: 'tracks' } }).on, false);
+  assert.equal(musicPrefs({ music: { mode: 'tracks', on: true, volume: 0.2 } }).volume, 0.2);
 });
 
 test('the engine has the themes the settings offer, and every one has its name in both languages', () => {
@@ -66,7 +80,6 @@ test('the engine has the themes the settings offer, and every one has its name i
   assert.deepEqual([...SIGNALS], ['idle', 'typing', 'agent-working', 'agent-done', 'error', 'success']);
   for (const dict of [es, en]) {
     for (const id of ADAPTIVE_THEMES) { assert.ok(dict[`nav.musicTheme.${id}`], id); assert.ok(dict[`appearance.musicTheme.${id}`], id); }
-    for (const mode of MUSIC_MODES) { assert.ok(dict[`appearance.musicMode.${mode}`], mode); assert.ok(dict[`appearance.musicModeHint.${mode}`], mode); }
   }
   // Its interface texts live in the locales, not in the engine.
   assert.doesNotMatch(read('lib', 'adaptive-music.js'), /[áéíóúñ¿¡]/i);
@@ -232,15 +245,15 @@ test('the player keeps its rules with the adaptive music: a click starts it, the
   assert.match(music, /context: engineCtx, autoPause: false \}\)/);
   assert.doesNotMatch(music, /new (window\.)?AudioContext/);
   // The lock and the button stop it for good, and its context and listeners go with it.
-  assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+bg\?\.pause\(\); game\?\.pause\(\); stopBackground\(\);/);
-  assert.match(music, /function stopBackground\(\) \{\n\s+runs\+\+;\n\s+bg\?\.pause\(\); stopAdaptive\(\); source = null; bgHeld = false;/);
+  assert.match(music, /export function pauseAll\(\) \{\n\s+disarm\(\);\n\s+game\?\.pause\(\); stopBackground\(\);/);
+  assert.match(music, /function stopBackground\(\) \{\n\s+runs\+\+;\n\s+stopAdaptive\(\); source = null; bgHeld = false;/);
   assert.match(music, /function stopAdaptive\(\) \{\n\s+stopSignals\?\.\(\); stopSignals = null; stopLevel\(\);\n\s+if \(!engine \|\| letGo\) return;\n\s+engine\.stop\(\);/);
   assert.match(music, /engine\?\.destroy\(\); engine = null;\n\s+engineCtx\?\.close\(\)\.catch\(quiet\); engineCtx = null;/);
   // No theme silences it: it is there in every one and plays only when the user turns it on.
   assert.doesNotMatch(music, /plainSkin|stopIfPlain|onAppearance/);
   // Hidden or minimised: paused, and back when shown. A game holds it meanwhile.
   assert.match(music, /if \(hidden\) \{ bgPause\(\); game\?\.pause\(\); \}/);
-  assert.match(music, /const bgPause = \(\) => \{ if \(source === 'adaptive'\) engine\?\.pause\(\); else bg\?\.pause\(\); \};/);
+  assert.match(music, /const bgPause = \(\) => \{ engine\?\.pause\(\); \};/);
   assert.match(music, /if \(bgSounding\(\)\) \{ bgPause\(\); bgHeld = true; \}/);
   assert.match(music, /if \(game && !game\.paused\) \{ bgHeld = true; return; \}\n\s+engine\.start\(\); catchUp\(\);/, 'never over a game\'s music');
   // It follows the activity only while it plays and reacts: no listener nor timer otherwise.
@@ -260,7 +273,7 @@ test('the player is told how far the music has risen, in hundredths and only whe
   assert.ok(LEVEL_MS >= 200 && LEVEL_MS <= 500, 'a few times a second, never every bar');
   const music = read('lib', 'music.js');
   // Part of what the button shows (musicState, subscribe); null while the adaptive music is not the one that plays.
-  assert.match(music, /let state = \{ playing: false, loading: false, error: null, track: null, theme: null, intensity: null \};/);
+  assert.match(music, /let state = \{ playing: false, loading: false, error: null, theme: null, intensity: null \};/);
   assert.match(music, /emit\(\{ loading: false, playing: true, theme: prefs\.theme, intensity: levelOf\(engine\.getState\(\)\.intensity\) \}\);/);
   // Read on a timer of its own, which lives only while it plays; told only when the level changes; a paused music keeps it.
   assert.match(music, /react\(\); watchLevel\(\);/);
@@ -273,32 +286,28 @@ test('the player is told how far the music has risen, in hundredths and only whe
 test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» and the next theme', () => {
   const settings = settingsSource();
   assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
-  for (const id of ['music-on', 'music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
+  for (const id of ['music-on', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
+  // There is only one source: nothing to choose it with.
+  assert.doesNotMatch(settings, /music-mode|MUSIC_MODES|setMusicMode|musicSource/);
   // The switch is the sidebar's button: it shows what plays and goes through the same toggle.
   assert.match(settings, /<Switch checked=\{playing\} onCheckedChange=\{\(\) => toggleMusic\(\)\}/);
-  // Both sources are always offered, under «Más opciones»: the music Orb makes and the free tracks, so either can be
-  // chosen again. What only the adaptive music has (its style, «Música que reacciona», the intensity) shows with it alone.
-  assert.match(settings, /data-testid="music-mode" options=\{MUSIC_MODES\.map\(/);
-  assert.doesNotMatch(settings, /MUSIC_MODES\.filter\(/);
-  assert.match(settings, /\{adaptive \? \(<>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
-  assert.match(settings, /value=\{prefs\.mode\} onValueChange=\{setMusicMode\}/);
+  // Under «Más opciones»: the style, «Música que reacciona» and the intensity.
+  assert.match(settings, /<Panel>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
   assert.match(settings, /value=\{prefs\.theme\} onValueChange=\{setMusicTheme\}/);
   assert.match(settings, /<Switch checked=\{prefs\.reactive\} onCheckedChange=\{setMusicReactive\}/);
   assert.match(settings, /\{prefs\.reactive \? null : \(/, 'the intensity shows only when it does not react');
   assert.match(settings, /<li data-testid="about-music-adaptive">\{t\('about\.musicAdaptive'\)\}<\/li>/);
   const sidebar = read('components', 'sidebar.jsx');
   assert.match(sidebar, /t\('nav\.musicNowAdaptive', \{ theme: t\(`nav\.musicTheme\.\$\{s\.theme\}`\) \}\)/);
-  assert.match(sidebar, /const adaptive = s\.playing \|\| s\.loading \? Boolean\(s\.theme\) : chosen;/, 'what plays; before, what the button would start');
-  assert.match(sidebar, /const next = t\(adaptive \? 'nav\.musicNextTheme' : 'nav\.musicNext'\);/);
+  assert.doesNotMatch(sidebar, /chosen|trackOf|nav\.musicNext'/);
+  assert.match(sidebar, /const next = t\('nav\.musicNextTheme'\);/);
   const music = read('lib', 'music.js');
-  // «Next» and «previous» go through the themes (or the tracks) in both directions.
-  assert.match(music, /if \(source === 'adaptive'\) \{ setMusicTheme\(\(back \? previousTheme : nextTheme\)\(musicPrefs\(\)\.theme\)\); return; \}/);
-  assert.match(music, /export const skipTrack = \(\) => skip\(false\);\nexport const skipBack = \(\) => skip\(true\);/);
+  // «Next» and «previous» go through the themes in both directions.
+  assert.match(music, /setMusicTheme\(\(back \? previousTheme : nextTheme\)\(musicPrefs\(\)\.theme\)\);/);
+  assert.match(music, /export const skipTheme = \(\) => skip\(false\);\nexport const skipBack = \(\) => skip\(true\);/);
   for (const id of ADAPTIVE_THEMES) assert.equal(previousTheme(nextTheme(id)), id, id);
   assert.equal(previousTheme('bruma'), 'orbita'); assert.equal(previousTheme('nope'), ADAPTIVE_THEMES.at(-1));
-  for (const t of BACKGROUND) assert.equal(previousTrack(nextTrack(t.id)), t.id, t.id);
-  assert.equal(previousTrack(BACKGROUND[0].id), BACKGROUND.at(-1).id);
-  assert.match(music, /if \(was && available\(\)\) \{ stopBackground\(\); playNow\(\); \}/, 'changing the source while it plays goes on with the other');
+  assert.doesNotMatch(music, /setMusicMode|playBackground|nextTrack|previousTrack/, 'the background music is made by Orb alone');
 });
 
 test('the engine is a file of its own in the built window, loaded on demand', { skip: !fs.existsSync(path.join(ROOT, 'src', 'renderer', 'index.html')) && 'the interface is not built' }, () => {

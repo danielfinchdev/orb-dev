@@ -17,7 +17,7 @@ the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](
 no audio files and no connection, and it follows what happens. It rises while you type and while the agents work, and
 it marks an error or a job well done. Four styles (Mist, Neon, Ivory and Orbit); the headphones in the sidebar turn
 it on and the button next to them changes the style. In Settings › Appearance you choose the style and the volume,
-turn "Music that reacts" off to keep one intensity, or go back to the free tracks. As before, it is off until you
+turn "Music that reacts" off to keep one intensity. As before, it is off until you
 turn it on, stops when Orb locks and pauses while the window is hidden.
 
 **A new interface.** Every screen of the Windows app has been redrawn. There are six themes: Default (with six
@@ -34,7 +34,8 @@ closest of the six palettes), and Cloud is now called Candy. Density, chat width
 are fixed, and the zoom of the whole app (Ctrl with + and −) is what remains to make everything bigger or smaller. The
 theme built from your own colours is gone too, and the 28 palettes are now six. Code fonts and colours that no longer
 exist fall back to the nearest one that does. The little arrow that opened the sidebar's footer, the list of subsections
-in Settings and the Orb icon in "About" are gone as well.
+in Settings and the Orb icon in "About" are gone as well. The free background tracks are gone: a profile that had them now plays the
+adaptive music.
 
 **Chat and tasks.** The chat shows unread marks (and "Mark as unread"), the live branch of each chat and closed pull
 requests. A side panel has three tabs: Details, Changes and PR. Every turn that changed files ends with a card that

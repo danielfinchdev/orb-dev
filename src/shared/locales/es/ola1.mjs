@@ -62,7 +62,7 @@ export default {
   'about.developer': 'Desarrollador',
   'about.license': 'Licencia',
   'about.music': 'Música',
-  'about.musicSummary': '{n} pistas libres (CC0)',
+  'about.musicSummary': '{n} pistas libres de los minijuegos (CC0)',
   'about.musicTrack': '«{title}», de {author}',
   'about.musicAdaptive': 'Música adaptativa: la crea Orb al momento, sin archivos de audio',
   // Textos que apuntaban a las secciones de antes

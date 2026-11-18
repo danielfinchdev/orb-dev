@@ -153,7 +153,9 @@ export function configFrom(stored) {
   // «Monitoreo del equipo» and Opti Bot are gone, and so are the bots, Open Control Edge and the «Orb | Bots» mode too.
   // Their settings go (the file loses them at the next save).
   delete config.monitor; delete config.bots; delete config.oce;
-  if (config.ui) { delete config.ui.mode; delete config.ui.menuBar; } // menuBar: Windows' menu bar is always hidden now
+  if (config.ui) { delete config.ui.mode; delete config.ui.menuBar; }
+  // The background music is only the adaptive one: the source and the track an earlier version saved are dropped, the rest stays.
+  if (config.ui?.music) { delete config.ui.music.mode; delete config.ui.music.track; } // menuBar: Windows' menu bar is always hidden now
   // the phone never types the master password on a page without encryption: «mobile.lanHttp» is gone.
   if (config.mobile) delete config.mobile.lanHttp;
   // Folders made by older versions: agents added later get their default account and their place in the order.

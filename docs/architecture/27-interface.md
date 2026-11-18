@@ -140,9 +140,12 @@ menus, texts, permissions and themes.
 - **«Cristal» theme** (`src/ui/themes/skins.css`, `src/ui/themes/pieces.css`): a theme of its own (light only, it takes
   the palettes like the default one) with a glass material and a shader backdrop. It no longer derives from the retired
   Profesional theme.
-- **Music** (Windows only; `src/engine/host/music.mjs`, `lib/music.js`): ♪ in the sidebar's foot and one track per
-  mini-game, off by default; CC0 tracks pinned by size and SHA-256 and downloaded the first time to
-  `core\herramientas\musica`; it stops when Orb locks or the window hides.
+- **Music** (Windows only; `lib/music.js`): the headphones in the sidebar's foot play the adaptive music, which Orb makes
+  as it plays (`lib/adaptive-music.js`; no files, no network; style, "Music that reacts" and intensity in Settings ›
+  Appearance). `ui.music` keeps `on`, `volume`, `theme`, `reactive` and `intensity`; the `mode` and `track` keys of
+  earlier versions are ignored. Each mini-game has a CC0 track pinned by size and SHA-256 and downloaded the first time
+  (`src/engine/host/music.mjs`) to `core\herramientas\musica`. Off by default; it stops when Orb locks or the window
+  hides.
 
 ## Tutorials and guided tour
 

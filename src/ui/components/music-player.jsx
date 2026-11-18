@@ -9,7 +9,7 @@ import { IconButton } from '@/components/ui/primitives.jsx';
 import { useStore } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { subscribe as onMusic, musicState, toggleMusic, skipBack, setMusicTheme, setMusicReactive, setMusicIntensity, setMusicVolume } from '@/lib/music.js';
-import { musicPrefs, previousTheme, trackOf } from '../../shared/music.mjs';
+import { musicPrefs, previousTheme } from '../../shared/music.mjs';
 
 const pct = (v) => `${Math.round(v * 100)} %`;
 
@@ -37,7 +37,6 @@ export function MusicPlayer({ next, children }) {
   const prefs = musicPrefs(ui);
   const running = Boolean(s.playing || s.loading);
   const theme = running && s.theme ? s.theme : prefs.theme;
-  const legacy = running && !s.theme ? trackOf(s.track) : null;
   const manual = !prefs.reactive;
   // While it plays the engine skips by itself; before, the arrows only choose the style the next play will start with.
   const back = () => (s.playing ? skipBack() : setMusicTheme(previousTheme(prefs.theme)));
@@ -49,8 +48,8 @@ export function MusicPlayer({ next, children }) {
         <div className="mp-now">
           <span className="mp-art"><AudioLines /></span>
           <span className="mp-t">
-            <b data-testid="music-pop-name">{legacy ? legacy.title : t(`nav.musicTheme.${theme}`)}</b>
-            {s.error ? <span className="mp-err" role="alert">{t('nav.musicErrorAdaptive')}</span> : <span>{legacy ? legacy.author : t(`player.theme.${theme}`)}</span>}
+            <b data-testid="music-pop-name">{t(`nav.musicTheme.${theme}`)}</b>
+            {s.error ? <span className="mp-err" role="alert">{t('nav.musicErrorAdaptive')}</span> : <span>{t(`player.theme.${theme}`)}</span>}
           </span>
         </div>
         <div className="mp-ctl">

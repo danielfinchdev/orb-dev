@@ -16,8 +16,8 @@ import { useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
 import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
-import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicMode, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
-import { MUSIC_MODES, ADAPTIVE_THEMES } from '../../../shared/music.mjs';
+import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
+import { ADAPTIVE_THEMES } from '../../../shared/music.mjs';
 import { save, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
@@ -132,26 +132,19 @@ function MusicMore() {
   const prefs = musicPrefs();
   const [level, setLevel] = useState(prefs.intensity);
   const keepLevel = () => setMusicIntensity(level, { save: true });
-  const adaptive = prefs.mode === 'adaptive';
   return (
     <MoreOptions testid="more-options-music">
       <Panel>
-            {/* always both ways: the music Orb makes and the free tracks, so either one can be chosen again */}
-            <Setting label={t('appearance.musicSource')} hint={t(`appearance.musicModeHint.${prefs.mode}`)}>
-              <Select caret="solid" className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.musicSource')} data-testid="music-mode" options={MUSIC_MODES.map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
-            </Setting>
-            {adaptive ? (<>
-              <Setting label={t('appearance.musicTheme')}>
-                <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
-              </Setting>
-              <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
-              {prefs.reactive ? null : (
-                <Setting label={t('appearance.musicIntensity')}>
-                  <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
-                    onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
-                </Setting>
-              )}
-            </>) : null}
+        <Setting label={t('appearance.musicTheme')}>
+          <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
+        </Setting>
+        <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
+        {prefs.reactive ? null : (
+          <Setting label={t('appearance.musicIntensity')}>
+            <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
+              onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
+          </Setting>
+        )}
       </Panel>
     </MoreOptions>
   );
@@ -468,8 +461,7 @@ export function ExpertPanelsCard({ c }) {
 
 // the background music (Windows; lib/music.js): the adaptive music, made by Orb on the spot: its theme, whether it follows
 // what happens in Orb (or keeps one intensity) and the volume. Each change is heard at once when the music is playing;
-// the sliders are heard while they are dragged and saved when let go. The tracks source is not offered: only a value
-// left by an earlier version shows the choice, so it can be left.
+// the sliders are heard while they are dragged and saved when let go.
 function MusicSettings() {
   const t = useT();
   useStore((s) => s.app?.config?.ui?.music); // drawn again when a choice is saved

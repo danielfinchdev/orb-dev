@@ -1,8 +1,8 @@
-// the music Orb can play on Windows: background music for studying or coding (the
-// play / pause button at the foot of the sidebar) and one track per minigame. The background music is either made by
-// Orb as it plays (the adaptive music, below) or one of the free tracks. No track is in the installer: each
-// one is downloaded the first time it is played (src/engine/host/music.mjs) into core\herramientas\musica (read-only for
-// agents, src/domain/security/guard.mjs) and checked against its size and SHA-256 here before it is kept or played.
+// the music Orb can play on Windows: background music for studying or coding (the play / pause button at the foot
+// of the sidebar), which Orb makes as it plays (the adaptive music, below), and one track per minigame. No game track is
+// in the installer: each one is downloaded the first time it is played (src/engine/host/music.mjs) into
+// core\herramientas\musica (read-only for agents, src/domain/security/guard.mjs) and checked against its size and
+// SHA-256 here before it is kept or played.
 //
 // Only free music: every track is CC0 1.0 (public domain dedication), checked by hand on its page (the «License(s)»
 // field of OpenGameArt.org) on 2026-11-09. CC0 asks for no attribution; Orb credits the authors anyway (Ajustes ›
@@ -10,14 +10,6 @@
 const OGA = 'https://opengameart.org/sites/default/files/';
 const CC0 = 'CC0 1.0';
 const track = (id, title, author, page, file, size, sha256) => Object.freeze({ id, title, author, page: `https://opengameart.org/content/${page}`, url: OGA + file, size, sha256, licence: CC0, mime: file.endsWith('.ogg') ? 'audio/ogg' : 'audio/mpeg' });
-
-// Lofi and chill, for the background.
-export const BACKGROUND = Object.freeze([
-  track('lofi-loop', 'Lofi Hip Hop Loop', 'omfgdude', 'lofi-hip-hop-loop', 'LofiLoop_2.ogg', 1430666, 'e57ba821d4db8d66783ca984a2778ec68d1439e862239ec36407344ef3bd1eab'),
-  track('lofi-again', 'Lofi again', 'omfgdude', 'lofi-again', 'lofiagain.ogg', 2419417, 'd3b3410a186d45dadbcf87a8072b5a7f3b3f5a11fe38d9a7e9bdb3f66d5d86fa'),
-  track('gathu', 'GATHU', 'cinameng', 'gathu', 'gathu_0.mp3', 1360456, '3c8de6f144948984f7cf9217915481641157e97dc708fbd29b1ee2ec90491096'),
-  track('dimly-lit', 'Dimly lit', 'iamoneabe', 'dimly-lit', 'dimlylit_0.mp3', 4312608, 'd89587af23a157d7df204c71888f9ef73f4d5ceef9daf87b89ab4a515e4af618')
-]);
 
 // One per minigame (the ids of src/ui/games/games.jsx): chiptune for the arcade ones, calmer for the thinking ones.
 export const GAMES = Object.freeze({
@@ -31,17 +23,14 @@ export const GAMES = Object.freeze({
   chess: track('forgotten-path', 'Forgotten Path', 'johndekale', 'forgotten-path', 'forgotten_path_2.mp3', 346403, '37373b97a602c606ce4fca979d5e1f9d6623c06681d7c70089779e1aad3fb8c3')
 });
 
-// Every track by its id (a track shared by two places counts once).
-export const TRACKS = Object.freeze(Object.fromEntries([...BACKGROUND, ...Object.values(GAMES)].map((t) => [t.id, t])));
+// Every track by its id (a track shared by two games counts once).
+export const TRACKS = Object.freeze(Object.fromEntries(Object.values(GAMES).map((t) => [t.id, t])));
 export const trackOf = (id) => (Object.hasOwn(TRACKS, id) ? TRACKS[id] : null);
 
 // The adaptive music (src/ui/lib/adaptive-music.js): Orb makes it as it plays, so it has no file, pin or licence, and
 // it needs no network. Its themes by id, in the order the «next» button goes through them; their names are interface
 // texts (music.theme.<id>). The engine's own list must stay the same as this one (test/musica-388.test.mjs).
 export const ADAPTIVE_THEMES = Object.freeze(['bruma', 'neon', 'marfil', 'orbita']);
-// Where the background music comes from: made by Orb (the default: it works offline and follows what happens), or the
-// free tracks above.
-export const MUSIC_MODES = Object.freeze(['adaptive', 'tracks']);
 
 // The volume the background music starts at (0..1): soft, under the voice of a video call or the agents' sounds.
 export const DEFAULT_VOLUME = 0.35;
@@ -50,24 +39,21 @@ export const DEFAULT_INTENSITY = 0.35;
 
 // Only the Windows app plays music: never a phone, the Android app or a linked browser. b: the window's bridge.
 export const musicAllowed = (b) => Boolean(b && !b.mobile && b.desktop === true && b.platform === 'win32');
-// ui.music of orb.json: { on (off by default), volume (0..1), track (a background track's id), mode (MUSIC_MODES),
-// theme (ADAPTIVE_THEMES), reactive (the adaptive music follows the activity; true unless turned off), intensity (0..1,
-// used when it does not) }.
+// ui.music of orb.json: { on (off by default), volume (0..1), theme (ADAPTIVE_THEMES), reactive (the adaptive music
+// follows the activity; true unless turned off), intensity (0..1, used when it does not) }. Any other key a profile
+// carries (the source and track an earlier version saved) is ignored: it plays the adaptive music, keeping the rest.
 const unit = (v, fallback) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback);
 export function musicPrefs(ui = {}) {
   const m = ui?.music ?? {};
   return {
-    on: m.on === true, volume: unit(m.volume, DEFAULT_VOLUME), track: BACKGROUND.some((t) => t.id === m.track) ? m.track : BACKGROUND[0].id,
-    mode: MUSIC_MODES.includes(m.mode) ? m.mode : MUSIC_MODES[0], theme: ADAPTIVE_THEMES.includes(m.theme) ? m.theme : ADAPTIVE_THEMES[0],
+    on: m.on === true, volume: unit(m.volume, DEFAULT_VOLUME), theme: ADAPTIVE_THEMES.includes(m.theme) ? m.theme : ADAPTIVE_THEMES[0],
     reactive: m.reactive !== false, intensity: unit(m.intensity, DEFAULT_INTENSITY)
   };
 }
 // The games' music is on unless muted (ui.gameMusic === false).
 export const gameMusicOn = (ui = {}) => ui?.gameMusic !== false;
-// The background track after this one, and the one before: they play in turn and the list starts again (a loop).
+// An entry of a list a number of steps from this one, starting again at the other end (a loop).
 const around = (list, at, step) => list[(Math.max(0, at) + step + list.length) % list.length];
-export const nextTrack = (id) => BACKGROUND[(BACKGROUND.findIndex((t) => t.id === id) + 1) % BACKGROUND.length].id;
-export const previousTrack = (id) => around(BACKGROUND, BACKGROUND.findIndex((t) => t.id === id), -1).id;
 // The adaptive theme after this one and the one before, in a loop.
 export const nextTheme = (id) => ADAPTIVE_THEMES[(ADAPTIVE_THEMES.indexOf(id) + 1) % ADAPTIVE_THEMES.length];
 export const previousTheme = (id) => around(ADAPTIVE_THEMES, ADAPTIVE_THEMES.indexOf(id), -1);

@@ -67,9 +67,8 @@ test('the robot\'s note, the reply line and the music with its volume', () => {
   assert.equal(es['appearance.robotTitle'], 'Robot y sonidos');
   assert.equal(es['appearance.repliesTitle'], 'Respuestas de los agentes');
   assert.equal(es['appearance.musicHint'], 'El reproductor está al pie de la barra lateral.');
-  // both sources are always on offer under «Más opciones»: the free tracks can be chosen again
-  assert.match(general, /data-testid="music-mode" options=\{MUSIC_MODES\.map\(/);
-  assert.doesNotMatch(general, /MUSIC_MODES\.filter\(/);
+  // Orb's own music is the only one: no source to choose
+  assert.doesNotMatch(general, /music-mode|MUSIC_MODES|setMusicMode/);
   assert.match(general, /data-testid="music-on"/);
 });
 
@@ -92,7 +91,7 @@ test('every test id of before is still there', () => {
     'expert-switch', 'ext-adopt', 'ext-approve', 'ext-editing', 'ext-files', 'ext-files-more', 'ext-import', 'ext-menu', 'ext-note', 'ext-pending', 'ext-project', 'ext-reject', 'ext-toggle', 'extensions',
     'feedback-capture', 'feedback-message', 'feedback-send', 'legacy-backups', 'legacy-card', 'legacy-delete', 'legacy-keys', 'link-again', 'link-device', 'link-devices', 'link-make', 'link-pair', 'link-pair-dialog', 'link-qr', 'link-relink', 'link-revoke', 'magic-link',
     'master-card', 'master-change', 'master-forgot', 'master-lock-minutes', 'master-lock-now', 'mcp-keys', 'mcpext-card', 'mcpext-create', 'mcpext-switch', 'mcpext-token', 'mcpext-url', 'mobile-card', 'mobile-preview', 'mobile-screenshot',
-    'music-intensity', 'music-mode', 'music-reactive', 'music-settings', 'music-theme', 'music-volume', 'one-at-a-time', 'palette-picker', 'palette-settings', 'parallel-chats', 'phone-card', 'previous-key', 'previous-key-more', 'previous-key-use',
+    'music-intensity', 'music-reactive', 'music-settings', 'music-theme', 'music-volume', 'one-at-a-time', 'palette-picker', 'palette-settings', 'parallel-chats', 'phone-card', 'previous-key', 'previous-key-more', 'previous-key-use',
     'protected-card', 'protected-defaults', 'protected-input', 'protected-item', 'protected-remove', 'settings-about', 'settings-dialog', 'settings-foot', 'settings-foot-github', 'settings-foot-version', 'settings-test', 'shortcuts-card', 'skin-picker',
     'spend-advanced', 'spend-profile', 'spend-save', 'spend-slider', 'suggest-next', 'tabs-switch', 'trash-card', 'trash-empty', 'trash-restore', 'updates-card', 'usage-line-switch', 'worktree-remove', 'worktrees-card'];
   const missing = ids.filter((id) => !ALL.includes(`data-testid="${id}"`) && !ALL.includes(`'data-testid': '${id}'`) && !ALL.includes(`triggerTestid="${id}"`));
@@ -162,7 +161,7 @@ test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing i
   const music = general.slice(general.indexOf('function MusicMore'));
   // the style of the adaptive music is Orb's own: with the reactivity and the intensity, under «Más opciones»
   assert.ok(music.indexOf("'appearance.musicTheme'") < music.indexOf("'appearance.musicReactive'") && music.indexOf("'appearance.musicReactive'") < music.indexOf("'appearance.musicVolume'"));
-  for (const id of ['music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume', 'music-on']) assert.ok(music.includes(`data-testid="${id}"`), id);
+  for (const id of ['music-theme', 'music-reactive', 'music-intensity', 'music-volume', 'music-on']) assert.ok(music.includes(`data-testid="${id}"`), id);
   // Permisos: Auto / Preguntar, waiting, protected paths; the two buttons make the same call
   assert.match(index, /<PermissionsCard c=\{c\} \/><ApprovalWaitCard c=\{c\} \/><ProtectedCard c=\{c\} \/>/);
   assert.match(general, /<Segmented value=\{mode\} data-testid="settings-autonomy"[^\n]*call\('permissions\.setMode', \{ mode: p === 'auto' \? 'auto' : 'preguntar' \}\)/);

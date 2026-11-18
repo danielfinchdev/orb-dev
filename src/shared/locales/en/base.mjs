@@ -18,13 +18,8 @@ export default {
   // sidebar foot
   'nav.feedback': 'Send feedback',
   'nav.music': 'Background music',
-  'nav.musicHint': 'Free music to help you focus. Downloaded the first time.',
   'nav.musicPlay': 'Play music',
   'nav.musicPause': 'Pause music',
-  'nav.musicNext': 'Next track',
-  'nav.musicLoading': 'Downloading…',
-  'nav.musicNow': '“{title}” by {author}',
-  'nav.musicError': 'Couldn’t play the music. Check your connection and try again.',
   'nav.musicHintAdaptive': 'Music Orb makes on the spot and that follows what happens: it rises when you type or the agents work.',
   'nav.musicNowAdaptive': 'Adaptive music · {theme}',
   'nav.musicNextTheme': 'Next style',
