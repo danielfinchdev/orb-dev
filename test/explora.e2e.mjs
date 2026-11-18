@@ -164,7 +164,8 @@ const TASKS = [
 // What the schedules run (their instructions are the task's text). The weekly one fails on purpose: «Reintentar» in its run.
 const RUNS = [
   { text: 'Resume los errores de la noche.', reply: '3 errores nuevos, ninguno grave.' },
-  { text: 'Revisa las dependencias y avisa de lo que falle.', reply: 'login_test y pago_test fallan.', append: 'FALLA' }
+  { text: 'Revisa las dependencias y avisa de lo que falle.', reply: 'login_test y pago_test fallan.', append: 'FALLA' },
+  { text: 'Prepara el informe mensual de visitas del blog.', reply: 'Informe listo: 12 400 visitas, un 8 % más que el mes pasado.' }
 ];
 const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
   { text: 'Gracias, me quedo con el museo. ¿A qué hora abre?', reply: 'Casi todos abren a las 10:00. Mira el horario del que elijas antes de salir.' }];
@@ -424,6 +425,8 @@ try {
     await attempt('la tarea retenida', () => until(async () => (await call('tasks.list')).some((x) => x.held), 'tarea retenida', 20000)).then((v) => { if (v === null) note('ninguna tarea llegó a «retenida» (la vista Tareas no la enseñará)'); });
     await attempt('la programada diaria', () => call('schedules.create', { project: 'api-pagos', title: 'Resumen de errores de la noche', description: 'Resume los errores de la noche.', agent: 'codex', readonly: true, every: 'daily', at_time: '08:30' }));
     await attempt('la programada semanal', () => call('schedules.create', { project: 'tienda-web', title: 'Revisión semanal de dependencias', description: 'Revisa las dependencias y avisa de lo que falle.', agent: 'claude', every: 'weekly', weekdays: [1], at_time: '09:00' }));
+    // a monthly one in another time zone (the day 31 falls on the last day of shorter months)
+    await attempt('la programada mensual', () => call('schedules.create', { project: 'blog', title: 'Informe mensual de visitas', description: RUNS[2].text, agent: 'claude', readonly: true, every: 'monthly', month_day: 31, at_time: '07:00', tz: 'Asia/Tokyo' }));
     // marks of the sidebar: one pinned, one completed, and unread only where the demo wants it (the rest are read)
     for (const c of CHATS) {
       if (!ids[c.key]) continue;
@@ -720,11 +723,32 @@ try {
         if (await page.locator('[data-testid=whiteboard-show-panel]').count()) { await tap('whiteboard-show-panel', 'panel de adjuntos de la pizarra'); await page.waitForTimeout(300); }
         if (await page.locator('[data-testid=whiteboard-panel]').count()) await shot(`${prefix}-pizarra-adjuntos`); else noteOnce('Pizarra: no hay panel de adjuntos con un proyecto elegido');
         if (await tap('whiteboard-more', '⋯ de la pizarra')) { await shot(`${prefix}-pizarra-adjuntos-menu`); await closeMenus(); }
+        // the toolbar in the mock-up's order with one tool chosen, and the general note for the assistant (opened, nothing written)
+        if (await tap('whiteboard-tool-rectangle', 'la herramienta «Rectángulo» de la barra de la pizarra')) { await shot(`${prefix}-pizarra-herramienta`); await tap('whiteboard-tool-selection', 'volver a «Seleccionar»'); }
+        if (await tap('whiteboard-canvas-note', '«Nota para Orbe» del lienzo')) {
+          await page.locator('[data-testid=whiteboard-canvas-note-text]').first().waitFor({ timeout: 3000 }).catch(() => noteOnce('Pizarra: «Nota para Orbe» no abre su caja'));
+          await shot(`${prefix}-pizarra-nota`); await closeMenus();
+        }
         await call('projects.setActive', { name: '' }).catch(() => {});
       }
-      if (await tap('nav-schedules', 'Programadas') && await tap('new-schedule', 'botón de nueva programada')) {
-        await page.waitForTimeout(400); await shot(`${prefix}-programada-nueva`);
-        await page.getByRole('button', { name: /^(Cancelar|Cancel)$/ }).click({ timeout: 3000 }).catch(async () => { noteOnce('Programadas: sin «Cancelar» en el diálogo de crear'); await closeMenus(); });
+      // Programadas: the dialog to create one (as it opens, then «Cada mes» with «Más opciones» unfolded) and the same dialog
+      // editing the monthly one. Nothing is saved and «Ejecutar ahora» is never pressed.
+      if (await tap('nav-schedules', 'Programadas')) {
+        const leave = async (what) => { if (!(await tap('schedule-cancel', `«Cancelar» de ${what}`))) await closeMenus(); await page.waitForTimeout(300); };
+        if (await tap('new-schedule', 'botón de nueva programada')) {
+          await page.waitForTimeout(400); await shot(`${prefix}-programada-nueva`);
+          if (await tap('schedule-every-monthly', 'la frecuencia «Cada mes»')) {
+            await page.locator('[data-testid=schedule-more-options]').first().click({ timeout: 3000 }).catch(() => noteOnce('Programadas: sin «Más opciones» en el diálogo'));
+            await page.waitForTimeout(300); await shot(`${prefix}-programada-mensual`);
+          }
+          await leave('la programada nueva');
+        }
+        const monthly = page.locator('[data-testid=schedule-row]', { hasText: 'Informe mensual' }).first();
+        if (await monthly.locator('[data-testid=schedule-edit]').first().click({ timeout: 3000 }).then(() => true, () => false)) {
+          await page.locator('[data-testid=schedule-dialog]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Programadas: «Editar» no abre el diálogo'));
+          await page.waitForTimeout(300); await shot(`${prefix}-programada-editar`);
+          await leave('editar la programada');
+        } else noteOnce('Programadas: sin la programada mensual sembrada para editarla');
       }
     } catch (error) { noteOnce(`Proyectos, pizarra y programadas: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
   };
@@ -1133,7 +1157,6 @@ try {
       // the extra pass: deepShots takes the place of the chat pictures, the boards and the places, then the lock screen
       await chatExtraShots(theme);
       await taskExtraShots(theme);
-      await projectPageShots(theme);
       await deepShots(theme);
       await footShots(theme);
       await lockShots(theme);
