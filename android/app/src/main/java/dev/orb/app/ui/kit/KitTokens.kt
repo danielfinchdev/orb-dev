@@ -20,11 +20,17 @@ object OrbKit {
     val background: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.background
     val foreground: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.onBackground
     val card: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surface
-    val popover: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surface
+    /** `--popover`: sheets and dialogs. Neutral grey in every palette (it is not the tinted `--card`). */
+    val popover: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.popover
 
-    /** `--secondary` and `--accent`: the field, a pressed row, the segmented track, the bottom bar's pill. */
-    val secondary: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainer
-    val muted: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerHighest
+    /** `--secondary`: the search field, the segmented track, a neutral badge. Same grey in every palette. */
+    val secondary: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.secondary
+
+    /** `--muted`: the track of a progress bar and a swipe's background. */
+    val muted: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.muted
+
+    /** `--accent`: a pressed or selected row, a hovered button, the bottom bar's pill. */
+    val accent: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.accent
     val sidebar: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerLow
     /** `--bubble`: the person's own message. */
     val bubble: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -45,6 +51,9 @@ object OrbKit {
     val successSoft: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.okSoft
     val warning: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.warn
     val warningSoft: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.warnSoft
+
+    /** `--warning-ink`: the text of a warning (`.warn-t`, `.banner.warn`). */
+    val warningInk: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.warnInk
     val info: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.info
 }
 

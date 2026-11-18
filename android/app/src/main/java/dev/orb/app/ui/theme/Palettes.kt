@@ -16,6 +16,13 @@ data class OrbPalette(
     val scrim: Color,
     /** `--info`: links and the Orbe mark; it has no Material slot. */
     val info: Color,
+    /**
+     * The tokens no palette changes: `--popover` (sheets, dialogs), `--secondary`, `--muted` and `--accent` (fields,
+     * tracks, pressed rows) stay neutral grey in every palette, so a surface made with them never takes the palette's tint.
+     */
+    val popover: Color, val secondary: Color, val muted: Color, val accent: Color,
+    /** `--warning-ink`: the text of a warning, darker than [warn] by day. */
+    val warnInk: Color,
 )
 
 /** The six palettes of the single theme; [key] is what is saved, [label] what the user reads. */
@@ -42,6 +49,8 @@ val GrafitoLightPalette = OrbPalette(
     ok = Color(0xFF007948), okSoft = Color(0xFFE2F9EC), warn = Color(0xFF945A00),
     warnSoft = Color(0xFFFFF3D6), err = Color(0xFFD01D21), errSoft = Color(0xFFFFEFED),
     scrim = Color(0x6612161F), info = oklch(0.53, 0.17, 254.0),
+    popover = oklch(1.0, 0.0, 0.0), secondary = oklch(0.967, 0.0, 0.0), muted = oklch(0.962, 0.0, 0.0), accent = oklch(0.958, 0.0, 0.0),
+    warnInk = oklch(0.46, 0.11, 65.0),
 )
 
 val GrafitoDarkPalette = OrbPalette(
@@ -53,6 +62,8 @@ val GrafitoDarkPalette = OrbPalette(
     ok = Color(0xFF4EC983), okSoft = Color(0xFF13271A), warn = Color(0xFFF0BA59),
     warnSoft = Color(0xFF30200D), err = Color(0xFFFF645F), errSoft = Color(0xFF391919),
     scrim = Color(0x8C000000), info = oklch(0.68, 0.17, 250.0),
+    popover = oklch(0.2, 0.0, 0.0), secondary = oklch(0.205, 0.0, 0.0), muted = oklch(0.205, 0.0, 0.0), accent = oklch(0.225, 0.0, 0.0),
+    warnInk = oklch(0.82, 0.13, 80.0),
 )
 
 // Every other palette is Grafito plus what its line of temas.css overrides: accent, field, sidebar, bubble, card, border.

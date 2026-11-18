@@ -25,7 +25,8 @@ class ThemeTokensTest {
         "primary" to { p -> p.primary }, "onPrimary" to { p -> p.onPrimary },
         "primarySoft" to { p -> p.primarySoft }, "primaryText" to { p -> p.primaryText },
         "ok" to { p -> p.ok }, "okSoft" to { p -> p.okSoft }, "warn" to { p -> p.warn }, "warnSoft" to { p -> p.warnSoft },
-        "err" to { p -> p.err },
+        "err" to { p -> p.err }, "popover" to { p -> p.popover }, "secondary" to { p -> p.secondary }, "muted" to { p -> p.muted },
+        "accent" to { p -> p.accent }, "warnInk" to { p -> p.warnInk },
     )
 
     // orb-ui.css: --background, --card, --sidebar, --bubble, --accent, --border, --input, --foreground, --muted-foreground,
@@ -36,14 +37,16 @@ class ThemeTokensTest {
         "line" to "0.93 0 0", "outline" to "0.62 0 0", "text" to "0.269 0 0", "text2" to "0.5 0 0", "text3" to "0.56 0 0",
         "primary" to "0.205 0 0", "onPrimary" to "0.985 0 0", "primarySoft" to "0.962 0.025 40", "primaryText" to "0.52 0.17 40",
         "ok" to "0.5 0.13 160", "okSoft" to "0.962 0.03 160", "warn" to "0.52 0.12 70", "warnSoft" to "0.967 0.04 85",
-        "err" to "0.55 0.21 27",
+        "err" to "0.55 0.21 27", "popover" to "1 0 0", "secondary" to "0.967 0 0", "muted" to "0.962 0 0", "accent" to "0.958 0 0",
+        "warnInk" to "0.46 0.11 65",
     )
     private val grafitoDark = mapOf(
         "bg" to "0.164 0 0", "surface" to "0.178 0 0", "scLow" to "0.145 0 0", "sc" to "0.225 0 0", "scHigh" to "0.225 0 0",
         "line" to "0.235 0 0", "outline" to "0.5 0 0", "text" to "0.97 0 0", "text2" to "0.72 0 0", "text3" to "0.64 0 0",
         "primary" to "0.97 0 0", "onPrimary" to "0.205 0 0", "primarySoft" to "0.27 0.05 40", "primaryText" to "0.74 0.15 45",
         "ok" to "0.75 0.15 155", "okSoft" to "0.25 0.035 155", "warn" to "0.82 0.13 80", "warnSoft" to "0.26 0.04 70",
-        "err" to "0.7 0.19 25",
+        "err" to "0.7 0.19 25", "popover" to "0.2 0 0", "secondary" to "0.205 0 0", "muted" to "0.205 0 0", "accent" to "0.225 0 0",
+        "warnInk" to "0.82 0.13 80",
     )
 
     // temas.css: what each palette overrides on top of Grafito, light then dark.
@@ -82,6 +85,23 @@ class ThemeTokensTest {
             val p = paletteFor(choice, dark)
             for ((name, spec) in expected(choice, dark)) {
                 near("${choice.key}-${if (dark) "dark" else "light"} $name", ok(spec), fields.getValue(name)(p).rgb())
+            }
+        }
+    }
+
+    @Test fun sheetsAndGreyPiecesNeverTakeThePalettesTint() {
+        for (dark in listOf(false, true)) {
+            val base = paletteFor(OrbPaletteChoice.Grafito, dark)
+            for (choice in OrbPaletteChoice.entries) {
+                val p = paletteFor(choice, dark)
+                for ((name, pick) in listOf<Pair<String, (OrbPalette) -> Color>>(
+                    "popover" to { x -> x.popover }, "secondary" to { x -> x.secondary }, "muted" to { x -> x.muted },
+                    "accent" to { x -> x.accent }, "warnInk" to { x -> x.warnInk },
+                )) {
+                    assertEquals("${choice.key} dark=$dark $name", pick(base), pick(p))
+                    val (r, g, b) = pick(p).rgb().toList()
+                    if (name != "warnInk") assertTrue("${choice.key} dark=$dark $name is neutral grey", r == g && g == b)
+                }
             }
         }
     }
