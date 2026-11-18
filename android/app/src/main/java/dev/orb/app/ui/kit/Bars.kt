@@ -42,6 +42,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.theme.OrbMotion
@@ -49,6 +50,7 @@ import dev.orb.app.ui.theme.OrbMotion
 /**
  * The header of every screen (`.abar`): 56 dp, three zones. The left one (96 dp) holds the menu or back arrow, the
  * centre the name (or [center], e.g. the wordmark) and an optional useful line, the right one (96 dp) the actions.
+ * [sideWidth] narrows both sides when a screen has one button each, so a long line fits in the centre.
  */
 @Composable
 fun OrbTopBar(
@@ -57,12 +59,13 @@ fun OrbTopBar(
     sub: String? = null,
     center: (@Composable () -> Unit)? = null,
     line: Boolean = false,
+    sideWidth: Dp = 96.dp,
     leading: @Composable RowScope.() -> Unit = {},
     actions: @Composable RowScope.() -> Unit = {},
 ) {
     Column(modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.width(96.dp), verticalAlignment = Alignment.CenterVertically, content = leading)
+            Row(Modifier.width(sideWidth), verticalAlignment = Alignment.CenterVertically, content = leading)
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 if (center != null) center() else Text(
                     title, Modifier.semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp, lineHeight = 22.sp,
@@ -73,7 +76,7 @@ fun OrbTopBar(
                 }
             }
             // A text action (not just icons) may need more than 96 dp; the title then gives way.
-            Row(Modifier.widthIn(min = 96.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, content = actions)
+            Row(Modifier.widthIn(min = sideWidth), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.End, content = actions)
         }
         if (line) Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
     }

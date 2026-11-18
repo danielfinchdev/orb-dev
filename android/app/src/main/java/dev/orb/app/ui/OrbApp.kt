@@ -211,7 +211,10 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.chatsBackend() }
             if (backend != null) {
                 val vm = viewModel<SearchViewModel>(factory = viewModelFactory { initializer { SearchViewModel(backend) } })
-                SearchScreen(vm, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) })
+                SearchScreen(
+                    vm, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
+                    onOpenTask = { nav.navigate(TaskRoute(it)) }, onOpenProject = { nav.navigate(ProjectRoute(it)) },
+                )
             }
         }
         composable<NewChat>(

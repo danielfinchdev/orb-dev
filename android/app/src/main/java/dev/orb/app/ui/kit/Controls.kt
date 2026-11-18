@@ -24,7 +24,11 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -177,20 +181,34 @@ fun OrbSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, 
     }
 }
 
-/** `.mfield` as a real text field. */
+/**
+ * `.mfield` as a real text field. [focus] lets the screen put the cursor in it on entering; [onClear] draws the «x»
+ * (in a 32 dp zone) while there is text.
+ */
 @Composable
-fun OrbSearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier) {
+fun OrbSearchField(
+    value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier,
+    focus: FocusRequester? = null, onClear: (() -> Unit)? = null, clearLabel: String = "Borrar texto",
+) {
     Row(
-        modifier.fillMaxWidth().height(44.dp).clip(RadiusCard).background(OrbKit.secondary).padding(horizontal = 14.dp),
+        modifier.fillMaxWidth().height(44.dp).clip(RadiusCard).background(OrbKit.secondary).padding(start = 14.dp, end = if (onClear != null) 6.dp else 14.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Icon(OrbIcons.Search, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
         Box(Modifier.weight(1f)) {
             if (value.isEmpty()) Text(placeholder, color = OrbKit.mutedForeground, fontSize = 15.sp, maxLines = 1)
             BasicTextField(
-                value, onValueChange, Modifier.fillMaxWidth().semantics { contentDescription = placeholder }, singleLine = true,
-                textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
+                value, onValueChange,
+                Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = placeholder },
+                singleLine = true, textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             )
+        }
+        if (onClear != null && value.isNotEmpty()) {
+            Box(
+                Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClear).semantics { contentDescription = clearLabel },
+                contentAlignment = Alignment.Center,
+            ) { Icon(OrbIcons.Close, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground) }
         }
     }
 }
