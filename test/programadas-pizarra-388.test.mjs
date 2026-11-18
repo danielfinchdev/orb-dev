@@ -47,9 +47,9 @@ test('Programadas: la cabecera común, el vacío y las confirmaciones de siempre
   assert.match(schedules, /sm:max-w-2xl/, 'el diálogo de crear y editar es el ancho de la maqueta');
 });
 
-test('Pizarra: con «Adjuntos» abierto el selector de proyecto pasa al menú ⋯', () => {
-  assert.match(whiteboard, /\{panel && project \? null : \(\s*<Select [\s\S]*?data-testid="project-picker"/);
-  assert.match(whiteboard, /\{panel \? \(\s*<>\s*<DropdownMenuLabel>\{t\('wb\.project'\)\}<\/DropdownMenuLabel>/);
+test('Pizarra: el selector de proyecto vive en el menú ⋯ (la cabecera de la maqueta no lo dibuja)', () => {
+  assert.doesNotMatch(whiteboard, /<Select /);
+  assert.match(whiteboard, /<DropdownMenuLabel data-testid="project-picker">\{t\('wb\.project'\)\}<\/DropdownMenuLabel>/);
   assert.match(whiteboard, /call\('projects\.setActive', \{ name \}\)/);
   assert.match(whiteboard, /<IconButton label=\{t\('wb\.attachments'\)\} active=\{panel\}/, 'el clip de la cabecera muestra y oculta el panel');
   assert.match(whiteboard, /<ChatPanel open=\{Boolean\(project\) && panel\}[\s\S]*?defaultWidth=\{360\}/);

@@ -904,6 +904,9 @@ try {
         await scrollView('top');
         if (await page.locator('[data-testid^=agent-more-]').first().click({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(300); await shot(`${prefix}-agentes-menu`); await closeMenus(); }
         else noteOnce('Agentes: sin «⋯» en la tarjeta de un agente');
+        // the «⋯» of one account (sign-out lives there; never pressed)
+        if (await page.locator('[data-testid^=agent-account-more-]').first().click({ timeout: 3000 }).then(() => true, () => false)) { await page.waitForTimeout(300); await shot(`${prefix}-agentes-cuenta-menu`); await closeMenus(); }
+        else noteOnce('Agentes: sin «⋯» en la fila de una cuenta');
         if (await tap('agents-tab-usage', 'pestaña «Uso»')) {
           await page.waitForTimeout(800); await scrollView('top'); await shot(`${prefix}-uso`);
           await scrollShot(`${prefix}-uso-medio`, 'middle');
