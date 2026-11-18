@@ -682,7 +682,11 @@ function AppLink() {
 // Where the notices sit on the PC, worked out from what is on screen: bottom right of the content column (left of an open side
 // panel) and, when a text box is there, over it and the row above it («Compactar»), never over its send button.
 // Without a box they sit in the page's bottom padding, which a list leaves free once it is scrolled to its end.
+// Over the whiteboard they clear its status bar and zoom controls; with a dialog open they stay outside its box (beside it,
+// under it or above it, wherever they fit) and only as a last resort sit just over its footer.
 const TOAST_GAP = 24;
+const TOAST_W = 356;
+const TOAST_H = 56;
 function useToastInsets() {
   const [ins, setIns] = useState({ bottom: TOAST_GAP, right: TOAST_GAP });
   useEffect(() => {
@@ -691,7 +695,8 @@ function useToastInsets() {
     let frame = 0;
     const seen = new Set();
     const resizes = new ResizeObserver(() => schedule());
-    const WATCHED = '.composer-dock, [data-testid="chat-panel"]';
+    const BOARD_BAR = '[data-testid="whiteboard-status"], .zoom-actions, .layer-ui__wrapper__footer-left';
+    const WATCHED = `.composer-dock, [data-testid="chat-panel"], [data-slot="dialog-content"], ${BOARD_BAR}`;
     const measure = () => {
       frame = 0;
       // a box or panel that left the page is let go, or the observer would keep its whole view alive
@@ -702,10 +707,25 @@ function useToastInsets() {
       // with two conversations side by side the one nearest the right edge is where the notice lands
       const docks = [...document.querySelectorAll('.composer-dock')].map(shown).filter(Boolean).sort((a, b) => b.right - a.right);
       const panel = [...document.querySelectorAll('[data-testid="chat-panel"][data-state="open"]')].map(shown).find(Boolean);
-      const next = {
-        bottom: docks[0] ? Math.max(TOAST_GAP, Math.round(innerHeight - docks[0].top + 8)) : TOAST_GAP,
+      const bars = [...document.querySelectorAll(BOARD_BAR)].map(shown).filter(Boolean);
+      const barTop = bars.length ? Math.min(...bars.map((r) => r.top)) : null;
+      // the newest dialog is the last one in the page
+      const dialog = [...document.querySelectorAll('[data-slot="dialog-content"]')].map(shown).filter(Boolean).pop();
+      let next = {
+        bottom: docks[0] ? Math.max(TOAST_GAP, Math.round(innerHeight - docks[0].top + 8)) : barTop != null ? Math.max(TOAST_GAP, Math.round(innerHeight - barTop + 8)) : TOAST_GAP,
         right: panel && panel.left < innerWidth ? Math.round(innerWidth - panel.left + TOAST_GAP) : TOAST_GAP
       };
+      if (dialog) {
+        const below = innerHeight - dialog.bottom;
+        const edge = Math.max(TOAST_GAP, Math.round(innerWidth - dialog.right));
+        if (innerWidth - dialog.right >= TOAST_W + 2 * TOAST_GAP) next = { bottom: TOAST_GAP, right: TOAST_GAP };
+        else if (below >= TOAST_H - 8) next = { bottom: Math.max(4, Math.floor((below - TOAST_H) / 2)), right: edge };
+        else if (dialog.top >= TOAST_H + 8) next = { bottom: Math.round(innerHeight - dialog.top + 8), right: edge };
+        else {
+          const foot = [...document.querySelectorAll('[data-slot="dialog-content"]')].at(-1)?.querySelector('[data-slot="dialog-footer"]')?.getBoundingClientRect();
+          next = { bottom: Math.round(innerHeight - (foot && foot.height > 0 ? foot.top : dialog.bottom) + 8), right: edge };
+        }
+      }
       setIns((old) => (old.bottom === next.bottom && old.right === next.right ? old : next));
     };
     function schedule() { if (!frame) frame = requestAnimationFrame(measure); }

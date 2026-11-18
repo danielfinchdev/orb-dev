@@ -3,7 +3,7 @@ export default {
   'activity.copied': 'Copiado',
   'activity.title': 'Actividad',
   'activity.meta': 'Registro de todos los eventos, con fecha y autor',
-  'activity.search': 'Buscar…',
+  'activity.search': 'Buscar en el texto',
   'activity.copy': 'Copiar',
   'activity.empty': 'No hay actividad',
   // cada evento en palabras

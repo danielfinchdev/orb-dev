@@ -691,7 +691,7 @@ export function OrbChatsView() {
     <>
       <PageHeader palette={false} title={t('nav.modeOrb')} className="chats-head" />
       {/* the list scrolls on its own inside (the search stays on top) */}
-      <PageBody className="flex flex-col overflow-hidden p-0"><OrbInbox page /></PageBody>
+      <PageBody className="flex flex-col overflow-hidden p-0 [scrollbar-gutter:auto]"><OrbInbox page /></PageBody>
     </>
   );
 }

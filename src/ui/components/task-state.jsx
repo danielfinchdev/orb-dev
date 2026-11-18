@@ -95,9 +95,21 @@ export function undoBody(t, task) {
   const at = task.events?.find((e) => e.kind === 'checkpoint')?.at;
   return at ? t('tasks.undo.bodyPhoto', { id: task.id, time: new Date(at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) }) : t('tasks.undo.body', { id: task.id });
 }
-export async function undoHeld(t, task) {
-  if (await confirm(t('tasks.undo.title'), undoBody(t, task), { ok: t('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: task.id }));
+// The confirmation focuses Cancel (danger) but its accept button is the neutral main one, as in the mock-up. The buttons behind
+// are not locked while it is open, so one undo per task at a time is enforced here: a second click shares the open dialog's
+// answer and must not undo twice.
+const undoing = new Set();
+// `during`: how the caller locks its other buttons while the engine undoes (after the answer, so nothing looks disabled
+// behind the open dialog).
+export async function undoTask(t, task, during = (fn) => fn()) {
+  if (undoing.has(task.id)) return undefined;
+  undoing.add(task.id);
+  try {
+    if (await confirm(t('tasks.undo.title'), undoBody(t, task), { ok: t('tasks.undo.ok'), danger: true, tone: 'primary' })) return await during(() => act(call('tasks.undo', { id: task.id })));
+    return undefined;
+  } finally { undoing.delete(task.id); }
 }
+export const undoHeld = undoTask;
 
 // A task Orb held for review: what it did, where, and the two ways out. `link`: a button to its detail (the chat).
 export function HeldCard({ task, link = false, className }) {

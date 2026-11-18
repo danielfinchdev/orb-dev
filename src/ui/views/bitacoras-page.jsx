@@ -22,7 +22,7 @@ export function BitacorasPage({ meta, actions, onRefresh, tabs, children, bodyCl
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <PageBody className="px-6 pt-5 pb-10 md:pb-28">
+      <PageBody className="pt-5 pb-10 md:pb-28">
         <div className={bodyClassName ?? 'mx-auto flex w-full max-w-[1180px] flex-col gap-4'}>
           {tabs}
           {children}

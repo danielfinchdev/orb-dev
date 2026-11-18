@@ -6,6 +6,7 @@ import { PANELS, savePanels } from '../expert.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input, Textarea } from '@/components/ui/basic.jsx';
+import { Segmented } from '@/components/ui/primitives.jsx';
 import { Select, Switch, Checkbox, Range, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
@@ -18,7 +19,6 @@ import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicMode, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
 import { MUSIC_MODES, ADAPTIVE_THEMES } from '../../../shared/music.mjs';
 import { save, num, Row, WithKeys, sizes, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
-import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
@@ -29,7 +29,7 @@ export function AssistantCard({ c }) {
       <Panel>
         <Setting label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input className="w-[200px]" value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} aria-label={t('settings.assistantName')} /></Setting>
         <Setting label={t('settings.userName')} hint={t('settings.userNameHint')}><Input className="w-[200px]" value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} aria-label={t('settings.userName')} /></Setting>
-        <Setting label={t('settings.language')} hint={t('settings.languageHint')}><Select value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} title={t('settings.language')} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Setting>
+        <Setting label={t('settings.language')} hint={t('settings.languageHint')}><Select caret="solid" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} title={t('settings.language')} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Setting>
         <CardFoot><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFoot>
       </Panel>
     </Block>
@@ -95,16 +95,16 @@ export function AppearanceCard({ c }) {
               </div>
             </Setting>
           ) : null}
-          <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONT_ORDER, 'appearance.font')} /></Setting>
-          <Setting label={t('appearance.codeFont')} hint={t('appearance.codeFontHint')}><Select value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} title={t('appearance.codeFont')} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Setting>
-          <Setting label={t('appearance.codeTheme')} hint={t('appearance.codeThemeHint')}><Select value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} title={t('appearance.codeTheme')} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Setting>
-          <Setting label={t('appearance.density')} hint={t('appearance.densityHint')} data-testid="size-settings"><Select value={ui.density} onValueChange={(density) => set({ density })} title={t('appearance.density')} options={opts(Object.keys(DENSITIES), 'appearance.density')} /></Setting>
-          <Setting label={t('appearance.chatWidth')} hint={t('appearance.chatWidthHint')}><Select value={ui.chatWidth} onValueChange={(chatWidth) => set({ chatWidth })} title={t('appearance.chatWidth')} options={opts(Object.keys(CHAT_WIDTHS), 'appearance.chatWidth')} /></Setting>
-          <Setting label={t('appearance.fontSize')} hint={t('appearance.fontSizeHint')}><Select value={ui.fontSize} onValueChange={(fontSize) => set({ fontSize })} title={t('appearance.fontSize')} options={FONT_SIZES.map((px) => ({ value: px, label: t('appearance.fontSizeValue', { px: String(px).replace('.', ',') }) }))} /></Setting>
+          <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select caret="solid" value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONT_ORDER, 'appearance.font')} /></Setting>
+          <Setting label={t('appearance.codeFont')} hint={t('appearance.codeFontHint')}><Select caret="solid" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} title={t('appearance.codeFont')} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Setting>
+          <Setting label={t('appearance.codeTheme')} hint={t('appearance.codeThemeHint')}><Select caret="solid" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} title={t('appearance.codeTheme')} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Setting>
           <Stack className="border-border border-t">
             <span className="text-control font-medium">{t('appearance.codeSample')}</span>
             <pre className="code-sample hljs rounded-ctl m-0 overflow-x-auto border px-3 py-2.5 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">robot</span> = <span className="hljs-keyword">await</span> orbe.<span className="hljs-title function_">saluda</span>(<span className="hljs-string">'Dani'</span>);{'\n'}<span className="hljs-keyword">if</span> (robot.listo) console.<span className="hljs-title function_">log</span>(<span className="hljs-string">'Tarea hecha'</span>);</code></pre>
           </Stack>
+          <Setting label={t('appearance.density')} hint={t('appearance.densityHint')} data-testid="size-settings"><Select caret="solid" value={ui.density} onValueChange={(density) => set({ density })} title={t('appearance.density')} options={opts(Object.keys(DENSITIES), 'appearance.density')} /></Setting>
+          <Setting label={t('appearance.chatWidth')} hint={t('appearance.chatWidthHint')}><Select caret="solid" value={ui.chatWidth} onValueChange={(chatWidth) => set({ chatWidth })} title={t('appearance.chatWidth')} options={opts(Object.keys(CHAT_WIDTHS), 'appearance.chatWidth')} /></Setting>
+          <Setting label={t('appearance.fontSize')} hint={t('appearance.fontSizeHint')}><Select caret="solid" value={ui.fontSize} onValueChange={(fontSize) => set({ fontSize })} title={t('appearance.fontSize')} options={FONT_SIZES.map((px) => ({ value: px, label: t('appearance.fontSizeValue', { px: String(px).replace('.', ',') }) }))} /></Setting>
         </Panel>
       </Block>
       <Block title={t('appearance.repliesTitle')}>
@@ -140,7 +140,7 @@ export function ChatCard({ c }) {
     <Block title={t('settings.chatCard')} note={t('settings.chatCardDesc')}>
       <Panel>
         <Setting label={t('settings.maxTurns')} hint={t('settings.maxTurnsHint')}><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} className="w-[72px]" aria-label={t('settings.maxTurns')} /></Setting>
-        {accounts.length > 1 ? <Setting label={t('settings.brainAccount')} hint={t('settings.brainAccountHint')}><Select value={v.account} onValueChange={(account) => setV({ ...v, account })} title={t('settings.brainAccount')} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Setting> : null}
+        {accounts.length > 1 ? <Setting label={t('settings.brainAccount')} hint={t('settings.brainAccountHint')}><Select caret="solid" value={v.account} onValueChange={(account) => setV({ ...v, account })} title={t('settings.brainAccount')} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Setting> : null}
         <CardFoot><Button size="sm" onClick={() => save({ orchestrator: v })}>{t('settings.save')}</Button></CardFoot>
       </Panel>
     </Block>
@@ -155,7 +155,9 @@ export function PermissionsCard({ c }) {
     <Block title={t('settings.autonomy')} note={t('settings.autonomyNote')}>
       <Panel>
         <Setting label={t('settings.autonomyLabel')} hint={t('settings.autonomyHint')}>
-          <AutonomySwitch value={mode} testid="settings-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
+          {/* the same action as the chat's selector (the pieces of the mock-up here: two buttons, Auto and Preguntar) */}
+          <Segmented value={mode} data-testid="settings-autonomy" aria-label={t('settings.autonomyLabel')} onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())}
+            options={[{ value: 'auto', label: t('session.autoMode'), testid: 'settings-autonomy-auto' }, { value: 'editar', label: t('session.askMode'), testid: 'settings-autonomy-editar' }]} />
         </Setting>
         <Stack className="border-border border-t"><Hint>{t('settings.autonomyAlways')}</Hint><Hint>{t('settings.autonomyMore')}</Hint></Stack>
       </Panel>
@@ -215,19 +217,20 @@ export function TasksCard({ c }) {
       <Block title={t('settings.tasks')} note={t('settings.tasksDesc')}>
         <Panel>
           <Setting label={t('settings.spend')} hint={level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)} data-testid="spend-profile">
-            <span className="text-primary-text text-control font-medium">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span>
-            <Range min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="w-[120px] cursor-pointer" aria-label={t('settings.spend')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
+            <Segmented value={SPEND_BUTTON[level] ?? null} onChange={(k) => applyProfile(SPEND_LEVEL[k])} aria-label={t('settings.spend')}
+              options={[{ value: 'low', label: t('settings.spendLow'), testid: 'spend-low' }, { value: 'recommended', label: t('settings.spendRecommended'), testid: 'spend-recommended' }, { value: 'high', label: t('settings.spendHigh'), testid: 'spend-high' }]} />
           </Setting>
           {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
           <Row label={t('settings.autoModel')} hint={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
-          <Stack className="border-border border-t"><ModelGuide auto={c.budget?.autoModel !== false} /></Stack>
-          <Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row>
           <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
           {/* tasks work at the same time by default; this makes them wait for each other. */}
           <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>
           <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
           <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
           <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
+          {/* what the mock-up does not draw, after its rows: the suggestion of the next task and the guide of models */}
+          <Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row>
+          <Stack className="border-border border-t"><ModelGuide auto={c.budget?.autoModel !== false} /></Stack>
         </Panel>
       </Block>
       {bridge.mobile ? null : <TestCard />}
@@ -237,6 +240,10 @@ export function TasksCard({ c }) {
           <div className="mt-4 flex flex-col gap-4">
             <Hint>{t('settings.advancedHint')}</Hint>
             <Panel>
+              <Setting label={t('settings.spendFine')} hint={t('settings.spendFineHint')}>
+                <span className="text-primary-text text-control font-medium">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span>
+                <Range min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="w-[120px] cursor-pointer" aria-label={t('settings.spendFine')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
+              </Setting>
               <Row label={<>{t('settings.review')} <Badge variant="info">{t('settings.reviewBadge')}</Badge></>} hint={t('settings.reviewHint')}><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); setProfile(null); save({ review: { auto: review }, budget: { profile: null } }); }} /></Row>
               <Row label={t('settings.trusted')} hint={t('settings.trustedHint', { n: v.maxPerTask })}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); setProfile(null); save({ delegation: { trusted }, budget: { profile: null } }); }} /></Row>
               <Row label={t('settings.highApproval')} hint={t('settings.highApprovalHint')}><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); setProfile(null); save({ policy: { highNeedsApproval: high }, budget: { profile: null } }); }} /></Row>
@@ -268,6 +275,9 @@ export function TasksCard({ c }) {
   );
 }
 
+// The three buttons of «Ahorro o potencia» are levels 0, 2 and 4; 1 and 3 are reached with the exact-level slider of the advanced options.
+const SPEND_LEVEL = { low: 0, recommended: 2, high: 4 };
+const SPEND_BUTTON = { 0: 'low', 2: 'recommended', 4: 'high' };
 // The five levels of the «ahorro ↔ uso» slider: the limits each one sets (2 = the usual ones, recommended).
 const SPEND_PRESETS = [
   { maxParallel: 1, perAgent: 1, timeoutMinutes: 30, stopAt: 0.75, maxTasks: 8, maxHeavy: 1, high: true, maxPerTask: 1, trusted: false, review: false },
@@ -372,13 +382,13 @@ export function InterfaceCard({ c }) {
     <Block title={t('settings.interface')} note={<WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} />}>
       <Panel>
         <Setting label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
-          <Select value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
+          <Select caret="solid" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
           <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
           <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
           <span className="text-muted-foreground min-w-9 text-caption tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
         </Setting>
         <Setting label={t('settings.terminal')} hint={t('settings.terminalHint')}>
-          <Select className="min-w-0" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} title={t('settings.terminal')} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
+          <Select caret="solid" className="min-w-0" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} title={t('settings.terminal')} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
           <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
           <span className="text-faint-foreground text-control">Ctrl J</span>
         </Setting>
@@ -422,15 +432,20 @@ function MusicSettings() {
   return (
     <div className="contents" data-testid="music-settings">
       <Row label={t('appearance.music')} hint={t('appearance.musicHint')} className="border-t"><Switch checked={playing} onCheckedChange={() => toggleMusic()} aria-label={t('appearance.music')} data-testid="music-on" /></Row>
+      {/* the mock-up's rows first (on, volume); what it does not draw, after them */}
+      <Setting label={t('appearance.musicVolume')} hint={t('appearance.musicVolumeHint')}>
+        <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px] cursor-pointer" data-testid="music-volume"
+          onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
+      </Setting>
       {prefs.mode !== 'adaptive' ? (
         <Setting label={t('appearance.musicSource')} hint={t(`appearance.musicModeHint.${prefs.mode}`)}>
-          <Select className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.musicSource')} data-testid="music-mode" options={MUSIC_MODES.filter((value) => value === 'adaptive' || value === prefs.mode).map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
+          <Select caret="solid" className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.musicSource')} data-testid="music-mode" options={MUSIC_MODES.filter((value) => value === 'adaptive' || value === prefs.mode).map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
         </Setting>
       ) : null}
       {prefs.mode === 'adaptive' ? (
         <>
           <Setting label={t('appearance.musicTheme')}>
-            <Select className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
+            <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
           </Setting>
           <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
           {prefs.reactive ? null : (
@@ -441,10 +456,6 @@ function MusicSettings() {
           )}
         </>
       ) : null}
-      <Setting label={t('appearance.musicVolume')} hint={t('appearance.musicVolumeHint')}>
-        <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px] cursor-pointer" data-testid="music-volume"
-          onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
-      </Setting>
     </div>
   );
 }

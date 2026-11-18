@@ -179,7 +179,7 @@ export function MobileCard() {
         {/* what notifications show when locked. */}
         {st.enabled ? (
           <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
-            <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
+            <Select caret="solid" value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
               options={PREVIEWS.map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
           </Row>
         ) : null}

@@ -21,13 +21,14 @@ function PaletteButton({ className }) {
 // The header every view of the PC app shares (app.css .bar): the clock on the left, the title with a useful line under
 // it in the middle, the view's actions on the right, and the window's own buttons in the 120 px kept at the end
 // (window-controls.jsx). `left` is the clock unless a view brings its own; `center` the title block.
-export function AppBar({ lead, left, center, children, className, ...props }) {
+// `inner`: a bar inside a pane (the chat embedded in the God mode): it does not drag the window nor keep room for its buttons.
+export function AppBar({ lead, left, center, children, className, inner = false, ...props }) {
   return (
-    <header className={cn('bar topbar theme-band app-titlebar', className)} {...props}>
+    <header className={cn('bar topbar theme-band', !inner && 'app-titlebar', className)} {...props}>
       <div className="bar-left">{lead}{left}</div>
       <div className="bar-center">{center}</div>
       <div className="bar-right">{children}</div>
-      <WindowControlsSlot />
+      {inner ? null : <WindowControlsSlot />}
     </header>
   );
 }
@@ -43,7 +44,7 @@ export function PageHeader({ title, meta, center, children, className, back, pal
     return (
       <AppBar className={className} lead={folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
         left={center ? title : <BarClock />}
-        center={center ?? <><h1 className="name">{title}</h1>{meta ? <div className="sub">{meta}</div> : null}</>}>
+        center={center ?? <><h1 className="name">{title}</h1>{meta ? <div className="sub">{typeof meta === 'string' ? <span className="min-w-0 truncate">{meta}</span> : meta}</div> : null}</>}>
         {children}{palette ? <PaletteButton /> : null}
       </AppBar>
     );
@@ -83,5 +84,5 @@ export function BackButton({ to, label }) {
 
 // The scrolling body under a PageHeader. `column`: one centred column for a list.
 export function PageBody({ className, column = false, children, ...props }) {
-  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 py-5', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
+  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] py-5 pr-[calc(1.5rem-var(--sb-w))] pl-6', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
 }

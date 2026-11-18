@@ -1,7 +1,7 @@
 // Bitácoras: Orb's journal (the general log and one per project). Read-only here: only the assistant appends.
 // Nothing is read until the tab opens, and only the log on screen is loaded; the search across all of them reads the
 // others only while something is typed in it.
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Copy, Maximize2, BookOpen, Lock, ChevronRight, Circle } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
 import { Markdown } from '@/components/markdown.jsx';
@@ -41,7 +41,19 @@ function Entry({ e, t, locale }) {
         <span className="ml-auto">#{e.n}</span>
       </div>
       <h3 className="mt-1.5 mb-1 font-(family-name:--title) text-card-title font-semibold">{e.topic}</h3>
-      {e.body ? <div className="text-body"><Markdown>{e.body}</Markdown></div> : null}
+      {e.parts?.length ? (
+        <>
+          {e.lead ? <div className="text-body"><Markdown>{e.lead}</Markdown></div> : null}
+          <dl className="kv mt-2 mb-0 grid grid-cols-[80px_minmax(0,1fr)] gap-x-2.5 gap-y-2.25 text-body" data-testid="log-entry-parts">
+            {e.parts.map((p, i) => (
+              <Fragment key={i}>
+                <dt className="text-muted-foreground" data-part={p.key}>{t(`logbooks.part.${p.key}`)}</dt>
+                <dd className="m-0 min-w-0 [&_p]:m-0"><Markdown>{p.text}</Markdown></dd>
+              </Fragment>
+            ))}
+          </dl>
+        </>
+      ) : e.body ? <div className="text-body"><Markdown>{e.body}</Markdown></div> : null}
     </article>
   );
 }
@@ -51,6 +63,7 @@ export function LogsView({ route, tabs }) {
   const locale = useLocale();
   const version = useStore((s) => s.version);
   const [logs, setLogs] = useState([]);
+  const dir = logs.find((l) => l.dir)?.dir;
   const [selected, setSelected] = useState(route.name ?? 'general');
   const [whole, setWhole] = useState(false);
   const [body, setText] = useState(null);
@@ -120,7 +133,7 @@ export function LogsView({ route, tabs }) {
             {groups.projects.some(visible) ? <><Lbl>{t('logbooks.groupProjects')}</Lbl>{groups.projects.filter(visible).map((l) => row(l, l.name, <ProjectIcon name={l.name} />))}</> : null}
             {groups.deleted.some(visible) ? <><Lbl>{t('logbooks.groupDeleted')}</Lbl>{groups.deleted.filter(visible).map((l) => row(l, l.name.replace(/\s*eliminad[oa]$/i, ''), <Circle className="size-2.5 shrink-0" />))}</> : null}
           </ListCard>
-          <p className="note text-muted-foreground m-0 flex items-start gap-1.5 px-1 text-caption"><Lock className="mt-0.5 size-3.5 shrink-0" />{t('logbooks.private')}</p>
+          <p className="note text-muted-foreground m-0 flex items-start gap-1.5 px-1 text-caption"><Lock className="mt-0.5 size-3.5 shrink-0" />{dir ? t('logbooks.privateAt', { dir }) : t('logbooks.private')}</p>
         </div>
         <div className="entries flex min-w-0 flex-col gap-3">
           <div className="bhead flex min-h-(--ctl) items-center gap-2">

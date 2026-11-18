@@ -340,7 +340,7 @@ export function ProjectPage({ p }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-6 pt-5 pb-10 md:pb-28">
+      <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] pt-5 pr-[calc(1.5rem-var(--sb-w))] pb-10 pl-6 md:pb-28">
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList variant="line" data-testid="project-tabs">

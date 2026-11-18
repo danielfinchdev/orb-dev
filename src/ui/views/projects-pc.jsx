@@ -189,7 +189,7 @@ function ProjectsList() {
           </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
-      <PageBody className="px-6 md:pb-28">
+      <PageBody className="md:pb-28">
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
           <div className="toolbar flex flex-wrap items-center gap-1.5">
             <Segmented value={catNow} onChange={setCat} aria-label={t('projects.cat.label')} itemTestId={(v) => `projects-cat-${v}`}

@@ -1,74 +1,99 @@
-// «Uso», the whole usage page (reached from the usage panel of the context ring and from Ctrl+K): cost and tokens
-// by day, agent and model in the last 7, 30 or 90 days (usage.history), and each account's plan limits with the mark of
-// an even pace (usage.get). The panel stays as it was; this page only adds detail.
+// «Uso», the whole usage page (reached from the usage panel of the context ring, from Ctrl+K and from the tab next to
+// «Agentes»): each account's plan limits with the marks of the brakes and the even pace (usage.get), and cost and tokens
+// by day, project, agent and model in the last 7, 30 or 90 days (usage.history, history.usage). The panel stays as it
+// was; this page only adds detail.
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Gauge } from 'lucide-react';
+import { Gauge, RefreshCw, OctagonX } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
-import { UsageBar, windowLabel, resetText, shortTokens } from '@/components/usage-bits.jsx';
-import { Card, Empty, Spinner } from '@/components/ui/basic.jsx';
-import { Tabs, TabsList, TabsTrigger, Tip } from '@/components/ui/overlay.jsx';
-import { useStore, call } from '@/lib/store.js';
-import { paceOf } from '@/lib/usage-pace.js';
+import { AgentsUsageTabs } from '@/components/agents-tabs.jsx';
+import { windowLabel, resetText, shortTokens } from '@/components/usage-bits.jsx';
+import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { ListCard, MoreButton, Segmented } from '@/components/ui/primitives.jsx';
+import { BubbleTip, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, Select, Switch, Tip } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, fullPc } from '@/lib/store.js';
+import { paceOf, windowMs } from '@/lib/usage-pace.js';
 import { AGENT } from '@/lib/labels.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
+import { Block, Panel, Setting, save } from './settings/rows.jsx';
 
 const usd = (n, locale) => `$${Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const tokens = shortTokens;
+const sum = (list) => list.reduce((n, d) => n + (d.usd ?? 0), 0);
 
-function Stat({ label, value, detail }) {
+// A bar like the mock-up's .progress, with the marks over it: the even pace (a thin line) and the brake (a red line).
+function Meter({ pct, pace = null, stop = null, label, className }) {
   return (
-    <Card className="gap-1 py-4">
-      <div className="text-muted-foreground px-5 text-xs">{label}</div>
-      <div className="mt-auto px-5 text-xl font-medium tabular-nums">{value}</div>
-      {detail ? <div className="text-muted-foreground px-5 text-xs tabular-nums">{detail}</div> : null}
-    </Card>
+    <span className={cn('bg-muted relative block h-1.5 overflow-hidden rounded-full', className)} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}>
+      <span className="bg-primary-text block h-full rounded-full" style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} />
+      {pace != null ? <span className="bg-foreground/60 absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(pace, 0))}% - 1px)` }} data-testid="usage-pace" /> : null}
+      {stop != null ? <span className="bg-destructive absolute top-0 h-full w-0.5" style={{ left: `calc(${Math.min(100, Math.max(stop, 0))}% - 1px)` }} data-testid="usage-stop" /> : null}
+    </span>
   );
 }
 
-// One bar a day: the cost when the agents report it, else the tokens.
+// One row of a table drawn with a grid: the name (with the agent's mark), tokens, cost and its share as a thin bar.
+const COLS = 'grid-cols-[1fr_100px_100px] min-[900px]:grid-cols-[1fr_100px_100px_160px]';
+function Rows({ head, rows, locale, total }) {
+  const t = useT();
+  return (
+    <ListCard>
+      <div className={cn('text-faint-foreground grid items-center gap-3 px-3.5 py-2 text-micro uppercase', COLS)}>
+        <span>{head}</span><span className="text-right">{t('usage.tokens')}</span><span className="text-right">{t('usage.costEst')}</span><span className="max-[899px]:hidden">{t('usage.share')}</span>
+      </div>
+      {rows.map((r) => {
+        const n = (r.tokensIn ?? 0) + (r.tokensOut ?? 0);
+        const share = total ? Math.round((n / total) * 100) : 0;
+        return (
+          <div key={r.key} className={cn('border-border grid items-center gap-3 border-t px-3.5 py-2.5 text-control', COLS)}>
+            <span className={cn('flex min-w-0 items-center gap-2', r.indent && 'pl-6')}>{r.agent && !r.plain ? <AgentIcon agent={r.agent} className="size-4 shrink-0" /> : null}<span className={cn('truncate', r.bold && 'font-medium')}>{r.name}</span></span>
+            <span className="text-right tabular-nums">{n ? tokens(n) : '—'}</span>
+            <span className="text-right tabular-nums">{r.usd ? usd(r.usd, locale) : '—'}</span>
+            <span className="max-[899px]:hidden" title={`${share} %`}><Meter pct={share} label={`${share} %`} /></span>
+          </div>
+        );
+      })}
+    </ListCard>
+  );
+}
+
+// One bar a day: the cost when the agents report it, else the tokens; the table under it gives the numbers.
 function Days({ days, metric, locale }) {
   const t = useT();
   const value = (d) => (metric === 'usd' ? d.usd : d.tokensIn + d.tokensOut);
   const max = Math.max(...days.map(value), 0);
+  const fmt = (v) => (metric === 'usd' ? usd(v, locale) : t('usage.tokensN', { n: tokens(v) }));
+  const dayName = (d, i) => {
+    const name = new Date(`${d.day}T12:00:00`).toLocaleDateString(locale, { weekday: 'short', day: 'numeric' });
+    return i === days.length - 1 ? t('usage.today', { day: name }) : name;
+  };
   return (
-    <div className="flex h-36 items-end gap-[2px]" role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
-      {days.map((d) => {
-        const v = value(d);
-        const label = `${new Date(`${d.day}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'short' })} · ${metric === 'usd' ? usd(v, locale) : t('usage.tokensN', { n: tokens(v) })}`;
-        return (
-          <Tip key={d.day} label={label}>
-            <span className="flex h-full min-w-0 flex-1 items-end" tabIndex={0}>
-              <span className={cn('w-full rounded-t-sm', v ? 'bg-primary-text' : 'bg-chart-empty')} style={{ height: v && max ? `${Math.max(3, (v / max) * 100)}%` : '3px' }} />
-            </span>
-          </Tip>
-        );
-      })}
-    </div>
-  );
-}
-
-function Table({ rows, head, locale, plain = false }) {
-  const t = useT();
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-control">
-        <thead><tr className="text-muted-foreground text-left text-xs"><th className="py-1.5 font-normal">{head}</th><th className="py-1.5 text-right font-normal">{t('usage.cost')}</th><th className="py-1.5 text-right font-normal">{t('usage.in')}</th><th className="py-1.5 text-right font-normal">{t('usage.out')}</th><th className="py-1.5 text-right font-normal">{t('usage.turns')}</th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.key} className="border-t">
-              <td className="py-2"><span className="flex min-w-0 items-center gap-2">{plain ? null : <AgentIcon agent={r.agent} className="size-4 shrink-0" />}<span className="truncate">{r.name}</span></span></td>
-              <td className="py-2 text-right tabular-nums">{r.usd ? usd(r.usd, locale) : '—'}</td>
-              <td className="py-2 text-right tabular-nums">{tokens(r.tokensIn)}</td>
-              <td className="py-2 text-right tabular-nums">{tokens(r.tokensOut)}</td>
-              <td className="py-2 text-right tabular-nums">{r.turns.toLocaleString(locale)}</td>
-            </tr>
+    <>
+      <ListCard className={cn(days.length > 14 && 'max-h-[30rem] overflow-y-auto')} role="img" aria-label={t('usage.byDay')} data-testid="usage-days">
+        {days.map((d, i) => {
+          const v = value(d);
+          return (
+            <div key={d.day} className="border-border grid grid-cols-[110px_1fr_70px] items-center gap-3 px-3.5 py-2 text-control not-first:border-t" title={`${dayName(d, i)} · ${fmt(v)}`}>
+              <span>{dayName(d, i)}</span>
+              <Meter pct={v && max ? (v / max) * 100 : 0} label={fmt(v)} className={cn(!v && '[&>span]:hidden')} />
+              <span className="text-right tabular-nums">{metric === 'usd' ? usd(v, locale) : tokens(v)}</span>
+            </div>
+          );
+        })}
+      </ListCard>
+      <details className="text-faint-foreground text-caption">
+        <summary className="cursor-pointer">{t('usage.tableOf', { what: metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay') })}</summary>
+        <ListCard className="mt-1.5">
+          <div className="text-faint-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 px-3.5 py-2 text-micro uppercase"><span>{t('usage.day')}</span><span>{t('usage.in')}</span><span>{t('usage.out')}</span><span>{metric === 'usd' ? t('usage.cost') : t('usage.total')}</span></div>
+          {days.map((d, i) => (
+            <div key={d.day} className="border-border text-foreground grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-t px-3.5 py-2 text-control tabular-nums"><span>{dayName(d, i)}</span><span>{tokens(d.tokensIn)}</span><span>{tokens(d.tokensOut)}</span><span>{metric === 'usd' ? usd(d.usd, locale) : tokens(d.tokensIn + d.tokensOut)}</span></div>
           ))}
-        </tbody>
-      </table>
-    </div>
+        </ListCard>
+      </details>
+    </>
   );
 }
 
@@ -96,49 +121,94 @@ function Heat({ heat, locale }) {
   );
 }
 
-// What the sessions of Claude Code and Codex on this PC spent (history.usage), by model, project and hour.
-function LocalUsage({ days, locale }) {
+// What the sessions of Claude Code and Codex on this PC spent by model and hour (history.usage, read-only files).
+function LocalUsage({ data, locale }) {
   const t = useT();
-  const [data, setData] = useState(null);
-  useEffect(() => { let alive = true; setData(null); call('history.usage', { days }).then((r) => alive && setData(r)).catch(() => alive && setData(false)); return () => { alive = false; }; }, [days]);
-  if (data === false) return null;
-  const models = (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.model ?? t('usage.defaultModel') }));
-  const projects = (data?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—' }));
+  if (!data?.total?.turns) return null;
+  const models = (data.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.model ?? t('usage.defaultModel') }));
+  const total = models.reduce((n, m) => n + m.tokensIn + m.tokensOut, 0);
   return (
     <>
-      <div><div className="text-control font-medium">{t('usage.local')}</div><p className="text-muted-foreground text-xs">{t('usage.localHint')}</p></div>
-      {data === null ? <Spinner /> : !data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : (<>
-        <Card className="gap-3" data-testid="usage-local"><div className="px-5 text-control font-medium">{t('usage.heat')}</div><div className="px-5"><Heat heat={data.heat} locale={locale} /></div></Card>
-        <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byModel')}</div><div className="px-5"><Table rows={models} head={t('usage.model')} locale={locale} /></div></Card>
-        <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byProject')}</div><div className="px-5"><Table rows={projects} head={t('usage.project')} locale={locale} plain /></div></Card>
-        {data.truncated ? <p className="text-muted-foreground text-xs">{t('usage.localTruncated')}</p> : null}
-      </>)}
+      <Block title={t('usage.local')} note={t('usage.localHint')} />
+      <ListCard className="flex flex-col gap-3 py-3.5" data-testid="usage-local"><div className="px-3.5 text-control font-medium">{t('usage.heat')}</div><div className="px-3.5"><Heat heat={data.heat} locale={locale} /></div></ListCard>
+      <Rows head={t('usage.model')} rows={models} locale={locale} total={total} />
+      {data.truncated ? <p className="text-faint-foreground text-caption">{t('usage.localTruncated')}</p> : null}
     </>
   );
 }
 
-function Limits({ accounts, locale }) {
+// What the account will do at its pace: when it would reach the limit, or that it does not, or that it already stopped.
+function outlook(t, locale, windows, stop, weeklyStop) {
+  const w = [...windows].reverse().find((x) => windowMs(x.window) && x.resetAt && x.utilization != null);
+  if (!w) return null;
+  const weekly = /seven_day|^10080min$/.test(String(w.window));
+  const brake = weekly ? weeklyStop : stop;
+  if (w.utilization >= brake) return t('usage.pastBrake', { pct: Math.round(brake * 100) });
+  const len = windowMs(w.window); const start = w.resetAt - len; const elapsed = Date.now() - start;
+  if (elapsed <= 0 || !w.utilization) return t(weekly ? 'usage.paceNoLimitWeek' : 'usage.paceNoLimit');
+  const hit = Date.now() + ((1 - w.utilization) / (w.utilization / elapsed));
+  if (hit >= w.resetAt) return t(weekly ? 'usage.paceNoLimitWeek' : 'usage.paceNoLimit');
+  return weekly ? t('usage.paceHitsDay', { when: new Date(hit).toLocaleString(locale, { weekday: 'long' }) }) : t('usage.paceHitsTime', { when: new Date(hit).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) });
+}
+
+function Account({ u, locale, stop, weeklyStop, reload }) {
   const t = useT();
-  const withData = accounts.filter((u) => u.windows?.length);
-  if (!withData.length) return <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p>;
+  // the brakes apply to the 5-hour window and to the whole week, not to a window of one model
+  const braked = u.windows?.some((w) => w.utilization != null && (/five_hour|^300min$|^5h$/.test(String(w.window)) ? w.utilization >= stop : /^seven_day$|^10080min$/.test(String(w.window)) && w.utilization >= weeklyStop));
+  const name = AGENT[u.agent] ?? u.agent;
+  const wlabel = (w) => (/five_hour|^300min$|^5h$/.test(String(w.window)) ? t('usage.win5', { h: u.windowHours ?? 5 }) : /^seven_day$|^10080min$/.test(String(w.window)) ? t('usage.winWeek') : windowLabel(t, w.window));
+  const line = outlook(t, locale, u.windows ?? [], stop, weeklyStop);
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {withData.map((u) => (
-        <div key={u.account} className="grid content-start gap-2.5 rounded-xl border p-3.5 text-control" data-testid="usage-account">
-          <div className="flex items-center gap-2 font-medium"><AgentIcon agent={u.agent} className="size-4" />{AGENT[u.agent] ?? u.agent}{u.label && u.label !== (AGENT[u.agent] ?? u.agent) ? <span className="text-muted-foreground truncate font-normal">· {u.label}</span> : null}</div>
+    <div className="bg-card border-border rounded-card flex flex-col gap-2.5 border p-3.5 text-control" data-testid="usage-account">
+      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} className="size-4 shrink-0" /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : null}</div>
+      {u.windows?.length ? (
+        <div className="text-muted-foreground grid grid-cols-[90px_1fr] items-center gap-x-2.5 gap-y-1.5 text-caption">
           {u.windows.map((w) => {
             const p = Math.round((w.utilization ?? 0) * 100); const pace = paceOf(w);
+            const weekly = /^seven_day$|^10080min$/.test(String(w.window));
+            const five = /five_hour|^300min$|^5h$/.test(String(w.window));
+            const mark = weekly ? weeklyStop : five ? stop : null;
             return (
-              <div key={w.window} className="grid gap-1">
-                <div className="flex items-baseline justify-between gap-3"><span className="truncate">{windowLabel(t, w.window)}</span><span className="tabular-nums">{p} %</span></div>
-                <UsageBar pct={p} pace={pace} />
-                <span className="text-muted-foreground text-xs">{[pace != null ? t(p > pace ? 'usage.aheadOfPace' : 'usage.withinPace', { pace }) : null, w.resetAt ? resetText(t, locale, w.resetAt) : null].filter(Boolean).join(' · ')}</span>
-              </div>
+              <Fragment key={w.window}>
+                <span>{wlabel(w)}</span>
+                <div className="flex flex-col gap-1">
+                  <b className="text-foreground text-control font-medium tabular-nums">{p} %</b>
+                  <Meter pct={p} pace={pace} stop={mark != null ? Math.round(mark * 100) : null} label={wlabel(w)} />
+                  <span>{[pace != null ? t(p > pace ? 'usage.aheadOfPace' : 'usage.withinPace', { pace }) : null, w.resetAt ? resetText(t, locale, w.resetAt) : null].filter(Boolean).join(' · ')}</span>
+                </div>
+              </Fragment>
             );
           })}
         </div>
-      ))}
+      ) : <p className="text-muted-foreground text-caption">{t('usage.noLimits')}</p>}
+      {line ? <p className="text-muted-foreground m-0 text-caption">{line}</p> : null}
+      {/* what the queue holds for this account, and the pause the user can lift when the limit was only of one model or reset earlier. */}
+      <div className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-caption">
+        <span>{u.maxHeavy ? t('agents.tasksUsed', { used: u.used, max: u.max, heavy: u.heavy, maxHeavy: u.maxHeavy }) : t('agents.tasksUsedNoHeavy', { used: u.used, max: u.max })}</span>
+        {u.cooldownUntil ? <Badge variant="destructive">{u.cooldownUntil - Date.now() > 20 * 3_600_000 ? t('agents.cooldownDay', { time: new Date(u.cooldownUntil).toLocaleString(locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }) : t('agents.cooldown', { time: new Date(u.cooldownUntil).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })}</Badge> : null}
+        {u.modelLimits?.map((m) => <Badge key={m.model} variant="warning" title={m.model}>{t('agents.modelLimit', { model: m.label, time: new Date(m.until).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })}</Badge>)}
+        {fullPc() && (u.cooldownUntil || u.modelLimits?.length) ? <Button size="xs" variant="outline" data-testid={`clear-cooldown-${u.account}`} onClick={async () => { if (await act(call('accounts.clearCooldown', { account: u.account }), t('agents.clearCooldownDone', { name: u.label }))) reload(); }}>{t('agents.clearCooldown')}</Button> : null}
+      </div>
     </div>
+  );
+}
+
+// What Orb does when an account nears its limit: the brakes are the same values as «Ajustes › Tareas» and «Reglas»
+// (a change of a brake asks the master password, as there).
+function Limits({ cfg, windowHours }) {
+  const t = useT();
+  const stop = Math.round((cfg.budget?.stopAt ?? 0.92) * 100);
+  const weekly = Math.round((cfg.budget?.weeklyStopAt ?? 0.85) * 100);
+  const opts = (list, cur) => [...new Set([...list, cur])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: `${n} %` }));
+  const resume = cfg.continuity?.resumeAtReset !== false;
+  return (
+    <Block title={t('usage.atLimit')} note={t('usage.atLimitNote')} data-testid="usage-limits">
+      <Panel>
+        <Setting label={t('usage.resume')} hint={t('usage.resumeHint')}><Switch checked={resume} onCheckedChange={(resumeAtReset) => save({ continuity: { resumeAtReset } })} aria-label={t('usage.resume')} /></Setting>
+        <Setting label={t('usage.brake5', { h: windowHours })} hint={t('usage.brake5Hint')}><Select value={String(stop)} options={opts([75, 80, 85, 90, 92, 95, 98, 100], stop)} onValueChange={(v) => save({ budget: { profile: null, stopAt: Number(v) / 100 } })} title={t('usage.brake5', { h: windowHours })} data-testid="usage-brake-5h" /></Setting>
+        <Setting label={t('usage.brakeWeek')} hint={t('usage.brakeWeekHint')}><Select value={String(weekly)} options={opts([70, 75, 80, 85, 90, 95, 100], weekly)} onValueChange={(v) => save({ budget: { weeklyStopAt: Number(v) / 100 } })} title={t('usage.brakeWeek')} data-testid="usage-brake-week" /></Setting>
+      </Panel>
+    </Block>
   );
 }
 
@@ -146,35 +216,75 @@ export function UsageView() {
   const t = useT();
   const locale = useLocale();
   const version = useStore((s) => s.version);
+  const cfg = useStore((s) => s.app.config);
   const [days, setDays] = useState('30');
   const [data, setData] = useState(null);
+  const [prev, setPrev] = useState(null);
+  const [local, setLocal] = useState(null);
   const [accounts, setAccounts] = useState([]);
-  useEffect(() => { let alive = true; call('usage.history', { days: Number(days) }).then((r) => alive && setData(r)).catch(() => alive && setData(false)); return () => { alive = false; }; }, [days, version]);
-  useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(quiet); return () => { alive = false; }; }, [version]);
+  const [tick, setTick] = useState(0);
+  useEffect(() => { let alive = true; call('usage.history', { days: Number(days) }).then((r) => alive && setData(r)).catch(() => alive && setData(false)); return () => { alive = false; }; }, [days, version, tick]);
+  // the period before this one, from the next longer range (7 → 30, 30 → 90), to say if the cost went up or down.
+  useEffect(() => {
+    let alive = true; setPrev(null);
+    const longer = days === '7' ? 30 : days === '30' ? 90 : null;
+    if (longer) call('usage.history', { days: longer }).then((r) => { if (alive) setPrev(sum(r.days.slice(-2 * Number(days), -Number(days)))); }).catch(quiet);
+    return () => { alive = false; };
+  }, [days, version, tick]);
+  useEffect(() => { let alive = true; setLocal(null); call('history.usage', { days: Number(days) }).then((r) => alive && setLocal(r)).catch(() => alive && setLocal(false)); return () => { alive = false; }; }, [days, tick]);
+  const reload = () => call('usage.get').then((r) => setAccounts(r ?? [])).catch(quiet);
+  useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(quiet); return () => { alive = false; }; }, [version, tick]);
   const metric = data?.total?.usd ? 'usd' : 'tokens';
-  const agents = useMemo(() => (data?.agents ?? []).map((a) => ({ ...a, key: a.agent, name: AGENT[a.agent] ?? a.agent })), [data]);
-  const models = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? t('usage.defaultModel') })), [data, t]);
+  const totalTokens = data?.total ? data.total.tokensIn + data.total.tokensOut : 0;
+  const agentRows = useMemo(() => (data?.agents ?? []).flatMap((a) => [
+    { ...a, key: a.agent, name: AGENT[a.agent] ?? a.agent, bold: true },
+    ...(data.models ?? []).filter((m) => m.agent === a.agent && m.model).map((m) => ({ ...m, key: `${m.agent}:${m.model}`, name: m.label ?? m.model, indent: true, plain: true }))
+  ]), [data]);
+  const projects = (local?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—', plain: true }));
+  const projectsTotal = projects.reduce((n, p) => n + p.tokensIn + p.tokensOut, 0);
+  const stop = cfg.budget?.stopAt ?? 0.92; const weeklyStop = cfg.budget?.weeklyStopAt ?? 0.85;
+  const delta = prev && data?.total?.usd ? Math.round(((data.total.usd - prev) / prev) * 100) : null;
+  const meta = data?.total ? [t('usage.days', { n: days }), t('usage.tokensN', { n: tokens(totalTokens) }), data.total.usd ? t('usage.estimated', { cost: usd(data.total.usd, locale) }) : null].filter(Boolean).join(' · ') : t('usage.days', { n: days });
+  const range = data?.from ? t('usage.range', { from: new Date(`${data.from}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long' }), to: new Date(`${data.to}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long' }) }) : '';
+  const withTabs = fullPc();
   return (
     <>
-      <PageHeader icon={<Gauge className="text-primary-text size-5" />} title={t('usage.title')}>
-        <Tabs value={days} onValueChange={setDays}><TabsList>{['7', '30', '90'].map((d) => <TabsTrigger key={d} value={d} data-testid={`usage-range-${d}`}>{t('usage.days', { n: d })}</TabsTrigger>)}</TabsList></Tabs>
+      <PageHeader title={t('usage.title')} meta={meta}>
+        <DropdownMenu modal={false}>
+          <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton data-testid="usage-more" /></DropdownMenuTrigger></BubbleTip>
+          <DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => setTick((n) => n + 1)} data-testid="usage-refresh"><RefreshCw />{t('agents.refresh')}</DropdownMenuItem></DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
-      <PageBody>
-        <div className="@container mx-auto grid max-w-4xl gap-5" data-testid="usage-view">
+      <PageBody className="pt-5 pb-10 md:pb-28">
+        <div className="@container mx-auto flex w-full max-w-[1180px] flex-col gap-4" data-testid="usage-view">
+          {withTabs ? <AgentsUsageTabs current="usage" /> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Segmented value={days} onChange={setDays} aria-label={t('usage.period')} options={['7', '30', '90'].map((d) => ({ value: d, label: t('usage.days', { n: d }), testid: `usage-range-${d}` }))} />
+          </div>
+          <Block title={t('usage.byAccount')} count={accounts.length || null}>
+            <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-caption"><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrake', { pct: Math.round(stop * 100) })}</span><span className="inline-flex items-center gap-1.5"><OctagonX className="size-3.5" />{t('usage.legendBrakeWeek', { pct: Math.round(weeklyStop * 100) })}</span></div>
+            {accounts.length ? <div className="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-2.5">{accounts.map((u) => <Account key={u.account} u={u} locale={locale} stop={stop} weeklyStop={weeklyStop} reload={reload} />)}</div> : <p className="text-muted-foreground text-control">{t('usage.noLimits')}</p>}
+          </Block>
           {data === null ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t('usage.unavailable')} /> : (<>
-            <div className="grid grid-cols-2 gap-3 @2xl:grid-cols-4">
-              <Stat label={t('usage.cost')} value={usd(data.total.usd, locale)} />
-              <Stat label={t('usage.in')} value={tokens(data.total.tokensIn)} />
-              <Stat label={t('usage.out')} value={tokens(data.total.tokensOut)} />
-              <Stat label={t('usage.turns')} value={data.total.turns.toLocaleString(locale)} />
+            <ListCard className="flex flex-col gap-0.5 p-3.5">
+              <span className="text-muted-foreground text-caption uppercase">{t('usage.costEstimated', { n: days })}</span>
+              <div className="flex items-center gap-2"><span className="font-(family-name:--title) text-[24px] font-semibold tabular-nums">{usd(data.total.usd, locale)}</span>{delta != null ? <Badge variant={delta > 0 ? 'warning' : 'success'}>{t(delta > 0 ? 'usage.deltaUp' : 'usage.deltaDown', { pct: Math.abs(delta), vs: t(days === '7' ? 'usage.vsWeek' : 'usage.vsMonth') })}</Badge> : null}</div>
+              <span className="text-muted-foreground text-caption">{t('usage.costNote')}</span>
+            </ListCard>
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5">
+              {[[t('usage.in'), tokens(data.total.tokensIn)], [t('usage.out'), tokens(data.total.tokensOut)], [t('usage.turns'), data.total.turns.toLocaleString(locale)], [t('usage.total'), tokens(totalTokens)]].map(([label, value]) => (
+                <div key={label} className="bg-card border-border rounded-card flex flex-col gap-1 border px-3.5 py-3"><span className="text-muted-foreground text-caption">{label}</span><b className="font-(family-name:--title) text-[24px] font-semibold tabular-nums">{value}</b></div>
+              ))}
             </div>
-            <Card className="gap-3"><div className="px-5 text-control font-medium">{metric === 'usd' ? t('usage.costByDay') : t('usage.tokensByDay')}</div><div className="px-5"><Days days={data.days} metric={metric} locale={locale} /></div></Card>
-            {agents.length ? <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byAgent')}</div><div className="px-5"><Table rows={agents} head={t('usage.agent')} locale={locale} /></div></Card> : null}
-            {models.length ? <Card className="gap-2"><div className="px-5 text-control font-medium">{t('usage.byModel')}</div><div className="px-5"><Table rows={models} head={t('usage.model')} locale={locale} /></div></Card> : null}
+            <Block title={t('usage.byDay')} count={[metric === 'usd' ? t('usage.metricCost') : t('usage.metricTokens'), range].filter(Boolean).join(' · ')}>
+              <Days days={data.days} metric={metric} locale={locale} />
+            </Block>
+            {projects.length ? <Block title={t('usage.byProject')}><Rows head={t('usage.project')} rows={projects} locale={locale} total={projectsTotal} /></Block> : null}
+            {agentRows.length ? <Block title={t('usage.byAgentModel')}><Rows head={t('usage.agent')} rows={agentRows} locale={locale} total={totalTokens} /></Block> : null}
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
-          <LocalUsage days={Number(days)} locale={locale} />
-          <Card className="gap-3"><div className="px-5 text-control font-medium">{t('usage.limits')}</div><div className="px-5"><Limits accounts={accounts} locale={locale} /></div></Card>
+          {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
+          <LocalUsage data={local || null} locale={locale} />
         </div>
       </PageBody>
     </>

@@ -1,11 +1,11 @@
 // Normas: the cards. A text rule shows its title, state and a plain-text view of its body; a rail shows what the code
 // enforces, its switch and its values (the real keys of orb.json). Nothing here writes: the buttons call back.
 import { useEffect, useMemo, useState } from 'react';
-import { Lock, Plus, X, RotateCcw, Pencil, Pause, Play, Trash2, Eye, EyeOff } from 'lucide-react';
+import { Lock, Plus, X, RotateCcw, Pause, Play, Trash2, Eye, EyeOff } from 'lucide-react';
 import { Badge, Input } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { IconButton, ListRow, MoreButton } from '@/components/ui/primitives.jsx';
-import { Switch, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { bridge } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
@@ -27,7 +27,7 @@ export function RuleCard({ rule, onEdit, onToggle, onDelete }) {
   const seed = Boolean(rule.de_serie);
   const acts = bridge.mobile ? null : (
     <>
-      <Button size="xs" variant="outline" onClick={() => onEdit(rule)} data-testid={`rule-edit-${rule.id}`}><Pencil />{t('rules.edit')}</Button>
+      <Button size="xs" variant="outline" onClick={() => onEdit(rule)} data-testid={`rule-edit-${rule.id}`}>{t('rules.edit')}</Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild><MoreButton small label={t('rules.more', { name: rule.titulo })} data-testid={`rule-more-${rule.id}`} /></DropdownMenuTrigger>
         <DropdownMenuContent>
@@ -177,11 +177,10 @@ export function RailCard({ rail, onSwitch, onSave, onRemove }) {
         <b className="min-w-0 flex-1 truncate text-body font-medium">{name}</b>
         <Badge variant={on ? 'success' : 'warning'}>{t(on ? 'rules.railActive' : 'rules.railPaused')}</Badge>
         {bridge.mobile ? null : (<>
-          <Switch checked={on} onCheckedChange={(next) => onSwitch(rail, next)} aria-label={t('rules.switchFor', { name })} data-testid={`rail-switch-${rail.id}`} />
           <DropdownMenu>
             <DropdownMenuTrigger asChild><MoreButton small label={t('rules.more', { name })} data-testid={`rail-more-${rail.id}`} /></DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem onSelect={() => onSwitch(rail, !on)}>{on ? <Pause /> : <Play />}<span className="grid"><span>{t(on ? 'rules.pauseRail' : 'rules.resume')}</span><span className="text-muted-foreground text-micro">{t('rules.everyTimeShort')}</span></span></DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => onSwitch(rail, !on)} data-testid={`rail-switch-${rail.id}`}>{on ? <Pause /> : <Play />}<span className="grid"><span>{t(on ? 'rules.pauseRail' : 'rules.resume')}</span><span className="text-muted-foreground text-micro">{t('rules.everyTimeShort')}</span></span></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" onSelect={() => onRemove(rail)} data-testid={`rail-remove-${rail.id}`}><Trash2 /><span className="grid"><span>{t('rules.deleteRail')}</span><span className="text-muted-foreground text-micro">{t('rules.everyTimeShort')}</span></span></DropdownMenuItem>
             </DropdownMenuContent>

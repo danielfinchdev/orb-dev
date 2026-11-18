@@ -12,7 +12,7 @@ import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { TaskChanges, ChangesSummary, ChangesFiles, ChangesMeta, DiffStat, useDiffStat, useTaskDiff } from '@/components/task-changes.jsx';
 import { useComments } from '@/lib/turn-comments.js';
-import { HeldCard, PausedNote, TaskStatus, waitText, setQueuePaused, acceptHeld, undoHeld, undoBody } from '@/components/task-state.jsx';
+import { HeldCard, PausedNote, TaskStatus, waitText, setQueuePaused, acceptHeld, undoHeld, undoTask } from '@/components/task-state.jsx';
 import { ChatPanel } from '@/components/chat-panel.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
@@ -106,7 +106,7 @@ function taskActions(task, tr) {
     accept: () => act(call('tasks.accept', { id: t.id }), tr('tasks.accepted')),
     launch: async () => { const r = await act(call('tasks.launchAnyway', { id: t.id })); if (r) notifyOk(tr(r.paused ? 'tasks.launchAnyway.paused' : 'tasks.launchAnyway.done')); },
     retry: () => act(call('tasks.retry', { id: t.id }), tr('tasks.retry.done')),
-    undo: async () => { if (await confirm(tr('tasks.undo.title'), undoBody(tr, t), { ok: tr('tasks.undo.ok'), danger: true })) await act(call('tasks.undo', { id: t.id })); },
+    undo: () => undoTask(tr, t),
     merge: async () => { if (await confirm(tr('tasks.merge'), tr('tasks.merge.body', { branch: t.branch }), { ok: tr('tasks.merge.ok'), danger: true })) await act(call('projects.merge', { name: t.project, branch: t.branch }), tr('tasks.merge.done')); },
     discard: async () => { if (await confirm(tr('tasks.discard'), tr('tasks.discard.body', { branch: t.branch }), { ok: tr('tasks.discard.ok'), danger: true })) await act(call('tasks.discardBranch', { id: t.id }), tr('tasks.discard.done')); },
     cancel: async () => { if (await confirm(tr('tasks.cancel.title'), t.status === 'running' ? tr('tasks.cancel.running') : tr('tasks.cancel.ask'), { ok: tr('tasks.cancel.title'), cancel: tr('tasks.cancel.back'), danger: true })) await act(call('tasks.cancel', { id: t.id }), tr('tasks.cancel.done')); }
@@ -326,7 +326,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
   const approval = t.status === 'awaiting_approval';
   const [busy, run] = useBusy();
   const more = [
-    ...(canUndo && t.status !== 'done' ? [{ key: 'undo', icon: Undo2, label: tr('tasks.undo.btn'), run: run(undo), testid: 'task-undo' }] : []),
+    ...(canUndo && t.status !== 'done' ? [{ key: 'undo', icon: Undo2, label: tr('tasks.undo.btn'), run: undo, testid: 'task-undo' }] : []),
     ...(!['running', 'done'].includes(t.status) ? [{ key: 'reassign', icon: UserCog, label: tr('tasks.reassign.btn'), run: reassign, testid: 'task-reassign' }] : []),
     ...(!['done', 'cancelled', 'running'].includes(t.status) ? [{ key: 'cancel', icon: CircleX, label: tr('tasks.cancelTask'), run: run(cancel), danger: true, testid: 'task-cancel' }] : [])
   ];
@@ -374,7 +374,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
         </>) : null}
         {t.held ? (<>
           <MoreActions items={more} label={tr('tasks.more')} />
-          <Button variant="outline" disabled={busy} onClick={run(() => undoHeld(tr, t))} data-testid="task-held-undo"><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button>
+          <Button variant="outline" disabled={busy} onClick={() => undoHeld(tr, t, (fn) => run(fn)())} data-testid="task-held-undo"><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button>
           {chat}
           {retryable ? <Button onClick={run(retry)} data-testid="task-retry"><RotateCw className="size-3.5" />{tr('tasks.retry')}</Button> : null}
           <Button disabled={busy} onClick={run(() => acceptHeld(tr, t))} data-testid="task-held-accept">{tr('tasks.held.accept')}</Button>
@@ -417,7 +417,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
         <CollapsibleTrigger className="group w-full cursor-pointer text-left"><Sec><ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />{tr('tasks.sec.history')}<span className="text-faint-foreground text-caption font-normal">{tr('tasks.sec.events', { n: t.events.length })}</span></Sec></CollapsibleTrigger>
         <CollapsibleContent><ol className="mt-1 grid gap-1.5 text-xs">{t.events.slice().reverse().map((e, i) => <li key={i} className="grid grid-cols-[110px_1fr] gap-2"><span className="text-muted-foreground">{fmtTime(e.at)}</span><span><span className="font-medium">{e.kind}</span> <span className="text-muted-foreground">{AGENT[e.actor] ?? e.actor}</span>{e.detail ? <span className="text-muted-foreground block break-all">{e.detail}</span> : null}</span></li>)}</ol></CollapsibleContent>
       </Collapsible>
-      {canUndo && t.status === 'done' ? <div className="acts-r mt-2.5 flex justify-start"><Button variant="ghost" disabled={busy} onClick={run(undo)} data-testid="task-undo"><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button></div> : null}
+      {canUndo && t.status === 'done' ? <div className="acts-r mt-2.5 flex justify-start"><Button variant="ghost" disabled={busy} onClick={() => undoTask(tr, t, (fn) => run(fn)())} data-testid="task-undo"><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button></div> : null}
     </div>
   );
 }
@@ -439,7 +439,7 @@ function TaskPanelChanges({ t, diff }) {
       </div>
       <div className="by text-muted-foreground mt-1 text-control">{t.title} · {t.project}{t.branch ? <> · <code className="font-mono text-caption">{t.branch}</code></> : null}</div>
       <div className="acts-r my-2.5 flex flex-wrap items-center justify-end gap-1.5">
-        {canUndo ? <Button variant="ghost" disabled={busy} onClick={run(undo)}><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button> : null}
+        {canUndo ? <Button variant="ghost" disabled={busy} onClick={() => undoTask(tr, t, (fn) => run(fn)())}><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button> : null}
         {t.session_id ? <Button variant="outline" onClick={() => go({ view: 'session', id: t.session_id })} data-testid="task-request-changes"><MessageSquarePlus className="size-3.5" />{comments ? tr('tasks.changes.askN', { n: comments }) : tr('tasks.changes.ask')}</Button> : null}
         {t.branch && t.status === 'done' ? (<>
           <Button variant="outline" onClick={createPr}><GitPullRequest className="size-3.5" />{tr('tasks.pr.title')}</Button>
@@ -447,7 +447,7 @@ function TaskPanelChanges({ t, diff }) {
         </>) : null}
       </div>
       <ChangesMeta data={diff} reviewer={t.review ? (AGENT[t.review.agent] ?? t.review.agent) : null} photoAt={photoAt} canUndo={canUndo} className="mb-2" />
-      <ChangesFiles data={diff} sessionId={t.session_id} />
+      <ChangesFiles data={diff} sessionId={t.session_id} project={t.project} />
     </div>
   );
 }
@@ -473,7 +473,7 @@ function RowActions({ t, onOpen, busy, run }) {
   }
   // «Aceptar» of a held task asks first, with the reason the guard held it (acceptHeld).
   if (t.held) return (<>
-    <Button size="xs" variant="outline" disabled={busy} onClick={run(() => undoHeld(tr, t))} data-testid="task-row-undo">{tr('tasks.undo.btn')}</Button>
+    <Button size="xs" variant="outline" disabled={busy} onClick={() => undoHeld(tr, t, (fn) => run(fn)())} data-testid="task-row-undo">{tr('tasks.undo.btn')}</Button>
     <Button size="xs" disabled={busy} onClick={run(() => acceptHeld(tr, t))} data-testid="task-row-accept">{tr('tasks.held.accept')}</Button>
   </>);
   if (t.status === 'awaiting_approval') return (<>

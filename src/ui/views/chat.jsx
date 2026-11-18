@@ -521,7 +521,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
     <>
       {/* the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
           project and what it is doing; a click opens the chat's info. On the right: notifications, pause and ⋯. */}
-      <ChatBar back={embedded ? null : <BackToList to="chats" />} testid="orb-chat-bar" className="topbar-chat" title={<>
+      <ChatBar back={embedded ? null : <BackToList to="chats" />} inner={embedded} testid="orb-chat-bar" className="topbar-chat" title={<>
         <h1 className="sr-only">{conv?.title ?? t('orbchats.newChatTitle')}</h1>
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
           className={cn('press flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1.5 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}

@@ -1,19 +1,19 @@
 // Activity: every event of Orb (who did what and when). A newer engine reads it by pages and filters it by source,
 // level, project, dates and text; an older one answers the plain list of events, and then only the text search stays.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, Check, SquareCheck } from 'lucide-react';
+import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, SquareCheck } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Input, Spinner } from '@/components/ui/basic.jsx';
 import { BubbleTip, Select } from '@/components/ui/overlay.jsx';
-import { IconButton, ListCard, SearchInput, Segmented } from '@/components/ui/primitives.jsx';
+import { IconButton, ListCard, SearchInput } from '@/components/ui/primitives.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { useStore, call, go } from '@/lib/store.js';
 import { AGENT } from '@/lib/labels.js';
 import { cn, fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
-import { SOURCES, EMPTY_FILTERS, buildQuery, normalizeActivity, appendPage, hasFilters, hasMethod } from '@/lib/activity-filters.js';
+import { SOURCES, LEVELS, EMPTY_FILTERS, buildQuery, normalizeActivity, appendPage, hasFilters, hasMethod } from '@/lib/activity-filters.js';
 import { quiet } from '@/lib/quiet.js';
 import { ReportDialog } from './activity-report.jsx';
 import { BitacorasPage } from './bitacoras-page.jsx';
@@ -25,6 +25,11 @@ const SOURCE_ICON = { orb: Orbit, subagentes: Bot, usuario: User, app: Monitor }
 const LEVEL_BADGE = { info: 'info', warn: 'warning', error: 'destructive' };
 // the hour only: the day is in the tooltip and in the detail
 const hourOf = (at) => (at ? new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+// The level filter keeps its threshold (info = everything, warn = warnings and errors, error = errors only); the three chips
+// show which levels that threshold lets in, and a chip moves it: the lowest lit one turns off, any other sets it.
+const levelOn = (level, l) => LEVELS.indexOf(l) >= LEVELS.indexOf(level);
+const nextLevel = (level, l) => (l === level ? LEVELS[Math.min(LEVELS.indexOf(level) + 1, LEVELS.length - 1)] : l);
+const CHIP = 'inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-ring';
 const COLS = 'grid-cols-[52px_150px_72px_150px_minmax(0,1fr)]';
 
 export function ActivityView({ tabs }) {
@@ -69,17 +74,17 @@ export function ActivityView({ tabs }) {
       {paged ? (
         <div className="toolbar flex flex-wrap items-center gap-2" role="group" aria-label={t('logbooks.filters')} data-testid="activity-filters">
           <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.source')}>
-            {SOURCES.map((s) => {
-              const Icon = SOURCE_ICON[s]; const on = sourceOn(s);
-              return (
-                <button key={s} type="button" aria-pressed={on} onClick={() => toggleSource(s)} data-testid={`activity-source-${s}`}
-                  className={cn('inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-ring', on ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>
-                  {filters.sources.includes(s) ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}{t(`logbooks.source.${s}`)}
-                </button>
-              );
-            })}
+            {SOURCES.map((s) => (
+              <button key={s} type="button" aria-pressed={sourceOn(s)} onClick={() => toggleSource(s)} data-testid={`activity-source-${s}`}
+                className={cn(CHIP, sourceOn(s) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.source.${s}`)}</button>
+            ))}
           </div>
-          <Segmented value={filters.level} onChange={(level) => set({ level })} aria-label={t('logbooks.level')} options={[{ value: 'info', label: t('logbooks.levelAll') }, { value: 'warn', label: t('logbooks.levelWarn') }, { value: 'error', label: t('logbooks.levelError') }]} data-testid="activity-level" />
+          <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.level')} data-testid="activity-level">
+            {LEVELS.map((l) => (
+              <button key={l} type="button" aria-pressed={levelOn(filters.level, l)} onClick={() => set({ level: nextLevel(filters.level, l) })} data-testid={`activity-level-${l}`}
+                className={cn(CHIP, levelOn(filters.level, l) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.level.${l}`)}</button>
+            ))}
+          </div>
           <span className="flex-1" />
           {canReport ? <Button variant="outline" onClick={() => setReport(true)} data-testid="activity-report-open"><ClipboardCopy />{t('logbooks.report')}</Button> : null}
         </div>
@@ -88,9 +93,9 @@ export function ActivityView({ tabs }) {
         {paged ? (
           <>
             <Select value={filters.project || ALL} onValueChange={(project) => set({ project: project === ALL ? '' : project })} options={projectOptions} prefix={t('logbooks.project')} title={t('logbooks.project')} data-testid="activity-project" />
-            <Input type="date" className="w-36" aria-label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} onChange={(e) => set({ from: e.target.value })} data-testid="activity-from" />
+            <Input type="date" className="w-34" aria-label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} onChange={(e) => set({ from: e.target.value })} data-testid="activity-from" />
             <span className="text-muted-foreground">–</span>
-            <Input type="date" className="w-36" aria-label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} onChange={(e) => set({ to: e.target.value })} data-testid="activity-to" />
+            <Input type="date" className="w-34" aria-label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} onChange={(e) => set({ to: e.target.value })} data-testid="activity-to" />
           </>
         ) : null}
         <SearchInput value={filters.q} onChange={(q) => set({ q })} placeholder={t('activity.search')} className="w-70 flex-[0_1_280px]" data-testid="activity-search" />
@@ -136,9 +141,9 @@ function PagedRow({ r, t, open, onOpen, marked, canMark, onMark }) {
   return (
     <div className={cn('border-border border-b last:border-b-0', marked && 'bg-accent/60')} data-level={r.level} data-testid="activity-row">
       <button type="button" onClick={onOpen} aria-expanded={open} className={cn('lrow arow hover:bg-accent/60 grid w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-ring', COLS)}>
-        <span className="text-muted-foreground text-caption" title={fmtTime(r.at)}>{hourOf(r.at)}</span>
+        <span className="text-muted-foreground font-mono text-caption" title={fmtTime(r.at)}>{hourOf(r.at)}</span>
         <span className="src inline-flex items-center gap-1.5 truncate text-control"><SrcIcon className="text-muted-foreground size-3.5 shrink-0" />{t(`logbooks.source.${r.source}`)}</span>
-        <Badge variant={LEVEL_BADGE[r.level] ?? 'info'}>{t(`logbooks.level.${r.level}`)}</Badge>
+        <Badge variant={LEVEL_BADGE[r.level] ?? 'info'} className="w-full justify-center">{t(`logbooks.level.${r.level}`)}</Badge>
         <span className="proj text-muted-foreground inline-flex min-w-0 items-center gap-1.5 text-caption">{r.project ? <ProjectIcon name={r.project} /> : null}<span className="truncate">{r.project ?? t('logbooks.noProject')}</span></span>
         <span className="what min-w-0 text-control break-words whitespace-pre-wrap">{r.text}</span>
       </button>

@@ -21,15 +21,15 @@ export const num = (v) => Number(v) || 0;
 // The whole row is the switch's label: clicking its text toggles it too (the switch alone is a small target).
 // info: the details that do not fit in the hint, behind an «ⓘ» next to the label.
 export function Row({ label, hint, info, children, className }) {
-  return <label className={cn('hover:bg-accent/40 border-border flex cursor-pointer items-center justify-between gap-4 px-3.5 py-3 not-first:border-t', className)}><div className="flex min-w-0 flex-col gap-0.5"><div className="flex items-center gap-1.5 text-control font-medium">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-caption">{hint}</div> : null}</div><div className="flex flex-none items-center gap-1.5">{children}</div></label>;
+  return <label className={cn('hover:bg-accent/40 border-border flex cursor-pointer items-center justify-between gap-4 px-3.5 py-3 not-first:border-t', className)}><div className="flex min-w-0 flex-col gap-0.5"><div className="flex items-center gap-1.5 text-control leading-[1.45] font-medium">{label}{info ? <InfoTip text={info} /> : null}</div>{hint ? <div className="text-muted-foreground text-caption leading-[1.45]">{hint}</div> : null}</div><div className="flex flex-none items-center gap-1.5">{children}</div></label>;
 }
 // The vocabulary of every section of Ajustes, as the mock-up draws it. Block: a heading (.sec-h) with its note and, under
 // them, a panel; its own flow keeps the 16 px between heading, note and panel.
 export function Block({ title, count, note, actions, children, className, ...props }) {
   return (
     <section className={cn('mt-1 flex min-w-0 flex-col gap-4', className)} {...props}>
-      <div className="-mb-1.5 flex items-center gap-2"><h2 className="font-(family-name:--title) text-card-title leading-normal font-semibold">{title}</h2>{count != null ? <span className="text-faint-foreground text-caption">{count}</span> : null}{actions ? <span className="ml-auto flex items-center gap-1.5">{actions}</span> : null}</div>
-      {note ? <p className="text-faint-foreground text-caption leading-normal">{note}</p> : null}
+      <div className="-mb-1.5 flex items-center gap-2"><h2 className="font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{title}</h2>{count != null ? <span className="text-faint-foreground text-caption">{count}</span> : null}{actions ? <span className="ml-auto flex items-center gap-1.5">{actions}</span> : null}</div>
+      {note ? <p className="text-faint-foreground text-caption leading-[1.45]">{note}</p> : null}
       {children}
     </section>
   );
@@ -40,7 +40,7 @@ export function Panel({ className, ...props }) { return <ListCard className={cn(
 export function Setting({ label, hint, children, className, ...props }) {
   return (
     <div className={cn('border-border flex items-center justify-between gap-4 px-3.5 py-3 not-first:border-t', className)} {...props}>
-      <div className="flex min-w-0 flex-col gap-0.5"><span className="text-control font-medium">{label}</span>{hint ? <span className="text-muted-foreground text-caption">{hint}</span> : null}</div>
+      <div className="flex min-w-0 flex-col gap-0.5"><span className="text-control leading-[1.45] font-medium">{label}</span>{hint ? <span className="text-muted-foreground text-caption leading-[1.45]">{hint}</span> : null}</div>
       {children ? <div className="flex flex-none items-center gap-1.5">{children}</div> : null}
     </div>
   );

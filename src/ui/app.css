@@ -26,9 +26,12 @@
   @media (pointer: fine) { svg.lucide { stroke-width: 1.75; } }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  /* The scrollbar's width, for a scroller whose content must end where it would with an overlay bar: its end padding
+     gives this much back, with scrollbar-gutter: stable so the bar's room is always there. */
+  :root { --sb-w: 10px; }
+  ::-webkit-scrollbar { width: var(--sb-w); height: var(--sb-w); }
   /* A touch screen scrolls by dragging: no grey scrollbars (they showed under the tabs of Tareas on the phone). */
-  @media (pointer: coarse) { ::-webkit-scrollbar { display: none; } * { scrollbar-width: none; } }
+  @media (pointer: coarse) { ::-webkit-scrollbar { display: none; } * { scrollbar-width: none; } :root { --sb-w: 0px; } }
   /* Thin and invisible at rest: the thumb only shows while the pointer is over the scrolling area (wheel and keys still scroll). */
   ::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
   :hover::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); background-clip: content-box; }
@@ -222,7 +225,7 @@ html[data-skin="retro"] .wordmark-dot { border-radius: 0; }
 
 /* The header of every view (components/page.jsx › AppBar): clock · title and a useful line · actions, 56 px. The window's
    own buttons sit in its last 120 px (the tab strip takes that job when it is on screen). */
-.bar { position: relative; height: 56px; flex: none; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, auto) minmax(150px, 1fr); align-items: center; gap: 8px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); }
+.bar { position: relative; height: 56px; flex: none; display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(150px, 1fr); align-items: center; gap: 8px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); }
 html.has-win-controls .bar { padding-right: 120px; }
 html.has-win-controls:has(.tabs-strip) .bar { padding-right: 10px; }
 .bar-left { justify-self: start; display: flex; align-items: center; gap: 4px; min-width: 0; }
@@ -310,6 +313,11 @@ html[data-skin="retro"] .notice-dot { border-radius: 0; }
 /* the Pizarra. The canvas is Excalidraw's own (light or dark with the app); around it, the theme's surfaces. */
 .wb-canvas { isolation: isolate; }
 .wb-canvas .excalidraw { --ui-font: var(--font-sans); }
+/* The PC canvas keeps only what the approved toolbar draws: Excalidraw's lock, key numbers, extra-tools button, main menu,
+   library button and hint are hidden here and live in the canvas menu (⋯) or stay on their shortcuts. */
+.wb-pc .excalidraw .ToolIcon__lock, .wb-pc .excalidraw .ToolIcon__keybinding, .wb-pc .excalidraw .App-toolbar__divider,
+.wb-pc .excalidraw .App-toolbar__extra-tools-trigger, .wb-pc .excalidraw .main-menu-trigger, .wb-pc .excalidraw .default-sidebar-trigger,
+.wb-pc .excalidraw .HintViewer { display: none !important; }
 .wb-status { background: color-mix(in oklch, var(--card) 88%, transparent); color: var(--muted-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); }
 .wb-item { background: color-mix(in oklch, var(--card) 70%, transparent); }
 .wb-panel { background: color-mix(in oklch, var(--sidebar) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35), 0 2px 8px -4px rgb(0 0 0 / 0.15); }

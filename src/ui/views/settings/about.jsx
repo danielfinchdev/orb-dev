@@ -78,7 +78,7 @@ export function FeedbackCard() {
   return (
     <Block title={t('contribute.feedbackTitle')} note={t('contribute.feedbackDesc')}>
       <Panel>
-        <Setting label={t('contribute.type')}><Select value={v.type} onValueChange={(type) => setV({ ...v, type })} title={t('contribute.type')} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Setting>
+        <Setting label={t('contribute.type')}><Select caret="solid" value={v.type} onValueChange={(type) => setV({ ...v, type })} title={t('contribute.type')} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Setting>
         <Fld label={t('contribute.message')}><Textarea rows={3} className="h-[72px] resize-y" maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Fld>
         <Fld label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Fld>
         <Stack className="border-border border-t">

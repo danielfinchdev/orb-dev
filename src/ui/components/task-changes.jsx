@@ -1,15 +1,17 @@
 // «Cambios» of a finished task: the files it changed, each one folding out to its diff (tasks.diff, read only,
 // from the task's undo checkpoint). Shown in the task's detail and at the end of its agent's conversation; nothing when
 // there is nothing to show (running, undone, a folder without git).
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Check, ChevronRight, Copy, FileEdit, FileMinus2, FilePlus2, FileDiff, MessageSquarePlus, X } from 'lucide-react';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { DiffLines } from '@/components/diff-view.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, Textarea } from '@/components/ui/basic.jsx';
-import { SearchInput } from '@/components/ui/primitives.jsx';
+import { SearchInput, Segmented } from '@/components/ui/primitives.jsx';
+import { PatchView } from '@/components/patch-view.jsx';
+import { OpenInMenu } from '@/components/project-tools.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, Tip } from '@/components/ui/overlay.jsx';
-import { call } from '@/lib/store.js';
+import { call, useStore } from '@/lib/store.js';
 import { useT, currentLocale } from '@/lib/i18n.js';
 import { addComment, removeComment, useComments } from '@/lib/turn-comments.js';
 import { cn } from '@/lib/utils.js';
@@ -114,15 +116,33 @@ export function DiffStat({ stat, className }) {
   return <span className={cn('tabular-nums', className)} data-testid="task-diff-stat"><span className="text-success">+{stat.added}</span> <span className="text-destructive">−{stat.removed}</span></span>;
 }
 
+// How the patch is drawn, shared by the controls of the meta rows and the diff below them: unified or split, and the file
+// after the change (the diff) or before it (the old file alone).
+let layout = { view: 'unified', side: 'after' };
+const layoutListeners = new Set();
+const setLayout = (patch) => { layout = { ...layout, ...patch }; layoutListeners.forEach((fn) => fn()); };
+const subscribeLayout = (fn) => { layoutListeners.add(fn); return () => layoutListeners.delete(fn); };
+export const useDiffLayout = () => [useSyncExternalStore(subscribeLayout, () => layout, () => layout), setLayout];
+
 const clock = (iso) => (iso ? new Date(iso).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) : '');
-// «6 archivos +120 −18 · revisada por Codex» and, on the right, the time of the photo the task can be undone to.
+// «6 archivos +120 −18 · revisada por Codex» with Unificado / Dividido on the right; under it Después / Antes and the time
+// of the photo the task can be undone to.
 export function ChangesMeta({ data, reviewer, photoAt, canUndo, className }) {
   const t = useT();
+  const [lay, set] = useDiffLayout();
   const { added, removed, count } = sumOf(data);
   return (
-    <div className={cn('flex flex-wrap items-center gap-x-3 gap-y-1 text-control', className)} data-testid="task-changes-meta">
-      <span className="text-muted-foreground">{filesLabel(t, count)} <DiffStat stat={{ added, removed }} />{reviewer ? ` · ${t('tasks.reviewedBy.lower', { agent: reviewer })}` : ''}</span>
-      {photoAt ? <span className="text-faint-foreground ml-auto text-caption" data-testid="task-changes-photo">{t(canUndo ? 'tasks.changes.photoUndo' : 'tasks.changes.photo', { time: clock(photoAt) })}</span> : null}
+    <div className={cn('grid gap-2 text-control', className)} data-testid="task-changes-meta">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-muted-foreground">{filesLabel(t, count)} <DiffStat stat={{ added, removed }} />{reviewer ? ` · ${t('tasks.reviewedBy.lower', { agent: reviewer })}` : ''}</span>
+        <Segmented className="ml-auto" value={lay.view} onChange={(view) => set({ view })} aria-label={t('tasks.changes.layout')} data-testid="task-changes-layout"
+          options={[{ value: 'unified', label: t('tasks.changes.unified'), testid: 'task-changes-unified' }, { value: 'split', label: t('tasks.changes.split'), testid: 'task-changes-split' }]} />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Segmented value={lay.side} onChange={(side) => set({ side })} aria-label={t('tasks.changes.version')} data-testid="task-changes-version"
+          options={[{ value: 'after', label: t('tasks.changes.after'), testid: 'task-changes-after' }, { value: 'before', label: t('tasks.changes.before'), testid: 'task-changes-before' }]} />
+        {photoAt ? <span className="text-faint-foreground ml-auto text-caption" data-testid="task-changes-photo">{t(canUndo ? 'tasks.changes.photoUndo' : 'tasks.changes.photo', { time: clock(photoAt) })}</span> : null}
+      </div>
     </div>
   );
 }
@@ -145,8 +165,9 @@ function Writer({ onAdd, onCancel }) {
 
 // The diff of the file chosen: its name and numbers, «Visto», copying its path and, when the task has a conversation of its
 // own, a «+» on each line to write a comment that goes with the next message there (lib/turn-comments.js).
-function PanelDiff({ f, seen, onSeen, sessionId }) {
+function PanelDiff({ f, seen, onSeen, sessionId, project }) {
   const t = useT();
+  const [lay] = useDiffLayout();
   const comments = useComments(sessionId ?? '');
   const [writing, setWriting] = useState(null);
   const copy = () => navigator.clipboard?.writeText(f.path).then(() => notifyOk(t('tasks.changes.copied'))).catch(() => notifyError(t('app.copyFailed')));
@@ -164,23 +185,26 @@ function PanelDiff({ f, seen, onSeen, sessionId }) {
   </>);
   return (
     <div className="grid gap-2" data-testid="task-diff">
-      <div className="flex items-center gap-2 text-control">
-        <b className="min-w-0 truncate font-mono text-caption font-semibold" title={f.path}>{f.path}</b>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-control">
+        <b className="min-w-0 flex-1 basis-32 truncate font-mono text-caption font-semibold" title={f.path}>{f.path}</b>
         {f.binary ? null : <span className="text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
         <span className="ml-auto flex shrink-0 items-center gap-1">
           <Tip label={t('tasks.changes.copyPath')}><Button size="icon-xs" variant="ghost" aria-label={t('tasks.changes.copyPath')} onClick={copy}><Copy /></Button></Tip>
           <Button size="xs" variant={seen ? 'soft' : 'ghost'} onClick={onSeen} aria-pressed={seen} data-testid="task-change-seen"><Check />{t('tasks.changes.seen')}</Button>
+          {project ? <OpenInMenu project={project} /> : null}
         </span>
       </div>
       {note ? <p className="text-muted-foreground m-0 text-caption">{note}</p>
-        : <div className="border-border max-h-96 overflow-auto rounded-card border"><DiffLines text={f.patch} headers={false} onLine={sessionId ? setWriting : undefined} below={sessionId ? below : undefined} lineLabel={t('turns.comment')} /></div>}
+        : <PatchView text={f.patch} path={f.path} view={lay.view} side={lay.side} onLine={sessionId ? setWriting : undefined} below={sessionId ? below : undefined} lineLabel={t('turns.comment')} />}
     </div>
   );
 }
 
 // The files a task changed as the mock-up's .flist: a letter for what happened to each and its numbers; the one chosen shows its diff below.
-export function ChangesFiles({ data, sessionId, className }) {
+export function ChangesFiles({ data, sessionId, project, className }) {
   const t = useT();
+  const projects = useStore((st) => st.projects);
+  const proj = project ? (typeof project === 'string' ? (projects ?? []).find((p) => p.name === project) : project) : null;
   const [query, setQuery] = useState('');
   const [pick, setPick] = useState(null);
   const [seen, setSeen] = useState(() => new Set());
@@ -198,16 +222,16 @@ export function ChangesFiles({ data, sessionId, className }) {
       <div className="flist border-border bg-card overflow-hidden rounded-card border">
         {files.map((f) => (
           <button key={f.path} type="button" onClick={() => setPick(f.path)} aria-pressed={f === current} title={f.path} data-testid="task-change"
-            className="frow hover:bg-accent aria-pressed:bg-accent border-border focus-visible:outline-ring flex w-full cursor-pointer items-center gap-2.5 border-t px-3 py-2 text-left text-control outline-none first:border-t-0 focus-visible:outline-2">
+            className="frow hover:bg-accent aria-pressed:bg-accent border-border focus-visible:outline-ring flex h-9 w-full cursor-pointer items-center gap-2.5 border-t px-3 text-left text-control outline-none first:border-t-0 focus-visible:outline-2">
             <span className={cn('st w-4 shrink-0 text-center text-caption font-semibold', LETTER[f.status] ?? 'text-info')}>{f.status === 'A' || f.status === 'D' ? f.status : 'M'}</span>
-            <span className="p min-w-0 flex-1 truncate font-mono text-caption"><bdi>{f.path}</bdi></span>
+            <span className="p min-w-0 flex-1 truncate font-mono text-control"><bdi>{f.path}</bdi></span>
             {f.binary ? null : <span className="nums shrink-0 text-caption tabular-nums"><span className="text-success">+{f.added}</span> <span className="text-destructive">−{f.removed}</span></span>}
           </button>
         ))}
         {data.more && !q ? <p className="text-muted-foreground border-border m-0 border-t px-3 py-2 text-control">{t('tasks.changes.more', { n: data.more })}</p> : null}
       </div>
       <p className="text-faint-foreground m-0 text-caption">{t('tasks.changes.legend')}</p>
-      {current ? <PanelDiff key={current.path} f={current} seen={seen.has(current.path)} onSeen={() => toggle(current.path)} sessionId={sessionId} /> : null}
+      {current ? <PanelDiff key={current.path} f={current} seen={seen.has(current.path)} onSeen={() => toggle(current.path)} sessionId={sessionId} project={proj} /> : null}
     </div>
   );
 }

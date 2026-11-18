@@ -185,7 +185,7 @@ function CoreCard() {
   );
 }
 
-export function DataCards() { return <><MasterCard /><KeyCard /><LegacyCard /><BackupsCard /><TrashCard /><WorktreesCard /><CoreCard /></>; }
+export function DataCards() { return <><MasterCard /><KeyCard /><LegacyCard /><BackupsCard /><CoreCard /><TrashCard /><WorktreesCard /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

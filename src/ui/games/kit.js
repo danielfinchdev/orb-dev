@@ -47,7 +47,8 @@ export function palette() {
   const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
   cache = {
     bg: v('--card', '#fff'), fg: v('--foreground', '#111'), muted: v('--muted', '#eee'), mutedFg: v('--muted-foreground', '#777'),
-    primary: v('--primary', '#4f6bed'), accent: v('--accent', '#e8ecff'), border: v('--border', '#ddd'),
+    // the accent of the theme (--primary is the neutral ink of the main button and would paint the pieces black or white)
+    primary: v('--primary-text', v('--primary', '#4f6bed')), accent: v('--accent', '#e8ecff'), border: v('--border', '#ddd'),
     success: v('--success', '#2bb673'), warning: v('--warning', '#f5a524'), danger: v('--destructive', '#e5484d'), info: v('--info', '#3b82f6'),
     font: getComputedStyle(document.body).fontFamily || 'sans-serif', dark: isDark(), skin: skin()
   };

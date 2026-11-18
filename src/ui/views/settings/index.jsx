@@ -50,7 +50,7 @@ const SECTIONS = [
     cards: () => <MagicLinkPanel grouped phoneAccess={<MobileCard />} /> },
   { id: 'agentes', icon: Bot, cards: (c) => <AgentsTabs c={c} /> },
   // What the agents may do without asking, the protected paths and how long a question waits.
-  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ProtectedCard c={c} /><ApprovalWaitCard c={c} /></> },
+  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ApprovalWaitCard c={c} /><ProtectedCard c={c} /></> },
   // every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: Database, cards: () => <DataCards /> },
@@ -130,10 +130,10 @@ export function SettingsDialog() {
                 <span className="max-sm:hidden" data-testid="settings-foot-version"> · {PRODUCT.name} {app.version} · {t('settings.footLicense')}</span>
               </div>
             </nav>
-            <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 pt-[18px] pb-8">
+            <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] pt-[18px] pr-[calc(1.5rem-var(--sb-w))] pb-8 pl-6">
               {/* min-w-0 on the blocks: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
               <div className="grid gap-4 [&>*]:min-w-0">
-                <Block title={t(`settings.section.${section.id}`)} note={t(`settings.sectionDesc.${section.id}`)} className="mt-0" />
+                <Block title={t(`settings.section.${section.id}`)} note={t(`settings.sectionDesc.${section.id}`)} />
                 {section.cards(c, app)}
               </div>
             </div>

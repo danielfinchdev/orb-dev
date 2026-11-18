@@ -229,7 +229,7 @@ async function editFlow(name, run) {
   const r = await form(t('ext.editTitle', { name }), {
     description: t('ext.editDesc'),
     initial: { category: 'windows' },
-    body: (v, set) => <Field label={t('ext.editCategory')}><Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((c) => ({ value: c, label: c }))} /></Field>,
+    body: (v, set) => <Field label={t('ext.editCategory')}><Select caret="solid" className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((c) => ({ value: c, label: c }))} /></Field>,
     ok: t('ext.editOk'),
     onOk: (v) => call('extensions.edit', { name, category: v.category })
   });

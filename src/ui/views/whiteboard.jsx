@@ -5,7 +5,7 @@
 // computer's browser linked with an Orb keep the floating panel.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { notifyError } from '@/lib/notify.js';
-import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload, FolderX, Download, Maximize, Eraser, Image as ImageIcon, X } from 'lucide-react';
+import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload, FolderX, Download, Maximize, Eraser, Image as ImageIcon, X, Lock, Library, Frame, Globe, Pointer, PaintBucket } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
@@ -139,6 +139,12 @@ function WhiteboardPc({ project }) {
   const exportDrawing = () => api.current?.updateScene({ appState: { openDialog: { name: 'imageExport' } } });
   const fit = () => { const els = api.current?.getSceneElements() ?? []; if (els.length) api.current.scrollToContent(els, { fitToContent: true, animate: true }); };
   const clear = async () => { if (await confirm(t('wb.clear.title'), t('wb.clear.body'), { ok: t('wb.clear.ok'), danger: true })) api.current?.resetScene(); };
+  // What the toolbar no longer draws (lock, library, the extra tools, the background) is reached from the same menu.
+  const toggleLock = () => { const a = api.current; const tool = a?.getAppState().activeTool; if (tool) a.setActiveTool({ type: tool.type, locked: !tool.locked }); };
+  const library = () => api.current?.toggleSidebar({ name: 'default', tab: 'library' });
+  const useTool = (type) => () => api.current?.setActiveTool({ type });
+  const BACKGROUNDS = ['#ffffff', '#f8f9fa', '#f5faff', '#fffce8', '#fdf8f6'];
+  const nextBackground = () => { const a = api.current; if (!a) return; const now = a.getAppState().viewBackgroundColor; a.updateScene({ appState: { viewBackgroundColor: BACKGROUNDS[(BACKGROUNDS.indexOf(now) + 1) % BACKGROUNDS.length] } }); };
   const ready = Boolean(project && b.data);
   const pj = (p) => <ProjectIcon name={p} small />;
   return (
@@ -169,13 +175,20 @@ function WhiteboardPc({ project }) {
               <DropdownMenuItem disabled={!ready} onSelect={exportDrawing} data-testid="whiteboard-menu-export"><Download />{t('wb.export')}</DropdownMenuItem>
               <DropdownMenuItem disabled={!ready} onSelect={fit} data-testid="whiteboard-menu-fit"><Maximize />{t('wb.fit')}</DropdownMenuItem>
               <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!ready} onSelect={toggleLock} data-testid="whiteboard-menu-lock"><Lock />{t('wb.lock')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={library} data-testid="whiteboard-menu-library"><Library />{t('wb.library')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={useTool('frame')} data-testid="whiteboard-menu-frame"><Frame />{t('wb.toolFrame')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={useTool('embeddable')} data-testid="whiteboard-menu-embed"><Globe />{t('wb.toolEmbed')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={useTool('laser')} data-testid="whiteboard-menu-laser"><Pointer />{t('wb.toolLaser')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={nextBackground} data-testid="whiteboard-menu-background"><PaintBucket />{t('wb.background')}</DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem variant="destructive" disabled={!ready} onSelect={clear} data-testid="whiteboard-menu-clear"><Eraser />{t('wb.clear')}</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </PageHeader>
         {project ? (
-          <PageBody className="relative flex overflow-hidden p-0" data-testid="whiteboard">
-            <div className="wb-canvas relative min-w-0 flex-1" data-testid="whiteboard-canvas">
+          <PageBody className="relative flex overflow-hidden p-0 [scrollbar-gutter:auto]" data-testid="whiteboard">
+            <div className="wb-canvas wb-pc relative min-w-0 flex-1" data-testid="whiteboard-canvas">
               {b.data ? (
                 <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
                   <Board initial={b.data} dark={dark} lang={lang} onChange={b.onChange} onApi={(a) => { api.current = a ?? null; }} />
@@ -229,7 +242,7 @@ function Whiteboard({ project }) {
   const { data, attachments, saving, dropping, setDropping, onChange, pick, note, remove, openFolder, drop } = useBoard(project);
 
   return (
-    <PageBody className="relative flex overflow-hidden p-0" data-testid="whiteboard">
+    <PageBody className="relative flex overflow-hidden p-0 [scrollbar-gutter:auto]" data-testid="whiteboard">
       <div className="wb-canvas relative min-w-0 flex-1" data-testid="whiteboard-canvas">
         {data ? (
           <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>

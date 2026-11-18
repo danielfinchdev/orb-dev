@@ -10,12 +10,13 @@ import { useT } from '@/lib/i18n.js';
 
 // The header of a conversation: the common one (clock · title block · actions) on the PC; on the phone the back arrow,
 // the title and the buttons in a row.
-export function ChatBar({ back, title, children, testid = 'chat-bar', className }) {
+// `inner`: the conversation lives inside another screen, which already has the clock and the window's buttons.
+export function ChatBar({ back, title, children, testid = 'chat-bar', className, inner = false }) {
   const phone = phoneLayout();
   const folded = useStore((s) => s.sidebarCollapsed);
   if (!phone) {
     return (
-      <AppBar className={cn('chat-bar', className)} data-testid={testid} lead={<>{back}{folded ? <SidebarToggle collapsed className="-ml-1" /> : null}</>} left={<BarClock />} center={title}>
+      <AppBar inner={inner} className={cn('chat-bar', className)} data-testid={testid} lead={inner ? null : <>{back}{folded ? <SidebarToggle collapsed className="-ml-1" /> : null}</>} left={inner ? null : <BarClock />} center={title}>
         {children}
       </AppBar>
     );

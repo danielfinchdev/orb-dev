@@ -214,7 +214,7 @@ function LockMinutes() {
   };
   return (
     <Setting label={t('master.lockAfter')} hint={t('master.lockAfterHint')}>
-      <Select value={value} onValueChange={pick} title={t('master.lockAfter')} options={LOCK_MINUTES.map((n) => ({ value: String(n), label: t('master.lockMinutes', { n }) }))} data-testid="master-lock-minutes" />
+      <Select caret="solid" value={value} onValueChange={pick} title={t('master.lockAfter')} options={LOCK_MINUTES.map((n) => ({ value: String(n), label: t('master.lockMinutes', { n }) }))} data-testid="master-lock-minutes" />
     </Setting>
   );
 }
