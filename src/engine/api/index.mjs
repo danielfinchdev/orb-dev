@@ -375,6 +375,26 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'expert.status': async ({ project: name }) => (await exp()).gitStatus(project(name).path),
     'expert.diff': async ({ project: name, path: file }) => (await exp()).gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
     'expert.log': async ({ project: name, limit }) => (await exp()).gitLog(project(name).path, limit),
+    // God mode's git panel. Reads: local branches and the last save. Changes (window only): switching branch, a new branch and
+    // undoing the last unpublished save; each refuses while anything works in the project (the same check as «Sincronizar»)
+    // and runs with the project held. None of them can lose work (see host/expert.mjs).
+    'expert.branches': async ({ project: name }) => (await exp()).listBranches(project(name).path),
+    'expert.lastCommit': async ({ project: name }) => (await exp()).lastCommit(project(name).path),
+    'expert.switchBranch': async ({ project: name, branch }) => {
+      const p = project(name); const b = str(branch, 'rama', 255);
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.projects.syncBusy'));
+      return holding(p.name, async () => (await exp()).switchBranch(p.path, b));
+    },
+    'expert.createBranch': async ({ project: name, name: branch, switch: to }) => {
+      const p = project(name); const b = str(branch, 'rama', 255);
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.projects.syncBusy'));
+      return holding(p.name, async () => (await exp()).createBranch(p.path, b, { switchTo: to === true }));
+    },
+    'expert.undoCommit': async ({ project: name, hash }) => {
+      const p = project(name); const h = str(hash, 'commit', 64, { optional: true });
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.projects.syncBusy'));
+      return holding(p.name, async () => (await exp()).undoCommit(p.path, h || undefined));
+    },
     'expert.system': async () => ({ ...(await exp()).systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
     'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; },
