@@ -80,6 +80,8 @@ test('el historial vive dentro del panel Git con sus 5 últimas filas y «Ver to
 test('el panel Historial aparte solo se ve por defecto si el usuario lo encendió', () => {
   assert.match(view, /id === 'history' \? panels\.history === true : panels\[id\] !== false/);
   assert.match(read('src/ui/views/settings/general.jsx'), /panelOn\(panels, id\)/);
+  // the default itself must not switch it on: a new profile takes its panels from here
+  assert.match(read('src/platform/config-file.mjs'), /expert: \{ enabled: false, panels: \{[^}]*history: false[^}]*\} \}/);
 });
 
 test('ExpertView: ninguna variable se usa antes de declararse (project en los arrays de dependencias)', () => {
