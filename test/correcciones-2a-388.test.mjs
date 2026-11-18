@@ -62,10 +62,10 @@ test('8: the permission menu texts are short', () => {
   }
 });
 
-test('9: the five places of God mode keep their names for the tooltip, never cut', () => {
-  assert.match(inbox, /const iconsOnly = more\.length > 0;/);
-  assert.match(inbox, /iconsOnly && 'sr-only'/);
-  assert.match(inbox, /title=\{iconsOnly \? t\(label\) : undefined\}/);
+test('9: with God mode the four places keep their names and «Más» is a narrow column of its own', () => {
+  assert.match(inbox, /more\.length \? 'grid-cols-\[repeat\(4,minmax\(0,1fr\)\)_1\.75rem\] gap-0' : 'grid-cols-4 gap-0\.5'/);
+  assert.match(inbox, /<span className="max-w-full truncate">\{t\(label\)\}<\/span>/);
+  assert.doesNotMatch(inbox, /iconsOnly/);
 });
 
 test('10: the games picker matches the mock-up: body 6 px lower, 18.85 and 17.4 px lines; the badge needs a record', () => {

@@ -471,25 +471,25 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
-  // five columns (God mode adds «Más») leave no room for «Programadas»: the names then go to the tooltip, never cut
-  const iconsOnly = more.length > 0;
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', iconsOnly && 'min-h-[53px] justify-center', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
+  // The four places keep their names as the mock-up draws them; «Más» (God mode adds it) is a narrow column of its own
+  // with only its icon, so «Programadas» still fits beside it.
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
   return (
-    <nav className={cn('grid gap-0.5 px-2 pb-1.5', more.length ? 'grid-cols-5' : 'grid-cols-4')} aria-label={t('orbchats.places')} data-testid="orb-places">
+    <nav className={cn('grid px-2 pb-1.5', more.length ? 'grid-cols-[repeat(4,minmax(0,1fr))_1.75rem] gap-0' : 'grid-cols-4 gap-0.5')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
-        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} title={iconsOnly ? t(label) : undefined} aria-label={iconsOnly ? t(label) : undefined} data-testid={`nav-${id}`}>
+        <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} data-testid={`nav-${id}`}>
           <span className="relative grid place-items-center">
             <Icon className={cn('size-5', view === id && 'text-primary-text')} />
             {id === 'tasks' && approvals ? <span className="bg-warning text-warning-foreground absolute -top-2 -right-3 grid h-[17px] min-w-[17px] place-items-center rounded-full px-1 text-micro font-bold tabular-nums shadow-[0_0_0_2px_var(--sidebar)]" aria-label={t('comp.sidebar.waitApproval')} title={t('comp.sidebar.waitApproval')} data-testid="nav-tasks-count">{approvals}</span>
               : id === 'tasks' && running ? <span className="bg-primary-text absolute -top-1 -right-2 size-1.5 animate-pulse rounded-full" aria-hidden="true" /> : null}
           </span>
-          <span className={cn('max-w-full truncate', iconsOnly && 'sr-only')}>{t(label)}</span>
+          <span className="max-w-full truncate">{t(label)}</span>
         </button>
       ))}
       {more.length ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
-            <button type="button" className={cls(more.some(([id]) => id === view))} title={t('nav.more')} aria-label={t('nav.more')} data-testid="orb-places-more"><Ellipsis className="size-5" /><span className="sr-only">{t('nav.more')}</span></button>
+            <button type="button" className={cn(cls(more.some(([id]) => id === view)), 'justify-center px-0 pt-0 pb-0')} title={t('nav.more')} aria-label={t('nav.more')} data-testid="orb-places-more"><Ellipsis className="size-5" /><span className="sr-only">{t('nav.more')}</span></button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {more.map(([id, Icon, label]) => <DropdownMenuItem key={id} onSelect={() => go({ view: id })} data-testid={`nav-${id}`}><Icon />{t(label)}</DropdownMenuItem>)}
