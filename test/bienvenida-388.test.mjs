@@ -58,7 +58,7 @@ test('3: the words promise nothing false (no «al abrir Orb», the code is not t
   assert.doesNotMatch(es, /'master\.createIntro'[^\n]*al abrir Orb/);
   assert.match(es, /'master\.warnGive': 'Si la olvidas, podrás poner otra con el código de recuperación; sin él, habrá que borrar los secretos y empezar de cero\. Te lo damos al crearla: guárdalo fuera de este PC\.'/);
   assert.match(es, /'master\.ackCode': 'Entiendo que, si la olvido, necesitaré el código de recuperación para no perder los secretos'/);
-  assert.doesNotMatch(es, /solo podrás entrar con el código|solo podré entrar con el código/);
+  assert.doesNotMatch(es, /solo podrás entrar con el código|solo podré entrar con el código|única forma de entrar/);
   assert.match(es, /'master\.warnHave': [^\n]*que creaste para tus copias[^\n]*Si no lo encuentras, crea otro en Ajustes › Datos\./);
   assert.match(es, /'master\.manager': 'Puedes pegarla y usar tu gestor de contraseñas \(Bitwarden, 1Password…\)\.'/);
   assert.match(create, /<WizardText>\{t\('master\.manager'\)\}<\/WizardText>/);

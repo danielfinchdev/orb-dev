@@ -57,7 +57,7 @@ export default {
   'master.ackCode': "I understand that, if I forget it, I will need the recovery code to avoid losing the secrets",
   'master.ackHave': "I understand that, if I forget it, I will need my backups’ recovery code to avoid losing the secrets",
   'master.codeTitle': 'Keep your recovery code',
-  'master.codeIntro': 'It is the only way in if you forget the password. It is shown only now: keep it outside this PC, in your password manager or on paper.',
+  'master.codeIntro': 'With it you can set another password if you forget yours, without losing the secrets. It is shown only now: keep it outside this PC, in your password manager or on paper.',
   'master.codeKept': 'I have kept it outside this PC',
   'master.forgotAsk': 'Forgot it?',
   'master.useCode': 'Use recovery code',

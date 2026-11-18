@@ -57,7 +57,7 @@ export default {
   'master.ackCode': 'Entiendo que, si la olvido, necesitaré el código de recuperación para no perder los secretos',
   'master.ackHave': 'Entiendo que, si la olvido, necesitaré el código de recuperación de mis copias para no perder los secretos',
   'master.codeTitle': 'Guarda tu código de recuperación',
-  'master.codeIntro': 'Es la única forma de entrar si olvidas la contraseña. Solo se muestra ahora: guárdalo fuera de este PC, en tu gestor de contraseñas o en papel.',
+  'master.codeIntro': 'Con él podrás poner otra contraseña si olvidas la tuya, sin perder los secretos. Solo se muestra ahora: guárdalo fuera de este PC, en tu gestor de contraseñas o en papel.',
   'master.codeKept': 'Lo he guardado fuera de este PC',
   'master.forgotAsk': '¿La olvidaste?',
   'master.useCode': 'Usar código de recuperación',
