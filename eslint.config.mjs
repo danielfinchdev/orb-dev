@@ -13,6 +13,9 @@ export default [
     linterOptions: { reportUnusedDisableDirectives: 'off' },
     rules: {
       'no-undef': 'error',
+      // a `const` read in its own scope before its line (a hook's dependency list above the state it names) throws as
+      // soon as the component renders; uses from inner functions are fine and are not reported
+      'no-use-before-define': ['error', { functions: false, classes: false, variables: false }],
       'no-restricted-imports': ['error', { paths: [{ name: 'sonner', message: 'Use notify() from lib/notify.js: it is the only way to show a notice.' }] }]
     }
   },
