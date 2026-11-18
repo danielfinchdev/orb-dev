@@ -80,6 +80,9 @@ export default {
   'ext.card.skillUpdate': '{agent} ha preparado una versión nueva de la skill «{name}» y te pide activarla.',
   'ext.card.mcp': '{agent} ha preparado el servidor MCP «{name}» y te pide activarlo.',
   'ext.card.mcpUpdate': '{agent} ha preparado una versión nueva del servidor MCP «{name}» y te pide activarla.',
+  'ext.approvedKeptOff': '«{name}» actualizada. Sigue desactivada: actívala en el proyecto que la usa o en Ajustes.',
+  'ext.err.activateFirst': 'Activa «{name}» antes en Ajustes › Skills y MCP; desde un proyecto solo se añade lo que ya está activado.',
+  'ext.err.scopeOther': 'No se cambia «{name}»: el cambio tocaría algo más de la configuración.',
   'ext.approvedSkill': 'Skill «{name}» activada',
   'ext.approvedMcp': 'Servidor MCP «{name}» activado',
   'ext.err.link': 'Tiene un enlace a otra carpeta ({file}): Orb no lo acepta.',
@@ -130,5 +133,6 @@ export default {
   'ext.keysWaiting': 'Las claves de {names} se activarán cuando desbloquees Orb con tu contraseña maestra.',
   'ext.err.needsInstall': '{name} necesita descargar paquetes antes de activarse.',
   'ext.err.inProgress': 'Ya se está haciendo. Espera a que termine.',
-  'ext.kindAgent': 'un agente'
+  'ext.kindAgent': 'un agente',
+  'ext.scope': 'Solo en: {names}'
 };

@@ -6,6 +6,7 @@ import { PageHeader } from '@/components/page.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
+import { ProjectExtensionsCard } from '@/components/project-extensions.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectOpenMenu } from '@/components/project-tools.jsx';
 import { GithubCard, ContributionGraph } from '@/components/project-github.jsx';
@@ -406,6 +407,7 @@ export function ProjectPage({ p }) {
                     <Button variant="outline" onClick={() => changeIconFlow(p, t)}>{t('projects.icon.change')}</Button>
                   </div>
                 </PjCard>
+                <ProjectExtensionsCard p={p} Shell={PjCard} />
               </div>
             </div>
           ) : null}

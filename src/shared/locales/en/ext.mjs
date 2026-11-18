@@ -80,6 +80,9 @@ export default {
   'ext.card.skillUpdate': '{agent} prepared a new version of the skill «{name}» and asks you to turn it on.',
   'ext.card.mcp': '{agent} prepared the MCP server «{name}» and asks you to turn it on.',
   'ext.card.mcpUpdate': '{agent} prepared a new version of the MCP server «{name}» and asks you to turn it on.',
+  'ext.approvedKeptOff': '«{name}» updated. It stays off: turn it on in the project that uses it or in Settings.',
+  'ext.err.activateFirst': 'Turn «{name}» on first in Settings › Skills and MCP; a project only adds what is already installed and ready.',
+  'ext.err.scopeOther': '«{name}» is not changed: the change would touch something else in the settings.',
   'ext.approvedSkill': 'Skill «{name}» turned on',
   'ext.approvedMcp': 'MCP server «{name}» turned on',
   'ext.err.link': 'It has a link to another folder ({file}): Orb does not accept it.',
@@ -130,5 +133,6 @@ export default {
   'ext.keysWaiting': 'The keys of {names} will work again when you unlock Orb with your master password.',
   'ext.err.needsInstall': '{name} needs to download packages before it is turned on.',
   'ext.err.inProgress': 'It is already in progress. Wait for it to finish.',
-  'ext.kindAgent': 'an agent'
+  'ext.kindAgent': 'an agent',
+  'ext.scope': 'Only in: {names}'
 };

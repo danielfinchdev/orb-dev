@@ -122,6 +122,7 @@ function Row({ item, detail, note = null, mono = false, on, disabled = false, on
       trailing={(
         <div className="flex items-center gap-1.5">
           {extra}
+          {item.scoped ? <Badge variant="outline" data-testid="ext-scope">{t('ext.scope', { names: item.projects?.length ? item.projects.join(', ') : '—' })}</Badge> : null}
           <Badge variant="secondary">{sourceLabel(item.source)}</Badge>
           <Switch checked={on} disabled={disabled} onCheckedChange={onToggle} aria-label={t('ext.toggle', { name: item.name })} data-testid="ext-toggle" />
           {keys ? <BubbleTip title={t('master.keys')}><Button variant="ghost" size="icon-xs" aria-label={t('master.keys')} onClick={() => connectorKeys(keys)} data-testid="mcp-keys"><KeyRound /></Button></BubbleTip> : null}
