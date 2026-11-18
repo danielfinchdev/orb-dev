@@ -3,6 +3,7 @@ import './lib/tauri-bridge.js'; // first of all: in the desktop app it provides 
 import './lib/app-bridge.js'; // then: in the Android app it tells the web bridge where the linked Orb is
 import './lib/web-bridge.js'; // last: in a phone's browser (or the app) it provides window.orb
 import './app.css';
+import './lib/scroll-hint.js';
 // the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
@@ -535,6 +536,15 @@ function StartError({ error, startError, onRelink }) {
 // used as HTML. The cards sit inside an `inert` box: nothing in them can be focused or pressed.
 const START_PREVIEWS = new Set(['core', 'core-sin', 'core-danada', 'core-confirma', 'migra', 'migra-act', 'error', 'clave', 'falla', 'falla-red', 'actualiza']);
 const previewName = () => { const v = window.__ORB_START_PREVIEW__; return typeof v === 'string' && START_PREVIEWS.has(v) ? v : null; };
+// A screen that fails or cannot load happens inside the app: the card sits in the content area, the sidebar still on view.
+function InArea({ children }) {
+  return (
+    <div className="flex h-full">
+      <ErrorBoundary onFail={() => {}}><div className="hidden md:flex"><Sidebar mood="idle" /></div></ErrorBoundary>
+      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+    </div>
+  );
+}
 function StartPreview({ name }) {
   const t = useT();
   const [data, setData] = useState(null);
@@ -556,8 +566,8 @@ function StartPreview({ name }) {
         {data.card === 'core' ? <Suspense fallback={null}><CoreMissing state={data.state} /></Suspense>
           : data.card === 'migration' ? <MigrationFailed state={data.state} preview={{ update: data.update }} />
             : data.card === 'error' ? <StartError error={data.error} startError={data.startError} onRelink={() => {}} />
-              : data.card === 'crash' ? <CrashCard onHome={() => {}} />
-                : data.card === 'offline' ? <OfflineCard onRetry={() => {}} />
+              : data.card === 'crash' ? <InArea><CrashCard onHome={() => {}} /></InArea>
+                : data.card === 'offline' ? <InArea><OfflineCard onRetry={() => {}} /></InArea>
                   : <UpdateNeeded info={data.info} />}
       </div>
     </>
@@ -588,6 +598,8 @@ function MigrationFailed({ state, preview = null }) {
       {v.folder && bridge.openPath ? <Button variant="ghost" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.migration38.openFolder')}</Button> : null}
       {u?.action === 'check' ? <Button variant="outline" disabled={u.busy} onClick={updateActions.check} data-testid="migration-update">{u.busy ? <Spinner /> : <RefreshCw />}{t('data.migration38.checkUpdate')}</Button> : null}
       {u?.action === 'update' ? <Button variant="outline" onClick={() => updateActions.update({ portable: u.portable })} data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
+      {/* while the download runs the same button stays in place, off, so the card does not jump (it starts nothing new) */}
+      {u?.percent != null ? <Button variant="outline" disabled data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
       {u?.action === 'restart' ? <Button variant="outline" onClick={updateActions.restart} data-testid="migration-update"><RotateCw />{t('update.restart')}</Button> : null}
       <Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('data.migration38.retry')}</Button>
     </>
@@ -612,7 +624,7 @@ function MigrationFailed({ state, preview = null }) {
 async function askNewSecret(startError) {
   // not a component: the module's own translator (there is no `t` in scope here)
   const paragraphs = [tNow('app.newSecretIntro'), startError?.master ? tNow('app.newSecretMaster') : startError?.vault ? tNow('app.newSecretVault') : null, startError?.recovery ? tNow('app.newSecretRecovery') : tNow('app.newSecretNoRecovery'), tNow('app.newSecretBack')].filter(Boolean);
-  if (startError?.recovery) return confirm(tNow('app.newSecretTitle'), paragraphs.join('\n\n'), { ok: tNow('app.newSecretOk'), danger: true });
+  if (startError?.recovery) return confirm(tNow('app.newSecretTitle'), paragraphs.join('\n\n'), { ok: tNow('app.newSecretOk'), danger: true, noClose: true });
   const word = tNow('app.newSecretWord');
   const typed = (v) => v.word.trim().toUpperCase() === word.toUpperCase();
   return Boolean(await form(tNow('app.newSecretTitle'), {
@@ -625,6 +637,7 @@ async function askNewSecret(startError) {
     ),
     ok: tNow('app.newSecretOk'),
     okDanger: true,
+    noClose: true,
     // the button waits for the word; onOk below still checks it, whatever the button says
     okDisabled: (v) => !typed(v),
     onOk: (v) => { if (!typed(v)) throw new Error(tNow('app.newSecretWrong', { word })); return true; }

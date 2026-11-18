@@ -32,9 +32,10 @@
   ::-webkit-scrollbar { width: var(--sb-w); height: var(--sb-w); }
   /* A touch screen scrolls by dragging: no grey scrollbars (they showed under the tabs of Tareas on the phone). */
   @media (pointer: coarse) { ::-webkit-scrollbar { display: none; } * { scrollbar-width: none; } :root { --sb-w: 0px; } }
-  /* Thin and invisible at rest: the thumb only shows while the pointer is over the scrolling area (wheel and keys still scroll). */
+  /* The bar's room is kept (nothing shifts) but its thumb is not drawn at rest, as the mock-up shows none: it appears while the area
+     scrolls (lib/scroll-hint.js sets data-scrolling) and under the pointer. */
   ::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
-  :hover::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); background-clip: content-box; }
+  [data-scrolling]::-webkit-scrollbar-thumb, ::-webkit-scrollbar-thumb:hover { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-corner { background: transparent; }
   /* A long one-line text (a path, a command) never widens the grid cell it sits in: the cell shrinks and the text wraps,
@@ -493,7 +494,9 @@ html[data-motion="minima"] :is(.animate-in, .animate-out, [class*=":animate-in"]
 
 /* the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
    least (its rows), 260 px at most, then it scrolls. */
-@supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: calc(2lh + 1rem); max-height: 260px; } }
+/* A conversation's scroller ends in a soft fade instead of a hard cut, so a line passing under the row above the text box never shows half a line. */
+.chat-fade { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); }
+@supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: 56px; max-height: 260px; } }
 
 /* the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */

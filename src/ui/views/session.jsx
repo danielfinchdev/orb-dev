@@ -546,8 +546,9 @@ export function SessionView({ route }) {
         </DropdownMenu>
       </PageHeader>
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
-        <div className="lazy-lines mx-auto flex max-w-3xl flex-col gap-3.5 px-5 py-6">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="chat-fade min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable]">
+        {/* as wide as the text box, whose edges the messages line up with (see the same column in chat.jsx) */}
+        <div className="lazy-lines mx-auto flex max-w-[calc(var(--chat-max-width)+2.5rem)] flex-col gap-3.5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5">
           {more ? <Button variant="ghost" size="sm" className="self-center" onClick={loadOlder}><ChevronUp />{t('session.older')}</Button> : null}
           {blocks.length || unsaved.length ? <TurnFlow blocks={blocks} session={s} running={running} onFork={s.kind === 'chat' ? fork : null} forkDisabled={running} renderBlock={(b) => <Block key={b.key} b={b} agent={s.agent} who={who} brain={s.agent} catalog={catalog} sessionId={s.id} project={s.project} />} />
             : <Empty title={t('session.emptyTitle', { agent: AGENT[s.agent] })}>{t('session.workIn')} <span className="font-mono text-xs">{s.cwd}</span> {t('session.withPerm', { perm: PERMISSION[s.permission] })}</Empty>}
@@ -569,7 +570,7 @@ export function SessionView({ route }) {
       {s.kind === 'chat' ? <SideChats id={s.id} /> : null}
       {s.kind === 'chat' ? <ChatModes id={s.id} /> : null}
       {queue.length ? (
-        <div className="mx-auto w-full max-w-3xl shrink-0 px-5 pb-2" data-testid="queue">
+        <div className="mx-auto w-full max-w-[calc(var(--chat-max-width)+2.5rem)] shrink-0 px-5 pb-2" data-testid="queue">
           <div className="text-muted-foreground mb-1.5 flex items-center gap-1.5 text-xs"><ListOrdered className="size-3.5" />{t('session.queueTitle')}</div>
           <div className="grid gap-1.5">
             {queue.map((q, i) => (
@@ -590,7 +591,7 @@ export function SessionView({ route }) {
       <PrCards sessionId={s.id} />
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
-      {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-3xl shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
+      {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-[calc(var(--chat-max-width)+2.5rem)] shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
       <Composer draft={draft} onSend={send} suggestion={suggestion} onSuggestionDone={dropSuggestion} attached={images.length > 0} notice={s.kind === 'chat' && CAN_COMPACT[s.agent] === true ? <ColdNotice id={`s${s.id}`} agent={s.agent} used={s.context?.used} lastAt={s.updated_at} busy={running} compacting={compacting} onCompact={compact} onFresh={() => newChat(s.project ?? undefined)} /> : null} onStop={() => act(call('sessions.stop', { id: s.id }))} busy={running} testid="session-input"
         placeholder={running ? (AGENT_CAN_STEER[s.agent] ? t('session.phSteer', { agent: AGENT[s.agent] }) : t('session.phWait', { agent: AGENT[s.agent] })) : s.kind === 'task' ? t('session.phTask') : t('session.phChat')}
         onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}

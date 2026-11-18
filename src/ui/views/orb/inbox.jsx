@@ -271,6 +271,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
   const press = usePress(() => (phone ? onSheet(item) : setMenu(true)));
   const p = orbProgress(item, t, { assistant });
   const time = item.at ? shortTime(item.at, { locale, yesterday: t('chats.yesterday') }) : '';
+  // an unread row is told apart by its counter alone (the mock-up keeps the title in normal weight and the time grey)
   const strong = item.unread && !item.muted;
   if (!phone) {
     // The PC's row (the mock-up's .row): the mark of the agent that answers, the title, what it is doing, the time and the
@@ -286,11 +287,11 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
         <button type="button" onClick={() => openOrbItem(item)} aria-current={active ? 'true' : undefined} className="block w-full min-w-0 cursor-pointer rounded-ctl px-2 py-[7px] text-left" data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
           <span className="flex min-h-5 items-center gap-1.5">
             <span className="grid shrink-0 place-items-center" role="img" aria-label={who || t('orbchats.noProject')} title={who || undefined} data-testid="orb-agent-mark">{!agents[0] && robotSkin(skin) ? <Robot size={16} still /> : <AgentIcon agent={agents[0]} className="size-2.5 opacity-70" />}</span>
-            <span className={cn('min-w-0 flex-1 truncate text-control leading-5', strong ? 'font-semibold' : 'font-normal', item.done && 'text-foreground/70')}>{item.title}</span>
+            <span className={cn('min-w-0 flex-1 truncate text-control leading-5', 'font-normal', item.done && 'text-foreground/70')}>{item.title}</span>
             {working ? <LoaderCircle className="text-muted-foreground size-3.5 shrink-0 animate-spin" aria-label={t('chats.working')} data-testid="orb-working" /> : null}
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
-            {working ? null : <span className={cn('shrink-0 text-micro tabular-nums', strong ? 'text-primary-text font-medium' : 'text-faint-foreground')}>{time}</span>}
+            {working ? null : <span className="text-faint-foreground shrink-0 text-micro tabular-nums">{time}</span>}
             {item.unread ? <span className={cn('grid h-[17px] min-w-[17px] shrink-0 place-items-center rounded-full px-[5px] text-micro font-semibold tabular-nums', item.muted ? 'bg-muted-foreground/25 text-foreground/70' : 'bg-primary text-primary-foreground')} data-testid="chat-unread" aria-label={t('chats.unread', { n: item.unread })}>{item.unread > 99 ? '99+' : item.unread}</span> : null}
             <span className="-mr-1 w-6 shrink-0" aria-hidden="true" />
           </span>

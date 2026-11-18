@@ -270,7 +270,8 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
     <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
       <label className={cn('flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
         <span className={on ? 'text-foreground' : 'text-muted-foreground'}>{t('chat.orchestrator')}</span>
-        <Switch size="sm" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
+        {/* locked is a fixed fact of the conversation, not a switched-off control: it keeps the full accent (no dimming) */}
+        <Switch size="sm" className="disabled:opacity-100" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
     </BubbleTip>
   );
@@ -593,8 +594,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
         ) : null}
       </ChatBar>
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="lazy-lines mx-auto flex min-h-full max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines" data-paste-chat={String(id ?? 'new')}>
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="chat-fade min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        {/* the column is as wide as the text box (its 20 px sides are the padding); the bar's room is taken from the right padding so the edges line up */}
+        <div className="lazy-lines mx-auto flex min-h-full max-w-[calc(var(--chat-max-width)+2.5rem)] flex-col gap-5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5" data-testid="chat-lines" data-paste-chat={String(id ?? 'new')}>
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
             <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center" data-testid="empty-chat">

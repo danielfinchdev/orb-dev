@@ -10,6 +10,12 @@ import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 
 const CURRENT = '@current'; // the radio group's value for «the branch the folder is on»
+// «desde main»: the branch name is set in medium weight, the rest stays as the line is (the translated sentence keeps its {branch} hole).
+function FromBase({ branch }) {
+  const t = useT();
+  const [before, after = ''] = t('chat.workspace.from', { branch: '{branch}' }).split('{branch}');
+  return <>{before}<b className="text-muted-foreground font-medium">{branch}</b>{after}</>;
+}
 const SEGMENT = 'rounded-[calc(var(--r-ctl)-2px)] px-2';
 const ON = 'bg-card text-foreground shadow-sm hover:bg-card';
 // A chat that already started keeps where it works: the pills show it as a segment like any other (the chosen one marked, not
@@ -37,7 +43,7 @@ export function WorkspacePills({ project, value, onChange, chat = null, branch =
             <Button size="xs" variant="ghost" className={cn(SEGMENT, 'cursor-default', info.has && ON)} aria-pressed={info.has} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
           </div>
         </BubbleTip>
-        {from ? <span className="text-faint-foreground truncate px-1.5 text-xs" data-testid="workspace-base">{t('chat.workspace.from', { branch: from })}</span> : null}
+        {from ? <span className="text-faint-foreground truncate px-1.5 text-xs" data-testid="workspace-base"><FromBase branch={from} /></span> : null}
       </>
     );
   }
@@ -60,7 +66,7 @@ export function WorkspacePills({ project, value, onChange, chat = null, branch =
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chat.workspace.base')} text={t('chat.workspace.baseTip')} side="top">
             <DropdownMenuTrigger asChild>
-              <Button size="xs" variant="ghost" className="text-faint-foreground max-w-40 min-w-0 px-1.5 font-normal" data-testid="workspace-base"><span className="truncate">{t('chat.workspace.from', { branch: value.base || info.current })}</span></Button>
+              <Button size="xs" variant="ghost" className="text-faint-foreground max-w-40 min-w-0 px-1.5 font-normal" data-testid="workspace-base"><span className="truncate"><FromBase branch={value.base || info.current} /></span></Button>
             </DropdownMenuTrigger>
           </BubbleTip>
           <DropdownMenuContent align="start" className="max-h-72 w-56 overflow-y-auto">

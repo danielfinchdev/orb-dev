@@ -208,9 +208,10 @@ export function SessionInfo({ session: s, line, onRename, task }) {
   return (
     <section className="grid gap-0" data-testid="orb-info">
       <div className="bg-card rounded-card border px-3 py-2.5">
-        <div className="flex items-center justify-between gap-2">
+        {/* a full-size rename button (32 px) sets the row's height, as in the mock-up: the card is 73-75 px, not 63 */}
+        <div className="flex min-h-(--ctl) items-center justify-between gap-2">
           <b className="min-w-0 truncate font-(family-name:--title) text-[15px] font-semibold" data-testid="info-name">{s.title}</b>
-          {s.kind === 'chat' ? <BubbleTip title={t('panel.info.rename')}><IconButton small label={t('panel.info.rename')} onClick={onRename} data-testid="info-rename"><PencilLine /></IconButton></BubbleTip> : null}
+          {s.kind === 'chat' ? <BubbleTip title={t('panel.info.rename')}><IconButton label={t('panel.info.rename')} onClick={onRename} data-testid="info-rename"><PencilLine /></IconButton></BubbleTip> : null}
         </div>
         <div className="text-muted-foreground mt-1 text-xs">{line}</div>
       </div>

@@ -110,6 +110,8 @@ export default {
   "app.loadOfflineTitle": "No connection",
   "app.loadOfflineBody": "This screen could not be loaded. Check the connection and try again.",
   "app.loadOfflineToast": "Could not open: no connection.",
+  // errorHint: a screen failed while drawing (error-boundary.jsx > CrashCard); the engine is alive, so it keeps working.
+  // crashHint: the engine did not start (main.jsx > StartError); nothing runs underneath, F5 only reloads the window.
   "app.errorHint": "Press F5 to reload the window. Orb keeps running underneath.",
   "app.crashHint": "F5 reloads the window.",
   "app.loadOfflineNote": "The screen you were on is kept. After two failed tries, “Try again” reloads the page.",
