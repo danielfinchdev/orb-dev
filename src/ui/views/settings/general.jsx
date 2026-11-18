@@ -132,20 +132,26 @@ function MusicMore() {
   const prefs = musicPrefs();
   const [level, setLevel] = useState(prefs.intensity);
   const keepLevel = () => setMusicIntensity(level, { save: true });
-  if (prefs.mode !== 'adaptive') return null;
+  const adaptive = prefs.mode === 'adaptive';
   return (
     <MoreOptions testid="more-options-music">
       <Panel>
-            <Setting label={t('appearance.musicTheme')}>
-              <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
+            {/* always both ways: the music Orb makes and the free tracks, so either one can be chosen again */}
+            <Setting label={t('appearance.musicSource')} hint={t(`appearance.musicModeHint.${prefs.mode}`)}>
+              <Select caret="solid" className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.musicSource')} data-testid="music-mode" options={MUSIC_MODES.map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
             </Setting>
-            <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
-            {prefs.reactive ? null : (
-              <Setting label={t('appearance.musicIntensity')}>
-                <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
-                  onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
+            {adaptive ? (<>
+              <Setting label={t('appearance.musicTheme')}>
+                <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
               </Setting>
-            )}
+              <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
+              {prefs.reactive ? null : (
+                <Setting label={t('appearance.musicIntensity')}>
+                  <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
+                    onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
+                </Setting>
+              )}
+            </>) : null}
       </Panel>
     </MoreOptions>
   );
@@ -479,11 +485,6 @@ function MusicSettings() {
         <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px]! cursor-pointer" data-testid="music-volume"
           onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
       </Setting>
-      {prefs.mode !== 'adaptive' ? (
-        <Setting label={t('appearance.musicSource')} hint={t(`appearance.musicModeHint.${prefs.mode}`)}>
-          <Select caret="solid" className="w-52 shrink-0" value={prefs.mode} onValueChange={setMusicMode} title={t('appearance.musicSource')} data-testid="music-mode" options={MUSIC_MODES.filter((value) => value === 'adaptive' || value === prefs.mode).map((value) => ({ value, label: t(`appearance.musicMode.${value}`) }))} />
-        </Setting>
-      ) : null}
     </div>
   );
 }

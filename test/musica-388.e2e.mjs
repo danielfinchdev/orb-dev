@@ -130,11 +130,11 @@ try {
   await until(async () => (await music()).theme === 'orbita', 'the theme chosen in Ajustes');
   assert.equal((await contexts())[0].state, 'running', 'still playing through every change');
 
-  step('the switch in Ajustes stops it: its context is closed, and no other source is offered');
+  step('the switch in Ajustes stops it: its context is closed; both sources stay on offer under «Más opciones»');
   const onOff = page.locator('[data-testid=music-on]');
   const mode = page.locator('[data-testid=music-mode]');
   assert.equal(await onOff.getAttribute('aria-checked'), 'true', 'the switch follows the button');
-  assert.equal(await mode.count(), 0, 'only the adaptive music is offered');
+  assert.equal(await mode.count(), 1, 'the source can always be chosen: the adaptive music or the free tracks');
   await onOff.click();
   await until(async () => (await contexts())[0].state === 'closed', 'the adaptive music let go');
   await until(async () => (await music()).on === false, 'remembered as off');

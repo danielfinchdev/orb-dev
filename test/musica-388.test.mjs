@@ -276,9 +276,11 @@ test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» 
   for (const id of ['music-on', 'music-mode', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
   // The switch is the sidebar's button: it shows what plays and goes through the same toggle.
   assert.match(settings, /<Switch checked=\{playing\} onCheckedChange=\{\(\) => toggleMusic\(\)\}/);
-  // Only the adaptive music is offered: the source shows when an earlier version left the tracks chosen, to leave them.
-  assert.match(settings, /\{prefs\.mode !== 'adaptive' \? \(/);
-  assert.match(settings, /MUSIC_MODES\.filter\(\(value\) => value === 'adaptive' \|\| value === prefs\.mode\)/);
+  // Both sources are always offered, under «Más opciones»: the music Orb makes and the free tracks, so either can be
+  // chosen again. What only the adaptive music has (its style, «Música que reacciona», the intensity) shows with it alone.
+  assert.match(settings, /data-testid="music-mode" options=\{MUSIC_MODES\.map\(/);
+  assert.doesNotMatch(settings, /MUSIC_MODES\.filter\(/);
+  assert.match(settings, /\{adaptive \? \(<>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
   assert.match(settings, /value=\{prefs\.mode\} onValueChange=\{setMusicMode\}/);
   assert.match(settings, /value=\{prefs\.theme\} onValueChange=\{setMusicTheme\}/);
   assert.match(settings, /<Switch checked=\{prefs\.reactive\} onCheckedChange=\{setMusicReactive\}/);

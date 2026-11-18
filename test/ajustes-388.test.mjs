@@ -67,9 +67,9 @@ test('the robot\'s note, the reply line and the music with its volume', () => {
   assert.equal(es['appearance.robotTitle'], 'Robot y sonidos');
   assert.equal(es['appearance.repliesTitle'], 'Respuestas de los agentes');
   assert.equal(es['appearance.musicHint'], 'El reproductor está al pie de la barra lateral.');
-  // only the generated music is offered: the tracks' source shows up just for a value an earlier version left
-  assert.match(general, /\{prefs\.mode !== 'adaptive' \? \(/);
-  assert.match(general, /MUSIC_MODES\.filter\(\(value\) => value === 'adaptive' \|\| value === prefs\.mode\)/);
+  // both sources are always on offer under «Más opciones»: the free tracks can be chosen again
+  assert.match(general, /data-testid="music-mode" options=\{MUSIC_MODES\.map\(/);
+  assert.doesNotMatch(general, /MUSIC_MODES\.filter\(/);
   assert.match(general, /data-testid="music-on"/);
 });
 
