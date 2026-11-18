@@ -74,6 +74,9 @@ function toolIcon(name = '') {
   return Wrench;
 }
 
+// An object with no known format is never dumped on screen: a short generic sentence, and the raw value on hover.
+const rawTitle = (body) => (typeof body === 'string' ? undefined : JSON.stringify(body));
+
 // a tool's name as people read it: the tools of Orb (and of Opti Bot, in its old conversation) by what they do («Creando una tarea»), the
 // agents' own (Read, Bash…) as they are, never «mcp__opti__opti_propose» or «ToolSearch».
 function toolName(t, name) {
@@ -232,9 +235,9 @@ const Block = memo(function Block({ b, agent, who, brain, sessionId, project, ca
     const parts = [body?.costUsd != null ? `$${Number(body.costUsd).toFixed(3)}` : null, body?.inputTokens != null ? `${t('session.tokensIn', { n: (body.inputTokens + (body.cacheReadTokens ?? 0) + (body.cacheWriteTokens ?? 0)).toLocaleString(locale) })}${body.cacheReadTokens ? ` (${t('session.tokensCached', { n: body.cacheReadTokens.toLocaleString(locale) })})` : ''}` : null, body?.outputTokens != null ? t('session.tokensOut', { n: body.outputTokens.toLocaleString(locale) }) : null].filter(Boolean);
     return parts.length ? <div className="text-muted-foreground text-right text-micro">{parts.join(' · ')}</div> : null;
   }
-  if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-control whitespace-pre-wrap break-words">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
+  if (it.role === 'error') return <div className="bg-destructive/10 text-destructive rounded-xl px-3.5 py-2.5 text-control whitespace-pre-wrap break-words" title={rawTitle(body)}>{typeof body === 'string' ? body : t('session.unknownEvent')}</div>;
   if (it.kind === 'status' && typeof body === 'string') return <div className="text-muted-foreground text-center text-xs">{statusText(body, brain ?? agent, catalog)}</div>;
-  return <div className="text-muted-foreground text-center text-xs">{typeof body === 'string' ? body : JSON.stringify(body)}</div>;
+  return <div className="text-muted-foreground text-center text-xs" title={rawTitle(body)}>{typeof body === 'string' ? body : t('session.unknownEvent')}</div>;
 }, (prev, next) => sameBlock(prev.b, next.b) && prev.agent === next.agent && prev.brain === next.brain && prev.sessionId === next.sessionId && prev.project === next.project && prev.catalog === next.catalog);
 
 // a proposal Opti Bot left in its conversation before «Monitoreo del equipo» was removed: read only, as it

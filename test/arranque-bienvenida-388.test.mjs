@@ -146,8 +146,9 @@ test('10C-a: the theme cards are 82 px tall and «Prepara tu equipo» is the moc
   assert.match(prepare, /<InstallCard progress=\{progress\} \/>/);
   assert.match(prepare, /<InstallRows items=\{inst\.items\}/);
   assert.match(prepare, /data-testid="setup-continue"/);
-  // Continuar stays enabled while it installs (the e2e flows click it)
-  assert.doesNotMatch(prepare.slice(prepare.indexOf('data-testid="setup-continue"') - 120, prepare.indexOf('data-testid="setup-continue"')), /disabled/);
+  // Continuar is off only while something really installs (idle, finished or interrupted leave it on: the e2e flows click it at once)
+  assert.match(prepare, /const installing = running && !progress\?\.finished && !progress\?\.interrupted;/);
+  assert.match(prepare, /<Button onClick=\{onDone\} disabled=\{installing\} data-testid="setup-continue">/);
   const installer = read('src/ui/components/installer.jsx');
   for (const c of ["call('installer.check')", "call('installer.progress')", "call('installer.start', { ids })", "bridge.on('installer:progress'"]) assert.ok(installer.includes(c), c);
   // the percent is the step count (finished + half of the one running): no finer figure is made up

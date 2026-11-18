@@ -7,6 +7,7 @@ export default {
   'activity.copy': 'Copy',
   'activity.empty': 'No activity',
   // each event in words
+  'activity.tool': 'the Orb tool',
   'activity.minutes': '{n} min',
   'activity.tokens': '{n} tokens',
   'activity.reasoning': 'reasoning {level}',

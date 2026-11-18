@@ -35,5 +35,6 @@ export function activityDetail(t, row, locale, agents = {}) {
     return Object.entries(data).filter(([, v]) => ['string', 'number', 'boolean'].includes(typeof v) && v !== '').slice(0, 4).map(([k, v]) => `${k}: ${state(v)}`).join(' · ');
   }
   // Git references and ids that mean nothing to a person (refs/orb/t24-1791970229048).
-  return state(raw.replace(/\s*\(refs\/[^)]+\)/g, '').replace(/\brefs\/orb\/\S+/g, '').trim());
+  // Names of Orb's own tools (orb_update_task) belong to the engine, not to the person.
+  return state(raw.replace(/\s*\(refs\/[^)]+\)/g, '').replace(/\brefs\/orb\/\S+/g, '').replace(/\borb_[a-z_]+\b/g, t('activity.tool')).trim());
 }

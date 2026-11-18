@@ -82,6 +82,7 @@ function Pip() {
           <div className="border-border bg-card text-muted-foreground rounded-ctl flex h-(--ctl-sm) shrink-0 items-center gap-1.5 border px-2 text-xs">
             {state.loading ? <LoaderCircle className="size-3.5 animate-spin" /> : state.url.startsWith('https:') ? <Lock className="size-3.5" /> : <Globe className="size-3.5" />}
             <span className="min-w-0 flex-1 truncate">{host(state.url) || t('pip.noPage')}</span>
+            {state.project ? <Badge className="max-w-[40%] min-w-0 flex-none truncate" title={state.project} data-testid="pip-project">{state.project}</Badge> : null}
           </div>
           <div className="border-border bg-card rounded-ctl relative min-h-0 flex-1 overflow-hidden border">
             <img src={src} alt={state.title || t('pip.pageAlt')} onClick={pick} className={cn('absolute inset-0 size-full object-contain', pointing && 'cursor-crosshair')} draggable={false} />

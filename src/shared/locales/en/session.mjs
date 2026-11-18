@@ -6,6 +6,7 @@ export default {
   'session.reasoning': 'Reasoning',
   'session.permissions': 'Permissions',
   'session.result': 'Result',
+  'session.unknownEvent': 'System event',
   'session.tool': 'Tool',
   'session.subagent': 'Subagent',
   'session.subagentSteps': '{n} steps',

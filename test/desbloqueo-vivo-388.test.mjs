@@ -67,7 +67,9 @@ test('the live window keeps every action it had and only shows what it showed', 
   for (const a of ["act('normal')", "act('grande')", "act('pildora')", "act('cerrar')", "act('app')", "act('grabar')", "act('parar')"]) assert.ok(pip.includes(a), a);
   assert.match(pip, /act\(`point:\$\{f\[0\]\},\$\{f\[1\]\}`\)/);
   assert.match(pip, /state\.recording/);
-  assert.doesNotMatch(pip, /state\.(path|file|message|text|cwd|project)\b/);
+  // only the project's name (the mock-up's badge, in the address bar) is new; never paths, files, messages or the folder
+  assert.doesNotMatch(pip, /state\.(path|file|message|text|cwd)\b/);
+  assert.equal((pip.match(/state\.project/g) ?? []).length, 3);
 });
 
 test('10C-a: the lock screen draws the theme backdrop blurred under its veil and never the app', () => {

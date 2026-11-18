@@ -160,6 +160,7 @@ export function Prepare({ name, onDone, onAgents = null }) {
   const running = Boolean(progress?.running);
   const { n, phrase } = useFunPhrase(running);
   const finished = progress?.finished && !progress.interrupted;
+  const installing = running && !progress?.finished && !progress?.interrupted;
   const failed = Boolean(progress?.steps.some((x) => x.state === 'error'));
   const title = running ? `${phrase}…` : finished ? t('install.ready') : progress?.interrupted ? t('install.interrupted') : t('setup.prepareTitle');
   const icon = finished ? CircleCheck : progress?.interrupted ? TriangleAlert : LoaderCircle;
@@ -181,7 +182,8 @@ export function Prepare({ name, onDone, onAgents = null }) {
           {onAgents ? <Button variant="outline" onClick={onAgents} data-testid="setup-agents">{t('setup.signIn')}</Button> : null}
           <Button variant="outline" onClick={inst.load} disabled={running}><RefreshCw />{t('comp.installer.check')}</Button>
           {inst.missing.length ? <Button variant="outline" disabled={!inst.ids.length || running} onClick={inst.start} data-testid="setup-install"><Download />{running ? t('comp.installer.installingBtn') : t('comp.installer.installMarked', { n: inst.ids.length })}</Button> : null}
-          <Button onClick={onDone} data-testid="setup-continue">{t('setup.continue')}</Button>
+          {/* off only while something is really installing: finished (well or not), interrupted or idle leave it on */}
+          <Button onClick={onDone} disabled={installing} data-testid="setup-continue">{t('setup.continue')}</Button>
         </WizardFoot>
       </WizardCard>
     </WizardPage>

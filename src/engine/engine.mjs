@@ -58,6 +58,7 @@ let api = null;
 // where an element pointed at and a recording of the agents' browser go (browser-record.mjs), once the
 // sessions exist.
 let browserFiles = null;
+let sessionsOpen = null; // the open database's conversations, for what the little browser window shows
 let hostBrowser = null; // the agents' browser when the app's pages are driven from here (src/engine/browser/host-browser.mjs)
 let logFile = null;
 const log = (line) => writeTimed(logFile, line);
@@ -163,6 +164,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     hostBrowser = createHostBrowser({
       log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'predeterminado',
       pipEnabled: () => ctx.config?.ui?.pip !== false && ctx.config?.browser?.enabled !== false,
+      project: (session) => { try { return sessionsOpen?.get(session)?.project || null; } catch { return null; } },
       label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent),
       onPointed: (p) => { browserFiles?.pointed(p).catch((error) => log(`navegador del agente: señalar: ${error.message}`)); },
       saveRecording: (session, avi) => browserFiles?.saveRecording(session, avi) ?? null
@@ -330,6 +332,7 @@ async function run(board, { home, version, restored, repair }) {
   const sessions = new Sessions(board, { emit, log });
   // «Auto» on for an install that had chats already (once, with a notice).
   try { const moved = adoptAuto(board); if (moved) log(`modo Auto: ${moved} chat(s) pasan de «Editar archivos» a «Auto»`); } catch (error) { log(`modo Auto: ${error.message}`); }
+  sessionsOpen = sessions;
   browserFiles = (await import('./browser/browser-record.mjs')).browserSink({ sessions, toWindow, log });
   const { plainAction, looksEnglish } = await import('../domain/security/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');

@@ -612,3 +612,6 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 /* the patch's added and removed lines wear the mock-up's soft green and red (the shared .dl.a / .dl.r of the design) */
 .diff[data-testid="patch-view"] .code-add { background: color-mix(in oklab, var(--success) 12%, transparent); }
 .diff[data-testid="patch-view"] .code-del { background: color-mix(in oklab, var(--destructive) 10%, transparent); }
+
+/* Edge/WebView2 draw their own eye and clear button inside inputs; the app has its own «Mostrar» and clear controls. */
+input::-ms-reveal, input::-ms-clear { display: none; }

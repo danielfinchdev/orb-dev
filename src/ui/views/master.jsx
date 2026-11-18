@@ -216,7 +216,7 @@ export function useReveal() {
 // The «Mostrar» / «Ocultar» text button that sits inside a password box, at its right.
 function RevealButton({ reveal }) {
   const t = useT();
-  return <button type="button" onClick={reveal.toggle} aria-pressed={reveal.shown} data-testid="master-reveal" className="text-info rounded-ctl hover:bg-accent focus-visible:ring-ring h-6 shrink-0 px-2 text-xs font-medium outline-none focus-visible:ring-2">{t(reveal.shown ? 'master.hide' : 'master.show')}</button>;
+  return <button type="button" onClick={reveal.toggle} aria-pressed={reveal.shown} data-testid="master-reveal" className="text-muted-foreground hover:text-foreground rounded-ctl hover:bg-accent focus-visible:ring-ring h-6 shrink-0 px-2 text-[13px] font-normal outline-none focus-visible:ring-2">{t(reveal.shown ? 'master.hide' : 'master.show')}</button>;
 }
 
 // «He olvidado la contraseña» with the backups' recovery code: the secrets stay (a new data key), every phone is unlinked.
@@ -317,7 +317,8 @@ export function MasterLocked({ onDone, state = null }) {
   };
   const forgot = () => openDialog(() => forgotFlow({ canForget }));
   const switchTo = (next) => { if (busy) return; reveal.hide(); setError(null); setMode(next); };
-  const linkClass = 'text-info hover:underline focus-visible:ring-ring rounded-ctl inline-flex items-center outline-none focus-visible:ring-2';
+  // Grey, 24 px tall with 12 px of side padding, as the mock-up's ghost button inside the «¿La olvidaste?» line.
+  const linkClass = 'text-muted-foreground hover:text-foreground hover:underline focus-visible:ring-ring rounded-ctl inline-flex h-6 items-center px-3 align-middle text-[13px] outline-none focus-visible:ring-2';
   // Nothing of the app is drawn while it is locked: behind the veil there is only a static drawing of its outline
   // (LockBackdrop: no text, no data), blurred. The veil and the card are siblings of the backdrop (not inside it) so the
   // window's own buttons, which stay usable (the pointer goes through the veil), sit under the veil as in the mock-up:
@@ -366,7 +367,7 @@ export function MasterLocked({ onDone, state = null }) {
               <div className="text-center"><Button type="button" variant={lost ? 'default' : 'ghost'} size="sm" onClick={forgot} data-testid="master-forgot">{t('master.forgot')}</Button></div>
             )}
             {screen ? <LockStatus /> : null}
-            {screen ? <p className="text-muted-foreground text-xs leading-snug" data-testid="master-screen-note">{t('master.screenNote')}</p> : null}
+            {screen ? <p className="text-muted-foreground text-xs leading-[1.45]" data-testid="master-screen-note">{t('master.screenNote')}</p> : null}
           </form>
       </div>
     </>

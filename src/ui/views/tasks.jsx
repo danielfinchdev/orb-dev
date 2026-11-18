@@ -22,9 +22,10 @@ import { Badge, Card, Empty, Field, Input, Textarea } from '@/components/ui/basi
 import { Tabs, TabsList, TabsTrigger, Select, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
 import { Note, IconButton, MoreButton, ListCard, ListRow, SectionLabel, SearchInput } from '@/components/ui/primitives.jsx';
 import { useStore, call, act, go, bridge, phoneLayout, fullPc, refresh } from '@/lib/store.js';
+import { activityLabel, activityDetail } from '@/lib/activity.js';
 import { AGENT, STATUS, REASONING, MODE, SENSITIVE, options } from '@/lib/labels.js';
 import { ago, fmtTime, cn } from '@/lib/utils.js';
-import { t, useT } from '@/lib/i18n.js';
+import { t, useT, useLocale } from '@/lib/i18n.js';
 import { needsApproval } from '@/lib/task-approval.js';
 
 const FILTERS = [
@@ -134,6 +135,7 @@ const useTaskDetail = (id) => useTaskDetailState(id)[0];
 // The detail of the phone and of a linked browser: one card.
 function TaskDetail({ id, live }) {
   const tr = useT();
+  const locale = useLocale();
   const t = useTaskDetail(id);
   if (!t) return <Card><Empty title={tr('tasks.pick')} icon={ClipboardCheck} /></Card>;
   const who = t.assigned_to ?? t.agent;
@@ -191,7 +193,7 @@ function TaskDetail({ id, live }) {
       {t.hasCheckpoint && t.status !== 'running' ? <TaskChanges taskId={t.id} version={`${t.status}:${t.updated_at}`} className="mx-5" /> : null}
       <Collapsible className="px-5">
         <CollapsibleTrigger className="text-muted-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{tr('tasks.history', { n: t.events.length })}</CollapsibleTrigger>
-        <CollapsibleContent><ol className="mt-2 grid gap-1.5 text-xs">{t.events.slice().reverse().map((e, i) => <li key={i} className="grid grid-cols-[110px_1fr] gap-2"><span className="text-muted-foreground">{fmtTime(e.at)}</span><span><span className="font-medium">{e.kind}</span> <span className="text-muted-foreground">{AGENT[e.actor] ?? e.actor}</span>{e.detail ? <span className="text-muted-foreground block break-all">{e.detail}</span> : null}</span></li>)}</ol></CollapsibleContent>
+        <CollapsibleContent><ol className="mt-2 grid gap-1.5 text-xs">{t.events.slice().reverse().map((e, i) => <li key={i} className="grid grid-cols-[110px_1fr] gap-2"><span className="text-muted-foreground">{fmtTime(e.at)}</span><span><span className="font-medium" title={e.kind}>{activityLabel(tr, e.kind)}</span> <span className="text-muted-foreground">{AGENT[e.actor] ?? e.actor}</span>{activityDetail(tr, e, locale, AGENT) ? <span className="text-muted-foreground block break-all" title={e.detail}>{activityDetail(tr, e, locale, AGENT)}</span> : null}</span></li>)}</ol></CollapsibleContent>
       </Collapsible>
     </Card>
   );
@@ -334,6 +336,7 @@ function signText(tr, a) {
 // The Detalle tab of the panel. `live`: the running task's progress; `diff`: what it changed, for the summary.
 function TaskPanelDetail({ t, live, diff, onChanges }) {
   const tr = useT();
+  const locale = useLocale();
   const who = whoOf(t);
   const { reassign, createPr, accept, launch, retry, undo, merge, discard, cancel } = taskActions(t, tr);
   const canUndo = t.hasCheckpoint && t.status !== 'running' && !t.held;
@@ -431,7 +434,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
       </>) : null}
       <Collapsible>
         <CollapsibleTrigger className="group w-full cursor-pointer text-left"><Sec><ChevronRight className="text-muted-foreground size-3.5 transition-transform group-data-[state=open]:rotate-90" />{tr('tasks.sec.history')}<span className="text-faint-foreground text-caption font-normal">{tr('tasks.sec.events', { n: t.events.length })}</span></Sec></CollapsibleTrigger>
-        <CollapsibleContent><ol className="mt-1 grid gap-1.5 text-xs">{t.events.slice().reverse().map((e, i) => <li key={i} className="grid grid-cols-[110px_1fr] gap-2"><span className="text-muted-foreground">{fmtTime(e.at)}</span><span><span className="font-medium">{e.kind}</span> <span className="text-muted-foreground">{AGENT[e.actor] ?? e.actor}</span>{e.detail ? <span className="text-muted-foreground block break-all">{e.detail}</span> : null}</span></li>)}</ol></CollapsibleContent>
+        <CollapsibleContent><ol className="mt-1 grid gap-1.5 text-xs">{t.events.slice().reverse().map((e, i) => <li key={i} className="grid grid-cols-[110px_1fr] gap-2"><span className="text-muted-foreground">{fmtTime(e.at)}</span><span><span className="font-medium" title={e.kind}>{activityLabel(tr, e.kind)}</span> <span className="text-muted-foreground">{AGENT[e.actor] ?? e.actor}</span>{activityDetail(tr, e, locale, AGENT) ? <span className="text-muted-foreground block break-all" title={e.detail}>{activityDetail(tr, e, locale, AGENT)}</span> : null}</span></li>)}</ol></CollapsibleContent>
       </Collapsible>
       {canUndo && t.status === 'done' ? <div className="acts-r mt-2.5 flex justify-start"><Button variant="ghost" disabled={busy} onClick={() => undoTask(tr, t, (fn) => run(fn)())} data-testid="task-undo"><Undo2 className="size-3.5" />{tr('tasks.undo.btn')}</Button></div> : null}
     </div>
