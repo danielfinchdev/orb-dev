@@ -51,7 +51,7 @@ export default {
   'logbooks.noProject': 'Sin proyecto',
   'logbooks.loadMore': 'Cargar más antiguas',
   'logbooks.loading': 'Cargando…',
-  'logbooks.local': 'Todo se queda en este PC. Se leen por páginas.',
+  'logbooks.local': 'Todo se queda en este PC. Los registros de Orb, Usuario y App rotan a los 10 MB (queda el anterior); el de Subagentes no rota. Se leen por páginas.',
   'logbooks.mark': 'Elegir este momento para copiar',
   'logbooks.marked': 'Momento elegido para copiar',
   // Copiar para informar de un fallo (D52)
@@ -80,5 +80,7 @@ export default {
   'logbooks.preamble': 'Índice y normas del principio del archivo',
   'logbooks.all': 'Todos',
   'logbooks.noEntriesYet': 'Todavía no hay entradas en esta bitácora.',
-  'logbooks.markShort': 'Marcar para copiar'
+  'logbooks.markShort': 'Marcar para copiar',
+  'logbooks.task': 'Tarea',
+  'logbooks.reviewTask': 'Revisar tarea #{n}'
 };

@@ -49,7 +49,7 @@ export default {
   'logbooks.noProject': 'No project',
   'logbooks.loadMore': 'Load older',
   'logbooks.loading': 'Loading…',
-  'logbooks.local': 'Everything stays on this PC. Read in pages.',
+  'logbooks.local': 'Everything stays on this PC. The Orb, User and App logs rotate at 10 MB (the previous one is kept); the Subagents one does not rotate. Read in pages.',
   'logbooks.mark': 'Pick this moment to copy',
   'logbooks.marked': 'Moment picked to copy',
   'logbooks.report': 'Copy to report a bug',
@@ -77,5 +77,7 @@ export default {
   'logbooks.preamble': 'Index and rules at the top of the file',
   'logbooks.all': 'All',
   'logbooks.noEntriesYet': 'There are no entries in this log yet.',
-  'logbooks.markShort': 'Mark to copy'
+  'logbooks.markShort': 'Mark to copy',
+  'logbooks.task': 'Task',
+  'logbooks.reviewTask': 'Review task #{n}'
 };

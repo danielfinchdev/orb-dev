@@ -18,6 +18,8 @@ export const keepUnlock = (r) => { held = r?.unlock ? { unlock: r.unlock, until:
 export const dropUnlock = () => { held = null; };
 // Still good for a few seconds more (the call that uses it must arrive in time).
 export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
+// When the held unlock ends (ms), or null when there is none: read-only, for «desbloqueado, quedan N min». The token itself is never exposed.
+export const heldUntil = (now = Date.now()) => (held && held.until - 5000 > now ? held.until : null);
 
 // action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
 // 'deleteProject' | 'removeExtension' | 'previousKey' | 'androidPair' | 'androidEmulator' | 'fullAccess' | 'android' |

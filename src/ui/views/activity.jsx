@@ -1,7 +1,7 @@
 // Activity: every event of Orb (who did what and when). A newer engine reads it by pages and filters it by source,
 // level, project, dates and text; an older one answers the plain list of events, and then only the text search stays.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, SquareCheck } from 'lucide-react';
+import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, SquareCheck, ArrowRight } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Input, Spinner } from '@/components/ui/basic.jsx';
@@ -13,7 +13,7 @@ import { AGENT } from '@/lib/labels.js';
 import { cn, fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
-import { SOURCES, LEVELS, EMPTY_FILTERS, buildQuery, normalizeActivity, appendPage, hasFilters, hasMethod } from '@/lib/activity-filters.js';
+import { SOURCES, LEVELS, EMPTY_FILTERS, buildQuery, normalizeActivity, appendPage, hasFilters, hasMethod, countsKey } from '@/lib/activity-filters.js';
 import { quiet } from '@/lib/quiet.js';
 import { ReportDialog } from './activity-report.jsx';
 import { BitacorasPage } from './bitacoras-page.jsx';
@@ -38,7 +38,7 @@ export function ActivityView({ tabs }) {
   const version = useStore((s) => s.version);
   const projects = useStore((s) => s.projects);
   const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [page, setPage] = useState({ paged: false, items: [], next: null });
+  const [page, setPage] = useState({ paged: false, items: [], next: null, counts: null });
   const [loading, setLoading] = useState(false);
   const [canReport, setCanReport] = useState(false);
   const [report, setReport] = useState(false);
@@ -46,11 +46,18 @@ export function ActivityView({ tabs }) {
   const [open, setOpen] = useState(null);
   const [tick, setTick] = useState(0);
   const gen = useRef(0);
+  const lastKey = useRef(null);
   const set = (patch) => setFilters((f) => ({ ...f, ...patch }));
   useEffect(() => {
     const mine = ++gen.current; // a slow older answer never lands over a newer one
-    const h = setTimeout(() => call('activity.list', buildQuery(filters)).then((r) => { if (gen.current === mine) setPage(normalizeActivity(r)); }).catch(quiet), 200);
-    return () => clearTimeout(h);
+    // typing in the search box keeps the last totals; they are asked again once after a pause
+    const key = JSON.stringify([countsKey(filters), version, tick]);
+    const typing = lastKey.current === key;
+    lastKey.current = key;
+    const run = (counts) => call('activity.list', buildQuery(filters, null, { counts })).then((r) => { if (gen.current === mine) setPage((p) => { const n = normalizeActivity(r); return counts ? n : { ...n, counts: p.counts }; }); }).catch(quiet);
+    const h = setTimeout(() => run(!typing), 200);
+    const h2 = typing ? setTimeout(() => run(true), 800) : null;
+    return () => { clearTimeout(h); if (h2) clearTimeout(h2); };
   }, [filters, version, tick]);
   // the report button only exists when the engine can write the report
   useEffect(() => { if (page.paged) hasMethod(call, 'activity.report', { lines: 1 }).then(setCanReport); }, [page.paged]);
@@ -59,7 +66,9 @@ export function ActivityView({ tabs }) {
     setLoading(true);
     call('activity.list', buildQuery(filters, page.next)).then((r) => { if (gen.current === mine) { const n = normalizeActivity(r); setPage((p) => ({ ...p, next: n.next, items: appendPage(p.items, n.items) })); } }).catch(quiet).finally(() => setLoading(false));
   }, [filters, page.next]);
-  const { items, paged } = page;
+  const { items, paged, counts } = page;
+  // the totals count what the other filters let through; a log longer than the engine reads in one go shows a «+»
+  const num = (n) => (n == null ? null : <span className="n text-faint-foreground tabular-nums" data-testid="activity-count">{n.toLocaleString(locale)}{counts?.partial ? '+' : ''}</span>);
   const copy = () => navigator.clipboard.writeText(items.map((r) => (r.legacy ? `${r.legacy.at}\t${r.legacy.actor}\t${r.legacy.kind}\t${r.legacy.task_id ? `#${r.legacy.task_id} ` : ''}${r.legacy.detail}` : `${r.at ?? ''}\t${r.source}\t${r.level}\t${r.project ?? ''}\t${r.text}`)).join('\n')).then(() => notifyOk(t('activity.copied')));
   const toggleSource = (s) => set({ sources: filters.sources.includes(s) ? filters.sources.filter((x) => x !== s) : [...filters.sources, s] });
   const projectOptions = useMemo(() => [{ value: ALL, label: t('logbooks.all') }, ...(projects ?? []).map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} /> }))], [projects, t]);
@@ -75,13 +84,13 @@ export function ActivityView({ tabs }) {
           <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.source')}>
             {SOURCES.map((s) => (
               <button key={s} type="button" aria-pressed={sourceOn(s)} onClick={() => toggleSource(s)} data-testid={`activity-source-${s}`}
-                className={cn(CHIP, sourceOn(s) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.source.${s}`)}</button>
+                className={cn(CHIP, sourceOn(s) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.source.${s}`)}{num(counts?.sources[s])}</button>
             ))}
           </div>
           <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.level')} data-testid="activity-level">
             {LEVELS.map((l) => (
               <button key={l} type="button" aria-pressed={levelOn(filters.level, l)} onClick={() => set({ level: nextLevel(filters.level, l) })} data-testid={`activity-level-${l}`}
-                className={cn(CHIP, levelOn(filters.level, l) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.level.${l}`)}</button>
+                className={cn(CHIP, levelOn(filters.level, l) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.level.${l}`)}{num(counts?.levels[l])}</button>
             ))}
           </div>
           <span className="flex-1" />
@@ -151,12 +160,15 @@ function PagedRow({ r, t, open, onOpen, marked, canMark, onMark }) {
           <dl className="kv m-0 mb-2.5 grid grid-cols-[80px_1fr] gap-x-3 gap-y-1 text-control">
             <dt className="text-muted-foreground">{t('logbooks.source')}</dt><dd className="m-0">{t(`logbooks.source.${r.source}`)}{r.kind ? ` · ${r.kind}` : ''}</dd>
             <dt className="text-muted-foreground">{t('logbooks.colTime')}</dt><dd className="m-0">{fmtTime(r.at)}</dd>
+            {r.task != null ? <><dt className="text-muted-foreground">{t('logbooks.task')}</dt><dd className="m-0" data-testid="activity-task">#{r.task}</dd></> : null}
             <dt className="text-muted-foreground">{t('logbooks.project')}</dt><dd className="m-0">{r.project ?? t('logbooks.noProject')}</dd>
           </dl>
           <pre className="bg-card border-border rounded-ctl m-0 mb-2.5 border px-2.5 py-2 text-caption whitespace-pre-wrap break-words"><code>{r.text}</code></pre>
-          {canMark && r.at ? (
+          {(canMark && r.at) || r.task != null ? (
             <div className="flex justify-end gap-1.5">
-              <Button variant="outline" aria-pressed={marked} onClick={onMark} title={marked ? t('logbooks.marked') : t('logbooks.mark')} data-testid="activity-mark">{marked ? <SquareCheck /> : <Bug />}{t(marked ? 'logbooks.marked' : 'logbooks.markShort')}</Button>
+              {canMark && r.at ? <Button variant="outline" aria-pressed={marked} onClick={onMark} title={marked ? t('logbooks.marked') : t('logbooks.mark')} data-testid="activity-mark">{marked ? <SquareCheck /> : <Bug />}{t(marked ? 'logbooks.marked' : 'logbooks.markShort')}</Button> : null}
+              {/* the engine names a task only while it exists */}
+              {r.task != null ? <Button onClick={() => go({ view: 'tasks', id: r.task })} data-testid="activity-review-task"><ArrowRight />{t('logbooks.reviewTask', { n: r.task })}</Button> : null}
             </div>
           ) : null}
         </div>
