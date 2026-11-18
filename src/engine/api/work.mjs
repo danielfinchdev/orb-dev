@@ -145,8 +145,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const currentBranch = (dir) => { const live = liveBranch(dir); return live === undefined ? cachedBranch(dir) : live; };
       const list = sessions.list({ archived: Boolean(archived) });
       let trees = null;
-      // `activity`: the short line of what a running chat does now (no paths); absent when it is not working.
-      const withLine = (s) => { const activity = s.kind === 'chat' ? sessions.liveLine?.(s.id) : null; return activity ? { ...s, activity } : s; };
+      // `activity`: the short line of what a running chat does now (file names only); absent when it is not working and for «Acceso total» chats, which the phone may not read.
+      const withLine = (s) => { const activity = s.kind === 'chat' && s.permission !== 'total' ? sessions.liveLine?.(s.id) : null; return activity ? { ...s, activity } : s; };
       return list.map((s0) => {
         const s = withLine(s0);
         if (s.kind !== 'chat' || !s.project) return s;

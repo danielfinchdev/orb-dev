@@ -8,7 +8,7 @@ import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
-import { isMuted } from '../src/domain/conversations/inbox.mjs';
+import { isMuted, clearExpiredMutes } from '../src/domain/conversations/inbox.mjs';
 import { ctx } from '../src/platform/context.mjs';
 
 let t; let board; let api; let sessions; let orchestrator;
@@ -57,8 +57,37 @@ test('mute: without until it is for ever, muted:false lifts it and clears the da
   m = await call('inbox.mute', { kind: 'conversation', id: c, muted: false });
   assert.equal(m.muted, false); assert.equal(m.mutedUntil, null);
   assert.equal(board.one("SELECT muted_until FROM inbox_items WHERE kind = 'conversation' AND item_id = ?", String(c)).muted_until, null);
-  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: '2000-01-01T00:00:00Z' }), 'not in the past');
-  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: 'mañana' }), 'not a time');
-  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: new Date(Date.now() + 400 * 86400e3).toISOString() }), 'not more than a year ahead');
+  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: '2000-01-01T00:00:00Z' }), /until/);
+  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: 'mañana' }), /until/);
+  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: new Date(Date.now() + 400 * 86400e3).toISOString() }), /until/);
   assert.equal(isMuted(board, c), false, 'a refused call changes nothing');
+});
+
+test('mute until: a number and an object are refused, and a bad until leaves a dated mute as it was', async () => {
+  const c = board.createConversation({ title: 'Con fecha fija' }).id;
+  const until = inHours(5);
+  await call('inbox.mute', { kind: 'conversation', id: c, until });
+  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: 12345 }), /until/);
+  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: { at: until } }), /until/);
+  await assert.rejects(call('inbox.mute', { kind: 'conversation', id: c, until: 'mañana' }), /until/);
+  const row = board.one("SELECT muted, muted_until FROM inbox_items WHERE kind = 'conversation' AND item_id = ?", String(c));
+  assert.equal(row.muted, 1); assert.equal(row.muted_until, until);
+});
+
+test('mute until: the scheduler clears the ones that ran out (also at start) and says so', () => {
+  const woke = [];
+  const scheduler = new Scheduler(board, null, { emit: (e) => woke.push(e) });
+  const c = board.createConversation({ title: 'Caduca' }).id;
+  const live = board.createConversation({ title: 'Sigue' }).id;
+  board.run("INSERT INTO inbox_items (person_id, kind, item_id, muted, muted_until) VALUES ('owner', 'conversation', ?, 1, '2000-01-01T00:00:00.000Z')", String(c));
+  board.run("INSERT INTO inbox_items (person_id, kind, item_id, muted, muted_until) VALUES ('owner', 'conversation', ?, 1, ?)", String(live), inHours(3));
+  scheduler.wakeChats();
+  assert.deepEqual(woke, ['inbox:changed']);
+  const get = (id) => board.one("SELECT muted, muted_until FROM inbox_items WHERE kind = 'conversation' AND item_id = ?", String(id));
+  assert.equal(get(c).muted, 0); assert.equal(get(c).muted_until, null);
+  assert.equal(get(live).muted, 1);
+  assert.equal(clearExpiredMutes(board), 0, 'nothing left to clear');
+  woke.length = 0;
+  scheduler.wakeChats();
+  assert.deepEqual(woke, [], 'nothing changed, nothing said');
 });

@@ -62,6 +62,16 @@ export function wakeSnoozed(board, now = new Date()) {
   return due.map((r) => ({ kind: r.kind, id: r.item_id }));
 }
 
+// A mute whose end has passed is cleared in the table too, so no old date stays for an older version. Readers
+// still check the date themselves (muteActive). Returns how many marks were cleared.
+export function clearExpiredMutes(board, now = new Date()) {
+  if (!has(board, 'inbox_items')) return 0;
+  const iso = now.toISOString();
+  const n = board.one('SELECT COUNT(*) AS n FROM inbox_items WHERE muted_until IS NOT NULL AND muted_until <= ?', iso)?.n ?? 0;
+  if (n) board.run('UPDATE inbox_items SET muted = 0, muted_until = NULL WHERE muted_until IS NOT NULL AND muted_until <= ?', iso);
+  return n;
+}
+
 // ---- read state. Where the counting starts: the last line when the lists were first used (old chats are not all
 // «unread» on the first day), or just before the first line that came.
 const SINCE = `inbox_since:${ME}`;

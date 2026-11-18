@@ -12,7 +12,7 @@ import { rankAccounts, untilText, modelName } from '../../domain/usage/budget.mj
 import { installed } from '../../agents/index.mjs';
 import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { runDue } from '../../domain/schedules/schedules.mjs';
-import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
+import { wakeSnoozed, clearExpiredMutes } from '../../domain/conversations/inbox.mjs';
 import { usableAccounts, accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { parallelLimits, taskTimeoutMinutes } from '../../domain/rules/rails.mjs';
@@ -48,6 +48,7 @@ export class Scheduler {
         board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: PRODUCT.name, result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
       }
     }
+    try { clearExpiredMutes(board); } catch (error) { this.log(`silencios caducados: ${error.message}`); }
     // Tasks the agent closed itself (orb_update_task) whose process was still alive when the app went away: what Orb does
     // when the process ends (automatic commit, files changed, log, report) never happened, and their pid would hold their
     // dependent tasks forever. It is done now.
@@ -258,7 +259,8 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
   // the snoozed chats whose time has come are back in the list, with a notice naming each.
   wakeChats() {
     const woken = wakeSnoozed(this.board);
-    if (!woken.length) return;
+    const cleared = clearExpiredMutes(this.board); // so both lists stop saying «Silenciado» without a reload
+    if (!woken.length) { if (cleared) this.emit?.('inbox:changed', {}); return; }
     for (const { kind, id } of woken) {
       const title = kind === 'session' ? this.board.one('SELECT title FROM sessions WHERE id = ?', id)?.title : this.board.conversation(Number(id))?.title;
       if (title) this.board.notice(tr('msg.inbox.snoozeBack', { title }));
