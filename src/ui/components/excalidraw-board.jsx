@@ -1,10 +1,9 @@
 // the Pizarra's canvas: Excalidraw itself (MIT), loaded only when the Pizarra opens (it is big). Its fonts are served
 // from the app (vite.config.mjs copies them to excalidraw/fonts), so it works without internet.
+import '@/lib/excalidraw-assets.js';
 import { useEffect, useMemo, useRef } from 'react';
 import { Excalidraw, exportToBlob, MainMenu } from '@excalidraw/excalidraw';
 import '@excalidraw/excalidraw/index.css';
-
-if (typeof window !== 'undefined') window.EXCALIDRAW_ASSET_PATH = new URL('./excalidraw/', document.baseURI).href;
 
 const blobToDataURL = (blob) => new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result)); r.onerror = reject; r.readAsDataURL(blob); });
 
