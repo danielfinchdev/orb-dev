@@ -79,12 +79,18 @@ const REPOS = {
     'docs/context-switch-plan.md': text('# Context switch plan', '', 'Pending.') } },
   'tienda-web': { git: 'main', files: { 'README.md': text('# tienda-web'), 'src/importar.js': text('export const importar = () => [];') } },
   // no repository: its chats show the panel without a «Cambios» history
-  'api-pagos': { git: null, files: { 'README.md': text('# api-pagos'), 'src/reembolsos.js': text('export const reembolsar = () => null;'), 'src/checkout.js': text('export const checkout = () => null;') } }
+  'api-pagos': { git: null, files: { 'README.md': text('# api-pagos'), 'src/reembolsos.js': text('export const reembolsar = () => null;'), 'src/checkout.js': text('export const checkout = () => null;') } },
+  // a folder of old exports: the task that empties it is held for review (10 or more deletions, in a repository)
+  // it needs a repository: without one the task only has a plain copy as its checkpoint and Orb never holds it for a mass deletion
+  'blog': { git: 'main', files: { 'README.md': text('# blog'), ...Object.fromEntries(Array.from({ length: 16 }, (_, i) => [`exportaciones/entradas-${String(i + 1).padStart(2, '0')}.csv`, text('titulo,fecha', `entrada ${i + 1},2026-01-${String((i % 27) + 1).padStart(2, '0')}`)])) } }
 };
 const repeat = (n, make) => Array.from({ length: n }, (_, i) => make(i + 1));
 const METER_V1 = text('export function ContextMeter({ context }) {', '  const size = context.runtime?.size ?? context.size;', '  const used = context.runtime?.used ?? context.used;', '  const pct = size ? Math.round((used / size) * 100) : null;', '  return { pct, pending: pct === null };', '}');
 const METER_V2 = text('// The runtime reports its own budget: a model switch restarts the idle runtime and resumes the same chat.', ...METER_V1.split('\n').slice(0, -1));
 const BUSY_TEXT = 'Sigue leyendo designer.mjs y apunta lo que cambia del modo diseño';
+// What the busy chat is told each time it stops (a short line: the first one is not repeated), and the follow-up of the busy task.
+const BUSY_AGAIN = 'Continúa con el diagnóstico.';
+const TASK_AGAIN = 'Sigue con la traducción.';
 // What each chat says (the user's lines are the keys the fake agents answer to: ORB_FAKE_SCRIPT) and does (ORB_EXPLORA_PLAN).
 const CHATS = [
   { key: 'contador', title: 'Arreglar el contador de contexto', agent: 'claude', project: 'orb-dev', permission: 'auto', turns: [
@@ -107,13 +113,20 @@ const CHATS = [
   { key: 'reembolsos', title: 'Reembolsos parciales', agent: 'claude', project: 'api-pagos', permission: 'editar', turns: [
     { text: 'Prepara el plan de los reembolsos parciales.', reply: 'Propongo dos pasos: primero el cálculo del importe y luego la llamada a la pasarela.' }] }
 ];
+// One task per state the board shows. `after`: the title of the task it waits for (a failed or held one stays that way, so the wait lasts);
+// `mode: 'aislada'`: its own branch (a worktree). PROGRESO reports 40 %, DUERME keeps it working, ZAP_TODO empties its folder (held for review).
 const TASKS = [
-  { project: 'tienda-web', title: 'Traducir las fichas de producto', agent: 'codex', text: 'Traduce las fichas de producto al inglés y al francés.', reply: 'Traduciendo…', append: 'DUERME', busy: true },
+  { project: 'tienda-web', title: 'Traducir las fichas de producto', agent: 'codex', text: 'Traduce las fichas de producto al inglés y al francés.', reply: 'Traduciendo…', append: 'PROGRESO DUERME', busy: true },
   { project: 'api-pagos', title: 'Migrar el cobro a la API nueva de Stripe', agent: 'cursor', text: 'Migra el cobro y haz el pago de la factura con la tarjeta de prueba.', reply: 'Hecho.' },
   { project: 'api-pagos', title: 'Revisar el checkout', agent: 'claude', text: 'Revisa el checkout y deja el resultado a punto de aceptar.', reply: 'Revisado: el checkout guarda el carrito entre recargas.', files: { 'src/checkout.js': text('export const checkout = (carrito) => ({ ...carrito, guardado: true });') } },
   { project: 'orb-dev', title: 'Revisar el contador', agent: 'claude', text: 'Revisa el contador de contexto y deja el resultado dicho.', reply: 'Revisado: el contador usa el presupuesto del runtime.' },
-  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.', files: { 'docs/prueba-movil.md': text('# Prueba en el móvil', '', 'El contador se ve bien.') } },
-  { project: 'api-pagos', title: 'Limpiar dependencias sin usar', agent: 'codex', text: 'Limpia las dependencias sin usar de la API.', reply: 'No pude terminar.', append: 'FALLA' }
+  { project: 'orb-dev', title: 'Probar en el móvil', agent: 'claude', text: 'Prueba el contador en el móvil y deja el resultado a punto de aceptar.', reply: 'Probado: el contador se ve bien en el móvil.',
+    files: { 'docs/prueba-movil.md': text('# Prueba en el móvil', '', 'El contador se ve bien.'), 'src/context-meter.js': text('export function ContextMeter({ context }) {', '  const pct = context.size ? Math.round((context.used / context.size) * 100) : null;', '  return { pct, mobile: true };', '}'), 'test/movil-contador.test.js': text(...repeat(8, (n) => `test('móvil ${n}', () => assert.ok(${n}));`)) } },
+  { project: 'api-pagos', title: 'Limpiar dependencias sin usar', agent: 'codex', text: 'Limpia las dependencias sin usar de la API.', reply: 'No pude terminar.', append: 'FALLA' },
+  { project: 'blog', title: 'Ordenar las exportaciones antiguas', agent: 'claude', text: 'Ordena la carpeta de exportaciones antiguas del blog.', reply: 'Carpeta ordenada.', append: 'ZAP_TODO' },
+  { project: 'tienda-web', title: 'Cambiar la tipografía de la tienda', agent: 'claude', mode: 'aislada', text: 'Cambia la tipografía de la tienda a una más legible.', reply: 'Tipografía cambiada en una rama propia.', files: { 'src/tipografia.js': text("export const fuente = 'Inter';", 'export const tamano = 16;') } },
+  { project: 'tienda-web', title: 'Paginar el listado de entradas', agent: 'codex', after: 'Limpiar dependencias sin usar', text: 'Pagina el listado de entradas de la tienda.', reply: 'Paginado.' },
+  { project: 'tienda-web', title: 'Optimizar las imágenes del catálogo', agent: 'cursor', after: 'Ordenar las exportaciones antiguas', text: 'Optimiza las imágenes del catálogo.', reply: 'Optimizadas.' }
 ];
 const ORBE = [{ text: 'Dame tres planes para el fin de semana si llueve.', reply: 'Te dejo tres planes con lluvia: un museo por la mañana, una peli con comida en casa y una partida de mesa con amigos.' },
   { text: 'Gracias, me quedo con el museo. ¿A qué hora abre?', reply: 'Casi todos abren a las 10:00. Mira el horario del que elijas antes de salir.' }];
@@ -123,7 +136,9 @@ function writeFakes() {
   const turns = [...CHATS.flatMap((c) => c.turns), ...TASKS, ...ORBE];
   const script = path.join(tmp, 'explora-guion.json'); const plan = path.join(tmp, 'explora-plan.json');
   fs.writeFileSync(script, JSON.stringify(turns.map((t) => ({ when: t.text, reply: t.reply }))));
-  fs.writeFileSync(plan, JSON.stringify(turns.filter((t) => t.files || t.append).map((t) => ({ when: t.text, files: t.files, append: t.append }))));
+  // the two «keep working» lines are not seeded turns: they only need DUERME to reach the fake agent
+  fs.writeFileSync(plan, JSON.stringify([...turns.filter((t) => t.files || t.append).map((t) => ({ when: t.text, files: t.files, append: t.append })),
+    { when: BUSY_AGAIN, append: 'DUERME' }, { when: TASK_AGAIN, append: 'PROGRESO DUERME' }]));
   return { ORB_FAKE_AGENTS: path.join(ROOT, 'test', 'fixtures', 'fake-explora.mjs'), ORB_FAKE_SCRIPT: script, ORB_EXPLORA_PLAN: plan };
 }
 // The projects' folders: files, and for the ones with a repository a first commit on main plus the branch the chat works on.
@@ -222,8 +237,16 @@ try {
       await until(async () => (await lines(ids.orbe)).length >= 2, 'segunda respuesta de Orbe', 30000);
       await call('conversations.update', { id: ids.orbe, title: 'Ideas para el fin de semana' });
     });
-    for (const t of TASKS) await attempt(`la tarea «${t.title}»`, () => call('tasks.create', { project: t.project, title: t.title, description: t.text, agent: t.agent }));
+    const taskIds = {};
+    for (const t of TASKS) {
+      await attempt(`la tarea «${t.title}»`, async () => {
+        const made = await call('tasks.create', { project: t.project, title: t.title, description: t.text, agent: t.agent, ...(t.mode ? { mode: t.mode } : {}), ...(t.after && taskIds[t.after] ? { depends_on: [taskIds[t.after]] } : {}) });
+        taskIds[t.title] = made.id;
+      });
+    }
     await attempt('el fin de las tareas', () => until(async () => { const l = await call('tasks.list'); return l.some((x) => x.status === 'failed' || x.status === 'blocked') && l.some((x) => x.status === 'done'); }, 'tareas terminadas', 40000)).then((v) => { if (v === null) note('las tareas no llegaron a todos sus estados (mira la vista Tareas)'); });
+    // the task that empties its folder is held for review (status blocked + «task.held»): a short wait, and a note when it is not
+    await attempt('la tarea retenida', () => until(async () => (await call('tasks.list')).some((x) => x.held), 'tarea retenida', 20000)).then((v) => { if (v === null) note('ninguna tarea llegó a «retenida» (la vista Tareas no la enseñará)'); });
     await attempt('la programada diaria', () => call('schedules.create', { project: 'api-pagos', title: 'Resumen de errores de la noche', description: 'Resume los errores de la noche.', agent: 'codex', readonly: true, every: 'daily', at_time: '08:30' }));
     await attempt('la programada semanal', () => call('schedules.create', { project: 'tienda-web', title: 'Revisión semanal de dependencias', description: 'Revisa las dependencias y avisa de lo que falle.', agent: 'claude', every: 'weekly', weekdays: [1], at_time: '09:00' }));
     // marks of the sidebar: one pinned, one completed, and unread only where the demo wants it (the rest are read)
@@ -243,12 +266,18 @@ try {
     if (!seeded || BUSY === 'none') return;
     try {
       const busyTask = TASKS.find((t) => t.busy);
-      if (BUSY !== 'chat' && !(await call('tasks.list')).some((x) => x.status === 'running' || (x.title === busyTask.title && x.status === 'queued'))) {
-        await call('tasks.create', { project: busyTask.project, title: busyTask.title, description: busyTask.text, agent: busyTask.agent });
-        await until(async () => (await call('tasks.list')).some((x) => x.status === 'running'), 'tarea en curso', 8000).catch(() => noteOnce('la tarea «en curso» no llegó a arrancar'));
+      if (BUSY !== 'chat') {
+        // One row only: when the task stops it is written to again (a follow-up requeues the same task) instead of creating another one.
+        const list = await call('tasks.list');
+        const mine = list.find((x) => x.title === busyTask.title);
+        if (!list.some((x) => x.status === 'running') && !(mine && mine.status === 'queued')) {
+          if (mine && mine.status !== 'cancelled') await call('tasks.followup', { id: mine.id, text: TASK_AGAIN });
+          else await call('tasks.create', { project: busyTask.project, title: busyTask.title, description: busyTask.text, agent: busyTask.agent });
+          await until(async () => (await call('tasks.list')).some((x) => x.status === 'running'), 'tarea en curso', 8000).catch(() => noteOnce('la tarea «en curso» no llegó a arrancar'));
+        }
       }
       const s = ids.diseno ? await sessionOf(ids.diseno) : null;
-      if (BUSY !== 'task' && s && s.status !== 'running') await call('sessions.send', { id: s.id, text: BUSY_TEXT });
+      if (BUSY !== 'task' && s && s.status !== 'running') await call('sessions.send', { id: s.id, text: BUSY_AGAIN });
     } catch (error) { noteOnce(`no se pudo mantener algo «trabajando»: ${error.message}`); }
   };
   // The chat of a row of the sidebar (by its title); a missing row is a note, not a stop.
@@ -305,7 +334,74 @@ try {
       if (!(await tap('chat-newtab', '«Abrir en pestaña nueva» del menú de la fila'))) await closeMenus(); else await shot(`${prefix}-pestanas`);
     } catch { noteOnce('sin menú ⋯ en la fila de un chat'); await closeMenus(); }
   };
-  const dark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
+  // The board with the seeded tasks: the list with its panel closed, a task waiting for its OK, the Cambios of a finished one and the
+  // «Deshacer esta tarea» dialog (closed with Cancelar, never confirmed). Every step is short and a missing piece is a note.
+  const taskShots = async (prefix) => {
+    if (!seeded) return;
+    await keepBusy();
+    if (!(await tap('nav-tasks', 'Tareas'))) return;
+    const rowOf = (title) => page.locator('[data-testid=task-row]', { hasText: title }).first();
+    const openTask = async (title) => {
+      try { await rowOf(title).locator('[data-testid=task-open]').click({ timeout: 3000 }); await page.waitForTimeout(600); return true; } catch { noteOnce(`Tareas: sin fila «${title}»`); return false; }
+    };
+    await page.locator('[data-testid=task-filters] [role=tab]').first().click({ timeout: 3000 }).catch(() => noteOnce('Tareas: sin la pestaña «Todas»'));
+    await page.locator('[data-testid=task-row]').first().waitFor({ timeout: 4000 }).catch(() => noteOnce('Tareas: ninguna fila a la vista'));
+    if (await page.locator('[data-testid=task-panel-close]').count()) { await tap('task-panel-close', 'cerrar el panel de la tarea'); await shot(`${prefix}-tareas-lista`); } else noteOnce('Tareas: el panel no estaba abierto para cerrarlo');
+    if (await openTask('Migrar el cobro')) await shot(`${prefix}-tareas-detalle`);
+    // The Cambios tab only exists once the task has finished with a checkpoint and files changed, so it is waited for first.
+    const changesTask = 'Probar en el móvil';
+    await until(async () => (await call('tasks.list')).some((x) => x.title === changesTask && x.status === 'done'), 'tarea terminada', 8000)
+      .catch(async () => noteOnce(`Tareas: «${changesTask}» no está «Completada» (estado: ${(await call('tasks.list').catch(() => [])).find((x) => x.title === changesTask)?.status ?? 'no existe'})`));
+    if (await openTask(changesTask)) {
+      await page.locator('[data-testid=task-panel-tab-changes]').first().waitFor({ timeout: 8000 }).catch(() => {});
+      if (await tap('task-panel-tab-changes', 'la pestaña «Cambios» de la tarea')) {
+        await page.locator('[data-testid=task-changes]').first().waitFor({ timeout: 5000 }).catch(() => noteOnce('Tareas: la pestaña Cambios no enseña la lista de archivos'));
+        // the diff of one file open (the second one when there is one: the first is usually a plain addition)
+        const files = page.locator('[data-testid=task-change]');
+        if (await files.count().catch(() => 0)) { await files.nth(Math.min(1, (await files.count()) - 1)).click({ timeout: 3000 }).catch(() => noteOnce('Tareas: no se pudo abrir el diff de un archivo')); await page.waitForTimeout(500); }
+        else noteOnce('Tareas: la pestaña Cambios no lista archivos');
+        await shot(`${prefix}-tareas-cambios`);
+      } else noteOnce(`Tareas: «${changesTask}» no tiene pestaña Cambios (sin diff)`);
+    }
+    await page.locator('[data-testid=task-row]').first().waitFor({ timeout: 2000 }).catch(() => {});
+    const undo = rowOf('Ordenar las exportaciones').locator('[data-testid=task-row-undo]').first();
+    if (await undo.count()) {
+      try {
+        await undo.click({ timeout: 3000 });
+        await page.locator('[data-testid=choice-cancel]').waitFor({ timeout: 3000 });
+        await shot(`${prefix}-tareas-deshacer`);
+        await page.click('[data-testid=choice-cancel]', { timeout: 3000 });
+        await page.waitForTimeout(300);
+      } catch { noteOnce('Tareas: no se pudo abrir o cerrar el diálogo «Deshacer esta tarea»'); await closeMenus(); }
+    } else noteOnce('Tareas: sin tarea retenida con «Deshacer esta tarea» en su fila');
+  };
+  // One project's page (its tabs and its ⋯), the whiteboard with its attachments, and the new-schedule dialog. Only opens
+  // and cancels: it never presses Fusionar, Publicar comentario, Push, Publicar or Crear PR.
+  const projectShots = async (prefix) => {
+    if (!seeded) return;
+    try {
+      if (await tap('nav-projects', 'Proyectos')) {
+        const name = page.locator('[data-testid=project-row]', { hasText: 'tienda-web' }).locator('[data-testid=project-open-name]').first();
+        if (await name.click({ timeout: 4000 }).then(() => true, () => false)) {
+          await page.waitForTimeout(500); await shot(`${prefix}-proyecto`);
+          if (await tap('project-tab-git', 'pestaña «Git y PR» del proyecto')) { await page.waitForTimeout(500); await shot(`${prefix}-proyecto-git`); }
+          if (await tap('project-more', '⋯ del proyecto')) { await shot(`${prefix}-proyecto-menu`); await closeMenus(); }
+          await tap('project-back', 'volver a la lista de proyectos');
+        } else noteOnce('Proyectos: sin fila «tienda-web» para abrir su página');
+      }
+      if (await tap('nav-board', 'Pizarra')) {
+        await page.waitForTimeout(500); await shot(`${prefix}-pizarra`);
+        if (await page.locator('[data-testid=whiteboard-show-panel]').count()) await tap('whiteboard-show-panel', 'panel de adjuntos de la pizarra');
+        if (await page.locator('[data-testid=whiteboard-panel]').count()) await shot(`${prefix}-pizarra-adjuntos`); else noteOnce('Pizarra: no hay panel de adjuntos (¿sin proyecto activo?)');
+        if (await tap('whiteboard-more', '⋯ de la pizarra')) { await shot(`${prefix}-pizarra-adjuntos-menu`); await closeMenus(); }
+      }
+      if (await tap('nav-schedules', 'Programadas') && await tap('new-schedule', 'botón de nueva programada')) {
+        await page.waitForTimeout(400); await shot(`${prefix}-programada-nueva`);
+        await page.getByRole('button', { name: /^(Cancelar|Cancel)$/ }).click({ timeout: 3000 }).catch(async () => { noteOnce('Programadas: sin «Cancelar» en el diálogo de crear'); await closeMenus(); });
+      }
+    } catch (error) { noteOnce(`Proyectos, pizarra y programadas: el recorrido se cortó (${String(error?.message ?? error).split('\n')[0]})`); await closeMenus(); }
+  };
+  const dark =() => page.evaluate(() => document.documentElement.classList.contains('dark'));
   const setDark = async (on) => { if (on !== (await dark())) await page.getByRole('button', { name: /claro y oscuro|day and night|light and dark/i }).click(); };
   // The robot at the top goes back to the chat; the professional theme has no robot (nothing drawn): there, a new chat
   // from the list's «+».
@@ -352,8 +448,10 @@ try {
     await shot(`${theme}-nueva-conversacion`); await page.keyboard.press('Escape');
     // the seeded chats: with an agent (turns, «Cambió N archivos», panel, menus), with Orbe, the row's ⋯, two tabs
     await agentShots(theme);
+    await taskShots(theme);
     // Programadas lives in the sidebar's places: seeded with two schedules (a view the loop above does not list)
     if (seeded && await tap('nav-schedules', 'Programadas')) await shot(`${theme}-programadas`);
+    await projectShots(theme);
   }
   // checks and switches in the night theme: their computed colors
   await page.click('[data-testid=nav-settings]');

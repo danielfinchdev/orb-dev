@@ -95,6 +95,8 @@ try {
 
   step = 'Security Review';
   await win.click('[data-testid=nav-projects]');
+  await win.locator('[data-testid=project-open]').first().click();
+  await win.click('[data-testid=project-more]');
   await win.locator('[data-testid=project-security]').first().waitFor();
   await win.hover('[data-testid=project-security]');
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
