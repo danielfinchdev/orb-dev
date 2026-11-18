@@ -327,3 +327,11 @@ test('paso 7C1: turnTails da una sola fila por turno (con el texto de sus respue
   assert.equal(done.get('a2').at, 20);
   assert.deepEqual([...turnTails(blocks, true).keys()], ['a2']);
 });
+
+test('the text box has the mock-up\'s measures in both chats: 720 px wide at most and 14 px from the bottom', () => {
+  const composer = ui('components', 'conversation', 'composer.jsx');
+  assert.match(composer, /className="composer-dock shrink-0 px-5 pb-3\.5"/);
+  assert.match(composer, /max-w-\[var\(--chat-max-width\)\] rounded-big border/);
+  assert.match(ui('tokens.css'), /--chat-max-width: 45rem;/);
+  assert.match(read('src', 'shared', 'appearance.mjs'), /normal: '45rem'/);
+});

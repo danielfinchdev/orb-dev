@@ -96,7 +96,7 @@ test('every test id of before is still there', () => {
     'spend-advanced', 'spend-profile', 'spend-save', 'spend-slider', 'suggest-next', 'tabs-switch', 'trash-card', 'trash-empty', 'trash-restore', 'updates-card', 'usage-line-switch', 'worktree-remove', 'worktrees-card'];
   const missing = ids.filter((id) => !ALL.includes(`data-testid="${id}"`) && !ALL.includes(`'data-testid': '${id}'`));
   assert.deepEqual(missing, []);
-  for (const dynamic of ['settings-nav-${id}', 'settings-sub-${g}', 'settings-group-${id}', 'mobile-${kind}', 'app-${a.id}', 'shortcut-${cmd.id}']) assert.ok(ALL.includes(`data-testid={\`${dynamic}\`}`), dynamic);
+  for (const dynamic of ['settings-nav-${id}', 'settings-group-${id}', 'mobile-${kind}', 'app-${a.id}', 'shortcut-${cmd.id}']) assert.ok(ALL.includes(`data-testid={\`${dynamic}\`}`), dynamic);
   assert.match(ALL, /testid="settings-autonomy"/);
 });
 
@@ -140,4 +140,11 @@ test('«Datos de Orb 3.7» is its own card, not a child of the backups, with its
   assert.match(data, /<LegacyCard \/><BackupsCard \/>/);
   assert.doesNotMatch(data, /between/);
   assert.match(data, /className="text-warning-ink" data-testid="legacy-keys"/);
+});
+
+test('the menu of Ajustes only has its eight sections: no entries of a block under the open one', () => {
+  const index = view('settings', 'index.jsx');
+  assert.doesNotMatch(index, /settings-sub-/);
+  // a link to a block (from the welcome, a notice, a tutorial) still lands on it
+  assert.match(index, /document\.getElementById\(`settings-\$\{part\}`\)\?\.scrollIntoView/);
 });

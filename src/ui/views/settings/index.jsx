@@ -110,21 +110,12 @@ export function SettingsDialog() {
                 {SECTIONS.filter((sec) => !sec.pcOnly || !bridge.mobile).map((sec) => {
                   const { id, icon: Icon } = sec;
                   const on = section.id === id;
-                  const groups = on ? groupsOf(sec) : [];
                   return (
                     <div key={id} className="grid gap-px">
                       <button type="button" onClick={() => openSettings(id)} data-testid={`settings-nav-${id}`} aria-label={t(`settings.section.${id}`)} aria-current={on ? 'page' : undefined}
                         className={cn('focus-visible:outline-ring flex h-(--ctl) cursor-pointer items-center gap-2.5 rounded-ctl px-2.5 text-left text-control outline-none focus-visible:outline-2', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-[color-mix(in_oklab,var(--accent)_60%,transparent)]')}>
                         <Icon className="size-4 shrink-0" /><span className="truncate max-sm:hidden">{t(`settings.section.${id}`)}</span>
                       </button>
-                      {groups.length ? (
-                        <div className="grid gap-px pb-1 pl-[38px] max-sm:hidden">
-                          {groups.map((g) => (
-                            <button key={g} type="button" onClick={() => openSettings(`${id}:${g}`)} data-testid={`settings-sub-${g}`} aria-current={part === g ? 'location' : undefined}
-                              className={cn('flex h-(--ctl-sm) cursor-pointer items-center truncate rounded-ctl px-2.5 text-left text-caption', part === g ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.group.${g}`)}</button>
-                          ))}
-                        </div>
-                      ) : null}
                     </div>
                   );
                 })}

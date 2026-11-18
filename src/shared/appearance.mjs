@@ -78,7 +78,7 @@ export function migrateAppearance(ui) {
 // --chat-max-width and --font-k / --chat-font (lib/store.js). The first value of each list is NOT the default: the defaults
 // («normal», 14.5 px) reproduce the sizes Orb has always had, so nothing moves until the user picks another one.
 export const DENSITIES = Object.freeze({ compacta: 0.85, normal: 1, amplia: 1.15 });
-export const CHAT_WIDTHS = Object.freeze({ estrecha: '40rem', normal: '48rem', ancha: '72rem', completa: '100%' });
+export const CHAT_WIDTHS = Object.freeze({ estrecha: '40rem', normal: '45rem', ancha: '72rem', completa: '100%' });
 export const FONT_SIZES = [12, 13, 14, 14.5, 15, 16, 17, 18];
 export const BASE_FONT = 14.5;
 

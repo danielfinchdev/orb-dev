@@ -22,7 +22,7 @@
      the chat column's width and the density of the chat's spacing. These defaults are the sizes Orb has always had. */
   --chat-font: 14.5px;
   --font-k: 1;
-  --chat-max-width: 48rem;
+  --chat-max-width: 45rem;
   --app-density: 1;
   --dur-fast: 120ms;
   --dur-base: 200ms;

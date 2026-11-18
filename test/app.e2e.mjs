@@ -261,7 +261,8 @@ try {
   const section = async (name) => {
     const [id, part] = PARTS[name] ?? [name];
     await win.click(`[data-testid=settings-nav-${id}]`);
-    if (part) await win.click(`[data-testid=settings-sub-${part}]`);
+    // the menu only has the eight sections: a block inside one is reached by scrolling to it
+    if (part) await win.evaluate((p) => document.getElementById(`settings-${p}`)?.scrollIntoView({ block: 'start' }), part);
     await win.waitForTimeout(250);
   };
   // 3.6: the version and the developer's GitHub are in «Acerca de».

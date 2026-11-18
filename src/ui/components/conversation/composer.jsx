@@ -143,7 +143,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
     finally { setHearing(false); }
   };
   return (
-    <div className="composer-dock shrink-0 px-5 pb-5">
+    <div className="composer-dock shrink-0 px-5 pb-3.5">
       {/* the row over the box (where the chat works, «Compactar»): outside the box, as wide as it. */}
       {above ? <div className="mx-auto mb-1.5 flex max-w-[var(--chat-max-width)] min-w-0 items-center gap-1" data-testid="composer-above">{above}</div> : null}
       <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-[var(--chat-max-width)] rounded-big border border-[color-mix(in_oklab,var(--foreground)_10%,transparent)] shadow-[var(--shadow)] transition-shadow focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-ring ring-2')}
