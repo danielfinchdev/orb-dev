@@ -1465,8 +1465,8 @@ try {
       }
       await shot(`${name}-${view}`);
       // the narrow window in the dark too
-      // (the switch may be out of reach in a narrow window: the theme is then set as it does, by the class of the page)
-      const paint = (on) => setDark(on).catch(() => page.evaluate((d) => document.documentElement.classList.toggle('dark', d), on));
+      // (the switch is out of reach in a narrow window: the theme is set as it does, by the class of the page)
+      const paint = (on) => page.evaluate((d) => document.documentElement.classList.toggle('dark', d), on);
       const darkToo = async (file) => { if (name !== 'estrecha') return; await paint(true); await page.waitForTimeout(200); await shot(`${file}-noche`); await paint(false); };
       await darkToo(`${name}-${view}`);
       if (view === 'ajustes') {
