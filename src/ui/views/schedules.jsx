@@ -4,66 +4,79 @@
 // The PC app draws the mock-up's list (filters, columns, last runs); the phone and a computer's browser linked with an Orb
 // keep the card layout.
 import { useEffect, useState } from 'react';
-import { CalendarSync, CalendarClock, Plus, Play, Trash2, Check, MessageSquare, PencilLine, Repeat, RefreshCw, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { CalendarSync, CalendarClock, Plus, Play, Trash2, Check, MessageSquare, PencilLine, Repeat, RefreshCw, ClipboardCheck, RotateCcw, LoaderCircle } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { BarPause } from '@/components/conversation/bar.jsx';
 import { TaskStatus } from '@/components/task-state.jsx';
-import { form, confirm } from '@/components/dialogs.jsx';
+import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Card, CardContent, Badge, Field, Input, Textarea, Empty } from '@/components/ui/basic.jsx';
-import { Select, Switch, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/overlay.jsx';
-import { MoreButton, IconButton, ListCard, ListRow, Segmented, SectionLabel } from '@/components/ui/primitives.jsx';
+import { Select, Switch, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
+import { MoreButton, IconButton, ListCard, ListRow, Segmented, SectionLabel, FieldError } from '@/components/ui/primitives.jsx';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { useStore, call, act, go, getState, bridge, fullPc, refresh } from '@/lib/store.js';
-import { AGENT, PERMISSION } from '@/lib/labels.js';
+import { AGENT } from '@/lib/labels.js';
 import { modelsOf } from '@/components/brain-picker.jsx';
 import { canRetryFromRow } from './tasks.jsx';
-import { ago, cn } from '@/lib/utils.js';
+import { ago, cn, errorText } from '@/lib/utils.js';
+import { nextLocalRun, isValidTz } from '../../shared/tz.mjs';
 import { t, useT, currentLocale } from '@/lib/i18n.js';
 
-const EVERY = ['hourly', 'daily', 'weekly', 'every_hours', 'once'];
+const EVERY = ['hourly', 'daily', 'weekly', 'monthly', 'once'];
 // Tomorrow at 9:00, as a datetime-local value (the first value of «Una sola vez»).
 const tomorrowAt9 = () => { const d = new Date(); d.setDate(d.getDate() + 1); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T09:00`; };
 const DAYS = [1, 2, 3, 4, 5, 6, 0];
 const when = (iso) => (iso ? new Date(iso).toLocaleString(currentLocale(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
 const dayName = (d) => new Date(2024, 0, 7 + d).toLocaleDateString(currentLocale(), { weekday: 'long' });
 
-// The zone the engine reads the wall time in: the owner's (Ajustes' tz) or, without one, this PC's.
+// The zone the engine reads the wall time in when a schedule names none: the owner's (Ajustes' tz) or, without one, this PC's.
 const PC_ZONE = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } };
 function zoneName() {
   const z = getState().app?.config?.tz;
-  try { if (z) { new Intl.DateTimeFormat(undefined, { timeZone: z }); return z; } } catch { /* an invalid zone: the engine falls back to the PC's */ }
+  if (z && isValidTz(z)) return z;
   return PC_ZONE();
 }
+// The zone of a schedule: its own, else Orb's.
+const zoneOf = (s) => (s?.tz && isValidTz(s.tz) ? s.tz : zoneName());
 const clock = (hhmm) => { const [h, m] = String(hhmm || '09:00').split(':'); return `${Number(h)}:${m ?? '00'}`; };
-const dayDate = (d) => { const text = d.toLocaleDateString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long' }); return currentLocale().startsWith('es') ? text.replace(',', '') : text; };
+const dayDate = (d, timeZone) => { const text = d.toLocaleDateString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long', timeZone }); return currentLocale().startsWith('es') ? text.replace(',', '') : text; };
+const monthDayOf = (v) => Math.min(31, Math.max(1, Number(v.month_day) || 1));
 
-// The next run of what the dialog describes, worked out in this PC's zone (the one the engine uses unless Ajustes sets another).
-function nextOccurrence(v, from = new Date()) {
-  const [h, m] = String(v.at_time || '09:00').split(':').map(Number);
-  if (v.every === 'once') { const d = v.at_date ? new Date(v.at_date) : null; return d && d > from ? d : null; }
-  if (v.every === 'hourly') { const d = new Date(from); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); return d; }
-  if (v.every === 'every_hours') return new Date(from.getTime() + (Number(v.hours) || 6) * 3_600_000);
-  const days = v.every === 'weekly' ? (v.weekdays.length ? v.weekdays : [1]) : DAYS;
-  for (let i = 0; i < 8; i++) { const d = new Date(from); d.setDate(d.getDate() + i); d.setHours(h, m, 0, 0); if (d > from && days.includes(d.getDay())) return d; }
-  return null;
+// The next run of what the dialog describes, worked out by the engine's own rule in the chosen zone (daylight-saving included).
+function nextOccurrence(v, tz, from = new Date()) {
+  const rule = { every: v.every, time: v.at_time || '09:00', weekdays: v.every === 'weekly' ? (v.weekdays.length ? v.weekdays : [1]) : [], ...(v.every === 'monthly' ? { start: `2000-01-${String(monthDayOf(v)).padStart(2, '0')}T00:00` } : {}) };
+  try { return nextLocalRun(rule, tz, from.getTime()); } catch { return null; }
 }
 
 // What the chosen frequency means, as the dialog's summary: «Cada lunes a las 9:00 (Europe/Madrid). Próxima: lunes 16 de noviembre.»
 function summary(v) {
-  const tz = zoneName();
-  if (v.every === 'once') return t('schedules.sum.once', { when: v.at_date ? new Date(v.at_date).toLocaleString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' }) : '—', tz });
+  const tz = v.tz || zoneName();
+  // a «once» date is a wall time in the chosen zone: it is written out as typed, never moved to this PC's zone
+  if (v.every === 'once') return t('schedules.sum.once', { when: v.at_date ? new Date(`${v.at_date}:00Z`).toLocaleString(currentLocale(), { weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }) : '—', tz });
   if (v.every === 'hourly') return t('schedules.sum.hourly');
   if (v.every === 'every_hours') return t('schedules.sum.hours', { n: Number(v.hours) || 6 });
-  // the next run is worked out in this PC's zone: with another zone set in Ajustes it is left out rather than guessed
-  const next = tz === PC_ZONE() ? nextOccurrence(v) : null;
-  const tail = next ? t('schedules.sum.next', { when: dayDate(next) }) : '';
+  const next = nextOccurrence(v, tz);
+  const tail = next ? t('schedules.sum.next', { when: dayDate(next, tz) }) : '';
   if (v.every === 'daily') return t('schedules.sum.daily', { time: clock(v.at_time), tz }) + tail;
+  if (v.every === 'monthly') return t('schedules.sum.monthly', { day: monthDayOf(v), time: clock(v.at_time), tz }) + tail;
   const names = (v.weekdays.length ? DAYS.filter((d) => v.weekdays.includes(d)) : [1]).map(dayName);
   return t('schedules.sum.weekly', { days: typeof Intl.ListFormat === 'function' ? new Intl.ListFormat(currentLocale(), { style: 'long', type: 'conjunction' }).format(names) : names.join(', '), time: clock(v.at_time), tz }) + tail;
+}
+
+// The zones the runtime knows, each with its offset now («Europe/Madrid (UTC+1)»); built once.
+const ORB_ZONE = '__orb';
+let zoneList = null;
+function zoneOptions() {
+  if (zoneList) return zoneList;
+  let names = [];
+  try { names = Intl.supportedValuesOf('timeZone'); } catch { /* an older runtime: only the zones a schedule already has */ }
+  if (!names.includes('UTC')) names = ['UTC', ...names];
+  const offset = (z) => { try { const o = new Intl.DateTimeFormat('en', { timeZone: z, timeZoneName: 'shortOffset' }).formatToParts(new Date()).find((p) => p.type === 'timeZoneName')?.value ?? ''; return o === 'GMT' ? 'UTC' : o.replace('GMT', 'UTC'); } catch { return ''; } };
+  zoneList = names.map((z) => ({ value: z, label: `${z} (${offset(z)})` }));
+  return zoneList;
 }
 
 // A setting of the dialog: its text on the left, its switch on the right; the whole row is the switch's label.
@@ -76,76 +89,184 @@ function SwitchRow({ label, hint, checked, onChange, testid }) {
   );
 }
 
-async function newSchedule(preset = {}) {
-  const { projects, app } = getState();
-  const list = projects ?? [];
-  if (!list.length) { notifyError(t('schedules.noProject')); return null; }
-  // only the agents this PC can run (the engine refuses a schedule for another one).
-  const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
-  // the agent and its model in one list: «Claude Code · Sonnet 5.5»; the value is «agent» or «agent::model» (split again on create).
-  const catalog = await call('models.catalog').catch(() => []);
-  const brains = [{ value: 'any', label: t('schedules.anyQuota') }, ...agents.flatMap((a) => {
-    const icon = <AgentIcon agent={a} className="size-3.5" />;
-    const own = modelsOf(catalog.find((c) => c.id === a), null).filter((m) => m.id);
-    // the agent alone comes first: its model is then Orb's choice at each run (a schedule is not tied to one model for good)
-    return [{ value: a, label: AGENT[a] ?? a, icon }, ...own.map((m) => ({ value: `${a}::${m.id}`, label: `${AGENT[a] ?? a} · ${m.label}`, icon }))];
-  })];
-  const mode = app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
-  return form(t('schedules.new.title'), {
-    initial: { project: preset.project ?? app?.activeProject?.name ?? list[0].name, title: '', description: '', brain: 'any', every: 'weekly', at_time: '09:00', weekdays: [1], hours: 6, readonly: false, at_date: tomorrowAt9(), same_chat: false },
-    wide: true,
-    body: (v, set) => (<>
-      <Field label={t('schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={t('schedules.titlePh')} /></Field>
-      <Field label={t('schedules.what')} hint={t('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea rows={4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={t('schedules.whatHint')} /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label={t('schedules.project')}><Select caret="solid" className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={list.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} /></Field>
-        <Field label={t('schedules.agentModel')}><Select caret="solid" className="w-full" value={v.brain} onValueChange={(brain) => set({ brain })} options={brains} data-testid="schedule-brain" /></Field>
-      </div>
-      <Field label={t('schedules.frequency')}><Segmented className="self-start" aria-label={t('schedules.frequency')} value={v.every} onChange={(every) => set({ every })} options={EVERY.map((value) => ({ value, label: t(`schedules.every.${value}`) }))} /></Field>
-      {v.every === 'weekly' ? (
-        <Field label={t('schedules.daysField')}>
-          <div className="flex flex-wrap gap-1">{DAYS.map((d) => <Button key={d} type="button" size="icon-sm" variant={v.weekdays.includes(d) ? 'default' : 'outline'} aria-pressed={v.weekdays.includes(d)} aria-label={dayName(d)} onClick={() => set({ weekdays: v.weekdays.includes(d) ? v.weekdays.filter((x) => x !== d) : [...v.weekdays, d] })}>{t(`schedules.days.${d}`)}</Button>)}</div>
-        </Field>
-      ) : null}
-      {v.every === 'hourly' ? null : (
-        <div className="grid grid-cols-2 gap-3">
-          {v.every === 'every_hours' ? <Field label={t('schedules.everyHours')}><Input type="number" min={1} max={168} value={v.hours} onChange={(e) => set({ hours: e.target.value })} /></Field>
-            : v.every === 'once' ? <Field label={t('schedules.dateTime')}><Input type="datetime-local" value={v.at_date} onChange={(e) => set({ at_date: e.target.value })} data-testid="schedule-at-date" /></Field>
-              : <Field label={t('schedules.time')}><Input type="time" value={v.at_time} onChange={(e) => set({ at_time: e.target.value })} /></Field>}
-          {/* the engine reads the wall time in one zone (Ajustes' or this PC's): it is shown, not chosen */}
-          {v.every === 'every_hours' ? null : <Field label={t('schedules.tz')} hint={t('schedules.tzHint')}><Input value={zoneName()} readOnly disabled data-testid="schedule-tz" /></Field>}
-        </div>
-      )}
-      <div className="bg-primary-soft text-primary-text flex items-center gap-2 rounded-card px-2.5 py-2 text-control" data-testid="schedule-summary"><CalendarClock className="size-3.5 shrink-0" />{summary(v)}</div>
-      <ListCard>
-        <SwitchRow label={t('schedules.readonlyLab')} hint={t('schedules.readonlyHint')} checked={v.readonly} onChange={(c) => set({ readonly: c === true })} />
-        {/* the level of permissions of the runs is Orb's own (Ajustes): shown here, changed there */}
-        <div className="border-border flex items-center gap-3 border-t px-3.5 py-3" data-testid="schedule-permissions">
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5"><b className="text-control font-medium">{t('schedules.perm')}</b><span className="text-muted-foreground text-caption">{t('schedules.permHint')}</span></span>
-          <Badge variant="secondary">{PERMISSION[mode]}</Badge>
-        </div>
-        {v.every === 'once' ? null : <SwitchRow label={t('schedules.sameChat')} hint={t('schedules.sameChatHint')} checked={v.same_chat} onChange={(c) => set({ same_chat: c === true })} testid="schedule-same-chat" />}
-      </ListCard>
-    </>),
-    ok: t('schedules.new.ok'),
-    onOk: async ({ at_date: date, brain, ...v }) => { const [agent, model] = brain.split('::'); return call('schedules.create', { ...v, agent, ...(model ? { model } : {}), at_time: v.every === 'once' ? date : v.at_time, same_chat: v.every !== 'once' && v.same_chat, hours: Number(v.hours) || 6 }); }
-  });
+// The values the dialog starts from: a new schedule's defaults, or what an existing one has.
+function initialValues(s, preset, list, app) {
+  return {
+    project: s?.project ?? preset.project ?? app?.activeProject?.name ?? list[0].name,
+    title: s?.title ?? '', description: s?.description ?? '',
+    brain: s ? (s.model ? `${s.agent}::${s.model}` : s.agent) : 'any',
+    every: s?.every ?? 'weekly',
+    at_time: s && !['once', 'every_hours'].includes(s.every) ? s.at_time || '09:00' : '09:00',
+    at_date: s?.every === 'once' ? s.at_time : tomorrowAt9(),
+    weekdays: s?.weekdays?.length ? s.weekdays : [1],
+    hours: s?.every === 'every_hours' ? Number(s.at_time) || 6 : 6,
+    month_day: s?.month_day ?? 1,
+    tz: s?.tz ?? '',
+    readonly: Boolean(s?.readonly), same_chat: Boolean(s?.same_chat), notify: s ? Boolean(s.notify_mobile) : true,
+    autonomy: s?.autonomy === 'preguntar' ? 'preguntar' : 'auto'
+  };
 }
 
-// What the engine lets change on a schedule that exists: its name and its instructions (the rest is decided when it is created).
-async function editSchedule(s) {
-  return form(t('schedules.edit.title'), {
-    initial: { title: s.title, description: s.description },
-    body: (v, set) => (<>
-      <Field label={t('schedules.edit.name')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} data-testid="schedule-edit-title" /></Field>
-      <Field label={t('schedules.edit.what')} hint={t('schedules.whatNote', { assistant: getState().app?.config?.assistantName })}><Textarea rows={5} value={v.description} onChange={(e) => set({ description: e.target.value })} data-testid="schedule-edit-description" /></Field>
-    </>),
-    ok: t('schedules.edit.ok'),
-    onOk: async (v) => {
-      if (!v.title.trim() || !v.description.trim()) throw new Error(t('schedules.edit.empty'));
-      return call('schedules.update', { id: s.id, title: v.title.trim(), description: v.description.trim() });
-    }
-  });
+// «Nueva programada» and «Editar programada»: one dialog. Editing shows «Cambios sin guardar», asks before throwing them
+// away and offers «Ejecutar ahora». What the mock-up does not draw (every N hours, the same chat) is under «Más opciones».
+function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
+  const tr = useT();
+  const editing = Boolean(schedule);
+  const { projects, app } = getState();
+  const list = projects ?? [];
+  const [first] = useState(() => initialValues(schedule, preset, list, app));
+  const [v, setV] = useState(first);
+  const [error, setError] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [more, setMore] = useState(() => first.every === 'every_hours' || first.same_chat);
+  const [catalog, setCatalog] = useState([]);
+  useEffect(() => { call('models.catalog').then(setCatalog).catch(() => setCatalog([])); }, []);
+  const set = (patch) => { setError(null); setV((x) => ({ ...x, ...patch })); };
+  // a new schedule with a title or description typed is also worth asking about before it is thrown away
+  const dirty = editing ? JSON.stringify(v) !== JSON.stringify(first) : Boolean(v.title.trim() || v.description.trim());
+  // only the agents this PC can run (the engine refuses a schedule for another one).
+  const agents = app?.agentsAvailable ?? Object.keys(app?.config?.agents ?? {});
+  // the agent and its model in one list: «Claude Code · Sonnet 5.5»; the value is «agent» or «agent::model» (split again on save).
+  const brains = (() => {
+    const out = [{ value: 'any', label: tr('schedules.anyQuota') }, ...agents.flatMap((a) => {
+      const icon = <AgentIcon agent={a} className="size-3.5" />;
+      const own = modelsOf(catalog.find((c) => c.id === a), null).filter((m) => m.id);
+      // the agent alone comes first: its model is then Orb's choice at each run (a schedule is not tied to one model for good)
+      return [{ value: a, label: AGENT[a] ?? a, icon }, ...own.map((m) => ({ value: `${a}::${m.id}`, label: `${AGENT[a] ?? a} · ${m.label}`, icon }))];
+    })];
+    // a schedule made for an agent that is not on this PC now keeps showing its own choice
+    if (!out.some((o) => o.value === v.brain)) { const [a, m] = v.brain.split('::'); out.push({ value: v.brain, label: tr('schedules.agentGone', { agent: `${AGENT[a] ?? a}${m ? ` · ${m}` : ''}` }) }); }
+    return out;
+  })();
+  const zones = (() => { const own = [{ value: ORB_ZONE, label: tr('schedules.tzDefault', { tz: zoneName() }) }, ...zoneOptions()]; return v.tz && !own.some((o) => o.value === v.tz) ? [...own, { value: v.tz, label: v.tz }] : own; })();
+  // the same number the engine waits (0 = no limit when the rail is paused)
+  const wait = Number(app?.approvalWaitMinutes ?? 10);
+  const level = tr(app?.config?.permissions?.mode === 'preguntar' ? 'session.askMode' : 'session.autoMode');
+
+  const requestClose = async () => {
+    if (dirty && !(await confirm(tr('schedules.discard.title'), tr('schedules.discard.body', { title: v.title.trim() || schedule?.title || tr('schedules.new.title') }), { ok: tr('schedules.discard.ok'), cancel: tr('schedules.discard.keep'), danger: true }))) return;
+    onDone(false);
+  };
+  const changed = (...keys) => keys.some((k) => JSON.stringify(v[k]) !== JSON.stringify(first[k]));
+  // On create, everything. On edit, only what changed (the timing as a whole): a schedule whose «once» date has passed can
+  // still be renamed.
+  const request = () => {
+    const [agent, model] = v.brain.split('::');
+    const once = v.every === 'once';
+    const all = { project: v.project, title: v.title.trim(), description: v.description.trim(), agent, model: model || null, readonly: v.readonly, every: v.every, at_time: once ? v.at_date : v.at_time,
+      weekdays: v.weekdays, hours: Number(v.hours) || 6, month_day: monthDayOf(v), tz: v.tz || null, same_chat: !once && v.same_chat, notify_mobile: v.notify,
+      // the permission level is chosen on this PC's window; the phone's page does not draw it
+      ...(bridge.mobile ? {} : { autonomy: v.autonomy === 'preguntar' ? 'preguntar' : 'auto' }) };
+    if (!editing) return { method: 'schedules.create', params: { ...all, model: model || undefined, tz: all.tz || undefined } };
+    const groups = [[['project'], ['project']], [['title'], ['title']], [['description'], ['description']], [['brain'], ['agent', 'model']], [['readonly'], ['readonly']], [['same_chat', 'every'], ['same_chat']], [['notify'], ['notify_mobile']], [['autonomy'], ['autonomy']],
+      [['every', 'at_time', 'at_date', 'weekdays', 'hours', 'month_day', 'tz'], ['every', 'at_time', 'weekdays', 'hours', 'month_day', 'tz']]];
+    const params = { id: schedule.id };
+    for (const [watch, send] of groups) if (changed(...watch)) for (const k of send) if (k in all) params[k] = all[k];
+    return { method: 'schedules.update', params };
+  };
+  const submit = async (e) => {
+    e?.preventDefault();
+    setError(null);
+    if (!v.title.trim() || !v.description.trim()) { setError(tr('schedules.edit.empty')); return; }
+    setBusy(true);
+    try {
+      const { method, params } = request();
+      if (!editing || Object.keys(params).length > 1) await call(method, params);
+      if (editing) notifyOk(tr('schedules.edit.done'));
+      onDone(true);
+    } catch (err) { setError(errorText(err)); } finally { setBusy(false); }
+  };
+  // «Ejecutar ahora» runs what is saved: with unsaved changes it says so first.
+  const runNow = async () => {
+    if (dirty && !(await confirm(tr('schedules.runDirty.title'), tr('schedules.runDirty.body'), { ok: tr('schedules.runNow'), tone: 'primary' }))) return;
+    await act(call('schedules.run', { id: schedule.id }), tr('schedules.run.done'));
+  };
+  const zoneField = (
+    <Field label={tr('schedules.tz')} hint={tr('schedules.tzHint')}>
+      <Select caret="solid" className="w-full" value={v.tz || ORB_ZONE} onValueChange={(z) => set({ tz: z === ORB_ZONE ? '' : z })} options={zones} data-testid="schedule-tz" />
+    </Field>
+  );
+  const timeField = <Field label={tr('schedules.time')}><Input type="time" value={v.at_time} onChange={(e) => set({ at_time: e.target.value })} data-testid="schedule-time" /></Field>;
+  return (
+    <Dialog open onOpenChange={(o) => { if (!o) requestClose(); }}>
+      <DialogContent className="grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl" data-testid="schedule-dialog">
+        <form onSubmit={submit} className="flex max-h-[inherit] min-h-0 flex-col">
+          <DialogHeader className="flex-none">
+            <div className="flex items-center gap-2"><DialogTitle>{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogTitle>{dirty ? <Badge variant="warning" data-testid="schedule-unsaved">{tr('schedules.unsaved')}</Badge> : null}</div>
+            <DialogDescription className="sr-only">{tr(editing ? 'schedules.edit.title' : 'schedules.new.title')}</DialogDescription>
+          </DialogHeader>
+          <div className="grid min-h-0 flex-1 gap-4 overflow-y-auto p-[18px]">
+            <Field label={tr(editing ? 'schedules.edit.name' : 'schedules.titleField')}><Input autoFocus value={v.title} onChange={(e) => set({ title: e.target.value })} maxLength={120} placeholder={tr('schedules.titlePh')} data-testid={editing ? 'schedule-edit-title' : 'schedule-title'} /></Field>
+            <Field label={tr(editing ? 'schedules.edit.what' : 'schedules.what')} hint={tr('schedules.whatNote', { assistant: app?.config?.assistantName })}><Textarea rows={editing ? 5 : 4} value={v.description} onChange={(e) => set({ description: e.target.value })} placeholder={tr('schedules.whatHint')} data-testid={editing ? 'schedule-edit-description' : 'schedule-description'} /></Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label={tr('schedules.project')}><Select caret="solid" className="w-full" value={v.project} onValueChange={(project) => set({ project })} options={list.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} data-testid="schedule-project" /></Field>
+              <Field label={tr('schedules.agentModel')}><Select caret="solid" className="w-full" value={v.brain} onValueChange={(brain) => set({ brain })} options={brains} data-testid="schedule-brain" /></Field>
+            </div>
+            <Field label={tr('schedules.frequency')}><Segmented className="self-start" aria-label={tr('schedules.frequency')} value={v.every} onChange={(every) => set({ every })} itemTestId={(k) => `schedule-every-${k}`} options={EVERY.map((value) => ({ value, label: tr(`schedules.every.${value}`) }))} /></Field>
+            {v.every === 'weekly' ? (
+              <Field label={tr('schedules.daysField')}>
+                <div className="flex flex-wrap gap-1">{DAYS.map((d) => <Button key={d} type="button" size="icon-sm" variant={v.weekdays.includes(d) ? 'default' : 'outline'} aria-pressed={v.weekdays.includes(d)} aria-label={dayName(d)} onClick={() => set({ weekdays: v.weekdays.includes(d) ? v.weekdays.filter((x) => x !== d) : [...v.weekdays, d] })}>{tr(`schedules.days.${d}`)}</Button>)}</div>
+              </Field>
+            ) : null}
+            {v.every === 'once' ? (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={tr('schedules.dateTime')}><Input type="datetime-local" value={v.at_date} onChange={(e) => set({ at_date: e.target.value })} data-testid="schedule-at-date" /></Field>
+                {zoneField}
+              </div>
+            ) : v.every === 'monthly' ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label={tr('schedules.monthDay')} hint={tr('schedules.monthDayHint')}><Input type="number" min={1} max={31} value={v.month_day} onChange={(e) => set({ month_day: e.target.value })} data-testid="schedule-month-day" /></Field>
+                  {timeField}
+                </div>
+                {zoneField}
+              </>
+            ) : v.every === 'daily' || v.every === 'weekly' ? <div className="grid grid-cols-2 gap-3">{timeField}{zoneField}</div> : null}
+            <div className="bg-primary-soft text-primary-text flex items-center gap-2 rounded-card px-2.5 py-2 text-control" data-testid="schedule-summary"><CalendarClock className="size-3.5 shrink-0" />{summary(v)}</div>
+            <ListCard>
+              <SwitchRow label={tr('schedules.readonlyLab')} hint={tr('schedules.readonlyHint')} checked={v.readonly} onChange={(c) => set({ readonly: c === true })} testid="schedule-readonly" />
+              {/* the level of the runs: only this PC's window sets it (the engine ignores a phone loosening it) */}
+              {bridge.mobile ? null : (
+                <div className="border-border flex items-center gap-3 border-t px-3.5 py-3" data-testid="schedule-permissions">
+                  <span className="flex min-w-0 flex-1 flex-col gap-0.5"><b className="text-control font-medium">{tr('schedules.perm')}</b><span className="text-muted-foreground text-caption">{tr(wait > 0 ? 'schedules.permHint' : 'schedules.permHintNoWait', { min: wait })}</span></span>
+                  <Select caret="solid" className="max-w-[18rem]" value={v.autonomy} onValueChange={(autonomy) => set({ autonomy })} data-testid="schedule-permission"
+                    options={[{ value: 'auto', label: tr('schedules.perm.auto', { level }) }, { value: 'preguntar', label: tr('schedules.perm.ask') }]} />
+                </div>
+              )}
+              <SwitchRow label={tr('schedules.notifyLab')} hint={tr('schedules.notifyHint')} checked={v.notify} onChange={(c) => set({ notify: c === true })} testid="schedule-notify" />
+            </ListCard>
+            <details className="border-border rounded-(--r-md) border px-3 py-2" data-testid="schedule-more-options" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+              <summary className="text-muted-foreground cursor-pointer text-control">{tr('schedules.moreOptions')}</summary>
+              <div className="mt-2">
+                <ListCard>
+                  <SwitchRow label={tr('schedules.every.every_hours')} hint={tr('schedules.everyHoursHint')} checked={v.every === 'every_hours'} onChange={(c) => set({ every: c === true ? 'every_hours' : 'daily' })} testid="schedule-every-hours" />
+                  {v.every === 'every_hours' ? <div className="border-border border-t px-3.5 py-3"><Field label={tr('schedules.everyHours')}><Input type="number" min={1} max={168} value={v.hours} onChange={(e) => set({ hours: e.target.value })} data-testid="schedule-hours" /></Field></div> : null}
+                  {v.every === 'once' ? null : <SwitchRow label={tr('schedules.sameChat')} hint={tr('schedules.sameChatHint')} checked={v.same_chat} onChange={(c) => set({ same_chat: c === true })} testid="schedule-same-chat" />}
+                </ListCard>
+              </div>
+            </details>
+            <FieldError>{error}</FieldError>
+          </div>
+          <DialogFooter className="flex-none">
+            <Button type="button" variant="outline" onClick={requestClose} data-testid="schedule-cancel">{tr('comp.dialogs.cancel')}</Button>
+            {editing ? <Button type="button" variant="outline" onClick={runNow} data-testid="schedule-dialog-run"><Play />{tr('schedules.runNow')}</Button> : null}
+            <Button type="submit" disabled={busy} aria-busy={busy} data-testid="schedule-save">{busy ? <LoaderCircle className="animate-spin" /> : null}{tr(editing ? 'schedules.edit.ok' : 'schedules.new.ok')}</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Opens the dialog for a new schedule (open()) or for one that exists (open(schedule)); `node` goes in the view's tree.
+function useScheduleDialog(load) {
+  const [dialog, setDialog] = useState(null);
+  const open = (schedule = null, preset = {}) => {
+    if (!(getState().projects ?? []).length) { notifyError(t('schedules.noProject')); return; }
+    setDialog({ schedule, preset, key: `${schedule?.id ?? 'new'}-${Date.now()}` });
+  };
+  const node = dialog ? <ScheduleDialog key={dialog.key} schedule={dialog.schedule} preset={dialog.preset} onDone={(saved) => { setDialog(null); if (saved) load(); }} /> : null;
+  return [open, node];
 }
 
 const removeSchedule = async (s, load, tr) => {
@@ -166,7 +287,7 @@ function RetryRun({ id }) {
   return <Button size="xs" variant="outline" disabled={busy} onClick={retry} data-testid="schedule-run-retry"><RotateCcw />{tr('tasks.retry')}</Button>;
 }
 
-function ScheduleRow({ s, load, catalog }) {
+function ScheduleRow({ s, load, catalog, onEdit }) {
   const tr = useT();
   // the model by its name («Sonnet 5.5»), else the agent's
   const brain = (s.model && modelsOf(catalog?.find((c) => c.id === s.agent), null).find((m) => m.id === s.model)?.label) || s.model || AGENT[s.agent] || s.agent;
@@ -181,7 +302,7 @@ function ScheduleRow({ s, load, catalog }) {
       title={<span className={off ? 'text-muted-foreground' : undefined}>{s.title}</span>}
       meta={(
         <span className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5">
-          <span className="inline-flex items-center gap-1"><Repeat className="size-3.5" />{['daily', 'weekly', 'once'].includes(s.every) ? `${s.when} (${zoneName()})` : s.when}</span>
+          <span className="inline-flex items-center gap-1"><Repeat className="size-3.5" />{['daily', 'weekly', 'monthly', 'once'].includes(s.every) ? `${s.when} (${zoneOf(s)})` : s.when}</span>
           <span>{s.project}</span>
           {s.readonly ? <Badge variant="secondary">{tr('schedules.readonlyBadge')}</Badge> : null}
           {!s.approved ? <Badge variant="warning">{tr('schedules.awaiting')}</Badge> : null}
@@ -200,7 +321,7 @@ function ScheduleRow({ s, load, catalog }) {
             ? <><Button size="xs" onClick={() => act(call('schedules.update', { id: s.id, approve: true }), tr('schedules.approve.done')).then(load)} data-testid="schedule-approve"><Check />{tr('schedules.approve')}</Button>
               <BubbleTip title={tr('schedules.runNow')}><IconButton small label={tr('schedules.runNow')} onClick={run} data-testid="schedule-run"><Play /></IconButton></BubbleTip></>
             : <Button size="xs" variant="outline" onClick={run} data-testid="schedule-run"><Play />{tr('schedules.runNow')}</Button>}
-          <BubbleTip title={tr('schedules.edit')}><IconButton small label={tr('schedules.edit')} onClick={async () => { if (await editSchedule(s)) { notifyOk(tr('schedules.edit.done')); load(); } }} data-testid="schedule-edit"><PencilLine /></IconButton></BubbleTip>
+          <BubbleTip title={tr('schedules.edit')}><IconButton small label={tr('schedules.edit')} onClick={() => onEdit(s)} data-testid="schedule-edit"><PencilLine /></IconButton></BubbleTip>
           {/* deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
           {bridge.mobile ? null : <BubbleTip title={tr('schedules.remove')}><IconButton small label={tr('schedules.remove')} onClick={() => removeSchedule(s, load, tr)} data-testid="schedule-remove"><Trash2 /></IconButton></BubbleTip>}
           {spent(s) ? null : s.approved
@@ -221,7 +342,8 @@ function SchedulesPc() {
   const load = () => call('schedules.list').then(setList).catch(() => setList([]));
   useEffect(() => { load(); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { call('models.catalog').then(setCatalog).catch(() => setCatalog([])); }, []);
-  const create = async () => { if (await newSchedule()) load(); };
+  const [openDialog, dialogNode] = useScheduleDialog(load);
+  const create = () => openDialog();
   const rows = (list ?? []).map((s) => { const lastTask = tasks.find((x) => x.id === s.last_task) ?? null; return { ...s, lastTask, lastFailed: Boolean(lastTask && FAILED.includes(lastTask.status) && !lastTask.undone) }; });
   const count = (key) => rows.filter(FILTERS.find(([k]) => k === key)[1]).length;
   const shown = rows.filter(FILTERS.find(([k]) => k === filter)[1]);
@@ -230,6 +352,7 @@ function SchedulesPc() {
   const titleOf = (x) => (list ?? []).find((s) => s.id === x.schedule_id)?.title ?? x.title;
   return (
     <>
+      {dialogNode}
       <PageHeader title={tr('schedules.title')} meta={list ? tr(failed ? 'schedules.subFail' : 'schedules.sub', { total: list.length, active: list.filter((s) => s.enabled).length, failed }) : tr('schedules.meta')}>
         <BarPause />
         <NotificationBell />
@@ -258,7 +381,7 @@ function SchedulesPc() {
                   <span className="flex-1">{tr('schedules.col.what')}</span><span className="w-[120px]">{tr('schedules.col.agent')}</span><span className="w-[170px]">{tr('schedules.col.next')}</span><span className="w-[300px] text-right">{tr('schedules.col.active')}</span>
                 </div>
                 <ListCard data-testid="schedules-list">
-                  {shown.length ? shown.map((s) => <ScheduleRow key={s.id} s={s} load={load} catalog={catalog} />) : <Empty icon={CalendarSync} title={tr('schedules.empty.filtered')} />}
+                  {shown.length ? shown.map((s) => <ScheduleRow key={s.id} s={s} load={load} catalog={catalog} onEdit={openDialog} />) : <Empty icon={CalendarSync} title={tr('schedules.empty.filtered')} />}
                 </ListCard>
               </div>
               {runs.length ? (
@@ -289,9 +412,11 @@ function SchedulesLegacy() {
   const [list, setList] = useState(null);
   const load = () => call('schedules.list').then(setList).catch(() => setList([]));
   useEffect(() => { load(); }, [version]); // eslint-disable-line react-hooks/exhaustive-deps
-  const create = async () => { if (await newSchedule()) load(); };
+  const [openDialog, dialogNode] = useScheduleDialog(load);
+  const create = () => openDialog();
   return (
     <>
+      {dialogNode}
       <PageHeader icon={<CalendarSync className="text-primary-text size-5" />} title={t('schedules.title')} meta={list ? t('schedules.sub', { total: list.length, active: list.filter((s) => s.enabled).length }) : t('schedules.meta')}>
         <Button size="sm" onClick={create} data-testid="new-schedule"><Plus />{t('schedules.newBtn')}</Button>
       </PageHeader>
