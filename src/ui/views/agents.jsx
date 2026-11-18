@@ -1,7 +1,7 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 // The detail of the usage lives in the «Uso» tab next to this one (views/usage.jsx).
 import { useEffect, useState } from 'react';
-import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, ListChecks, LogOut } from 'lucide-react';
+import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, Plus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, ListChecks, LogOut } from 'lucide-react';
 import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
 import { useCatalog } from '@/components/brain-picker.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
@@ -20,7 +20,7 @@ import { LOGIN, OFF_AGENTS } from '@/lib/labels.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
-import { Block, Panel, Setting, Stack, CardFoot } from './settings/rows.jsx';
+import { Block, Panel, Setting, Stack, CardFoot, MoreOptions } from './settings/rows.jsx';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com',
@@ -253,11 +253,13 @@ async function signOut(acc, reload) {
 function AccountRow({ acc, plan, reload }) {
   const t = useT();
   const login = LOGIN[acc.login] ?? LOGIN.desconocido;
+  // The state as the mock-up's row says it: signed out, paused (not used by Orb) or active (signed in and in use).
+  const state = acc.login === 'no' ? [t('agents.accountNoLogin'), 'warning'] : acc.enabled === false ? [t('agents.accountPaused'), 'secondary'] : acc.login === 'si' ? [t('agents.accountActive'), 'success'] : login;
   return (
     <ListRow className={cn('border-border not-first:border-t', acc.enabled === false && 'opacity-60')} title={acc.label} meta={plan ? <span>{plan}</span> : null}
       trailing={(
         <span className="flex flex-none items-center gap-1.5">
-          <Badge variant={acc.login === 'no' ? 'warning' : login[1]}>{login[0]}</Badge>
+          <Badge variant={state[1]} data-testid={`agent-account-state-${acc.id}`}>{state[0]}</Badge>
           <DropdownMenu modal={false}>
             <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-account-more-${acc.id}`} /></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
@@ -392,12 +394,16 @@ function AgentCard({ a, reload, usage, team, today }) {
   const defaultValue = alias ?? (cfg.defaultModel || AGENT_DEFAULT);
   if (cfg.defaultModel && !alias && !modelOptions.some((o) => o.value === cfg.defaultModel)) modelOptions.push({ value: cfg.defaultModel, label: /^[a-z]+$/.test(cfg.defaultModel) ? cfg.defaultModel[0].toUpperCase() + cfg.defaultModel.slice(1) : cfg.defaultModel });
   const login = LOGIN[a.login] ?? LOGIN.desconocido;
+  // «Modelos y ajustes» is not in the mock-up's card: it opens from the card's «⋯» instead of showing a row of its own.
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const { add, scan } = useAccountActions(a, reload);
   const planOf = (acc) => usage.find((u) => u.account === acc.id)?.plan ?? null;
   const shown = listed.slice(0, 3);
   const installViaTeam = team.available && TEAM_AGENTS.includes(a.id);
   const pickPath = async () => { const f = await bridge.pickProgram?.(t('sys.dialog.pickProgram')); if (f) save(a.id, { path: f }).then(reload); };
   const firstLogin = a.accounts.find((acc) => acc.enabled !== false) ?? a.accounts[0];
+  // «Cerrar sesión» in the card's foot acts on the account in use that is signed in; the others have it in their own «⋯».
+  const signable = a.installed ? a.accounts.find((acc) => acc.enabled !== false && acc.login === 'si' && acc.logout) : null;
   // «Versión 2.4.1 · hay 2.4.3» once an update check has run (agents.checkUpdates); the plain version before.
   const upd = a.installed ? a.update : null;
   const own = a.version?.match(/\d+(?:\.\d+)+/)?.[0];
@@ -419,6 +425,10 @@ function AgentCard({ a, reload, usage, team, today }) {
             <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-more-${a.id}`} /></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuItem onSelect={() => save(a.id, { enabled: !cfg.enabled })} data-testid={`agent-toggle-${a.id}`}>{cfg.enabled ? t('agents.turnOff') : t('agents.enable')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setSettingsOpen((v) => !v)} data-testid={`agent-settings-${a.id}`}>{settingsOpen ? t('agents.hideSettings') : t('agents.showSettings')}</DropdownMenuItem>
+              {a.installed && a.multi ? <DropdownMenuItem onSelect={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</DropdownMenuItem> : null}
+              {a.where ? <DropdownMenuItem onSelect={() => act(bridge.openPath(dirOf(a.where)))} data-testid={`agent-open-${a.id}`}><FolderOpen />{t('agents.openFolder')}</DropdownMenuItem> : null}
+              <DropdownMenuItem onSelect={() => act(call('agents.check', { agent: a.id })).then(reload)} data-testid={`agent-check-${a.id}`}><RefreshCw />{t('agents.check')}</DropdownMenuItem>
               {a.installed && INSTALLABLE.includes(a.id) && upd?.available === false ? <DropdownMenuItem onSelect={() => reinstall(t, a)} data-testid={`agent-reinstall-${a.id}`}>{t('agents.reinstall')}</DropdownMenuItem> : null}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -429,6 +439,7 @@ function AgentCard({ a, reload, usage, team, today }) {
       {a.unverified ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-unverified-${a.id}`}>{t('agents.unverifiedNote')}</p></Stack> : null}
       {a.id === 'pi' || a.id === 'antigravity' ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-noguard-${a.id}`}>{t('agents.noGuardNote')}</p></Stack> : null}
       {a.installed ? a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} />) : null}
+      {a.installed && a.multi && a.accounts.filter((acc) => acc.enabled !== false).length === 1 ? <Stack className="py-2.5"><span className="text-muted-foreground text-caption" data-testid={`agent-one-account-${a.id}`}>{t('agents.oneAccount')}</span></Stack> : null}
       {a.installed && !a.multi ? <Stack className="py-2.5"><span className="text-faint-foreground text-caption">{t('agents.fixedSession', { label: a.label })}</span></Stack> : null}
       {a.keys?.length ? <AgentKeys a={a} /> : null}
       {a.installed ? (
@@ -440,12 +451,10 @@ function AgentCard({ a, reload, usage, team, today }) {
       {a.installed ? <SpendRow a={a} today={today} /> : null}
       {/* a new version of an agent Orb cannot update by itself, or on a PC where its installer is not at hand: the command, no button */}
       {upd?.available && !INSTALLABLE.includes(a.id) && !installViaTeam && upd.command ? <Stack><span className="text-muted-foreground text-caption" data-testid={`agent-update-cmd-${a.id}`}>{t('agents.updateManual', { latest: upd.latest, cmd: upd.command })}</span></Stack> : null}
-      <Stack className="py-2.5">
-        <Collapsible>
-          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t('agents.modelsSettings')}</CollapsibleTrigger>
-          {/* everything is chosen, nothing typed: the agent's real models, its strengths from a list and its program
-              in Windows' own dialog. Each change is saved at once. */}
-          <CollapsibleContent className="mt-3 grid gap-3">
+      <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+        {/* everything is chosen, nothing typed: the agent's real models, its strengths from a list and its program
+            in Windows' own dialog. Each change is saved at once. */}
+        <CollapsibleContent className="border-border grid gap-3 border-t px-3.5 py-3" data-testid={`agent-settings-body-${a.id}`}>
             {a.installed && KIND[a.kind] ? <span className="text-muted-foreground text-caption">{t(KIND[a.kind])}</span> : null}
             <Field label={t('agents.defaultModel')} hint={t('agents.defaultModelHint')}>
               <Select className="w-full" value={defaultValue} options={modelOptions} disabled={modelOptions.length < 2} onValueChange={(m) => save(a.id, { defaultModel: m === AGENT_DEFAULT ? '' : m })} data-testid={`agent-default-model-${a.id}`} />
@@ -460,13 +469,9 @@ function AgentCard({ a, reload, usage, team, today }) {
             </Field>
           </CollapsibleContent>
         </Collapsible>
-      </Stack>
       <CardFoot className="flex-wrap gap-2">
-        {a.installed && a.multi ? <Button size="sm" variant="outline" onClick={add}><UserPlus />{t('agents.addAnother')}</Button> : null}
-        {a.installed && a.multi ? <BubbleTip title={t('agents.scan')} text={t('agents.scanTip', { label: a.label })}><Button size="sm" variant="outline" onClick={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</Button></BubbleTip> : null}
-        {/* the paths are not shown (they say too much on a shared screen): a button opens the program's folder. */}
-        {a.where ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openPath(dirOf(a.where)))} data-testid={`agent-open-${a.id}`}><FolderOpen />{t('agents.openFolder')}</Button> : null}
-        <Button size="sm" variant="outline" onClick={() => act(call('agents.check', { agent: a.id })).then(reload)}><RefreshCw />{t('agents.check')}</Button>
+        {a.installed && a.multi ? <Button size="sm" variant="outline" onClick={add} data-testid={`agent-add-account-${a.id}`}><Plus />{t('agents.addAnother')}</Button> : null}
+        {signable ? <Button size="sm" variant="outline" onClick={() => signOut(signable, reload)} data-testid={`agent-signout-${a.id}`}><LogOut />{t('agents.logout')}</Button> : null}
         {!a.installed ? <Button size="sm" variant="outline" onClick={pickPath}><Search />{t('agents.findIt')}</Button> : null}
         {a.installed && a.login === 'no' && firstLogin ? <Button size="sm" onClick={() => signIn(firstLogin, firstLogin.label)}><LogIn />{t('agents.login')}</Button> : null}
         <InstallButton a={a} reload={reload} />
@@ -641,9 +646,11 @@ export function AgentsView() {
               <CardColumns list={more} render={card} />
             </Block>
           ) : null}
-          {/* what Orb leaves out of a project's agent settings (claude.mjs, cursor.mjs, guard.mjs). */}
-          <Block title={t('agents.projectSettingsTitle')} note={t('agents.projectSettingsDesc')} />
-          <CommitStyleCard />
+          {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones» (what Orb leaves out of a project's agent settings, and how commits are written) */}
+          <MoreOptions testid="agents-more-options">
+            <Block title={t('agents.projectSettingsTitle')} note={t('agents.projectSettingsDesc')} />
+            <CommitStyleCard />
+          </MoreOptions>
         </div>
       </PageBody>
     </>

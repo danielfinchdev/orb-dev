@@ -58,7 +58,7 @@ test('Versión nueva: «Versión X · hay Y», «Actualizar a Y» con confirmaci
 test('Uso: barras por agente y día con su leyenda, y los cuatro números de la maqueta', () => {
   assert.match(usage, /function DaysLegend/);
   assert.match(usage, /data-testid="usage-days-legend"/);
-  assert.match(usage, /actions=\{<DaysLegend byDay=\{data\.byDay\} order=\{order\} \/>\}/);
+  assert.match(usage, /actions=\{<DaysLegend byDay=\{data\.byDay\} order=\{order\} warn=\{warn\} \/>\}/);
   assert.match(usage, /\[t\('usage\.cache'\), cacheTokens \? tokens\(cacheTokens\) : '—'\]/);
   assert.match(usage, /t\('usage\.total'\), tokens\(totalTokens\)/);
   assert.match(usage, /tokens_cache/);

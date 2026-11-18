@@ -3,7 +3,7 @@
 // by day, project, agent and model in the last 7, 30 or 90 days (usage.history, history.usage). The panel stays as it
 // was; this page only adds detail.
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Download, Gauge, RefreshCw, OctagonX, TriangleAlert } from 'lucide-react';
+import { CalendarRange, Download, Gauge, RefreshCw, OctagonX, TriangleAlert } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
@@ -118,12 +118,15 @@ function Days({ days, byDay, order, metric, locale }) {
 }
 
 // The legend of the day bars: a dot of each agent's colour and its name.
-function DaysLegend({ byDay, order }) {
+// The warning entry only exists when a warning level is configured (0 = off), so the legend never names a mark that is not set.
+function DaysLegend({ byDay, order, warn = 0 }) {
+  const t = useT();
   const agents = agentsOf(byDay, order);
-  if (agents.length < 1) return null;
+  if (agents.length < 1 && !(warn > 0)) return null;
   return (
     <span className="text-muted-foreground flex flex-wrap items-center gap-3 text-caption" data-testid="usage-days-legend">
       {agents.map((a, k) => <span key={a} className="inline-flex items-center gap-1.5"><span className="inline-block size-2.5 rounded-full" style={{ background: AGENT_COLORS[k % AGENT_COLORS.length] }} />{AGENT[a] ?? a}</span>)}
+      {warn > 0 ? <span className="inline-flex items-center gap-1.5" data-testid="usage-days-legend-warn"><TriangleAlert className="size-3.5" />{t('usage.legendWarn', { pct: Math.round(warn * 100) })}</span> : null}
     </span>
   );
 }
@@ -340,14 +343,18 @@ export function UsageView() {
         <BubbleTip title={`${t('usage.exportCsv')} · ${t('usage.exportCsvHint')}`}><IconButton label={t('usage.exportCsv')} disabled={!data?.days} onClick={exportCsv} data-testid="usage-export-icon"><Download /></IconButton></BubbleTip>
         <DropdownMenu modal={false}>
           <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton data-testid="usage-more" /></DropdownMenuTrigger></BubbleTip>
-          <DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={() => setTick((n) => n + 1)} data-testid="usage-refresh"><RefreshCw />{t('agents.refresh')}</DropdownMenuItem></DropdownMenuContent>
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuItem onSelect={() => setTick((n) => n + 1)} data-testid="usage-refresh"><RefreshCw />{t('agents.refresh')}</DropdownMenuItem>
+            {/* the mock-up's period control has three steps; the 90-day view Orb already had lives here, with the same call */}
+            <DropdownMenuItem onSelect={() => setDays('90')} data-testid="usage-range-90"><CalendarRange />{t('usage.view90')}</DropdownMenuItem>
+          </DropdownMenuContent>
         </DropdownMenu>
       </PageHeader>
       <PageBody className="pt-5 pb-10 md:pb-28">
         <div className="@container mx-auto flex w-full max-w-[1180px] flex-col gap-4" data-testid="usage-view">
           {withTabs ? <AgentsUsageTabs current="usage" /> : null}
           <div className="flex flex-wrap items-center gap-2">
-            <Segmented value={days} onChange={setDays} aria-label={t('usage.period')} options={['1', '7', '30', '90'].map((d) => ({ value: d, label: range1(t, d), testid: `usage-range-${d}` }))} />
+            <Segmented value={days} onChange={setDays} aria-label={t('usage.period')} options={['1', '7', '30'].map((d) => ({ value: d, label: range1(t, d), testid: `usage-range-${d}` }))} />
             <span className="grow" />
             <Button variant="outline" disabled={!data?.days} onClick={exportCsv} title={t('usage.exportCsvHint')} data-testid="usage-export-csv"><Download />{t('usage.exportCsv')}</Button>
           </div>
@@ -366,16 +373,17 @@ export function UsageView() {
                 <div key={label} className="bg-card border-border rounded-card flex flex-col gap-1 border px-3.5 py-3"><span className="text-muted-foreground text-caption">{label}</span><b className="font-(family-name:--title) text-[24px] font-semibold tabular-nums">{value}</b></div>
               ))}
             </div>
-            <Block title={t('usage.byDay')} count={[metric === 'usd' ? t('usage.metricCost') : t('usage.metricTokens'), range].filter(Boolean).join(' · ')} actions={<DaysLegend byDay={data.byDay} order={order} />}>
+            <Block title={t('usage.byDay')} count={[metric === 'usd' ? t('usage.metricCost') : t('usage.metricTokens'), range].filter(Boolean).join(' · ')} actions={<DaysLegend byDay={data.byDay} order={order} warn={warn} />}>
               <Days days={data.days} byDay={data.byDay} order={order} metric={metric} locale={locale} />
             </Block>
             {projects.length ? <Block title={t('usage.byProject')}><Rows head={t('usage.project')} rows={projects} locale={locale} total={projectsTotal} /></Block> : null}
             {agentRows.length ? <Block title={t('usage.byAgentModel')}><Rows head={t('usage.agent')} rows={agentRows} locale={locale} total={ioTokens} /></Block> : null}
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}
-          {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones». Open, because the limits and the brake are there. */}
+          {/* drawn by the mock-up after the tables: what Orb does when an account nears its limit */}
+          {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
+          {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones» */}
           <MoreOptions testid="usage-more-options">
-            {fullPc() ? <Limits cfg={cfg} windowHours={accounts[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
             {data?.total?.turns ? <p className="text-muted-foreground text-caption" data-testid="usage-turns">{t('usage.turns')}: {data.total.turns.toLocaleString(locale)}</p> : null}
             <LocalUsage data={local || null} locale={locale} />
             {data?.days?.length ? <DaysTable days={data.days} byDay={data.byDay} order={order} metric={metric} locale={locale} /> : null}

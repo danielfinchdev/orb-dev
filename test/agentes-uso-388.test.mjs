@@ -67,6 +67,7 @@ test('the pages keep the unified look: the accent is a token', () => {
 
 test('9C-a Uso: Today and 90 days in the period, CSV export, cost card, flat model table, closing day table', () => {
   for (const d of ['1', '7', '30', '90']) assert.ok(usage.includes(`'${d}'`), d);
+  assert.match(usage, /usage-range-90/);
   assert.match(usage, /usage-range-\$\{d\}/);
   assert.match(usage, /data-testid="usage-export-csv"/);
   assert.match(usage, /data-testid="usage-export-icon"/);

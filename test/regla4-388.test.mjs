@@ -65,11 +65,14 @@ test('f: an agent is turned on or off from the «⋯» of its card, with the sam
   for (const l of ['es', 'en']) assert.match(locale(l, 'agents'), /'agents\.turnOff'/);
 });
 
-test('g: Uso keeps its limits, the local usage and «Tokens por día: tabla» under «Más opciones» at the end of the page', () => {
+test('g: Uso shows «Al llegar al límite» in view (the mock-up draws it) and keeps the local usage and «Tokens por día: tabla» under «Más opciones»', () => {
   const usage = src('views', 'usage.jsx');
-  // open, because the limits and the brake are there; the table of days folds on its own
-  const more = usage.slice(usage.indexOf('<MoreOptions testid="usage-more-options">'), usage.indexOf('</MoreOptions>', usage.indexOf('<MoreOptions testid="usage-more-options">')));
-  for (const piece of ['<Limits cfg=', '<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
+  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
+  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
+  for (const piece of ['<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
+  assert.ok(!more.includes('<Limits cfg='), 'the limits are not folded');
+  assert.ok(usage.indexOf('<Limits cfg=') > usage.indexOf('byAgentModel') && usage.indexOf('<Limits cfg=') < start, 'the limits follow «Por agente y modelo»');
+  for (const id of ['usage-switch-account', 'usage-warn-at', 'usage-stop-queue', 'usage-brake-5h', 'usage-brake-week']) assert.ok(usage.includes(`data-testid="${id}"`), id);
   assert.match(usage, /<details className="text-faint-foreground text-caption" data-testid="usage-table">/);
   assert.ok(usage.indexOf('<DaysTable days=') > usage.indexOf('<LocalUsage'));
 });
