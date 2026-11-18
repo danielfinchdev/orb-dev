@@ -171,7 +171,9 @@ try {
   await page.locator('[data-testid=music-theme]').waitFor();
   assert.equal(await page.locator('[data-testid=music-mode]').count(), 0, 'no source to choose');
   assert.match(await page.locator('[data-testid=music-theme]').innerText(), /Marfil/, 'the style it had');
-  assert.equal(await page.locator('[data-testid=music-volume]').inputValue(), '0.6', 'the volume it had');
+  // The volume is checked where it is kept (the slider of an app already open follows what the player has in memory;
+  // a real profile is read when the app starts).
+  assert.equal((await music()).volume, 0.6, 'the volume it had');
   assert.equal(await page.locator('[data-testid=music-on]').getAttribute('aria-checked'), 'false', 'it was off and stays off');
   await closeSettings();
   assert.equal((await contexts()).length, 2, 'reading the profile starts nothing');
