@@ -2,15 +2,17 @@
 // chat and the files opened as tabs; on the right git (changes and history) and the other panels chosen in the header.
 // Everything here only reads; the work is still done by the agents.
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronRight, File, FileCode2, FileJson, FileText, FlaskConical, Lock, Folder, FolderOpen, FolderTree, GitBranch, GitCompare, History, LoaderCircle, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon, Settings, LogOut, CircleCheck } from 'lucide-react';
+import { ChevronRight, FilePlus2, Copy, File, FileCode2, FileJson, FileText, FlaskConical, Lock, Folder, FolderOpen, FolderTree, GitBranch, GitCompare, History, LoaderCircle, RefreshCw, X, LayoutPanelLeft, Cpu, Activity, Gauge, SquareTerminal, MessageSquare, FileDiff, Monitor, ImageIcon, Settings, LogOut, CircleCheck } from 'lucide-react';
 import { ChatView } from './chat.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Input, Spinner } from '@/components/ui/basic.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { PageHeader } from '@/components/page.jsx';
 import { OpenInMenu, ActionsMenu } from '@/components/project-tools.jsx';
 import { Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { IconButton, MoreButton, SearchInput } from '@/components/ui/primitives.jsx';
+import { form } from '@/components/dialogs.jsx';
+import { notifyOk, notifyError } from '@/lib/notify.js';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { useStore, call, act, go, bridge, setState, getState, openTerminal } from '@/lib/store.js';
@@ -42,13 +44,15 @@ const LANGUAGE = { ts: 'TypeScript', tsx: 'TypeScript React', js: 'JavaScript', 
 const languageOf = (path) => LANGUAGE[/\.([a-z0-9]+)$/i.exec(path ?? '')?.[1]?.toLowerCase()] ?? null;
 const sumCounts = (by) => { const all = Object.values(by); return all.length ? { add: all.reduce((n, f) => n + f.add, 0), del: all.reduce((n, f) => n + f.del, 0) } : null; };
 // The right end of the path bar: what is known for sure about the open file (its language, the lines it changed).
-function StatusBar({ language, counts }) {
+function StatusBar({ language, counts, info }) {
   const t = useT();
-  if (!language && !counts) return null;
+  const encoding = info?.encoding ? t(info.encoding === 'unknown' ? 'expert.encoding.unknown' : info.bom ? 'expert.encoding.utf8bom' : 'expert.encoding.utf8') : null;
+  const parts = [language, encoding, info?.lines != null ? t('expert.nLines', { n: info.lines }) : null].filter(Boolean);
+  if (!parts.length && !counts) return null;
   return (
     <span className="ml-auto flex shrink-0 items-center gap-1.5 whitespace-nowrap" data-testid="expert-status">
-      {language ? <span>{language}</span> : null}
-      {language && counts ? <span aria-hidden="true">·</span> : null}
+      {parts.map((p, i) => <span key={p} data-testid={p === encoding ? 'expert-encoding' : undefined}>{i ? <span aria-hidden="true" className="mr-1.5">·</span> : null}{p}</span>)}
+      {parts.length && counts ? <span aria-hidden="true">·</span> : null}
       {counts ? <span title={t('expert.lines', counts)}><span className="text-success">+{counts.add}</span> <span className="text-destructive">−{counts.del}</span></span> : null}
     </span>
   );
@@ -94,7 +98,7 @@ const Notice = ({ icon: Icon, title, children }) => (
 
 // ---- explorer
 // `changes`: the git state of each file (the letter beside its name).
-function Tree({ project, onOpen, version, current, changes, filter = '' }) {
+function Tree({ project, onOpen, onPick, version, current, changes, filter = '' }) {
   const t = useT();
   const [dirs, setDirs] = useState({});
   const [open, setOpen] = useState(() => new Set(['']));
@@ -116,7 +120,7 @@ function Tree({ project, onOpen, version, current, changes, filter = '' }) {
       const dir = e.kind === 'dir'; const FileIcon = fileIcon(e.name); const state = !dir ? changes[e.path] : null;
       return (
         <div key={e.path}>
-          <button type="button" onClick={() => (dir ? toggle(e.path) : e.secret ? null : onOpen(e.path))} title={e.secret ? t('expert.secretFile') : `${e.path}${e.size != null ? ` · ${size(e.size)}` : ''}`} aria-selected={!dir && current === e.path ? true : undefined}
+          <button type="button" onClick={() => { onPick?.(dir ? e.path : e.path.split('/').slice(0, -1).join('/')); if (dir) toggle(e.path); else if (!e.secret) onOpen(e.path); }} title={e.secret ? t('expert.secretFile') : `${e.path}${e.size != null ? ` · ${size(e.size)}` : ''}`} aria-selected={!dir && current === e.path ? true : undefined}
             className={cn('hover:bg-accent/60 flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-ctl pr-1.5 text-left text-control', !dir && current === e.path && 'bg-accent', e.secret && 'text-muted-foreground cursor-not-allowed', dir && e.name === 'node_modules' && 'text-faint-foreground')} style={pad}>
             {dir ? <><ChevronRight className={cn('text-muted-foreground size-3.5 shrink-0 transition-transform', isOpen(e.path) && 'rotate-90')} />{isOpen(e.path) ? <FolderOpen className="text-muted-foreground size-4 shrink-0" /> : <Folder className="text-muted-foreground size-4 shrink-0" />}</>
               : <><span className="w-3.5 shrink-0" />{e.secret ? <Lock className="text-muted-foreground size-4 shrink-0" /> : <FileIcon className="text-muted-foreground size-4 shrink-0" />}</>}
@@ -188,18 +192,18 @@ function ImagePreview({ file, name }) {
   if (!src) return <div className="p-4"><Spinner /></div>;
   return <div className="grid min-h-full place-items-center p-4" data-testid="expert-image"><img src={src} alt={name} className="img-checker rounded-ctl max-h-[calc(100vh-10rem)] max-w-full border object-contain" /></div>;
 }
-function Viewer({ project, root, tab, version }) {
+function Viewer({ project, root, tab, version, onInfo }) {
   if (tab.kind !== 'diff' && root && IMAGE.test(tab.path)) return <ImagePreview file={`${root.replace(/[\\/]+$/, '')}/${tab.path}`} name={tab.path.split('/').pop()} />;
-  return <TextViewer project={project} tab={tab} version={version} />;
+  return <TextViewer project={project} tab={tab} version={version} onInfo={onInfo} />;
 }
-function TextViewer({ project, tab, version }) {
+function TextViewer({ project, tab, version, onInfo }) {
   const t = useT();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   useEffect(() => {
     let alive = true; setError('');
     const req = tab.kind === 'diff' ? call('expert.diff', { project, path: tab.path || undefined }) : call('expert.read', { project, path: tab.path });
-    req.then((r) => alive && setData(r)).catch((e) => alive && setError(errorText(e)));
+    req.then((r) => { if (!alive) return; setData(r); if (tab.kind !== 'diff') onInfo?.({ path: tab.path, encoding: r.encoding ?? null, bom: Boolean(r.bom), lines: r.lines ?? null }); }).catch((e) => alive && setError(errorText(e)));
     return () => { alive = false; };
   }, [project, tab.kind, tab.path, version]);
   if (error) return <Notice icon={File} title={t('expert.cannotShow')}>{error}</Notice>;
@@ -365,6 +369,21 @@ export function ExpertView() {
     setCurrent(id);
   };
   const closeTab = (id) => { const rest = tabs.filter((t) => t.id !== id); setTabs(rest); if (current === id) setCurrent(rest.at(-1)?.id ?? 'chat'); };
+  // The folder «Nuevo archivo» creates in: the last folder or file clicked in the tree (the project's root at first).
+  const [pickedDir, setPickedDir] = useState('');
+  const [fileInfo, setFileInfo] = useState(null);
+  useEffect(() => { setPickedDir(''); setFileInfo(null); }, [project]);
+  const newFile = async () => {
+    const folder = pickedDir || t('expert.newFileRoot');
+    const r = await form(t('expert.newFileTitle'), {
+      description: t('expert.newFileDesc', { folder: pickedDir ? `${pickedDir}/` : folder }), initial: { name: '' },
+      body: (v, setV) => <Input autoFocus autoComplete="off" spellCheck={false} aria-label={t('expert.fileName')} placeholder={t('expert.fileName')} value={v.name} onChange={(e) => setV({ name: e.target.value })} data-testid="expert-new-file-name" />,
+      ok: t('expert.create'), okDisabled: (v) => !v.name.trim(),
+      onOk: (v) => call('expert.createFile', { project, dir: pickedDir || undefined, name: v.name.trim() })
+    });
+    if (r) { notifyOk(t('expert.fileCreated', { name: r.name })); setManual((n) => n + 1); openTab('file', r.path); }
+  };
+  const copyPath = (p) => navigator.clipboard?.writeText(p).then(() => notifyOk(t('expert.pathCopied'))).catch(() => notifyError(t('app.copyFailed')));
   if (bridge.mobile) return <div className="m-auto"><Notice icon={Monitor} title={t('expert.pcOnly')}>{t('expert.pcOnlyBody')}</Notice></div>;
   const tab = tabs.find((x) => x.id === current);
   const showRight = RIGHT_PANELS.some(on);
@@ -409,10 +428,11 @@ export function ExpertView() {
           {on('explorer') && project ? (
             <nav className="border-border flex w-60 shrink-0 flex-col border-r" aria-label={t('expert.files')} data-testid="panel-explorer">
               <div className="text-faint-foreground flex items-center gap-1 py-2 pr-2 pl-3 text-micro tracking-wide uppercase"><span className="flex-1 truncate">{t('expert.files')}</span>
+                <BubbleTip title={t('expert.newFile')}><IconButton small label={t('expert.newFile')} onClick={newFile} data-testid="expert-new-file"><FilePlus2 /></IconButton></BubbleTip>
                 <BubbleTip title={t('expert.reload')}><IconButton small label={t('expert.reload')} onClick={() => setManual((n) => n + 1)}><RefreshCw /></IconButton></BubbleTip>
               </div>
               <SearchInput value={fileQuery} onChange={setFileQuery} placeholder={t('expert.searchFiles')} title={t('expert.searchFilesHint')} className="mx-2 mb-1.5 w-auto" data-testid="expert-file-search" />
-              <div className="min-h-0 flex-1 overflow-auto"><Tree project={project} version={version} filter={fileQuery} current={tab?.kind === 'file' ? tab.path : null} changes={changes} onOpen={(p) => openTab('file', p)} /></div>
+              <div className="min-h-0 flex-1 overflow-auto"><Tree project={project} version={version} filter={fileQuery} onPick={setPickedDir} current={tab?.kind === 'file' ? tab.path : null} changes={changes} onOpen={(p) => openTab('file', p)} /></div>
             </nav>
           ) : null}
           <div className="flex min-w-0 flex-1 flex-col">
@@ -434,12 +454,20 @@ export function ExpertView() {
                 })}
               </div>
               {tab?.kind === 'file' && !IMAGE.test(tab.path) ? <Button variant="ghost" size="sm" onClick={() => openTab('diff', tab.path)} title={t('expert.viewChangesHint')} data-testid="expert-view-changes"><FileDiff />{t('expert.viewChanges')}</Button> : null}
+              {tab?.path ? (
+                <DropdownMenu modal={false}>
+                  <BubbleTip title={t('expert.fileMore')}><DropdownMenuTrigger asChild><MoreButton label={t('expert.fileMore')} data-testid="expert-file-more" /></DropdownMenuTrigger></BubbleTip>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onSelect={() => copyPath(tab.path)} data-testid="expert-copy-path"><Copy />{t('expert.copyPath')}</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              ) : null}
             </div>
             {tab ? <div className="border-border text-muted-foreground flex shrink-0 items-center gap-1.5 border-b px-3.5 py-1.5 text-caption"><span className="font-mono">{dir ? `${dir.split('/').join(' › ')} ›` : null}</span><b className="text-foreground font-medium">{tab.kind === 'diff' && !tab.path ? t('expert.allChanges') : fileName}</b>
-              <StatusBar language={tab.path ? languageOf(tab.path) : null} counts={tab.path ? lineCounts[tab.path] : sumCounts(lineCounts)} /></div> : null}
+              <StatusBar language={tab.path ? languageOf(tab.path) : null} counts={tab.path ? lineCounts[tab.path] : sumCounts(lineCounts)} info={tab.kind === 'file' && fileInfo?.path === tab.path ? fileInfo : null} /></div> : null}
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
             <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView route={{ view: 'chat', id: conversation }} onConversation={setConversation} project={project || undefined} /></div>
-            {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} /></div> : null}
+            {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} onInfo={setFileInfo} /></div> : null}
           </div>
           {showRight && project ? (
             <aside className="border-border flex w-75 shrink-0 flex-col overflow-y-auto border-l" aria-label={t('expert.git')}>
