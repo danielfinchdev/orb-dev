@@ -24,6 +24,7 @@ import { t, useT, useLocale } from '@/lib/i18n.js';
 import { stepText } from '@/components/chat-live.jsx';
 import { activityLabel, activityDetail } from '@/lib/activity.js';
 import { quiet } from '@/lib/quiet.js';
+import { GitPanel, BranchMenu } from '@/components/expert-git.jsx';
 
 // Labels are read when used (getters), so they follow the language chosen in Ajustes.
 export const PANELS = {
@@ -220,28 +221,6 @@ function useGitStatus(project, version) {
   useEffect(() => { if (bridge.mobile || !project) return undefined; let alive = true; call('expert.status', { project }).then((r) => alive && setSt(r)).catch(() => alive && setSt({ repo: false, files: [] })); return () => { alive = false; }; }, [project, version]);
   return st;
 }
-function GitPanel({ st, onDiff }) {
-  const t = useT();
-  if (!st) return <div className="p-3" data-testid="panel-git"><Spinner className="size-3" /></div>;
-  if (!st.repo) return <div data-testid="panel-git"><Notice icon={GitBranch} title={t('expert.noGit')} /></div>;
-  if (!st.files.length) return <div data-testid="panel-git"><Notice icon={CircleCheck} title={t('expert.noChanges')}>{t('expert.noChangesBody')}</Notice></div>;
-  return (
-    <Sec label={<button type="button" onClick={() => onDiff('')} className="hover:text-foreground cursor-pointer uppercase">{t('expert.unsaved')}</button>} count={st.files.length} testid="panel-git">
-      <div data-testid="expert-git">
-        {st.files.map((f) => {
-          const [dir, name] = splitPath(f.path);
-          return (
-            <button key={f.path} type="button" disabled={f.secret} onClick={() => onDiff(f.path)} title={f.secret ? t('expert.secretFile') : f.path} className="hover:bg-accent/60 flex min-h-7 w-full cursor-pointer items-center gap-2 rounded-ctl px-1 text-left text-control disabled:cursor-not-allowed disabled:opacity-60">
-              <span className="min-w-0 flex-1 truncate">{name}{dir ? <small className="text-faint-foreground ml-1 text-micro">{dir}</small> : null}</span>
-              {f.add != null ? <span className="text-micro tabular-nums" title={t('expert.lines', f)}><span className="text-success">+{f.add}</span> <span className="text-destructive">−{f.del}</span></span> : null}
-              <span className={cn('text-micro font-semibold', STATE_TONE[f.state])} title={STATE_KEY[f.state] ? t(STATE_KEY[f.state]) : f.state}>{f.secret ? t('expert.secret') : STATE_LETTER[f.state] ?? '·'}</span>
-            </button>
-          );
-        })}
-      </div>
-    </Sec>
-  );
-}
 function HistoryPanel({ project, version }) {
   const t = useT();
   const locale = useLocale();
@@ -416,7 +395,7 @@ export function ExpertView() {
           <Select size="sm" value={project} onValueChange={setProject} title={t('expert.project')} className="-ml-1.5 w-auto max-w-52 min-w-0 shrink border-transparent bg-transparent px-1.5 font-medium hover:bg-accent data-[state=open]:bg-accent [&>svg]:opacity-0 hover:[&>svg]:opacity-100 focus-visible:[&>svg]:opacity-100 data-[state=open]:[&>svg]:opacity-100" placeholder={t('expert.pickProject')} options={projects.map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} small /> }))} />
           <span className="text-faint-foreground hidden min-w-0 flex-1 truncate font-mono text-caption @4xl/bar:inline" title={info?.path}>{info?.path}</span>
           <Badge className="shrink-0">{t('nav.expert')}</Badge>
-          {st?.repo ? <Button variant="ghost" size="sm" className="min-w-0 shrink" onClick={() => openTab('diff', '')} title={t('expert.allChanges')}><GitBranch /><span className="truncate">{st.branch}</span></Button> : null}
+          {st?.repo ? <BranchMenu project={project} st={st} version={version} reload={() => setManual((n) => n + 1)} /> : null}
           {running ? <Badge variant="info" className="hidden shrink-0 @5xl/bar:inline-flex"><AgentIcon agent={running.assigned_to ?? running.agent} className="size-3" />{t('expert.workingOn', { agent: AGENT[running.assigned_to ?? running.agent] ?? '', id: running.id })}</Badge> : null}
           <div className="min-w-0 flex-1" />
           {/* the project in an editor, and its actions (commands of the user's own, with their shortcut). */}
@@ -467,17 +446,17 @@ export function ExpertView() {
               <StatusBar language={tab.path ? languageOf(tab.path) : null} counts={tab.path ? lineCounts[tab.path] : sumCounts(lineCounts)} info={tab.kind === 'file' && fileInfo?.path === tab.path ? fileInfo : null} /></div> : null}
             {/* The chat stays mounted so switching tabs never loses what is being written. */}
             <div className={cn('min-h-0 flex-1 flex-col', current === 'chat' ? 'flex' : 'hidden')}><ChatView route={{ view: 'chat', id: conversation }} onConversation={setConversation} project={project || undefined} /></div>
-            {tab ? <div className="min-h-0 flex-1 overflow-auto" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} onInfo={setFileInfo} /></div> : null}
+            {tab ? <div className="min-h-0 flex-1 overflow-auto [&_.code-surface]:bg-background!" data-testid="expert-viewer"><Viewer project={project} root={info?.path} tab={tab} version={version} onInfo={setFileInfo} /></div> : null}
           </div>
           {showRight && project ? (
             <aside className="border-border flex w-75 shrink-0 flex-col overflow-y-auto border-l" aria-label={t('expert.git')}>
-              {on('git') || on('history') ? (
+              {on('history') && !on('git') ? (
                 <div className="border-border flex items-center gap-1.5 border-b py-2 pr-2 pl-3">
                   <div className="flex min-w-0 flex-1 flex-col"><b className="font-(family-name:--title) text-card-title font-semibold">{t('expert.git')}</b>
                     {st?.repo ? <span className="text-muted-foreground truncate text-caption">{[st.branch, st.ahead ? t(st.upstream ? 'expert.aheadOf' : 'expert.ahead', { n: st.ahead, base: st.upstream }) : null, st.behind ? t(st.upstream ? 'expert.behindOf' : 'expert.behind', { n: st.behind, base: st.upstream }) : null].filter(Boolean).join(' · ')}</span> : null}</div>
                 </div>
               ) : null}
-              {on('git') ? <GitPanel st={st} onDiff={(p) => openTab('diff', p)} /> : null}
+              {on('git') ? <GitPanel project={project} st={st} version={version} reload={() => setManual((n) => n + 1)} onDiff={(p) => openTab('diff', p)} ago={ago} /> : null}
               {on('history') ? <HistoryPanel project={project} version={version} /> : null}
               {on('running') ? <RunningPanel /> : null}
               {on('usage') ? <UsagePanel version={version} /> : null}
