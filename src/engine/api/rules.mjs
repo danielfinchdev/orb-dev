@@ -1,6 +1,7 @@
 // The API of the text rules (core\normas) and of the rails. Only this PC's window reaches the writes; the phone may
 // read (src/domain/security/permissions.mjs). The master password is checked before these run (master.mjs › checkUnlock):
 // here only the parameters and the files. Every write returns what the activity log needs (before / after).
+import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { DEFAULT_CONFIG } from '../../platform/config-file.mjs';
@@ -43,7 +44,11 @@ export function rulesMethods({ emit }) {
 
   return {
     'rules.list': ({ includeDeleted }) => listRules({ deleted: includeDeleted === true }).map(clean),
-    'rules.read': ({ id }) => clean(readRule(ruleId(id))) ?? fail(tr('msg.rules.err.noexiste')),
+    // `ruta` (where the file is, from the core folder) is for this PC's window only: the phone gets no folders.
+    'rules.read': ({ id }, principal) => {
+      const rule = clean(readRule(ruleId(id))) ?? fail(tr('msg.rules.err.noexiste'));
+      return principal?.channel === 'desktop' ? { ...rule, ruta: path.relative(ctx.home, path.join(ctx.paths.rules, `${rule.id}.md`)) } : rule;
+    },
     'rules.save': userRule(({ id, titulo, para, texto }) => cleanPair(saveRule(ruleId(id), { titulo, para, texto }))),
     'rules.create': userRule(({ titulo, para, texto }) => cleanPair(createRule({ titulo, para, texto }))),
     'rules.pause': userRule(({ id }) => cleanPair(setRuleState(ruleId(id), 'pausada'))),
