@@ -295,3 +295,70 @@ const phone = { channel: 'phone', device: 'd' };
 
 const lastRun = (board, id) => board.one("SELECT id FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", id).id;
 const api = (ctx) => ({ call: (m, p, who) => ctx.api.call(m, p, who) });
+
+// the web UI opened on a phone or in a browser sends no checkpointId: it is guarded all the same
+const browser = { channel: 'browser', device: 'b' };
+const outside = [['phone', phone], ['browser', browser]];
+
+test('tasks.undo from a phone or browser without checkpoint: refused without end photo, the PC and internal calls as before', async () => {
+  for (const [, who] of outside) {
+    const ctx = setup(); const { start, end, call, task, board, undone } = ctx;
+    start(); fs.writeFileSync(path.join(ctx.dir, 'a.txt'), 'dos\n'); await end();
+    const cp = board.settingJson(`checkpoint:${task.id}`); board.settingJson(`checkpoint:${task.id}`, { ...cp, after: null });
+    await assert.rejects(api(ctx).call('tasks.undo', { id: task.id }, who), /deshacerla devolvería toda su carpeta/);
+    assert.deepEqual(undone, []); assert.equal(board.settingJson(`undone:${task.id}`), null);
+    assert.equal(fs.readFileSync(path.join(ctx.dir, 'a.txt'), 'utf8'), 'dos\n');
+    await call('tasks.undo', { id: task.id }); // the PC's window
+    assert.deepEqual(undone, [task.id]);
+  }
+});
+
+test('tasks.undo from a phone or browser without checkpoint: all in order undoes, a copy without end photo is refused with or without it', async () => {
+  for (const [, who] of outside) {
+    const ctx = setup({ useGit: false }); const { start, end, task, board, undone, idOf } = ctx;
+    start(); fs.writeFileSync(path.join(ctx.dir, 'a.txt'), 'dos\n'); await end();
+    const good = board.settingJson(`checkpoint:${task.id}`);
+    board.settingJson(`checkpoint:${task.id}`, { ...good, after: null });
+    await assert.rejects(api(ctx).call('tasks.undo', { id: task.id }, who), /el PC no guardó el estado final/);
+    await assert.rejects(api(ctx).call('tasks.undo', { id: task.id, checkpoint: await idOf() }, who), /el PC no guardó el estado final/);
+    assert.deepEqual(undone, []);
+    assert.equal((await api(ctx).call('tasks.diff', { id: task.id }, who)).reason, 'nophotoafter');
+    assert.equal((await ctx.call('tasks.diff', { id: task.id })).reason, 'nogit');
+    board.settingJson(`checkpoint:${task.id}`, good);
+    await api(ctx).call('tasks.undo', { id: task.id }, who);
+    assert.deepEqual(undone, [task.id]);
+  }
+});
+
+test('tasks.undo from a phone or browser without checkpoint: hand join, abandoned join and another run are refused', async () => {
+  {
+    const a = setup(); const { join } = await rerunInCopy(a, { change: true });
+    fs.writeFileSync(path.join(a.dir, 'b.txt'), 'otro\n'); git(a.dir, 'add', 'b.txt'); git(a.dir, 'commit', '-qm', 'folder');
+    await join();
+    await assert.rejects(api(a).call('tasks.undo', { id: a.task.id }, phone), /se unió a mano/);
+    assert.deepEqual(a.undone, []);
+
+    const b = await (async () => { const c = setup(); const info = await conflicted(c); c.board.patch(info.by, { status: 'failed' }, 'orb', 'task.failed'); c.sched.joinedBy(c.board.task(c.task.id), info); return c; })();
+    await assert.rejects(api(b).call('tasks.undo', { id: b.task.id }, browser), /quedó sin terminar/);
+    assert.deepEqual(b.undone, []);
+
+    // a re-run in a copy keeps the point of the earlier run until it is joined
+    const c = setup(); await rerunInCopy(c);
+    await assert.rejects(api(c).call('tasks.undo', { id: c.task.id }, phone), /aún no están listos/);
+    assert.deepEqual(c.undone, []);
+  }
+});
+
+test('an abandoned hand join followed by «Descartar»: the phone sees the diff and may accept and undo; before it, not', async () => {
+  const ctx = setup(); const info = await conflicted(ctx); const { board, task, undone } = ctx;
+  board.patch(info.by, { status: 'failed' }, 'orb', 'task.failed');
+  ctx.sched.joinedBy(board.task(task.id), info);
+  assert.equal((await api(ctx).call('tasks.diff', { id: task.id }, phone)).reason, 'resolveonpc');
+  board.event(task.id, 'usuario', 'branch.discarded', 'copy');
+  const diff = await api(ctx).call('tasks.diff', { id: task.id }, phone);
+  assert.equal(diff.available, true); assert.equal(diff.checkpointId, await ctx.idOf());
+  await api(ctx).call('tasks.accept', { id: task.id, checkpoint: await ctx.idOf() }, phone);
+  assert.equal(board.isAccepted(task.id), true);
+  await api(ctx).call('tasks.undo', { id: task.id }, phone);
+  assert.deepEqual(undone, [task.id]);
+});

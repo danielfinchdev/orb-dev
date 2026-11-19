@@ -21,7 +21,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { abandonSettled, joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 // Folders compared as the engine writes them: either separator, any case, no trailing separator.
@@ -46,7 +46,7 @@ function assertPointCurrent(board, taskId, { files = true } = {}) {
   const cp = board.settingJson(`checkpoint:${taskId}`);
   const run = cp?.after?.run;
   const current = lastLaunchId(board, taskId);
-  if (Number.isInteger(run)) { if (run !== current) fail('los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento'); return; }
+  if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail('los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento'); return; }
   if (!cp?.after || !current || !files) return;
   if (runOfAfter(board, taskId, cp, current) == null) fail('no se puede comprobar a qué ejecución pertenece este punto de vuelta; deshazla desde el PC');
 }
@@ -122,15 +122,19 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
-    'tasks.undo': ({ id, checkpoint }) => {
+    'tasks.undo': ({ id, checkpoint }, principal) => {
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
-      if (checkpoint != null && joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
-      if (checkpoint != null && joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
-      // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too; the
-      // PC's dialog says so, the phone cannot show it.
-      if (checkpoint != null) { const cp = board.settingJson(`checkpoint:${tid}`); if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail('el PC no guardó el estado final de esta tarea; deshazla desde el PC, donde se ve lo que se perdería'); }
-      if (checkpoint != null) assertPointCurrent(board, tid);
+      // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
+      // a browser sends none. A call without principal is internal and behaves as the window.
+      if (checkpoint != null || (principal && principal.channel !== 'desktop')) {
+        if (joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
+        if (joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
+        // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too.
+        const cp = board.settingJson(`checkpoint:${tid}`);
+        if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail('el PC no guardó el estado final de esta tarea; deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después. Hazlo desde el PC si de verdad quieres eso');
+        assertPointCurrent(board, tid);
+      }
       return scheduler.undo(tid);
     },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
@@ -160,7 +164,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // the work yet), nophotoafter (phone only: finished without one), joinedbyhand, resolveonpc, unknownrun (phone only), gone (the repository is not there any more).
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) {
         const finished = !['queued', 'awaiting_approval', 'waiting', 'running'].includes(task.status);
-        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? 'nogit' : !cp.after?.commit ? (phone && finished && !cp.after ? 'nophotoafter' : 'notdone') : 'gone';
+        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? (phone && finished && !cp.after ? 'nophotoafter' : 'nogit') : !cp.after?.commit ? (phone && finished && !cp.after ? 'nophotoafter' : 'notdone') : 'gone';
         return { available: false, reason, files: [], more: 0 };
       }
       // a diff of an unknown run is not shown to the phone: it could not tell which run it belongs to (a task never launched has no runs to tell apart)

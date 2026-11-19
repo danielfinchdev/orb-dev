@@ -17,6 +17,7 @@ export function runIdentifier(before, run) {
 // The run the undo point's end photo (after) was taken for; null when it predates the mark (cannot be known).
 export function runOfAfter(board, taskId, cp, current) {
   const after = cp?.after;
+  if (abandonSettled(board, taskId)) return current;
   if (after && Number.isInteger(after.run)) return after.run;
   const last = lastLaunch(board, taskId);
   if (!last) return null;
@@ -47,11 +48,21 @@ export function joinedByHand(board, taskId) {
   return kinds.includes('branch.merged') || kinds[0] === 'integrate.conflict';
 }
 
-// True when the task that joined this run by hand failed or was cancelled and the point is still of an earlier run:
-// nothing will ever bring the folder and the stored diff together, so only the PC can settle it.
-export function joinAbandoned(board, taskId) {
+// The id of the newest event of a kind after the last launch (0 when none).
+const lastOf = (board, taskId, kind) => board.one('SELECT id FROM events WHERE task_id = ? AND id > ? AND kind = ? ORDER BY id DESC LIMIT 1', Number(taskId), lastLaunchId(board, taskId), kind)?.id ?? 0;
+
+// True when a hand join was given up (its task failed or was cancelled) and the point is still of an earlier run.
+function givenUp(board, taskId) {
   const kinds = joinEvents(board, taskId);
   if (kinds[0] !== 'integrate.skipped' || !kinds.includes('integrate.conflict') || kinds.includes('branch.merged')) return false;
   const cp = board.settingJson(`checkpoint:${taskId}`);
   return Boolean(cp?.before) && cp.after?.run !== lastLaunchId(board, taskId);
 }
+
+// True once the user discarded the copy after that join was given up: nothing is left to join, so the kept point is the
+// one of the folder as it is.
+export const abandonSettled = (board, taskId) => givenUp(board, taskId) && lastOf(board, taskId, 'branch.discarded') > lastOf(board, taskId, 'integrate.skipped');
+
+// True when the task that joined this run by hand failed or was cancelled and the point is still of an earlier run:
+// nothing will ever bring the folder and the stored diff together, so only the PC can settle it (discarding the copy does).
+export const joinAbandoned = (board, taskId) => givenUp(board, taskId) && !abandonSettled(board, taskId);
