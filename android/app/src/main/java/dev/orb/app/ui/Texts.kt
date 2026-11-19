@@ -14,7 +14,7 @@ fun pairErrorText(e: PairError): String = when (e) {
     PairError.BadAnswer -> "La respuesta no es la del PC de este código. No se ha enlazado."
     is PairError.Refused -> when {
         e.update != null || e.status == 426 -> "Hay que actualizar la app para enlazar con este PC."
-        e.reason == "password" -> e.left?.let { "Contraseña incorrecta. Te quedan $it ${if (it == 1) "intento" else "intentos"}." } ?: "Contraseña incorrecta."
+        e.reason == "password" -> e.left?.let { "No es la contraseña. Te quedan $it ${if (it == 1) "intento" else "intentos"} con este código." } ?: "No es la contraseña."
         e.reason == "newCode" -> "Demasiados intentos: el código ya no vale. Genera uno nuevo en el PC."
         e.reason == "wait" -> "Espera un momento antes de volver a probar."
         e.reason == "noMaster" || e.reason == "noVerifier" -> "El PC no tiene contraseña maestra para enlazar. Créala en Orb y vuelve a probar."

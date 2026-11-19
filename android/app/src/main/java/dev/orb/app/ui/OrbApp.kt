@@ -80,6 +80,7 @@ import dev.orb.app.ui.usage.UsageViewModel
 import dev.orb.app.ui.home.HomeViewModel
 import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
+import dev.orb.app.ui.welcome.AndroidNoticeGate
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
 import dev.orb.app.ui.web.GamesScreen
@@ -183,9 +184,14 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
     ) {
         composable<Welcome> {
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
-                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith) }
+                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess)) }
             })
-            WelcomeScreen(vm, onLinked = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } })
+            val noticesOn by container.notificationAccess.enabled.collectAsStateWithLifecycle()
+            val toChats = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } }
+            WelcomeScreen(
+                vm, onDone = { toChats() }, noticesEnabled = noticesOn,
+                onOpenThisPhone = { toChats(); nav.navigate(ThisPhoneRoute) },
+            )
         }
         composable<Home> {
             val backend = remember { container.chatsBackend() }

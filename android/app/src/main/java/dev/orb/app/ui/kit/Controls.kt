@@ -250,19 +250,28 @@ fun OrbSearchButton(placeholder: String, onClick: () -> Unit, modifier: Modifier
 fun OrbTextField(
     value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier,
     focus: FocusRequester? = null, onDone: (() -> Unit)? = null, soft: Boolean = false,
+    leading: ImageVector? = null, trailing: (@Composable () -> Unit)? = null, secret: Boolean = false,
+    keyboardType: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
+    enabled: Boolean = true, invalid: Boolean = false,
 ) {
-    Box(
+    val border = if (invalid) OrbKit.destructive else OrbKit.border
+    Row(
         modifier.fillMaxWidth().height(if (soft) 44.dp else 48.dp).clip(RadiusCard).background(if (soft) OrbKit.secondary else OrbKit.card)
-            .then(if (soft) Modifier else Modifier.border(1.dp, OrbKit.border, RadiusCard)).padding(horizontal = 14.dp),
-        contentAlignment = Alignment.CenterStart,
+            .then(if (soft && !invalid) Modifier else Modifier.border(1.dp, border, RadiusCard)).padding(start = 14.dp, end = if (trailing != null) 6.dp else 14.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        if (value.isEmpty()) Text(label, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
-        BasicTextField(
-            value, onValueChange,
-            Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = label },
-            singleLine = true, textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone?.invoke() }),
-        )
+        if (leading != null) Icon(leading, null, Modifier.size(18.dp), tint = OrbKit.mutedForeground)
+        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            if (value.isEmpty()) Text(label, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
+            BasicTextField(
+                value, onValueChange,
+                Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = label },
+                enabled = enabled, singleLine = true, textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
+                visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone?.invoke() }),
+            )
+        }
+        if (trailing != null) trailing()
     }
 }
