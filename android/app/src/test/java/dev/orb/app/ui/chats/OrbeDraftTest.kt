@@ -204,7 +204,7 @@ class OrbeDraftScreenTest {
     @Test fun theBoxNamesTheBrainAndKeepsTheMicrophoneOff() {
         screen(FakeNewChatBackend(), d = OrbeDraft(true, "api-pagos", Brain("claude", "opus", "high")))
         rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
-        rule.onNodeWithContentDescription("Dictar por voz, aún no disponible").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsDisplayed()
     }
 
     @Test fun withoutWhatThePcSaysTheBrainReadsAsThePcs() {

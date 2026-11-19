@@ -258,7 +258,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 val brain = route.brainAgent?.let { Brain(it, route.brainModel, route.brainEffort) }
                 val vm = viewModel<OrbeDraftViewModel>(factory = viewModelFactory { initializer { OrbeDraftViewModel(backend, OrbeDraft(route.setProject, route.project, brain)) } })
                 OrbeDraftScreen(
-                    vm, onBack = { nav.popBackStack() },
+                    vm, onBack = { nav.popBackStack() }, mentions = remember { container.mentionSource() },
                     // The created conversation takes the draft's place, so back from it returns to the list.
                     onCreated = { nav.navigate(ChatRoute("conversation", it.toString())) { popUpTo<OrbeDraftRoute> { inclusive = true } } },
                 )
@@ -270,7 +270,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.orbeChatBackend() }
             if (route.kind == "conversation" && conversation != null && backend != null) {
                 val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation) } })
-                OrbeChatScreen(vm, onBack = { nav.popBackStack() })
+                OrbeChatScreen(vm, onBack = { nav.popBackStack() }, mentions = remember { container.mentionSource() })
             } else if (route.kind == "session") {
                 val direct = remember { container.directChatBackend() }
                 if (direct != null) {
@@ -278,6 +278,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     DirectChatScreen(
                         vm, onBack = { nav.popBackStack() },
                         onOpenChat = { nav.navigate(ChatRoute("session", it)) },
+                        mentions = remember { container.mentionSource() },
                     )
                 }
             } else {

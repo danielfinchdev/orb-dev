@@ -72,6 +72,8 @@ fun DirectChatScreen(
     onOpenChat: (String) -> Unit,
     modifier: Modifier = Modifier,
     nowMs: () -> Long = System::currentTimeMillis,
+    /** What «@» offers in the box; null where the PC cannot expand mentions. */
+    mentions: MentionSource? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val forkAsk by vm.fork.collectAsStateWithLifecycle()
@@ -114,6 +116,10 @@ fun DirectChatScreen(
                         ComposerChoice(ChatTexts.QUEUE_IT) { stick = true; vm.send(it, SendMode.Queue) },
                     )
                 }
+                // «/compact» asks the same question as the menu's «Compactar»; the agent must be able to and idle.
+                val commands = remember(state.canCompact, state.online, state.busy) {
+                    if (state.canCompact && state.online && !state.busy) listOf(ComposerCommand(ChatTexts.COMPACT_COMMAND, ChatTexts.COMPACT_COMMAND_HINT, OrbIcons.Minimize2) { compactAsk = true }) else emptyList()
+                }
                 Composer(
                     online = state.online, busy = state.busy, mode = null, canSetMode = false,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop, onMode = {},
@@ -125,6 +131,7 @@ fun DirectChatScreen(
                     busyChoices = choices,
                     leading = { PermissionLabel(state) },
                     attach = vm.attach, mic = true,
+                    mentions = mentions, commands = commands,
                     above = { text, clear ->
                         if (editing != null) QueueEditBar(
                             canSave = text.isNotBlank() && state.online,

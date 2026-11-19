@@ -349,6 +349,8 @@ class AppContainer(private val app: Application) {
 
     /** One Orbe conversation; null until a PC is linked. */
     fun orbeChatBackend(): dev.orb.app.ui.chats.OrbeChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeOrbeChatBackend(this, it) }
+    /** What «@» offers in a writing box; null until a PC is linked. */
+    fun mentionSource(): dev.orb.app.ui.chats.MentionSource? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeMentionSource(it.api) }
     fun directChatBackend(): dev.orb.app.ui.chats.DirectChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeDirectChatBackend(this, it) }
     fun tasksBackend(): dev.orb.app.ui.tasks.TasksBackend? = _runtime.value?.let { dev.orb.app.ui.tasks.RuntimeTasksBackend(this, it) }
     fun projectsBackend(): dev.orb.app.ui.projects.ProjectsBackend? = _runtime.value?.let { dev.orb.app.ui.projects.RuntimeProjectsBackend(it, chatsBackend(), this) }

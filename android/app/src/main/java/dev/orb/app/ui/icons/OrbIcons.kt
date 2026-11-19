@@ -188,6 +188,14 @@ object OrbIcons {
     }
     val SearchX by lazy { lucide("search-x", "m13.5 8.5-5 5", "m8.5 8.5 5 5", "m21 21-4.35-4.35", circle(11f, 11f, 8f)) }
     val GitFork by lazy { lucide("git-fork", circle(12f, 18f, 3f), circle(6f, 6f, 3f), circle(18f, 6f, 3f), "M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9", "M12 12v3") }
+    val AtSign by lazy { lucide("at-sign", circle(12f, 12f, 4f), "M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8") }
+    val Slash by lazy { lucide("slash", "M22 2 2 22") }
+    val FileText by lazy {
+        lucide(
+            "file-text", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z",
+            "M14 2v5a1 1 0 0 0 1 1h5", "M10 9H8", "M16 13H8", "M16 17H8",
+        )
+    }
     val Minimize2 by lazy { lucide("minimize-2", "m14 10 7-7", "M20 10h-6V4", "m3 21 7-7", "M4 14h6v6") }
     val History by lazy { lucide("history", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2") }
     val FilePen by lazy {

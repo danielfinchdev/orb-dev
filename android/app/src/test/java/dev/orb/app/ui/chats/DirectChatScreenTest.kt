@@ -43,10 +43,10 @@ class DirectChatScreenTest {
         sitem(5, "system", "approval", approvalBody()),
     )
 
-    private fun screen(b: FakeDirectChatBackend): DirectChatViewModel {
+    private fun screen(b: FakeDirectChatBackend, mentions: MentionSource? = null): DirectChatViewModel {
         val vm = DirectChatViewModel(b, "s1", dispatcher = Dispatchers.Unconfined)
         rule.setContent {
-            OrbTheme(OrbPaletteChoice.Grafito, dark = false) { DirectChatScreen(vm, onBack = {}, onOpenChat = {}) }
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) { DirectChatScreen(vm, onBack = {}, onOpenChat = {}, mentions = mentions) }
         }
         rule.waitForIdle()
         return vm
@@ -267,7 +267,7 @@ class DirectChatScreenTest {
     @Test fun theBoxShowsThePermissionAndADisabledMicrophone() {
         screen(FakeDirectChatBackend(thread.take(4)))
         rule.onNodeWithContentDescription("Permisos del agente: Editar archivos").assertIsDisplayed()
-        rule.onNodeWithContentDescription("Dictar por voz, aún no disponible").assertIsNotEnabled()
+        rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsNotEnabled()
     }
 
     @Test fun whileWorkingTheComposerOffersStopThenCorrectOrQueue() {
@@ -305,5 +305,40 @@ class DirectChatScreenTest {
         b.events.tryEmit(LinkEvent("session:removed", json("""{"id":"s1"}""")))
         rule.waitForIdle()
         rule.onNodeWithText("Este chat se borró en el PC").assertIsDisplayed()
+    }
+
+    @Test fun slashCompactAsksTheSameQuestionAsTheMenuBeforeCompacting() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNode(hasSetTextAction()).performTextInput("/")
+        rule.onNodeWithText("/compact").assertIsDisplayed()
+        rule.onNodeWithText("/compact").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("¿Compactar el contexto?").assertIsDisplayed()
+        assertFalse(b.calls.contains("compact"))
+        rule.onNodeWithText("Compactar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("compact"))
+    }
+
+    @Test fun whatWasWrittenSurvivesEditingAQueuedMessage() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        val vm = screen(b)
+        b.infoOnPc = sessionInfo(status = "running")
+        b.events.tryEmit(queueEvent("Documenta el cambio", "Sube la versión"))
+        rule.waitForIdle()
+        b.queueOnPc = vm.state.value.queue
+        rule.onNode(hasSetTextAction()).performTextInput("borrador a medias")
+        rule.onAllNodesWithContentDescription("Editar")[0].performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction()).assertTextContains("Documenta el cambio")
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction()).assertTextContains("borrador a medias")
+        rule.onAllNodesWithContentDescription("Editar")[0].performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Guardar").performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction()).assertTextContains("borrador a medias")
     }
 }

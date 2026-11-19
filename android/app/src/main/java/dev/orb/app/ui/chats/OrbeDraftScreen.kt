@@ -29,7 +29,11 @@ import dev.orb.app.ui.offline.ConnectionBand
  * PC creates the conversation when the first message is sent. Leaving with nothing written leaves nothing behind.
  */
 @Composable
-fun OrbeDraftScreen(vm: OrbeDraftViewModel, onBack: () -> Unit, onCreated: (Long) -> Unit, modifier: Modifier = Modifier) {
+fun OrbeDraftScreen(
+    vm: OrbeDraftViewModel, onBack: () -> Unit, onCreated: (Long) -> Unit, modifier: Modifier = Modifier,
+    /** What «@» offers in the box; null where the PC cannot expand mentions. */
+    mentions: MentionSource? = null,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     LaunchedEffect(vm) { vm.created.collect(onCreated) }
 
@@ -54,7 +58,7 @@ fun OrbeDraftScreen(vm: OrbeDraftViewModel, onBack: () -> Unit, onCreated: (Long
         if (!state.online) OrbNote(ChatTexts.DRAFT_OFFLINE, Modifier.padding(horizontal = 20.dp, vertical = 16.dp))
         else if (state.pending == null) Composer(
             online = true, busy = false, mode = null, canSetMode = false, onSend = vm::send, onStop = {}, onMode = {},
-            brain = state.brain ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
+            brain = state.brain ?: ChatTexts.BRAIN_UNKNOWN, mic = true, mentions = mentions,
         )
     }
 }

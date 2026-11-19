@@ -94,6 +94,8 @@ fun OrbeChatScreen(
     liveRefreshMs: Long = 4_000L,
     onOpenTask: (Long) -> Unit = {},
     onOpenChanges: (Long) -> Unit = {},
+    /** What «@» offers in the box; null where the PC cannot expand mentions. */
+    mentions: MentionSource? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val liveInfo by vm.liveInfo.collectAsStateWithLifecycle()
@@ -133,6 +135,10 @@ fun OrbeChatScreen(
                 }
             }
             if (!state.deleted) {
+                // Same as «Compactar» of the menu, which asks nothing; it needs the PC, so it is not offered without the link.
+                val commands = remember(state.canCompact, state.online, vm) {
+                    if (state.canCompact && state.online) listOf(ComposerCommand(ChatTexts.COMPACT_COMMAND, ChatTexts.COMPACT_COMMAND_HINT, OrbIcons.Minimize2, vm::compact)) else emptyList()
+                }
                 val queue = if (state.canEditQueue) QueueActions(
                     state.queue, state.queueEditor, onOpen = { vm.openQueued(it.id) }, onClose = vm::closeQueued, onSave = vm::saveQueued,
                     onRemove = { vm.removeQueued(it.id) },
@@ -142,6 +148,7 @@ fun OrbeChatScreen(
                     online = state.online, busy = liveInfo?.busy == true, mode = state.mode, canSetMode = state.canSetMode,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop,
                     attach = vm.attach, brain = state.brain?.label ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
+                    mentions = mentions, commands = commands,
                 )
             }
         }
@@ -300,99 +307,4 @@ internal suspend fun LazyListState.toEnd() {
     scrollToItem(last)
     // A last row taller than the screen is shown from its top by the line above; this brings its end into view.
     scrollBy(100_000f)
-}
-
-// ---------- Composer ----------
-
-/** One way to send a message while the agent works. */
-class ComposerChoice(val label: String, val send: (String) -> Unit)
-
-/** Text that fills the box once for each [key] (a queued message brought back to be edited). */
-class ComposerSeed(val key: Long, val text: String)
-
-/**
- * The writing box (`.mcomp`): the text on top and, below, «+», the permission label (or [leading]), the brain label,
- * the microphone and the round send/stop button. [brain] null hides the brain label; [mic] draws the microphone,
- * switched off because dictation is not there yet.
- */
-@Composable
-internal fun Composer(
-    online: Boolean, busy: Boolean, mode: String?, canSetMode: Boolean,
-    onSend: (String) -> Unit, onStop: () -> Unit,
-    /** Unused: the mode is chosen in the selector under the header; the box only shows it. */
-    onMode: (String) -> Unit = {},
-    placeholder: String = ChatTexts.MESSAGE_FIELD,
-    /** While the agent works and there is text: the ways to send it («Corregir», «Encolar»); the first is the send button's. */
-    busyChoices: List<ComposerChoice> = emptyList(),
-    /** Replaces the permission label (a direct chat shows its agent and model instead). */
-    leading: (@Composable () -> Unit)? = null,
-    /** The pictures and files of this message; null hides «+» (where nothing can be attached). */
-    attach: dev.orb.app.attach.AttachController? = null,
-    brain: String? = null,
-    mic: Boolean = false,
-    /** A bar over the box that sees what is written and can empty it (the context bar, or «Editando…» with its «Guardar»). */
-    above: (@Composable (text: String, clear: () -> Unit) -> Unit)? = null,
-    seed: ComposerSeed? = null,
-    /** While non-null the send button hands the text to it (saving an edit) and the busy choices are off. */
-    sendOverride: ((String) -> Unit)? = null,
-) {
-    var text by rememberSaveable { mutableStateOf("") }
-    LaunchedEffect(seed?.key) { if (seed != null) text = seed.text }
-    val attached = attach?.items?.collectAsState()?.value.orEmpty()
-    val attachNotice = attach?.notice?.collectAsState()?.value
-    var problem by remember { mutableStateOf<String?>(null) }
-    var sheet by remember { mutableStateOf(false) }
-    val launchers = if (attach != null) dev.orb.app.ui.attach.rememberAttachLaunchers(attach) { problem = it } else null
-    // Sending waits for every upload: a message that left before them would reach the PC without its files.
-    val attachOk = attached.all { it.state == dev.orb.app.attach.AttachState.Ready }
-    val canSend = text.isNotBlank() && attachOk
-    if (sheet && attach != null && launchers != null) {
-        dev.orb.app.ui.attach.AttachSheet(attach.currentPolicy, launchers, onDismiss = { sheet = false })
-    }
-    if (above != null) above(text) { text = "" }
-    OrbComposerFrame {
-        if (attach != null) {
-            dev.orb.app.ui.attach.AttachStrip(attached, attachNotice ?: problem, attach::remove, attach::retry, Modifier.padding(end = 8.dp))
-        }
-        Box(Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 160.dp).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
-            BasicTextField(
-                text, { text = it }, Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp),
-                cursorBrush = SolidColor(OrbKit.foreground), maxLines = 8,
-                keyboardOptions = KeyboardOptions(capitalization = androidx.compose.ui.text.input.KeyboardCapitalization.Sentences),
-            )
-            if (text.isEmpty()) Text(placeholder, color = OrbKit.faintForeground, fontSize = 15.sp, lineHeight = 22.sp)
-        }
-        AnimatedVisibility(
-            busy && canSend && busyChoices.isNotEmpty() && sendOverride == null,
-            enter = fadeIn(tween(OrbMotion.Short)) + expandVertically(OrbMotion.standard(OrbMotion.Short)),
-            exit = fadeOut(tween(OrbMotion.Fast)) + shrinkVertically(OrbMotion.standard(OrbMotion.Fast)),
-        ) {
-            Row(Modifier.padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (choice in busyChoices) {
-                    OrbButton(choice.label, { val t = text; text = ""; choice.send(t) }, small = true)
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (attach != null) OrbComposerIcon(OrbIcons.Plus, dev.orb.app.attach.AttachTexts.ADD, { problem = null; sheet = true })
-            // Only says which mode is on; the choice is made in the selector under the header.
-            if (leading != null) leading() else if (canSetMode) ChatTexts.modeLabel(mode).let { OrbComposerLabel(it, icon = OrbIcons.ShieldCheck, description = "${ChatTexts.MODE_SELECTOR}: $it") }
-            if (brain != null) OrbComposerLabel(brain, description = "${ChatTexts.BRAIN_DESC}: $brain")
-            Box(Modifier.weight(1f))
-            if (mic) OrbComposerIcon(OrbIcons.Mic, ChatTexts.MIC_SOON, {}, enabled = false)
-            // Parar only when there is nothing to send: with text, the message goes to the PC's queue behind the turn.
-            OrbSendButton(
-                stop = busy && !canSend && sendOverride == null, enabled = canSend, sendLabel = if (sendOverride != null) ChatTexts.QUEUED_SAVE else ChatTexts.SEND,
-                stopLabel = ChatTexts.STOP,
-                onClick = {
-                    if (sendOverride != null) { if (canSend) { val t = text; text = ""; sendOverride(t) } }
-                    else if (busy && !canSend) onStop() else {
-                        val t = text; text = ""
-                        if (busy && busyChoices.isNotEmpty()) busyChoices.first().send(t) else onSend(t)
-                    }
-                },
-            )
-        }
-    }
 }

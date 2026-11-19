@@ -3,6 +3,7 @@ package dev.orb.app.ui.chats
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -48,11 +49,11 @@ class OrbeChatScreenTest {
     private val openedTasks = ArrayList<Long>()
     private val openedChanges = ArrayList<Long>()
 
-    private fun screen(b: FakeOrbeChatBackend, theme: OrbPaletteChoice = OrbPaletteChoice.Grafito, withOffline: Boolean = false): OrbeChatViewModel {
+    private fun screen(b: FakeOrbeChatBackend, theme: OrbPaletteChoice = OrbPaletteChoice.Grafito, withOffline: Boolean = false, mentions: MentionSource? = null): OrbeChatViewModel {
         val vm = OrbeChatViewModel(b, 7, dispatcher = Dispatchers.Unconfined)
         val info = if (withOffline) OfflineInfo(b.connectionState, MutableStateFlow(null), { retries += Unit }, { clockMs }) else null
         rule.setContent {
-            OrbTheme(theme, dark = false) { CompositionLocalProvider(LocalOffline provides info) { OrbeChatScreen(vm, onBack = {}, liveRefreshMs = 0, onOpenTask = { openedTasks += it }, onOpenChanges = { openedChanges += it }) } }
+            OrbTheme(theme, dark = false) { CompositionLocalProvider(LocalOffline provides info) { OrbeChatScreen(vm, onBack = {}, liveRefreshMs = 0, onOpenTask = { openedTasks += it }, onOpenChanges = { openedChanges += it }, mentions = mentions) } }
         }
         rule.waitForIdle()
         return vm
@@ -166,7 +167,7 @@ class OrbeChatScreenTest {
         rule.onNodeWithContentDescription("Permisos de las tareas: Preguntar").assertIsDisplayed()
         rule.onNodeWithText("Preguntar: te pido el OK antes de cada cambio.").assertIsDisplayed()
         rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
-        rule.onNodeWithContentDescription("Dictar por voz, aún no disponible").assertIsNotEnabled()
+        rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsNotEnabled()
         assertTrue(b.brainReads > 0)
     }
 
@@ -520,5 +521,30 @@ class OrbeChatScreenTest {
     @Test fun anotherPalettePaintsTheSameChat() {
         screen(FakeOrbeChatBackend(thread), OrbPaletteChoice.Oceano)
         rule.onNodeWithText("Mensaje para Orbe").assertIsDisplayed()
+    }
+
+    @Test fun slashCompactIsListedAndAsksThePcWithoutAnExtraQuestion() {
+        val b = FakeOrbeChatBackend(thread)
+        screen(b)
+        rule.onNodeWithContentDescription("Mensaje para Orbe").performTextInput("/")
+        rule.onNodeWithText("/compact").assertIsDisplayed()
+        rule.onNodeWithText("Resume la conversación para liberar contexto").assertIsDisplayed()
+        rule.onNodeWithText("/compact").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("compact"))
+        // The command is not sent as a message and the box is empty again.
+        assertTrue(b.calls.none { it.startsWith("send") })
+        rule.onNodeWithText("/compact").assertDoesNotExist()
+    }
+
+    @Test fun anAtInTheBoxListsWhatThePcOffersAndInsertsTheToken() {
+        val src = MentionSource { listOf(MentionOption("@tarea:43", "#43 Borrar build/", "tarea · app-movil", MentionKind.Task)) }
+        screen(FakeOrbeChatBackend(thread), mentions = src)
+        rule.onNodeWithContentDescription("Mensaje para Orbe").performTextInput("Revisa el @")
+        rule.waitForIdle()
+        rule.onNodeWithText("#43 Borrar build/").assertIsDisplayed()
+        rule.onNodeWithText("#43 Borrar build/").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Mensaje para Orbe").assertTextContains("Revisa el @tarea:43 ")
     }
 }
