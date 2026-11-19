@@ -29,6 +29,9 @@ import dev.orb.app.ui.offline.PcOffContent
 import dev.orb.app.ui.offline.PcOffRetry
 import dev.orb.app.ui.offline.ReadOnlyBar
 import dev.orb.app.ui.theme.OrbPaletteChoice
+import dev.orb.app.ui.update.UpdateActions
+import dev.orb.app.ui.update.UpdateContent
+import dev.orb.app.ui.update.UpdateView
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.Rule
@@ -41,7 +44,7 @@ import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneId
 
-/** Screen 06 (PC apagado) with every variant, light and dark: `ORB_SHOTS=1` turns them on. */
+/** Screens 06 (PC apagado) and 07 (Actualizar) with every variant, light and dark: `ORB_SHOTS=1` turns them on. */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(sdk = [35], qualifiers = Shots.PHONE)
@@ -99,5 +102,29 @@ class PcDownShotsTest {
                 OrbBottomBar(tabs, "chats", {})
             }
         }
+    }
+
+    @Test fun actualizaApp() = shoot("07-actualiza-app") {
+        UpdateContent(UpdateView.App("3.8.8", 5, "3.9.0"), false, UpdateActions())
+    }
+
+    @Test fun actualizaAppSinNavegador() = shoot("07-actualiza-app-sin-navegador") {
+        UpdateContent(UpdateView.App("3.8.8", 5, "3.9.0"), true, UpdateActions())
+    }
+
+    @Test fun actualizaAppAlArrancar() = shoot("07-actualiza-app-al-arrancar") {
+        UpdateContent(UpdateView.App("3.8.8", 5, "3.9.0"), false, UpdateActions(seeSaved = {}))
+    }
+
+    @Test fun actualizaPc() = shoot("07-actualiza-pc") {
+        UpdateContent(UpdateView.Pc("3.8.8", null, null), false, UpdateActions())
+    }
+
+    @Test fun alDia() = shoot("07-al-dia") {
+        UpdateContent(UpdateView.UpToDate("3.8.8", 4, "3.8.8"), false, UpdateActions(back = {}))
+    }
+
+    @Test fun sinComprobar() = shoot("07-sin-comprobar") {
+        UpdateContent(UpdateView.Unknown("3.8.8"), false, UpdateActions(back = {}))
     }
 }

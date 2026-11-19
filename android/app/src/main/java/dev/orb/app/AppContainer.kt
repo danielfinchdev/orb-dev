@@ -157,6 +157,7 @@ class AppContainer(private val app: Application) {
         lastContact = lastContact.at,
         retryNow = { _runtime.value?.client?.resume() },
         pcName = { _runtime.value?.client?.let { it.pcInfo.value?.name ?: it.currentSession.name } },
+        pcVersions = { _runtime.value?.client?.pcInfo?.value?.versions },
     )
 
     /** When the app takes the whole screen to say the PC is out of reach or the app is out of date. */

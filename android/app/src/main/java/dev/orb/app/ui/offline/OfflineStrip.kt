@@ -29,6 +29,8 @@ class OfflineInfo(
     val clock: () -> Long = System::currentTimeMillis,
     /** The linked PC's name, for the screens that talk about it; null when it is not known. */
     val pcName: () -> String? = { null },
+    /** What the PC said about the versions in its last answer, if it ever did. */
+    val pcVersions: () -> dev.orb.app.link.net.PcVersions? = { null },
 )
 
 val LocalOffline = compositionLocalOf<OfflineInfo?> { null }

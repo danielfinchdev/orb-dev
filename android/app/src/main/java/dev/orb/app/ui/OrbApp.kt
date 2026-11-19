@@ -133,6 +133,7 @@ import kotlinx.serialization.Serializable
 @Serializable data object GamesRoute
 @Serializable data object TutorialsRoute
 @Serializable data object ThisPhoneRoute
+@Serializable data object UpdateRoute
 @Serializable data class ShareRoute(val id: Long)
 
 @Composable
@@ -195,7 +196,8 @@ private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHost
                                 }
                             },
                         )
-                        else -> Unit
+                        dev.orb.app.ui.offline.DownKind.UpdateApp, dev.orb.app.ui.offline.DownKind.UpdatePc ->
+                            dev.orb.app.ui.update.UpdateScreen(container.offline, seeSaved = gate::openSaved)
                     }
                 }
             }
@@ -458,6 +460,9 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 UsageScreen(vm, onBack = { nav.popBackStack() })
             }
         }
+        composable<UpdateRoute> {
+            dev.orb.app.ui.update.UpdateScreen(container.offline, onBack = { nav.popBackStack() })
+        }
         composable<ThisPhoneRoute> {
             val backend = remember { RuntimeThisPhoneBackend(container) }
             val vm = viewModel<ThisPhoneViewModel>(factory = viewModelFactory { initializer { ThisPhoneViewModel(backend) } })
@@ -526,18 +531,20 @@ private fun OpenFromNotice(container: AppContainer, nav: androidx.navigation.Nav
 }
 
 /**
- * Where a notice leads. The announced version has no screen of its own yet, so it opens «Este móvil», where the PC's
- * version and the phone's are shown.
+ * Where a notice leads; null for the chat list, where the person already is. The announced version opens the update page,
+ * which says with the real state of the link whether there is anything to update.
  */
+internal fun noticeRoute(t: NoticeTarget): Any? = when (t) {
+    is NoticeTarget.Chat -> ChatRoute(t.kind, t.id)
+    is NoticeTarget.Task -> TaskRoute(t.id)
+    is NoticeTarget.TaskChanges -> TaskChangesRoute(t.id)
+    is NoticeTarget.Account -> UsageRoute
+    is NoticeTarget.Version -> UpdateRoute
+    NoticeTarget.ChatsTab -> null
+}
+
 private fun openNotice(nav: androidx.navigation.NavHostController, t: NoticeTarget) {
-    when (t) {
-        is NoticeTarget.Chat -> nav.navigate(ChatRoute(t.kind, t.id))
-        is NoticeTarget.Task -> nav.navigate(TaskRoute(t.id))
-        is NoticeTarget.TaskChanges -> nav.navigate(TaskChangesRoute(t.id))
-        is NoticeTarget.Account -> nav.navigate(UsageRoute)
-        is NoticeTarget.Version -> nav.navigate(ThisPhoneRoute)
-        NoticeTarget.ChatsTab -> Unit
-    }
+    noticeRoute(t)?.let { nav.navigate(it) }
 }
 
 /** Opens the «Compartir con Orb» screen for content another app shared, once a PC is linked and the app is open. */
