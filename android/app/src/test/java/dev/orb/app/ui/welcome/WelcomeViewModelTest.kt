@@ -37,23 +37,30 @@ class WelcomeViewModelTest {
         },
     ) : Linker {
         var resolveCalls = 0
+        var holdResolve: kotlinx.coroutines.CompletableDeferred<Unit>? = null
         var linkCalls = 0
         var lastPassword: String? = null
+        var lastLink: ResolvedLink? = null
+        // When set, link() waits for it, so a second tap can arrive while the first is in flight.
+        var hold: kotlinx.coroutines.CompletableDeferred<Unit>? = null
         override suspend fun resolve(payload: LinkPayload): Result<ResolvedLink> {
             resolveCalls++
+            holdResolve?.await()
             return resolveResult(payload)
         }
 
         override suspend fun link(link: ResolvedLink, password: String, deviceName: String): Result<PairOk> {
             linkCalls++
             lastPassword = password
+            lastLink = link
+            hold?.await()
             return linkResult
         }
     }
 
-    private class FakeNotices(var ask: Boolean = true, override var enabled: Boolean = false) : NoticeGate {
+    private class FakeNotices(var ask: Boolean = true, override var enabled: Boolean = false, var failing: Boolean = false) : NoticeGate {
         var requests = 0
-        override fun shouldAsk() = ask
+        override fun shouldAsk(): Boolean = if (failing) error("no permission service") else ask
         override fun request() { requests++ }
     }
 
@@ -83,7 +90,8 @@ class WelcomeViewModelTest {
         vm.setCode("ABCDEF")
         vm.setAddress("http://8.8.8.8:3131")
         vm.resolve()
-        assertTrue(vm.state.value.error!!.contains("red local"))
+        assertTrue(vm.state.value.error!!.contains("no es privada"))
+        assertEquals(WelcomeErrorKind.NotPrivate, vm.state.value.errorKind)
         assertEquals(0, linker.resolveCalls)
     }
 
@@ -162,6 +170,105 @@ class WelcomeViewModelTest {
         assertNull(vm.state.value.passwordError)
         assertTrue(vm.state.value.error!!.contains("código"))
     }
+
+    @Test fun theFingerprintShownIsTheOneOfTheLinkThatIsConfirmed() {
+        val linker = FakeLinker(Result.success(ok()))
+        val vm = vm(linker)
+        vm.fillCode(); vm.resolve(); vm.setPassword("x")
+        val shown = vm.state.value.pc!!.groups.joinToString("-")
+        vm.confirm()
+        assertEquals(shown, linker.lastLink!!.fp)
+    }
+
+    @Test fun twoTapsOnConfirmLinkOnlyOnce() {
+        val linker = FakeLinker(Result.success(ok())).also { it.hold = kotlinx.coroutines.CompletableDeferred() }
+        val vm = vm(linker)
+        vm.fillCode(); vm.resolve(); vm.setPassword("x")
+        vm.confirm()
+        vm.confirm()
+        assertEquals(1, linker.linkCalls)
+        assertTrue(vm.state.value.checking)
+        linker.hold!!.complete(Unit)
+        assertEquals(WelcomeStage.Done, vm.state.value.stage)
+        assertEquals(1, linker.linkCalls)
+    }
+
+    @Test fun savingTheLinkFailingAfterThePcAcceptedNeverGoesBackToTheFingerprint() {
+        val linker = FakeLinker(Result.success(ok()))
+        val vm = vm(linker) { error("disk full") }
+        vm.fillCode(); vm.resolve(); vm.setPassword("x")
+        vm.confirm()
+        val s = vm.state.value
+        assertEquals(WelcomeStage.Entry, s.stage)
+        assertTrue(s.error!!.contains("aceptó el enlace"))
+        assertFalse(s.checking)
+        assertNull(s.pc)
+        // The spent code is gone and there is nothing left to confirm.
+        assertEquals("", s.code)
+        vm.confirm()
+        assertEquals(1, linker.linkCalls)
+    }
+
+    @Test fun theNoticeQuestionFailingStillEndsInDone() {
+        val vm = vm(FakeLinker(Result.success(ok())), FakeNotices(failing = true))
+        vm.fillCode(); vm.resolve(); vm.setPassword("x"); vm.confirm()
+        assertEquals(WelcomeStage.Done, vm.state.value.stage)
+        assertFalse(vm.state.value.noticeDialog)
+        assertFalse(vm.state.value.checking)
+    }
+
+    @Test fun aCodeThatCannotWorkAgainSendsThePersonBackToTheStartWithABanner() {
+        val cases = listOf(refused("expired"), refused("newCode"), refused("tries"), refused("password", 0), Result.failure<PairOk>(PairingException(PairError.Refused(410, "x", null, null, null))))
+        for (case in cases) {
+            val vm = vm(FakeLinker(case))
+            vm.fillCode(); vm.resolve(); vm.setPassword("secreto"); vm.confirm()
+            val s = vm.state.value
+            assertEquals(WelcomeStage.Entry, s.stage)
+            assertEquals(WelcomeErrorKind.CodeSpent, s.errorKind)
+            assertNull(s.pc)
+            assertNull(s.passwordError)
+            assertFalse(s.checking)
+            assertEquals("", s.code)
+            assertFalse(s.error!!.contains("0 intentos"))
+            vm.dismissError()
+            assertNull(vm.state.value.error)
+            assertNull(vm.state.value.errorKind)
+        }
+    }
+
+    @Test fun anExpiredCodeFoundWhileAskingThePcClosesTheSheetAndShowsTheBanner() {
+        val vm = vm(FakeLinker(Result.success(ok()), { Result.failure(PairingException(PairError.Refused(410, "x", "expired", null, null))) }))
+        vm.openSheet()
+        vm.fillCode()
+        vm.resolve()
+        val s = vm.state.value
+        assertEquals(WelcomeErrorKind.CodeSpent, s.errorKind)
+        assertFalse(s.sheet)
+        assertEquals(WelcomeStage.Entry, s.stage)
+    }
+
+    @Test fun otherResolveErrorsStayInTheSheetAsPlainText() {
+        val vm = vm(FakeLinker(Result.success(ok()), { Result.failure(PairingException(PairError.Offline(true))) }))
+        vm.openSheet()
+        vm.fillCode()
+        vm.resolve()
+        assertTrue(vm.state.value.sheet)
+        assertNull(vm.state.value.errorKind)
+    }
+
+    @Test fun theSheetCannotBeClosedWhileThePcIsBeingAsked() {
+        val linker = FakeLinker(Result.success(ok())).also { it.holdResolve = kotlinx.coroutines.CompletableDeferred() }
+        val vm = vm(linker)
+        vm.openSheet()
+        vm.fillCode()
+        vm.resolve()
+        vm.closeSheet()
+        assertTrue(vm.state.value.sheet)
+        assertTrue(vm.state.value.busy)
+        linker.holdResolve!!.complete(Unit)
+        assertEquals(WelcomeStage.Fingerprint, vm.state.value.stage)
+    }
+
 
     @Test fun lastAttemptIsSingular() {
         assertEquals(

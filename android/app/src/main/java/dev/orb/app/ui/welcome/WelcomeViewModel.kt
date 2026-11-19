@@ -6,6 +6,7 @@ import dev.orb.app.link.net.PairError
 import dev.orb.app.link.net.PairOk
 import dev.orb.app.link.net.PairingException
 import dev.orb.app.link.net.ResolvedLink
+import dev.orb.app.link.payload.LinkErrors
 import dev.orb.app.link.payload.LinkPayloadException
 import dev.orb.app.link.payload.LinkVia
 import dev.orb.app.link.payload.parseManual
@@ -35,6 +36,15 @@ enum class WelcomeStage {
     Done,
 }
 
+/** A failure of the first steps that the entry page shows as a banner with its own button. */
+enum class WelcomeErrorKind {
+    /** The code expired, ran out of tries or was never going to work again: a new one is needed. */
+    CodeSpent,
+
+    /** The address is not on the home network or Tailscale. */
+    NotPrivate,
+}
+
 /** What the PC answered, for the person to compare with the PC's own screen. */
 data class PcIdentity(val name: String, val groups: List<String>, val viaCode: Boolean)
 
@@ -57,6 +67,8 @@ data class WelcomeUiState(
     // The error that belongs under the password field, and the one that belongs to the stage as a whole.
     val passwordError: String? = null,
     val error: String? = null,
+    // What kind of failure [error] is when it needs more than a line of text: a banner with its own way out.
+    val errorKind: WelcomeErrorKind? = null,
     val noticeDialog: Boolean = false,
     // The person said «Ahora no» to notices: the bottom message points to «Este móvil».
     val noticesLater: Boolean = false,
@@ -98,7 +110,10 @@ class WelcomeViewModel(
     private var resolved: ResolvedLink? = null
 
     fun openSheet() = _state.update { it.copy(sheet = true, error = null) }
-    fun closeSheet() = _state.update { if (it.busy) it else it.copy(sheet = false, error = null) }
+    fun closeSheet() = _state.update { if (it.busy) it else it.copy(sheet = false, error = null, errorKind = null) }
+
+    /** The banner's button: the failure is acknowledged and the entry page is as it was. */
+    fun dismissError() = _state.update { it.copy(error = null, errorKind = null) }
 
     fun setLink(v: String) = _state.update { it.copy(link = v, error = null) }
     fun setCode(v: String) = _state.update { it.copy(code = v, error = null) }
@@ -120,14 +135,14 @@ class WelcomeViewModel(
         val payload = try {
             parseManual(text = s.link.ifBlank { null }, code = s.code, address = s.address)
         } catch (e: LinkPayloadException) {
-            return fail(payloadErrorText(e.key))
+            return fail(payloadErrorText(e.key), if (e.key == LinkErrors.INSECURE) WelcomeErrorKind.NotPrivate else null)
         } catch (e: Exception) {
             return fail(payloadErrorText(""))
         }
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch(dispatcher) {
             try {
-                val r = linker.resolve(payload).getOrElse { return@launch fail(errorOf(it)) }
+                val r = linker.resolve(payload).getOrElse { return@launch rejected(it) }
                 resolved = r
                 _state.update {
                     it.copy(
@@ -152,20 +167,26 @@ class WelcomeViewModel(
         val password = s.password
         _state.update { it.copy(checking = true, error = null, passwordError = null, password = "", showPassword = false) }
         viewModelScope.launch(dispatcher) {
-            try {
-                val ok = linker.link(r, password, deviceName).getOrElse { return@launch rejected(it) }
-                _state.update { it.copy(stage = WelcomeStage.Linking) }
-                onLinked(ok)
-                resolved = null
-                val ask = notices?.shouldAsk() == true
-                _state.update {
-                    it.copy(checking = false, stage = WelcomeStage.Done, passwordLength = 0, noticeDialog = ask, noticesOn = notices?.enabled == true)
-                }
+            val ok = try {
+                linker.link(r, password, deviceName).getOrElse { return@launch rejected(it) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(checking = false, stage = WelcomeStage.Fingerprint, error = "Error inesperado (${e.javaClass.simpleName}).") }
+                return@launch _state.update { it.copy(checking = false, stage = WelcomeStage.Fingerprint, error = "Error inesperado (${e.javaClass.simpleName}).") }
             }
+            // The PC has accepted: its code is spent, so nothing below may send the person back to the fingerprint.
+            try {
+                _state.update { it.copy(stage = WelcomeStage.Linking) }
+                onLinked(ok)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return@launch backToEntry("El PC aceptó el enlace, pero no se pudo guardar en este móvil. Genera un código nuevo en el PC y vuelve a probar.")
+            }
+            resolved = null
+            val ask = try { notices?.shouldAsk() == true } catch (e: Exception) { false }
+            val on = try { notices?.enabled == true } catch (e: Exception) { false }
+            _state.update { it.copy(checking = false, stage = WelcomeStage.Done, passwordLength = 0, noticeDialog = ask, noticesOn = on) }
         }
     }
 
@@ -190,12 +211,39 @@ class WelcomeViewModel(
 
     private fun rejected(e: Throwable) {
         val refused = (e as? PairingException)?.error as? PairError.Refused
-        if (refused?.reason == "password") _state.update { it.copy(checking = false, passwordError = errorOf(e)) } else fail(errorOf(e))
+        when {
+            // A wrong password with tries left stays on the fingerprint; with none left the code is dead.
+            refused?.reason == "password" && refused.left != 0 -> _state.update { it.copy(checking = false, passwordError = errorOf(e)) }
+            refused != null && isSpent(refused) -> backToEntry(
+                if (refused.reason == "password") pairErrorText(refused.copy(reason = "newCode")) else errorOf(e), WelcomeErrorKind.CodeSpent,
+            )
+            else -> fail(errorOf(e))
+        }
+    }
+
+    private fun isSpent(r: PairError.Refused) =
+        r.reason == "password" && r.left == 0 || r.reason in SPENT_REASONS || r.status == 410 || r.status == 404
+
+    /** Forgets what the PC answered and shows the first page again with [message]; the spent code is not kept. */
+    private fun backToEntry(message: String, kind: WelcomeErrorKind = WelcomeErrorKind.CodeSpent) {
+        resolved = null
+        _state.update {
+            it.copy(
+                stage = WelcomeStage.Entry, pc = null, password = "", passwordLength = 0, showPassword = false, passwordError = null,
+                busy = false, checking = false, sheet = false, link = "", code = "", error = message, errorKind = kind,
+            )
+        }
     }
 
     private fun errorOf(e: Throwable): String = (e as? PairingException)?.let { pairErrorText(it.error) } ?: pairErrorText(PairError.BadAnswer)
 
-    private fun fail(message: String) = _state.update { it.copy(busy = false, checking = false, error = message) }
+    /** A [kind] leaves the sheet: the banner on the entry page carries the way out. */
+    private fun fail(message: String, kind: WelcomeErrorKind? = null) =
+        _state.update { it.copy(busy = false, checking = false, error = message, errorKind = kind, sheet = it.sheet && kind == null) }
+
+    private companion object {
+        val SPENT_REASONS = setOf("expired", "newCode", "tries")
+    }
 
     override fun onCleared() {
         resolved = null

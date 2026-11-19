@@ -32,7 +32,7 @@ fun payloadErrorText(key: String): String = when (key) {
     LinkErrors.BAD_ADDRESS -> "La dirección no es válida."
     LinkErrors.BAD_QR -> "El enlace no es válido."
     LinkErrors.OLD_QR -> "El código es demasiado antiguo. Genera uno nuevo en el PC."
-    LinkErrors.INSECURE -> "Solo se permite http con direcciones de tu red local o de Tailscale."
+    LinkErrors.INSECURE -> "Esa dirección no es privada: usa el Wi-Fi de casa o Tailscale."
     LinkErrors.NO_CODE -> "Escribe el código de enlace (6 caracteres o más) o pega el enlace."
     else -> "Revisa los datos del enlace."
 }
