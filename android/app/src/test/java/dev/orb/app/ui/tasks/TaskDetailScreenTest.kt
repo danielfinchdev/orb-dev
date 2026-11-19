@@ -95,12 +95,12 @@ class TaskDetailScreenTest {
         val b = backend(d)
         show(b, 5)
         rule.onNodeWithText("Retenida para que la revises: ha eliminado 214 archivos en C:/p.").assertIsDisplayed()
-        rule.onNodeWithText("Rechazar").performClick()
-        rule.onNodeWithText("Rechazar los cambios").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.onNodeWithText("Deshacer esta tarea").assertIsDisplayed()
         assertEquals(emptyList<String>(), b.calls)
         // The button on the card and the one in the dialog.
-        rule.onAllNodesWithText("Rechazar").assertCountEquals(2)
-        rule.onAllNodesWithText("Rechazar")[1].performClick()
+        rule.onAllNodesWithText("Deshacer").assertCountEquals(2)
+        rule.onAllNodesWithText("Deshacer")[1].performClick()
         rule.waitForIdle()
         assertEquals(listOf("undo 5"), b.calls)
     }
@@ -109,7 +109,7 @@ class TaskDetailScreenTest {
         val d = detail(task(5, status = "blocked", held = TaskHeld("x", null)), hasCheckpoint = true)
         val b = backend(d)
         show(b, 5)
-        rule.onNodeWithText("Aprobar").performClick()
+        rule.onNodeWithText("Aceptar").performClick()
         rule.waitForIdle()
         assertEquals(listOf("accept 5"), b.calls)
     }

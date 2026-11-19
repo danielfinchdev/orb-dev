@@ -104,7 +104,7 @@ object TaskTexts {
     const val ACCOUNT = "Cuenta"
     const val CREATED = "Creada"
     const val YES = "Sí"
-    const val UNDONE = "Rechazada"
+    const val UNDONE = "Deshecha"
     const val UNDONE_NOTE = "Los archivos volvieron a como estaban antes de la tarea."
 
     const val LAUNCH_ANYWAY = "Iniciar de todos modos"
@@ -136,12 +136,12 @@ object TaskTexts {
     const val REJECT = "Rechazar"
     const val APPROVED = "Tarea aprobada"
     const val REJECTED = "Tarea rechazada"
-    const val ACCEPT = "Aprobar"
-    const val ACCEPTED = "Cambios aprobados"
-    const val UNDO = "Rechazar"
-    const val UNDO_TASK_TITLE = "Rechazar los cambios"
+    const val ACCEPT = "Aceptar"
+    const val ACCEPTED = "Cambios aceptados"
+    const val UNDO = "Deshacer"
+    const val UNDO_TASK_TITLE = "Deshacer esta tarea"
     const val UNDO_TASK_BODY = "Se restauran los archivos modificados por esta tarea. Los cambios posteriores se conservan."
-    const val UNDO_DONE = "Cambios rechazados"
+    const val UNDO_DONE = "Deshecho"
     fun heldLine(reasons: String, folder: String?) =
         if (folder.isNullOrBlank()) "Retenida para que la revises: $reasons." else "Retenida para que la revises: $reasons en $folder."
 
@@ -176,5 +176,5 @@ object TaskTexts {
     const val BINARY_FILE = "Archivo binario: no hay vista previa."
     const val TOO_BIG = "El cambio es demasiado grande para verlo aquí. Ábrelo en el PC."
     const val SWIPE_HINT = "Desliza a los lados para cambiar de archivo"
-    const val ALREADY_ACCEPTED = "Aprobada"
+    const val ALREADY_ACCEPTED = "Aceptada"
 }

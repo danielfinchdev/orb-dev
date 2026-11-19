@@ -79,13 +79,13 @@ class TaskDiffScreenTest {
     @Test fun acceptGoesToThePcAndUndoAsksFirst() {
         val b = backend(TaskDiff(true, files, 0))
         show(b)
-        rule.onNodeWithText("Aprobar").performClick()
+        rule.onNodeWithText("Aceptar").performClick()
         rule.waitForIdle()
         assertEquals(listOf("accept 4"), b.calls)
-        rule.onNodeWithText("Rechazar").performClick()
-        rule.onNodeWithText("Rechazar los cambios").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.onNodeWithText("Deshacer esta tarea").assertIsDisplayed()
         assertEquals(listOf("accept 4"), b.calls)
-        rule.onAllNodesWithText("Rechazar")[1].performClick()
+        rule.onAllNodesWithText("Deshacer")[1].performClick()
         rule.waitForIdle()
         assertEquals(listOf("accept 4", "undo 4"), b.calls)
     }
