@@ -203,7 +203,7 @@ class Lane {
       this.orch.dropIfEmpty(this.id);
     } else {
       // chat.send runs «/compact» and «/clear» typed alone (and without pictures) as commands; a waiting message cannot turn into one
-      if (slashCommand(text) && !part.attachments.length) throw new Error(ctx.config?.language === 'en' ? 'a waiting message cannot become a command (/clear, /compact): remove it and send the command' : 'un mensaje en cola no puede ser un comando (/clear, /compact): quítalo y envía el comando');
+      if (slashCommand(text) && !part.attachments.length) throw new Error(tr('msg.queue.slashCommand'));
       part.shown = text; part.mentions = mentions; rebuildQueued(item);
       if (part.chat != null) { this.board.run('UPDATE chat SET body = ? WHERE id = ? AND conversation_id = ?', text, part.chat, this.id); this.board.changed('chat'); }
     }

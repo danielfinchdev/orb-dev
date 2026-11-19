@@ -2,16 +2,15 @@
 // It keeps what was delivered, as it was delivered (preview setting applied): never an action token, a card or a path.
 // Cleaned when a notice is written (no timers): at most RECENT_MAX rows and RECENT_DAYS days.
 
-import { ctx } from '../../platform/context.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
 
 export const RECENT_MAX = 100;
 export const RECENT_DAYS = 7;
 const DAY_MS = 86_400_000;
 
 // A hidden notice that is not a chat line must not claim a message (a chat's own hidden text is the preview setting's).
-const HIDDEN_NOTICE = { es: 'Tienes un aviso nuevo', en: 'You have a new notice' };
 export const NOTICE_TYPES = ['done', 'held', 'update', 'limit'];
-export const hiddenNoticeText = (language) => HIDDEN_NOTICE[language] ?? HIDDEN_NOTICE.es;
+export const hiddenNoticeText = () => tr('msg.notice.hidden');
 
 const json = (v) => (v == null ? null : JSON.stringify(v));
 const parse = (s) => { try { return s == null ? null : JSON.parse(s); } catch { return null; } };
@@ -43,7 +42,7 @@ export function listRecent(board, { since = 0, limit = 50, now = Date.now(), pre
     `SELECT m.* FROM mobile_notes m LEFT JOIN conversations c ON c.id = m.conversation_id
      WHERE m.at > ? AND m.at >= ? AND (m.conversation_id IS NULL OR (c.id IS NOT NULL AND c.trashed_at IS NULL))
      ORDER BY m.at DESC, m.id DESC LIMIT ?`, s, now - RECENT_DAYS * DAY_MS, n);
-  const noticeHidden = hiddenNoticeText(ctx.config?.language);
+  const noticeHidden = hiddenNoticeText();
   return rows.map((r) => ({
     id: r.id, at: r.at, key: r.key, kind: r.kind, title: hide ? assistantName : r.title,
     body: hide ? (NOTICE_TYPES.includes(r.kind) ? noticeHidden : hiddenText) : r.body, hidden: hide || Boolean(r.hidden),

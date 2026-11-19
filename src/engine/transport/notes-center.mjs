@@ -3,7 +3,7 @@
 // route, title, body, hidden, kind, icon, actions, silent) with a `target` saying where a tap leads, and no action
 // at all (information and destination only, never a token). remote.mjs delivers them like a chat's note.
 // The texts live here (not in the locale files) so the note's wording stays next to its shape.
-import { ctx } from '../../platform/context.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
 import { noteId } from '../../shared/notes.mjs';
 import { hiddenNoticeText } from '../../domain/notes/recent.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
@@ -13,27 +13,7 @@ import { accounts, accountLabel } from '../../domain/usage/accounts.mjs';
 
 export const NOTICE_KINDS = ['done', 'held', 'update', 'limit'];
 
-const TEXTS = {
-  es: {
-    done: '#{id} terminada y revisada',
-    held: 'Orb paró la #{id} · {reasons}',
-    heldNoReason: 'Orb paró la #{id} · necesita tu revisión',
-    update: 'Orb {version} disponible en el PC',
-    // «Tiene límite» here means the account has usage available again (the wording of the approved mock-up).
-    limit: '{account} ya tiene límite otra vez'
-  },
-  en: {
-    done: '#{id} finished and reviewed',
-    held: 'Orb stopped #{id} · {reasons}',
-    heldNoReason: 'Orb stopped #{id} · needs your review',
-    update: 'Orb {version} is available on the PC',
-    limit: '{account} has usage available again'
-  }
-};
-const say = (key, vars) => {
-  const t = TEXTS[ctx.config?.language] ?? TEXTS.es;
-  return t[key].replace(/\{(\w+)\}/g, (_, k) => String(vars[k] ?? ''));
-};
+const say = (key, vars) => tr(`msg.notice.${key}`, vars);
 
 // A text written by an agent or a rule goes out as one short line with no secret and no absolute path.
 const PATHS = /(?:[A-Za-z]:[\\/]|\\\\)[^\s"'«»]*|\/(?:Users|home|root|mnt|media|var|tmp|opt|private|Volumes|srv|data)\/[^\s"'«»]*/g;
@@ -60,7 +40,7 @@ export function noticeNote(fact, { preview = 'chat', assistantName = 'Orb' } = {
   } else return null;
   const shown = preview !== 'none';
   return {
-    key, id: noteId(key), route, title: assistantName, body: shown ? body : hiddenNoticeText(ctx.config?.language), hidden: !shown,
+    key, id: noteId(key), route, title: assistantName, body: shown ? body : hiddenNoticeText(), hidden: !shown,
     kind: fact.kind, icon: '/icon.png', actions: [], silent: false, target
   };
 }

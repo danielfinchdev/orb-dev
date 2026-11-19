@@ -555,7 +555,7 @@ export class Board {
   explainForAgents(t) {
     const w = this.waitReason(t); const h = this.heldInfo(t);
     const dep = (d) => `#${d.id} (${d.held ? `retenida: ${userName()} la tiene que aceptar o deshacer` : d.status})`;
-    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.kind === 'folder' ? `espera a que la tarea #${w.by} termine de escribir en la misma carpeta` : w.text } : {}),
+    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.kind === 'folder' ? tr('msg.board.waitFolder', { by: w.by }) : w.text } : {}),
       ...(h ? { held: `retenida para que ${userName()} la revise: ${h.reasons} en ${h.folder}` } : {}) };
   }
   summary(agent, conversation = null) {

@@ -41,14 +41,13 @@ function checkpointIdOf(board, taskId) {
 // A phone that sends the checkpointId is refused while the stored end photo still belongs to an earlier run (a task
 // re-run in an isolated copy keeps the previous undo point until its work is joined). A point whose run cannot be known
 // (an old one) only blocks what touches files: accepting just marks the task, so it passes with { files: false }.
-const JOIN_UNFINISHED = 'la unión de esta tarea quedó sin terminar; resuélvela en el PC';
 function assertPointCurrent(board, taskId, { files = true } = {}) {
   const cp = board.settingJson(`checkpoint:${taskId}`);
   const run = cp?.after?.run;
   const current = lastLaunchId(board, taskId);
-  if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail('los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento'); return; }
+  if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail(tr('msg.undo.runNotReady')); return; }
   if (!cp?.after || !current || !files) return;
-  if (runOfAfter(board, taskId, cp, current) == null) fail('no se puede comprobar a qué ejecución pertenece este punto de vuelta; deshazla desde el PC');
+  if (runOfAfter(board, taskId, cp, current) == null) fail(tr('msg.undo.runUnknown'));
 }
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -124,16 +123,16 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
     'tasks.undo': ({ id, checkpoint }, principal) => {
       const tid = int(id, 'tarea');
-      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.undo.rerunSinceUndo'));
       // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
       // a browser sends none. Only an explicit desktop principal skips them: a call without principal is not known to be the
       // window, so it is guarded like a remote one.
       if (checkpoint != null || principal?.channel !== 'desktop') {
-        if (joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
-        if (joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
+        if (joinedByHand(board, tid)) fail(tr('msg.undo.joinedByHand'));
+        if (joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
         // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too.
         const cp = board.settingJson(`checkpoint:${tid}`);
-        if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail('el PC no guardó el estado final de esta tarea; deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después. Hazlo desde el PC si de verdad quieres eso');
+        if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail(tr('msg.undo.noFinalState'));
         assertPointCurrent(board, tid);
       }
       return scheduler.undo(tid);
@@ -192,13 +191,13 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // checkpoint (optional): the checkpointId the phone saw; if the task ran again since, nothing is accepted.
     'tasks.accept': ({ id, unheld, checkpoint }) => {
       const tid = int(id, 'tarea');
-      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla');
-      if (checkpoint != null && joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.accept.rerunSinceSeen'));
+      if (checkpoint != null && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
       if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
-        if (board.heldInfo(t)) fail('la tarea está retenida por la guardia; revisa sus cambios en el PC antes de aceptarla');
-        if (t.status !== 'done') fail('la tarea ya no se puede aceptar: su estado ha cambiado; ábrela de nuevo');
+        if (board.heldInfo(t)) fail(tr('msg.accept.held'));
+        if (t.status !== 'done') fail(tr('msg.accept.statusChanged'));
       }
       if (board.heldInfo(board.task(tid))) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       return accept([tid]);
