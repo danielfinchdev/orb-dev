@@ -7,10 +7,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.ui.chats.DirectChatScreen
 import dev.orb.app.ui.chats.DirectChatViewModel
@@ -156,6 +158,13 @@ class DirectChatShotsTest {
             rule.onNodeWithContentDescription("Más acciones del chat").performClick()
             rule.waitForIdle()
             rule.onNodeWithText("Compactar contexto").performClick()
+        })
+    }
+
+    @Test fun forkingFromAMessage() {
+        Shots.assumeEnabled()
+        shoot(OrbPaletteChoice.Grafito, "-bifurcar", vm(backend(head(), "idle")), after = {
+            rule.onNodeWithText("Cambiado en styles.css. Ahora compilo.", substring = true).performTouchInput { longClick() }
         })
     }
 

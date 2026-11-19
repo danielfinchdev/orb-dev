@@ -74,6 +74,7 @@ fun DirectChatScreen(
     nowMs: () -> Long = System::currentTimeMillis,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val forkAsk by vm.fork.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LaunchedEffect(vm) {
@@ -89,7 +90,7 @@ fun DirectChatScreen(
     var sheet by rememberSaveable { mutableStateOf(false) }
     var compactAsk by rememberSaveable { mutableStateOf(false) }
     var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
-    val actions = remember(vm) { DirectActions(vm::decide, vm::retrySend, vm::discard, vm::resume, fork = vm::fork) }
+    val actions = remember(vm) { DirectActions(vm::decide, vm::retrySend, vm::discard, vm::resume, vm::askFork, vm::fork) }
     val editing = state.queue.firstOrNull { it.id == editingId }
     // The message being edited left the queue (the PC took it): the box goes back to what it was.
     LaunchedEffect(editing == null) { if (editing == null) editingId = null }
@@ -150,6 +151,19 @@ fun DirectChatScreen(
         confirm = OrbDialogAction(DirectTexts.COMPACT_CONFIRM, { compactAsk = false; vm.compact() }),
         dismiss = OrbDialogAction(ChatTexts.CANCEL, { compactAsk = false }),
     )
+    forkAsk?.let { ask ->
+        OrbSheet(onDismiss = vm::dismissFork, title = DirectTexts.MESSAGE_SHEET) {
+            when (ask.can) {
+                null -> OrbSheetInfo(DirectTexts.FORK_ASKING, OrbIcons.GitFork)
+                true -> OrbSheetItem(DirectTexts.FORK_HERE, vm::forkFromAsked, icon = OrbIcons.GitFork)
+                false -> {
+                    OrbSheetItem(DirectTexts.FORK_HERE, {}, icon = OrbIcons.GitFork, enabled = false)
+                    if (ask.why != null) OrbSheetLabel(ask.why)
+                }
+            }
+            if (ask.can != false) OrbSheetLabel(DirectTexts.FORK_FROM_NOTE)
+        }
+    }
     if (renaming) TextDialog(
         ChatTexts.RENAME_TITLE, ChatTexts.TITLE_FIELD, state.title, ChatTexts.SAVE,
         onDismiss = { renaming = false }, onConfirm = { vm.rename(it); renaming = false },
@@ -323,7 +337,7 @@ private fun DirectList(
             if (state.stalled) item(key = "stalled", contentType = "stalled") {
                 StalledCard(
                     state.limited, state.online, actions.resume, Modifier.animateItem(),
-                    onFork = actions.fork, forkEnabled = state.online && !state.busy,
+                    canForkFrom = state.canForkFrom, onFork = actions.fork, forkEnabled = state.online && !state.busy,
                 )
             }
             if (state.queue.isNotEmpty()) item(key = "queue", contentType = "queue") {

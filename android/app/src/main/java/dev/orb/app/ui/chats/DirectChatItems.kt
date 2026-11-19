@@ -12,6 +12,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,13 +29,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
@@ -65,9 +70,24 @@ class DirectActions(
     val retry: (String) -> Unit,
     val discard: (String) -> Unit,
     val resume: () -> Unit,
+    /** A long press (or the accessibility action) on a line of text: copy the chat up to it. */
+    val forkFrom: (Long) -> Unit = {},
     /** The whole chat, as it is now. */
     val fork: () -> Unit = {},
 )
+
+/**
+ * The gesture that offers «Bifurcar desde aquí» on a line of text: a long press, and the same as an accessibility action
+ * for whoever cannot long-press. Off where the PC cannot copy from a line.
+ */
+@Composable
+private fun Modifier.forkable(id: Long, enabled: Boolean, actions: DirectActions): Modifier {
+    if (!enabled) return this
+    val run = rememberUpdatedState { actions.forkFrom(id) }
+    return this
+        .pointerInput(id) { detectTapGestures(onLongPress = { run.value() }) }
+        .semantics { customActions = listOf(CustomAccessibilityAction(DirectTexts.FORK_ACTION_DESC) { run.value(); true }) }
+}
 
 @Composable
 fun DirectRow(item: DItem, state: DirectChatState, now: Long, actions: DirectActions, modifier: Modifier = Modifier) {
@@ -98,7 +118,7 @@ private fun UserLine(m: DItem.User, state: DirectChatState, now: Long, actions: 
         when (m.images) { 0 -> null; 1 -> ChatTexts.IMAGE_ATTACHED; else -> "${m.images} imágenes adjuntas" },
     ).joinToString("\n")
     Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.End) {
-        UserBubble(shown, ChatTime.short(m.at, now), delivery = OrbDelivery.Saved)
+        UserBubble(shown, ChatTime.short(m.at, now), Modifier.forkable(m.id, state.canForkFrom, actions), delivery = OrbDelivery.Saved)
         if (m.steer) Row(Modifier.padding(top = 4.dp, end = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             OrbBadge(DirectTexts.STEER_SENT, kind = OrbBadgeKind.Acc)
             // «llega al agente en marcha» is only true while that turn is still going
@@ -111,7 +131,7 @@ private fun UserLine(m: DItem.User, state: DirectChatState, now: Long, actions: 
 @Composable
 private fun AssistantLine(m: DItem.Assistant, state: DirectChatState, now: Long, actions: DirectActions, modifier: Modifier) {
     val blocks = remember(m.id, m.text) { LightMarkdown.parse(m.text) }
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.fillMaxWidth().forkable(m.id, state.canForkFrom, actions), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         OrbAuthor(state.agent, state.agentName ?: ChatTexts.AGENT_FALLBACK, time = ChatTime.short(m.at, now))
         MarkdownBody(blocks)
     }

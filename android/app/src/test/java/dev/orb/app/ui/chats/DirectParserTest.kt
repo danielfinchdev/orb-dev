@@ -121,6 +121,21 @@ class DirectParserTest {
         assertEquals("algo", (items[0] as DItem.Note).text)
     }
 
+    @Test fun theForkAnswerSaysIfAndWhyNot() {
+        val ok = DirectParser.forkInfo(dev.orb.app.data.json("""{"canEdit":true,"canFork":true,"forkWhy":""}"""))!!
+        assertTrue(ok.can)
+        val no = DirectParser.forkInfo(dev.orb.app.data.json("""{"canFork":false,"forkWhy":"El chat está trabajando"}"""))!!
+        assertFalse(no.can)
+        assertEquals("El chat está trabajando", no.why)
+    }
+
+    @Test fun anAnswerWithoutCanForkIsAnOlderPcThatCannot() {
+        val old = DirectParser.forkInfo(dev.orb.app.data.json("""{"canEdit":true,"canRewind":false}"""))!!
+        assertFalse(old.can)
+        assertEquals(DirectTexts.FORK_FROM_OLD_PC, old.why)
+        assertNull(DirectParser.forkInfo(dev.orb.app.data.json("[]")))
+    }
+
     @Test fun theContextPercentIsWhatTheRowSays() {
         val info = DirectParser.info(dev.orb.app.data.json("""{"id":"s1","context":{"used":62,"size":100}}""") as kotlinx.serialization.json.JsonObject)!!
         assertEquals(62, info.contextPercent)

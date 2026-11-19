@@ -3,8 +3,10 @@ package dev.orb.app.ui.chats
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.layout.positionInRoot
 import org.junit.Assert.assertFalse
 import androidx.compose.ui.test.hasSetTextAction
@@ -211,6 +213,37 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Reanudar").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("resume"))
+    }
+
+    @Test fun aLongPressOnAMessageOffersForkingFromThere() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Este mensaje").assertIsDisplayed()
+        rule.onNodeWithText("Bifurcar desde aquí").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.containsAll(listOf("rewindInfo 1", "fork from 1")))
+    }
+
+    @Test fun whenThePcCannotForkThereItSaysWhy() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.forkInfoOnPc = Result.success(ForkInfo(false, "El chat está trabajando"))
+        screen(b)
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("El chat está trabajando").assertIsDisplayed()
+        rule.onNodeWithText("Bifurcar desde aquí").assertIsNotEnabled()
+        assertFalse(b.calls.any { it.startsWith("fork") })
+    }
+
+    @Test fun anOlderPcHasNoForkFromAMessage() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.rewindAvailable = false
+        screen(b)
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithText("Este mensaje").fetchSemanticsNodes().size)
     }
 
     @Test fun aMessageFromThePcHasTwoTicksAndTheOneJustSentOne() {
