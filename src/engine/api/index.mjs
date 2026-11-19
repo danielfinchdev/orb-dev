@@ -318,16 +318,22 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // ({ items, next }, src/domain/activity/activity.mjs).
     'activity.list': (params, principal) => {
       const { q, limit } = params;
+      // before/after of a setting may be objects or lists: every string inside is swapped.
+      const hideDeep = (v, depth = 0) => (typeof v === 'string' ? hidePcPaths(v) : depth < 6 && Array.isArray(v) ? v.map((x) => hideDeep(x, depth + 1))
+        : depth < 6 && v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, hideDeep(x, depth + 1)])) : v);
       if (['sources', 'level', 'project', 'from', 'to', 'cursor'].some((k) => params[k] !== undefined)) {
         const page = readActivity(board, params);
         // the phone gets places, not this PC's folders (the same swap as in the report)
         if (principal?.channel === 'desktop') return page;
-        const hide = (v) => (typeof v === 'string' ? hidePcPaths(v) : v);
+        const hide = hideDeep;
         return { ...page, items: page.items.map((it) => ({ ...it, text: hide(it.text), detail: hide(it.detail), title: hide(it.title), ...(it.before !== undefined ? { before: hide(it.before) } : {}), ...(it.after !== undefined ? { after: hide(it.after) } : {}) })) };
       }
       const rows = board.recentEvents(Math.min(Number(limit) || 300, 2000));
       const needle = String(q ?? '').toLowerCase().trim();
-      return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
+      return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => {
+        const out = { ...r, detail: redactSecrets(r.detail) };
+        return principal?.channel === 'desktop' ? out : { ...out, detail: hideDeep(out.detail), title: hideDeep(out.title) };
+      });
     },
     'activity.report': ({ at, lines }, principal) => buildReport(board, { at, lines, version, remote: principal?.channel !== 'desktop' }),
     // only the accounts of the agents this PC can run (not every agent Orb knows).

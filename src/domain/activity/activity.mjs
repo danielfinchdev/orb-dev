@@ -328,6 +328,9 @@ export function hidePcPaths(text) {
   let out = String(text ?? '');
   out = swap(out, home, '<Orb>'); out = swap(out, home.replaceAll(String.fromCharCode(92), '/'), '<Orb>');
   out = swap(out, user, '~'); out = swap(out, user.replaceAll(String.fromCharCode(92), '/'), '~');
+  // the same folders inside a JSON string (before/after of a setting are stored as text) carry doubled backslashes
+  const BS = String.fromCharCode(92);
+  out = swap(out, home.replaceAll(BS, BS + BS), '<Orb>'); out = swap(out, user.replaceAll(BS, BS + BS), '~');
   return out;
 }
 

@@ -312,3 +312,16 @@ test('a filter that matches no event scans a capped number of rows per call and 
   const r2 = readActivity(board, { sources: ['subagentes'], q: 'aguja-unica', cursor: r1.next });
   assert.equal(r2.items.length, 1); assert.equal(r2.next, null);
 });
+
+test('activity.list: the phone gets no PC paths in either shape, nested objects included; the PC keeps them', async () => {
+  reset();
+  const dir = `${ctx.home}\\core\\x`;
+  const task = board.createTask({ project: 'viejo', title: 'Hola', description: 'x', agent: 'claude' }, 'usuario');
+  board.event(task.id, 'claude', 'agent.reply', `en ${dir}`);
+  logUserAction({ kind: 'settings.save', text: 'ajustes', before: { a: { dir }, list: [dir] }, after: { dir } });
+  const oldPhone = JSON.stringify(await call('activity.list', { q: 'en' }, phone));
+  assert.ok(!oldPhone.includes(ctx.home) && oldPhone.includes('<Orb>'), oldPhone);
+  const newPhone = JSON.stringify(await call('activity.list', { sources: ['usuario'] }, phone));
+  assert.ok(!newPhone.includes(ctx.home) && newPhone.includes('<Orb>'), newPhone);
+  assert.ok(JSON.stringify(await call('activity.list', { sources: ['usuario'] })).includes(path.basename(ctx.home)));
+});
