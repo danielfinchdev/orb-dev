@@ -61,6 +61,12 @@ test('herramientas: Flutter, SDK de Android y Java con su versión, leída de su
   let asked = null;
   assert.equal(toolVersion('java', path.join(bare, 'bin'), { run: (file, args) => { asked = args; return 'openjdk 17.0.9 2023-10-17'; } }), '17.0.9');
   assert.deepEqual(asked, ['--version']);
+  // A java inside Orb's own folder (agents can write there) is never run, even without a `release` file.
+  const planted = path.join(root, 'orbcore', 'herramientas', 'jdk');
+  touch(path.join(planted, 'bin', win ? 'java.exe' : 'java'));
+  assert.equal(toolVersion('java', path.join(planted, 'bin'), { core: path.join(root, 'orbcore'), run: () => assert.fail('a java inside the Orb folder must not be run') }), null);
+  touch(path.join(planted, 'release'), 'JAVA_VERSION="17.0.1"\n');
+  assert.equal(toolVersion('java', path.join(planted, 'bin'), { core: path.join(root, 'orbcore'), run: () => assert.fail('release is read, not run') }), '17.0.1');
 });
 
 test('installer.devTools: solo desde este PC', async () => {

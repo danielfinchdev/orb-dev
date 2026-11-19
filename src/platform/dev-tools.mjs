@@ -96,7 +96,7 @@ const maxVersion = (names) => names.map((n) => versionIn(n)).filter(Boolean).sor
 const listDir = (d) => { try { return fs.readdirSync(d); } catch { return []; } };
 
 // The version of a tool found at `where` (a folder from checkDevTools), or null when it cannot be read without running it.
-export function toolVersion(id, where, { run = defaultRun, platform = process.platform } = {}) {
+export function toolVersion(id, where, { run = defaultRun, platform = process.platform, core = ctx.paths?.core ?? null } = {}) {
   if (!where) return null;
   const p = platform === 'win32' ? path.win32 : path.posix;
   if (id === 'flutter') {
@@ -110,6 +110,8 @@ export function toolVersion(id, where, { run = defaultRun, platform = process.pl
     const home = p.dirname(where); // .../jdk/bin → .../jdk
     const release = (() => { try { return /JAVA_VERSION="?([\d._]+)/.exec(fs.readFileSync(p.join(home, 'release'), 'utf8'))?.[1] ?? null; } catch { return null; } })();
     if (release) return release;
+    // Agents can write inside Orb's folder (core\herramientas included): a java.exe planted there must never be run by the engine.
+    if (inside(where, core, platform === 'win32')) return null;
     return versionIn(run(p.join(where, platform === 'win32' ? 'java.exe' : 'java'), ['--version']));
   }
   return null;
