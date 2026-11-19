@@ -35,6 +35,8 @@ data class TaskDetailState(
     val busy: Boolean = false,
     val actions: Set<TaskAction> = emptySet(),
     val agents: List<AgentChoice>? = null,
+    /** An event of the PC arrived and the task has not been read again yet: what the screen shows may be older than the PC's word. */
+    val reloading: Boolean = false,
 )
 
 object TaskActions {
@@ -71,36 +73,52 @@ class TaskDetailViewModel(
     val id: Long,
     private val reloadDebounceMs: Long = 300,
 ) : ViewModel() {
-    private data class Ui(val detail: TaskDetail? = null, val loading: Boolean = true, val error: String? = null, val busy: Boolean = false, val agents: List<AgentChoice>? = null)
+    private data class Ui(
+        val detail: TaskDetail? = null, val loading: Boolean = true, val error: String? = null, val busy: Boolean = false,
+        val agents: List<AgentChoice>? = null, val pending: Boolean = false,
+    )
 
     private val ui = MutableStateFlow(Ui())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
     private val _messages = Channel<String>(Channel.BUFFERED)
+    private var eventStamp = 0
 
     val messages = _messages.receiveAsFlow()
 
     val state: StateFlow<TaskDetailState> = combine(ui, backend.connection) { u, c ->
         TaskDetailState(
             detail = u.detail, loading = u.loading, error = u.error, online = c is ConnectionState.Online, busy = u.busy,
-            actions = u.detail?.let { TaskActions.of(it, backend::available) }.orEmpty(), agents = u.agents,
+            actions = u.detail?.let { TaskActions.of(it, backend::available) }.orEmpty(), agents = u.agents, reloading = u.pending,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TaskDetailState())
 
     init {
         viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { load() } }
-        viewModelScope.launch { backend.events.collect { if (it.name in RELOAD_EVENTS) reloads.trySend(Unit) } }
+        viewModelScope.launch {
+            backend.events.collect {
+                if (it.name in RELOAD_EVENTS) {
+                    // The decisions go off at once, not after the wait: during it the screen still shows what the PC has left behind.
+                    eventStamp++
+                    ui.update { u -> u.copy(pending = true) }
+                    reloads.trySend(Unit)
+                }
+            }
+        }
         viewModelScope.launch {
             backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { load() }
         }
     }
 
     private suspend fun load() {
+        val stamp = eventStamp
         val r = backend.get(id)
         ui.update { u ->
+            // An event that came while this read was under way asks for another one: until it is done this is not final.
+            val pending = eventStamp != stamp
             r.fold(
-                onSuccess = { Ui(it, loading = false, error = null, busy = u.busy, agents = u.agents) },
+                onSuccess = { Ui(it, loading = false, error = null, busy = u.busy, agents = u.agents, pending = pending) },
                 // What was on screen stays: only a first read that fails shows the error.
-                onFailure = { u.copy(loading = false, error = if (u.detail == null) linkErrorText(it) else null) },
+                onFailure = { u.copy(loading = false, error = if (u.detail == null) linkErrorText(it) else null, pending = pending) },
             )
         }
     }
@@ -131,6 +149,9 @@ class TaskDetailViewModel(
 
     private fun allowed(a: TaskAction) = ui.value.detail?.let { a in TaskActions.of(it, backend::available) } == true
 
+    /** The decisions that touch the person's work wait for the read an event of the PC asked for. */
+    private fun settled() = !ui.value.pending
+
     /**
      * [shownHash] is the fingerprint of what the screen painted when the person tapped: the PC refuses the OK if the task
      * changed since. Without it, the one captured by [askReject] for a rejection, and last the current one.
@@ -138,7 +159,7 @@ class TaskDetailViewModel(
     fun approve(approve: Boolean, shownHash: String? = null) {
         val hash = shownHash ?: rejectHash?.takeIf { !approve } ?: ui.value.detail?.previewHash ?: return
         rejectHash = null
-        if (!allowed(TaskAction.Approve)) return
+        if (!allowed(TaskAction.Approve) || !settled()) return
         act(if (approve) TaskTexts.APPROVED else TaskTexts.REJECTED) { backend.decide(id, approve, hash) }
     }
 
@@ -154,7 +175,7 @@ class TaskDetailViewModel(
      * read again first and nothing is accepted if the hold, the point of return or the state is not what the person was looking at.
      */
     fun accept() {
-        if (!allowed(TaskAction.AcceptHeld)) return
+        if (!allowed(TaskAction.AcceptHeld) || !settled()) return
         val shown = ui.value.detail ?: return
         act(TaskTexts.ACCEPTED) {
             backend.get(id).fold(
@@ -184,7 +205,7 @@ class TaskDetailViewModel(
 
     /** The screen asks first; this is only called after the person accepted the dialog. */
     fun undo() {
-        if (!allowed(TaskAction.UndoHeld)) return
+        if (!allowed(TaskAction.UndoHeld) || !settled()) return
         val checkpoint = if (undoAsked) undoCheckpoint else ui.value.detail?.checkpointId
         undoAsked = false
         act(TaskTexts.UNDO_DONE) { backend.undo(id, checkpoint) }

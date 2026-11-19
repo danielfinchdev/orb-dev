@@ -76,7 +76,7 @@ internal fun NewTaskDialog(state: NewTaskState, onCreate: (String, String, Strin
 
 /** The field of [OrbTextField] for a longer text: the same border and type, several lines. */
 @Composable
-private fun TextArea(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
+internal fun TextArea(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
     val shape = RoundedCornerShape(12.dp)
     Box(
         modifier.fillMaxWidth().defaultMinSize(minHeight = 96.dp).clip(shape).background(OrbKit.card).border(1.dp, OrbKit.border, shape)

@@ -1,36 +1,24 @@
 package dev.orb.app.ui.tasks
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -40,24 +28,51 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.ChatTime
 import dev.orb.app.ui.chats.Message
+import dev.orb.app.ui.chats.agentName
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBadge
+import dev.orb.app.ui.kit.OrbBadgeKind
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbCard
+import dev.orb.app.ui.kit.OrbChip
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbProgress
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.OrbSheetLabel
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSpinner
+import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.offline.NeedsPcNote
 import dev.orb.app.ui.offline.OfflineStrip
-import dev.orb.app.ui.theme.OrbTheme
 
-private enum class Ask { Cancel, Undo, Reassign, Followup, LaunchAnyway, Reject }
+private enum class Ask { Cancel, Undo, Reassign, Followup, LaunchAnyway, Reject, Review, Menu, History, Subtasks, Depends }
 
+/**
+ * One task (screen 18): the reason it waits first, with the way out; then what it did and what the person can decide; the
+ * data; and «Cancelar tarea · Reasignar · Seguir» fixed at the bottom. The history, the subtasks, what it depends on and
+ * «Revisar tarea» are in the «⋯» menu.
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun TaskDetailScreen(
@@ -73,247 +88,335 @@ fun TaskDetailScreen(
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
     var ask by rememberSaveable { mutableStateOf<Ask?>(null) }
-    val enabled = state.online && !state.busy
+    // A decision waits for the read an event of the PC asked for: until then the screen may show what the PC has left behind.
+    val enabled = state.online && !state.busy && !state.reloading
+    val d = state.detail
+    val hasMenu = d != null && (d.events.isNotEmpty() || d.children.isNotEmpty() || d.dependencies.isNotEmpty() || TaskAction.Review in state.actions)
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack) { Icon(OrbIcons.ArrowLeft, TaskTexts.BACK, tint = OrbTheme.colors.text2) }
-                Text(
-                    state.detail?.let { "#${it.id} ${it.row.title}" } ?: "#${vm.id}", Modifier.weight(1f).semantics { heading() },
-                    style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (!state.online && state.detail != null) OfflineStrip()
-            val d = state.detail
+            OrbTopBar(
+                title = d?.let { "#${it.id} ${it.row.title}" } ?: "#${vm.id}", sub = d?.row?.let(::taskSubtitle)?.takeIf { it.isNotEmpty() }, sideWidth = 56.dp,
+                leading = { OrbIconButton(OrbIcons.ArrowLeft, TaskTexts.BACK, onBack) },
+                actions = { if (hasMenu) OrbIconButton(OrbIcons.MoreVertical, TaskTexts.ACTIONS, { ask = Ask.Menu }) },
+            )
+            if (!state.online && d != null) OfflineStrip()
             when {
-                d == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                d == null -> Message(state.error ?: TaskTexts.DETAIL_ERROR, action = TaskTexts.RETRY, onAction = vm::refresh)
-                else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                    Header(d, nowMs())
-                    if (!state.online && state.actions.isNotEmpty()) NeedsPcNote(Modifier.padding(top = 8.dp))
-                    Decisions(d, state.actions, enabled, vm, onAskUndo = { vm.askUndo(); ask = Ask.Undo }, onAskReject = { vm.askReject(); ask = Ask.Reject })
-                    WhyWaits(d, state.actions, enabled) { ask = Ask.LaunchAnyway }
-                    // While an OK is asked, the card above shows the description with the rest of what the OK covers.
-                    if (d.description.isNotBlank() && TaskAction.Approve !in state.actions) {
-                        SectionLabel(TaskTexts.WHAT_TO_DO)
-                        Text(d.description, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    d.row.result?.takeIf { it.isNotBlank() }?.let {
-                        SectionLabel(TaskTexts.RESULT)
-                        Text(it, style = MaterialTheme.typography.bodyMedium)
-                    }
-                    if (d.row.undone) {
-                        SectionLabel(TaskTexts.UNDONE)
-                        Text(TaskTexts.UNDONE_NOTE, style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2)
-                    }
-                    Details(d)
-                    Links(TaskTexts.DEPENDS_ON, d.dependencies, onOpenTask)
-                    Links(TaskTexts.SUBTASKS, d.children, onOpenTask)
-                    History(d, nowMs())
-                    FlowRow(Modifier.fillMaxWidth().padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (TaskAction.SeeChanges in state.actions) OutlinedButton(onClick = { onOpenChanges(d.id) }) { Text(TaskTexts.SEE_CHANGES) }
-                        if (TaskAction.Retry in state.actions) OutlinedButton(onClick = vm::retry, enabled = enabled) { Text(TaskTexts.RETRY_TASK) }
-                        if (TaskAction.Reassign in state.actions) OutlinedButton(onClick = { ask = Ask.Reassign; vm.loadAgents() }, enabled = enabled) { Text(TaskTexts.REASSIGN) }
-                        if (TaskAction.Followup in state.actions) OutlinedButton(onClick = { ask = Ask.Followup }, enabled = enabled) { Text(TaskTexts.FOLLOWUP) }
-                        if (TaskAction.Review in state.actions) OutlinedButton(onClick = vm::review, enabled = enabled) { Text(TaskTexts.REVIEW) }
-                        if (TaskAction.Cancel in state.actions) {
-                            TextButton(onClick = { ask = Ask.Cancel }, enabled = enabled) { Text(TaskTexts.CANCEL_TASK, color = MaterialTheme.colorScheme.error) }
+                d == null && state.loading -> Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
+                d == null -> Box(Modifier.weight(1f)) { Message(state.error ?: TaskTexts.DETAIL_ERROR, action = TaskTexts.RETRY, onAction = vm::refresh, icon = OrbIcons.CircleAlert) }
+                else -> {
+                    Column(
+                        Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(top = 8.dp, bottom = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Header(d, nowMs())
+                        if (!state.online && state.actions.isNotEmpty()) NeedsPcNote()
+                        WhyWaits(d, state.actions, enabled, onOther = { ask = Ask.Reassign; vm.loadAgents() }, onLaunch = { ask = Ask.LaunchAnyway })
+                        Held(d, state.actions, enabled, onChanges = { onOpenChanges(d.id) }, onAccept = vm::accept, onUndo = { vm.askUndo(); ask = Ask.Undo })
+                        Stopped(d, state.actions, enabled, onOther = { ask = Ask.Reassign; vm.loadAgents() }, onRetry = vm::retry)
+                        Approval(d, state.actions, enabled, onApprove = { vm.approve(true, d.previewHash) }, onReject = { vm.askReject(); ask = Ask.Reject })
+                        // While an OK is asked, the card above shows the description with the rest of what the OK covers.
+                        if (d.description.isNotBlank() && TaskAction.Approve !in state.actions) {
+                            TaskCard(TaskTexts.WHAT_TO_DO) { BodyText(d.description) }
                         }
+                        Outcome(d, state.actions, onChanges = { onOpenChanges(d.id) })
+                        if (d.row.undone) TaskCard(TaskTexts.UNDONE) { BodyText(TaskTexts.UNDONE_NOTE, OrbKit.mutedForeground) }
+                        Details(d)
                     }
+                    ActionBar(state.actions, enabled, onCancel = { ask = Ask.Cancel }, onReassign = { ask = Ask.Reassign; vm.loadAgents() }, onFollowup = { ask = Ask.Followup })
                 }
             }
         }
-        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = if (d != null && state.actions.any { it in BAR }) 76.dp else 16.dp))
     }
 
+    val close = { ask = null }
     when (ask) {
-        Ask.Cancel -> AlertDialog(
-            onDismissRequest = { ask = null },
-            title = { Text(TaskTexts.CANCEL_ASK) },
-            text = { if (state.detail?.row?.running == true) Text(TaskTexts.CANCEL_RUNNING) },
-            confirmButton = { TextButton(onClick = { ask = null; vm.cancel() }) { Text(TaskTexts.CANCEL_CONFIRM, color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.CANCEL_BACK) } },
+        Ask.Cancel -> OrbDialog(
+            close, TaskTexts.cancelAsk(vm.id), OrbDialogAction(TaskTexts.CANCEL_CONFIRM, { ask = null; vm.cancel() }),
+            text = if (d?.row?.running == true) TaskTexts.CANCEL_RUNNING else TaskTexts.CANCEL_QUEUED_BODY, dismiss = OrbDialogAction(TaskTexts.CANCEL_BACK, close),
         )
-        Ask.Undo -> AlertDialog(
-            onDismissRequest = { ask = null },
-            title = { Text(TaskTexts.UNDO_TASK_TITLE) },
-            text = { Text(TaskTexts.UNDO_TASK_BODY) },
-            confirmButton = { TextButton(onClick = { ask = null; vm.undo() }) { Text(TaskTexts.UNDO, color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.DISMISS) } },
+        Ask.Undo -> OrbDialog(
+            close, TaskTexts.UNDO_TASK_TITLE, OrbDialogAction(TaskTexts.UNDO, { ask = null; vm.undo() }),
+            text = TaskTexts.UNDO_TASK_BODY, dismiss = OrbDialogAction(TaskTexts.DISMISS, close),
         )
-        Ask.LaunchAnyway -> AlertDialog(
-            onDismissRequest = { ask = null },
-            title = { Text(TaskTexts.LAUNCH_ASK) },
-            text = { Text(TaskTexts.LAUNCH_BODY) },
-            confirmButton = { TextButton(onClick = { ask = null; vm.launchAnyway() }) { Text(TaskTexts.LAUNCH_CONFIRM) } },
-            dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.CANCEL_BACK) } },
+        Ask.LaunchAnyway -> OrbDialog(
+            close, TaskTexts.LAUNCH_ASK, OrbDialogAction(TaskTexts.LAUNCH_CONFIRM, { ask = null; vm.launchAnyway() }),
+            text = TaskTexts.LAUNCH_BODY, dismiss = OrbDialogAction(TaskTexts.CANCEL_BACK, close),
         )
-        Ask.Reject -> AlertDialog(
-            onDismissRequest = { ask = null },
-            title = { Text(TaskTexts.REJECT_ASK) },
-            text = { Text(TaskTexts.REJECT_BODY) },
-            confirmButton = { TextButton(onClick = { ask = null; vm.approve(false) }) { Text(TaskTexts.REJECT_CONFIRM, color = MaterialTheme.colorScheme.error) } },
-            dismissButton = { TextButton(onClick = { ask = null }) { Text(TaskTexts.CANCEL_BACK) } },
+        Ask.Reject -> OrbDialog(
+            close, TaskTexts.REJECT_ASK, OrbDialogAction(TaskTexts.REJECT_CONFIRM, { ask = null; vm.approve(false) }, danger = true),
+            text = TaskTexts.REJECT_BODY, dismiss = OrbDialogAction(TaskTexts.CANCEL_BACK, close),
         )
-        Ask.Reassign -> ReassignDialog(state.agents, state.detail?.row?.agent, state.detail?.reasoning, onDismiss = { ask = null }, onOk = { a, r -> ask = null; vm.reassign(a, r) })
-        Ask.Followup -> FollowupDialog(onDismiss = { ask = null }, onSend = { ask = null; vm.followup(it) })
+        Ask.Review -> OrbDialog(
+            close, TaskTexts.REVIEW_TASK_ASK, OrbDialogAction(TaskTexts.REVIEW_TASK_CONFIRM, { ask = null; vm.review() }),
+            text = TaskTexts.REVIEW_TASK_BODY, dismiss = OrbDialogAction(TaskTexts.DISMISS, close),
+        )
+        Ask.Reassign -> ReassignSheet(state.agents, d?.row?.agent, d?.reasoning, onDismiss = close, onOk = { a, r -> ask = null; vm.reassign(a, r) })
+        Ask.Followup -> FollowupSheet(onDismiss = close, onSend = { ask = null; vm.followup(it) })
+        Ask.Menu -> if (d != null) OrbSheet(close, title = "#${d.id}") {
+            if (d.events.isNotEmpty()) OrbSheetItem(TaskTexts.HISTORY, { ask = Ask.History }, icon = OrbIcons.History, meta = d.events.size.toString(), chevron = true)
+            if (d.children.isNotEmpty()) OrbSheetItem(TaskTexts.SUBTASKS, { ask = Ask.Subtasks }, icon = OrbIcons.GitFork, meta = d.children.size.toString(), chevron = true)
+            if (d.dependencies.isNotEmpty()) OrbSheetItem(TaskTexts.DEPENDS_ON, { ask = Ask.Depends }, icon = OrbIcons.Link, meta = d.dependencies.size.toString(), chevron = true)
+            if (TaskAction.Review in state.actions) OrbSheetItem(TaskTexts.REVIEW, { ask = Ask.Review }, icon = OrbIcons.ShieldCheck, enabled = enabled)
+        }
+        Ask.History -> if (d != null) OrbSheet(close, title = "${TaskTexts.HISTORY} (${d.events.size})") { History(d, nowMs()) }
+        Ask.Subtasks -> if (d != null) OrbSheet(close, title = TaskTexts.SUBTASKS) { Links(d.children) { ask = null; onOpenTask(it) } }
+        Ask.Depends -> if (d != null) OrbSheet(close, title = TaskTexts.DEPENDS_ON) { Links(d.dependencies) { ask = null; onOpenTask(it) } }
         null -> Unit
     }
 }
 
+/** The actions the fixed bar draws; the snackbar rises above it only when it is there. */
+private val BAR = setOf(TaskAction.Cancel, TaskAction.Reassign, TaskAction.Followup)
+
+/** The state, when and by whom it was made and, while it runs, how far it is. */
 @Composable
 private fun Header(d: TaskDetail, nowMs: Long) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            TaskStatusPill(d.row)
-            val sub = taskSubtitle(d.row)
-            if (sub.isNotEmpty()) Text(sub, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val r = d.row
+    val state = when {
+        r.held != null -> TaskTexts.HELD_BADGE
+        else -> TaskTexts.status(r.status)
+    }
+    val ago = TaskLines.ago(r.createdAt, nowMs)
+    val text = if (ago != null) TaskTexts.createdLine(state, ago, d.createdBy?.takeIf { it.isNotBlank() }?.let(TaskTexts::creator)) else state
+    val kind = when {
+        r.held != null || r.problem -> OrbBadgeKind.Err
+        r.status == "awaiting_approval" || r.status == "queued" || r.status == "pending" -> OrbBadgeKind.Warn
+        r.status == "running" -> OrbBadgeKind.Info
+        r.status == "done" -> OrbBadgeKind.Ok
+        else -> OrbBadgeKind.Neutral
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OrbBadge(text, kind = kind)
+        if (r.running) {
+            r.percent?.let { OrbProgress(it.coerceIn(0, 100) / 100f) }
+            r.note?.takeIf { it.isNotBlank() }?.let { Text(it, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1) }
         }
-        val created = ChatTime.short(d.row.createdAt, nowMs)
-        if (created.isNotEmpty()) {
-            Text(
-                "${TaskTexts.CREATED} $created" + (d.createdBy?.takeIf { it.isNotBlank() }?.let(TaskTexts::createdBy) ?: ""),
-                style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3,
-            )
-        }
-        TaskProgress(d.row)
     }
 }
 
-/** The cards that need the person: a task waiting for the OK and one held for review. */
+/** `.lcard.pad`: a title with its mark and what goes under it. */
 @Composable
-private fun Decisions(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, vm: TaskDetailViewModel, onAskUndo: () -> Unit, onAskReject: () -> Unit) {
-    val held = d.row.held
-    if (held != null) {
-        Card(OrbTheme.colors.warnSoft) {
-            Text(TaskTexts.heldLine(held.reasons, held.folder), style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (TaskAction.AcceptHeld in actions) Button(onClick = vm::accept, enabled = enabled) { Text(TaskTexts.ACCEPT) }
-                if (TaskAction.UndoHeld in actions) OutlinedButton(onClick = onAskUndo, enabled = enabled) { Text(TaskTexts.UNDO) }
+private fun TaskCard(title: String, icon: ImageVector? = null, tone: Color? = null, content: @Composable ColumnScope.() -> Unit) {
+    OrbCard {
+        Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (icon != null) androidx.compose.material3.Icon(icon, null, Modifier.width(16.dp).height(16.dp), tint = tone ?: OrbKit.mutedForeground)
+                Text(title, color = OrbKit.foreground, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
             }
-        }
-    }
-    if (TaskAction.Approve in actions) {
-        Card(OrbTheme.colors.warnSoft) {
-            Text(TaskTexts.status("awaiting_approval"), style = MaterialTheme.typography.titleSmall)
-            // The same facts as the chat's card and dialog, all of them: what the OK covers is what is read here.
-            d.facts?.let { dev.orb.app.ui.chats.ApprovalFacts(it, preview = false) }
-            // A PC that sent no facts still shows the brief it is asked to approve.
-            ?: Text(d.description, style = MaterialTheme.typography.bodyMedium)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.approve(true, d.previewHash) }, enabled = enabled) { Text(TaskTexts.APPROVE) }
-                OutlinedButton(onClick = onAskReject, enabled = enabled) { Text(TaskTexts.REJECT) }
-            }
+            content()
         }
     }
 }
 
 @Composable
-private fun Card(color: androidx.compose.ui.graphics.Color, content: @Composable () -> Unit) {
-    Surface(Modifier.fillMaxWidth().padding(top = 12.dp), shape = RoundedCornerShape(16.dp), color = color) {
-        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { content() }
-    }
+private fun BodyText(text: String, color: Color = OrbKit.foreground) = Text(text, color = color, fontSize = 14.5.sp, lineHeight = 21.sp)
+
+/** The right-aligned, wrapping row of a card's buttons. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Buttons(content: @Composable () -> Unit) {
+    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalArrangement = Arrangement.spacedBy(4.dp)) { content() }
 }
 
+/** «¿Por qué espera?»: the reason in plain words, and the two ways out. */
 @Composable
-private fun WhyWaits(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onLaunch: () -> Unit) {
+private fun WhyWaits(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onOther: () -> Unit, onLaunch: () -> Unit) {
     val r = d.row
     if (r.status != "queued") return
-    SectionLabel(TaskTexts.WHY_WAITS)
-    Text(TaskTexts.waitText(r.waiting), style = MaterialTheme.typography.bodyMedium)
-    when (r.waiting?.kind) {
-        "paused" -> Text(TaskTexts.WAIT_PAUSED_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
-        "manual" -> Text(TaskTexts.WAIT_MANUAL_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+    val w = r.waiting
+    val clock = TaskLines.clock(w?.until)
+    val icon = when (w?.kind) { "notice" -> OrbIcons.Gauge; "folder" -> OrbIcons.FolderLock; else -> OrbIcons.Clock }
+    TaskCard(TaskTexts.WHY_WAITS, icon) {
+        val bold = SpanStyle(fontWeight = FontWeight.SemiBold)
+        val body = buildAnnotatedString {
+            when {
+                w?.kind == "notice" && w.account != null && clock != null -> {
+                    append(TaskTexts.waitLimit(w.account, w.percent)); append(" "); append(TaskTexts.WAIT_BACK_AT)
+                    withStyle(bold) { append(clock) }
+                    append(TaskTexts.WAIT_LAUNCHES)
+                }
+                w?.kind == "notice" -> append(TaskTexts.waitText(w))
+                w?.kind == "paused" -> append(TaskTexts.WAIT_PAUSED_NOTE)
+                w?.kind == "manual" -> append(TaskTexts.WAIT_MANUAL_NOTE)
+                w?.kind == "folder" -> { append(TaskTexts.waitFolder(w.by)); append(". "); append(TaskTexts.WAIT_FOLDER_NOTE) }
+                w?.kind == "deps" && w.on.isNotEmpty() -> { append(TaskTexts.waitsFor(w.on)); append(". "); append(TaskTexts.waitDeps(w.on.any { it.held })) }
+                else -> append(TaskTexts.WAIT_TURN_NOTE)
+            }
+        }
+        Text(body, color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
+        if (TaskAction.Reassign in actions || TaskAction.LaunchAnyway in actions) Buttons {
+            if (TaskAction.Reassign in actions) OrbButton(TaskTexts.WAIT_ANOTHER, onOther, enabled = enabled)
+            if (TaskAction.LaunchAnyway in actions) OrbButton(TaskTexts.LAUNCH_ANYWAY, onLaunch, kind = OrbButtonKind.Primary, enabled = enabled)
+        }
     }
-    if (TaskAction.LaunchAnyway in actions) {
-        OutlinedButton(onClick = onLaunch, enabled = enabled, modifier = Modifier.padding(top = 8.dp)) { Text(TaskTexts.LAUNCH_ANYWAY) }
+}
+
+/** «Retenida para revisión»: why Orb stopped the task, and what can be done with the work. */
+@Composable
+private fun Held(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onChanges: () -> Unit, onAccept: () -> Unit, onUndo: () -> Unit) {
+    val held = d.row.held ?: return
+    TaskCard(TaskTexts.HELD_TITLE, OrbIcons.ShieldAlert, OrbKit.destructive) {
+        BodyText(TaskTexts.heldBody(held.reasons, held.folder))
+        if (actions.any { it == TaskAction.SeeChanges || it == TaskAction.AcceptHeld || it == TaskAction.UndoHeld }) Buttons {
+            if (TaskAction.SeeChanges in actions) OrbButton(TaskTexts.SEE_CHANGES, onChanges)
+            if (TaskAction.UndoHeld in actions) OrbButton(TaskTexts.UNDO, onUndo, enabled = enabled)
+            if (TaskAction.AcceptHeld in actions) OrbButton(TaskTexts.ACCEPT, onAccept, kind = OrbButtonKind.Primary, enabled = enabled)
+        }
+    }
+}
+
+/** A task that did not finish: what happened, and to try again or hand it to someone else. */
+@Composable
+private fun Stopped(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onOther: () -> Unit, onRetry: () -> Unit) {
+    val r = d.row
+    if (!r.problem && r.status != "cancelled") return
+    val clock = TaskLines.clock(r.limitedUntil)
+    val (title, body) = when (r.status) {
+        "blocked" -> TaskTexts.BLOCKED_TITLE to TaskTexts.BLOCKED_BODY
+        "cancelled" -> TaskTexts.CANCELLED_TITLE to TaskTexts.CANCELLED_BODY
+        "limited" -> TaskTexts.LIMITED to TaskTexts.limitedBody(clock)
+        else -> TaskTexts.FAILED_TITLE to TaskTexts.FAILED_BODY
+    }
+    TaskCard(title, OrbIcons.CircleAlert, OrbKit.destructive) {
+        BodyText(body)
+        if (TaskAction.Reassign in actions || TaskAction.Retry in actions) Buttons {
+            if (TaskAction.Reassign in actions) OrbButton(TaskTexts.WAIT_ANOTHER, onOther, enabled = enabled)
+            if (TaskAction.Retry in actions) OrbButton(TaskTexts.RETRY_TASK, onRetry, kind = OrbButtonKind.Primary, enabled = enabled)
+        }
+    }
+}
+
+/** «Espera tu OK»: everything the OK covers, all of it, then «Rechazar» and «Aprobar». */
+@Composable
+private fun Approval(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onApprove: () -> Unit, onReject: () -> Unit) {
+    if (TaskAction.Approve !in actions) return
+    TaskCard(TaskTexts.APPROVE_TITLE, OrbIcons.Hand, OrbKit.warning) {
+        // The same facts as the chat's card and dialog, all of them: what the OK covers is what is read here.
+        d.facts?.let { dev.orb.app.ui.chats.ApprovalFacts(it, preview = false) }
+            // A PC that sent no facts still shows the brief it is asked to approve.
+            ?: BodyText(d.description)
+        Buttons {
+            OrbButton(TaskTexts.REJECT, onReject, enabled = enabled)
+            OrbButton(TaskTexts.APPROVE, onApprove, kind = OrbButtonKind.Primary, enabled = enabled)
+        }
+    }
+}
+
+/** What the task answered, with the way to its changes; a held task has that in its own card. */
+@Composable
+private fun Outcome(d: TaskDetail, actions: Set<TaskAction>, onChanges: () -> Unit) {
+    val result = d.row.result?.takeIf { it.isNotBlank() }
+    val changes = TaskAction.SeeChanges in actions && d.row.held == null
+    if (result == null && !changes) return
+    TaskCard(if (result != null) TaskTexts.RESULT else TaskTexts.CHANGES_CARD) {
+        BodyText(result ?: TaskTexts.CHANGES_CARD_BODY)
+        if (changes) Buttons { OrbButton(TaskTexts.SEE_CHANGES, onChanges) }
     }
 }
 
 @Composable
 private fun Details(d: TaskDetail) {
-    SectionLabel(TaskTexts.DETAILS)
-    d.folder?.takeIf { it.isNotBlank() }?.let { LabelValue(TaskTexts.FOLDER, it) }
-    LabelValue(TaskTexts.MODE, if (d.mode == "aislada") TaskTexts.FOLDER_ISOLATED else TaskTexts.FOLDER_SHARED)
-    d.branch?.takeIf { it.isNotBlank() }?.let { LabelValue(TaskTexts.BRANCH, it) }
-    dev.orb.app.ui.chats.agentName(d.row.agent)?.let { LabelValue(TaskTexts.AGENT, it) }
-    (d.modelLabel ?: d.row.model)?.takeIf { it.isNotBlank() }?.let { LabelValue(TaskTexts.MODEL, it) }
-    d.reasoning?.takeIf { it.isNotBlank() }?.let { LabelValue(TaskTexts.REASONING, TaskTexts.reasoning(it)) }
-    d.accountLabel?.takeIf { it.isNotBlank() }?.let { LabelValue(TaskTexts.ACCOUNT, it) }
-    if (d.row.readonly) LabelValue(TaskTexts.READ_ONLY, TaskTexts.YES)
-}
-
-@Composable
-private fun Links(title: String, links: List<TaskLink>, onOpen: (Long) -> Unit) {
-    if (links.isEmpty()) return
-    SectionLabel(title)
-    for (l in links) {
-        Text(
-            "#${l.id} ${l.title} · ${TaskTexts.status(l.status)}",
-            Modifier.fillMaxWidth().clickable { onOpen(l.id) }.padding(vertical = 8.dp), style = MaterialTheme.typography.bodyMedium,
-        )
-    }
-}
-
-@Composable
-private fun History(d: TaskDetail, nowMs: Long) {
-    if (d.events.isEmpty()) return
-    var all by rememberSaveable { mutableStateOf(false) }
-    SectionLabel("${TaskTexts.HISTORY} (${d.events.size})")
-    // Newest first, and a short list until the person asks for more.
-    val shown = d.events.asReversed().let { if (all) it else it.take(8) }
-    for (e in shown) {
-        Row(Modifier.padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(ChatTime.short(e.at, nowMs), Modifier.size(width = 52.dp, height = 20.dp), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3)
-            Text(e.detail.ifBlank { e.kind.orEmpty() }, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall, maxLines = 3, overflow = TextOverflow.Ellipsis)
+    val review = d.review
+    TaskCard(TaskTexts.DETAILS) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            d.folder?.takeIf { it.isNotBlank() }?.let { Fact(TaskTexts.FOLDER, it) }
+            Fact(TaskTexts.MODE, if (d.mode == "aislada") TaskTexts.FOLDER_ISOLATED else TaskTexts.FOLDER_SHARED)
+            d.branch?.takeIf { it.isNotBlank() }?.let { Fact(TaskTexts.BRANCH, it) }
+            agentName(d.row.agent)?.let { Fact(TaskTexts.AGENT, it) }
+            (d.modelLabel ?: d.row.model)?.takeIf { it.isNotBlank() }?.let { Fact(TaskTexts.MODEL, it) }
+            d.reasoning?.takeIf { it.isNotBlank() }?.let { Fact(TaskTexts.REASONING, TaskTexts.reasoning(it)) }
+            d.accountLabel?.takeIf { it.isNotBlank() }?.let { Fact(TaskTexts.ACCOUNT, it) }
+            if (d.row.readonly) Fact(TaskTexts.READ_ONLY, TaskTexts.YES)
+            if (review != null) Fact(TaskTexts.REVIEW_ROW, TaskTexts.reviewLine(review, d.row.agent))
+            Fact(TaskTexts.DEPENDS_ON, if (d.dependencies.isEmpty()) TaskTexts.NO_DEPENDENCY else d.dependencies.joinToString(", ") { "#${it.id}" })
+            Fact(TaskTexts.SCHEDULED, if (d.row.scheduleId != null) TaskTexts.YES else TaskTexts.NO)
         }
     }
-    if (!all && d.events.size > shown.size) TextButton(onClick = { all = true }) { Text(TaskTexts.SEE_ALL) }
+}
+
+/** A row of `.kv-m`: the name in muted grey and its value. */
+@Composable
+private fun Fact(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Text(label, Modifier.width(112.dp), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp)
+        Text(value, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
+    }
+}
+
+/** `.actbar`: «Cancelar tarea» at the left, «Reasignar» and «Seguir» at the right; only what the PC and the state allow. */
+@Composable
+private fun ActionBar(actions: Set<TaskAction>, enabled: Boolean, onCancel: () -> Unit, onReassign: () -> Unit, onFollowup: () -> Unit) {
+    if (actions.none { it in BAR }) return
+    Column(Modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (TaskAction.Cancel in actions) OrbButton(TaskTexts.CANCEL_CONFIRM, onCancel, kind = OrbButtonKind.Danger, enabled = enabled)
+            Box(Modifier.weight(1f))
+            if (TaskAction.Reassign in actions) OrbButton(TaskTexts.REASSIGN, onReassign, enabled = enabled)
+            if (TaskAction.Followup in actions) OrbButton(TaskTexts.FOLLOWUP, onFollowup, enabled = enabled)
+        }
+    }
+}
+
+/** The task's own history, newest first. */
+@Composable
+private fun History(d: TaskDetail, nowMs: Long) {
+    for (e in d.events.asReversed()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(ChatTime.short(e.at, nowMs), Modifier.width(52.dp), color = OrbKit.faintForeground, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(e.detail.ifBlank { e.kind.orEmpty() }, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 14.sp, lineHeight = 20.sp)
+        }
+    }
 }
 
 @Composable
-private fun ReassignDialog(agents: List<AgentChoice>?, current: String?, reasoning: String?, onDismiss: () -> Unit, onOk: (String, String) -> Unit) {
+private fun Links(links: List<TaskLink>, onOpen: (Long) -> Unit) {
+    for (l in links) OrbSheetItem("#${l.id} ${l.title} · ${TaskTexts.status(l.status)}", { onOpen(l.id) }, icon = OrbIcons.Tasks)
+}
+
+/** `dlg:reasignar`: the agents the PC offers with their account and model, then «Más opciones» (the reasoning). */
+@Composable
+private fun ReassignSheet(agents: List<AgentChoice>?, current: String?, reasoning: String?, onDismiss: () -> Unit, onOk: (String, String) -> Unit) {
     var agent by rememberSaveable { mutableStateOf(current?.takeIf { it.isNotBlank() } ?: "any") }
     var level by rememberSaveable { mutableStateOf(reasoning?.takeIf { it.isNotBlank() } ?: "medium") }
     // A task already at a level outside the standard list keeps it selectable, so it is not lowered silently.
     val levels = if (reasoning != null && reasoning !in TaskReasoning && reasoning.isNotBlank()) TaskReasoning + reasoning else TaskReasoning
     val options = listOf(AgentChoice("any", TaskTexts.REASSIGN_AUTO)) + agents.orEmpty()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(TaskTexts.REASSIGN_TITLE) },
-        text = {
-            Column(Modifier.verticalScroll(rememberScrollState())) {
-                Text(TaskTexts.REASSIGN_AGENT, style = MaterialTheme.typography.labelLarge)
-                if (agents == null) CircularProgressIndicator(Modifier.padding(8.dp).size(24.dp))
-                for (o in options) {
-                    Row(
-                        Modifier.fillMaxWidth().selectable(agent == o.id, onClick = { agent = o.id }, role = Role.RadioButton),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = agent == o.id, onClick = null)
-                        Text(o.label, Modifier.padding(start = 12.dp, top = 10.dp, bottom = 10.dp))
-                    }
-                }
-                Text(TaskTexts.REASSIGN_REASONING, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.labelLarge)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (r in levels) FilterChip(selected = level == r, onClick = { level = r }, label = { Text(TaskTexts.reasoning(r)) })
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onOk(agent, level) }, enabled = agents != null) { Text(TaskTexts.REASSIGN_OK) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(TaskTexts.DISMISS) } },
-    )
+    OrbSheet(onDismiss, title = TaskTexts.REASSIGN_SHEET) {
+        if (agents == null) Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { OrbSpinner(size = 24.dp) }
+        for (o in options) {
+            val on = agent == o.id
+            OrbSheetItem(
+                listOfNotNull(o.label, o.detail).joinToString(" · "), { agent = o.id }, Modifier.semantics { selected = on },
+                icon = if (on) OrbIcons.Check else OrbIcons.Circle, meta = if (o.id == (current ?: "any")) TaskTexts.REASSIGN_CURRENT else null,
+            )
+        }
+        OrbSheetLabel(TaskTexts.MORE_OPTIONS_TASK)
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(TaskTexts.REASSIGN_REASONING, Modifier.align(Alignment.CenterVertically).padding(end = 6.dp), color = OrbKit.mutedForeground, fontSize = 14.sp)
+            for (r in levels) OrbChip(TaskTexts.reasoning(r), selected = level == r, onClick = { level = r })
+        }
+        SheetBar(TaskTexts.REASSIGN_OK, enabled = agents != null, onDismiss = onDismiss, onOk = { onOk(agent, level) })
+    }
 }
 
+/** `dlg:seguir`: a field for what is missing, and «Enviar». */
 @Composable
-private fun FollowupDialog(onDismiss: () -> Unit, onSend: (String) -> Unit) {
+private fun FollowupSheet(onDismiss: () -> Unit, onSend: (String) -> Unit) {
     var text by rememberSaveable { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(TaskTexts.FOLLOWUP_TITLE) },
-        text = { OutlinedTextField(text, { text = it }, Modifier.fillMaxWidth(), minLines = 3, maxLines = 6, label = { Text(TaskTexts.FOLLOWUP_HINT) }) },
-        confirmButton = { TextButton(onClick = { onSend(text) }, enabled = text.isNotBlank()) { Text(TaskTexts.FOLLOWUP_SEND) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(TaskTexts.DISMISS) } },
-    )
+    OrbSheet(onDismiss, title = TaskTexts.FOLLOWUP_SHEET) {
+        Box(Modifier.imePadding().padding(horizontal = 16.dp, vertical = 4.dp)) { TextArea(text, { text = it }, TaskTexts.FOLLOWUP_PLACEHOLDER) }
+        SheetBar(TaskTexts.FOLLOWUP_SEND, enabled = text.isNotBlank(), onDismiss = onDismiss, onOk = { onSend(text) })
+    }
+}
+
+/** The `.actbar` inside a sheet: «Cancelar» and the main action. */
+@Composable
+private fun SheetBar(ok: String, enabled: Boolean, onDismiss: () -> Unit, onOk: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+        OrbButton(ChatTexts.CANCEL, onDismiss, kind = OrbButtonKind.Ghost)
+        OrbButton(ok, onOk, kind = OrbButtonKind.Primary, enabled = enabled)
+    }
 }
