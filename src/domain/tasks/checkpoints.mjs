@@ -182,7 +182,11 @@ export async function fullSnapshot(repo, { message }) {
 // snapshot means somebody touched the file after the task ended, so it is not counted as hidden. Those paths go to `later`
 // (when given): left as they are and reported, so a task that forged that date still cannot hide the file from the person.
 // A change date in the future is no proof of a later edit (a task may set it so, to hide a change): it is trusted only up to
-// `now` (plus a little slack for clock jitter), and beyond it the file counts as changed by the task.
+// `now`, and beyond it the file counts as changed by the task.
+// Both comparisons leave CLOCK_SLACK: the file system stamps files with a clock that runs a few ms apart from the one
+// Date.now() reads (so a task's last write can look newer than a snapshot started right after it), and a snapshot
+// without `at` only knows its second. Inside that margin the file counts as the task's, as before.
+const CLOCK_SLACK = 2000;
 export function missedBy(repo, after, full, later = [], now = Date.now()) {
   const at = after.at ?? Number(git(repo, 'show', '-s', '--format=%ct', after.commit).stdout.trim()) * 1000;
   return changedBetween(repo, after.commit, full.commit).filter((c) => {
@@ -190,7 +194,7 @@ export function missedBy(repo, after, full, later = [], now = Date.now()) {
     try {
       const st = fs.statSync(path.join(repo, c.path)); // gone: git always sees that
       if (st.mtimeMs >= at) return false;
-      if (Math.floor(st.ctimeMs) > at && st.ctimeMs <= now + 2000) { later.push(c.path); return false; } // whole ms: `at` is one, so a write in that same ms is the task's
+      if (st.ctimeMs > at + CLOCK_SLACK && st.ctimeMs <= now + CLOCK_SLACK) { later.push(c.path); return false; }
       return true;
     } catch { return false; }
   });

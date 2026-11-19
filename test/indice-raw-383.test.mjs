@@ -64,7 +64,7 @@ test('Deshacer también devuelve un archivo cambiado con su fecha restaurada, y 
 
 test('Deshacer deja intacto y avisa de un archivo que el usuario copió después con una fecha antigua', async () => {
   const { repo, task } = hiddenTask();
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => setTimeout(r, 2200)); // past the clock slack of missedBy: nearer than that, a change still counts as the task's
   // what Explorer or an unzip do: new content (or a new file) that keeps the source's old date, but gets a new change date
   fs.writeFileSync(path.join(repo, 'c.txt'), 'TRES (copiado después)\n'); fs.utimesSync(path.join(repo, 'c.txt'), OLD, OLD);
   fs.writeFileSync(path.join(repo, 'd.txt'), 'nuevo copiado\n'); fs.utimesSync(path.join(repo, 'd.txt'), OLD, OLD);
@@ -128,7 +128,7 @@ test('Deshacer se ve en la conversación de la tarea y Orbe lo sabe en su siguie
 
 test('a change date in the future is not trusted: the file counts as changed, while an honest later date is skipped', async () => {
   const { repo, task } = hiddenTask();
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => setTimeout(r, 2200)); // past the clock slack of missedBy: nearer than that, a change still counts as the task's
   fs.writeFileSync(path.join(repo, 'c.txt'), 'TRES (copiado después)\n'); fs.utimesSync(path.join(repo, 'c.txt'), OLD, OLD);
   const { after: snap } = board.settingJson(`checkpoint:${task.id}`);
   const full = await fullSnapshot(repo, { message: 'full' });
