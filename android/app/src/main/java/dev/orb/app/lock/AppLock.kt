@@ -207,7 +207,7 @@ object LockTexts {
     const val WHERE_TO_CHANGE = "Opcional · Menú › Este móvil › Bloqueo de la app"
     const val NEVER_MASTER = "Nunca pide la contraseña maestra."
     const val USE_PIN = "Usar PIN del móvil"
-    const val BLOCKED = "Demasiados intentos con la huella. Espera un momento o usa el PIN del móvil. No se ha borrado nada."
+    const val BLOCKED = "Demasiados intentos. Espera un momento o usa el PIN del móvil."
     const val FAILED = "No se pudo comprobar. Inténtalo otra vez o usa el PIN del móvil."
 
     fun notice(n: LockNotice) = when (n) {
