@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -60,8 +61,10 @@ class ManifestPermissionsTest {
 
     // An empty affinity keeps another app's activity from being slipped into Orb's task (task hijacking on Android 7-10).
     @Test fun theEntryActivityHasAnEmptyTaskAffinity() {
-        val info = context.packageManager.getActivityInfo(android.content.ComponentName(context, "dev.orb.app.MainActivity"), 0)
-        assertEquals("", info.taskAffinity)
+        // Robolectric reports an empty affinity as null, so the manifest source is what is checked.
+        val xml = java.io.File("src/main/AndroidManifest.xml").readText()
+        val main = Regex("<activity\\b[^>]*android:name=\"\\.MainActivity\"[^>]*>").find(xml)!!.value
+        assertTrue(main, main.contains("android:taskAffinity=\"\""))
     }
 
     @Test fun theOnlyComponentsOthersCanStartAreTheEntryActivityAndTheBootReceiver() {

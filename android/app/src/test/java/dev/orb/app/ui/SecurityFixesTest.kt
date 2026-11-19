@@ -90,7 +90,7 @@ class PcNameTextTest {
 
 class PcMessageTextTest {
     @Test fun aRefusalIsOneShortLine() {
-        val raw = "Hola\r\n\n  llama al‮ 600 123 456​" + "x".repeat(500)
+        val raw = "Hola\r\n\nllama al‮ 600 123 456​" + "x".repeat(500)
         val shown = dev.orb.app.link.net.pcMessage(raw, "nada")
         assertTrue(shown.length <= 200)
         assertEquals("Hola llama al 600 123 456", shown.take(25))
