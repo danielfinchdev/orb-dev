@@ -241,7 +241,7 @@ class TaskDiffScreenTest {
 
     @Test fun reasonTheRepositoryIsGoneIsToldWithItsTrueSentence() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "gone")))
-        rule.onNodeWithText("La carpeta del proyecto ya no está en el PC, así que no hay cambios que enseñar.").assertIsDisplayed()
+        rule.onNodeWithText("El repositorio de esta tarea ya no existe en el PC, así que no hay cambios que enseñar.").assertIsDisplayed()
     }
 
     @Test fun aTaskJoinedByHandIsToldAndOnlyOffersAcceptWithItsOwnRun() {
@@ -257,21 +257,70 @@ class TaskDiffScreenTest {
         assertEquals(listOf<String?>("run7"), b.acceptCheckpoints)
     }
 
-    @Test fun aTaskWithoutFinalPhotoIsToldOffersUndoAfterAskingAndNoAccept() {
-        val b = backend(TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
-        show(b)
-        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Deshacerla la devuelve a como estaba antes.").assertIsDisplayed()
+    @Test fun aTaskWithoutFinalPhotoIsToldAndOffersNoButtonAtAll() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "nophotoafter")))
+        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Para deshacerla, hazlo desde el PC: allí se ve lo que se perdería.").assertIsDisplayed()
         rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun anUnfinishedMergeIsToldAndOffersNoButtonAtAll() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "resolveonpc")))
+        rule.onNodeWithText("La unión de los cambios de esta tarea quedó sin terminar. Resuélvela en el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun anOldRestorePointIsToldAndOnlyOffersAccept() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "unknownrun")))
+        rule.onNodeWithText("Este punto de vuelta es anterior a la última actualización de Orb y no se puede comprobar a qué ejecución pertenece. Para deshacerla, hazlo desde el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun aGoneRepositoryOffersAcceptButNoUndo() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "gone")))
+        rule.onNodeWithText("El repositorio de esta tarea ya no existe en el PC, así que no hay cambios que enseñar.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun noPhotoOffersAcceptButNoUndo() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "nophoto")))
+        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun noPhotoOfATaskAlreadyUndoneOffersNothing() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "nophoto"), detail(task(4, status = "done", undone = true), hasCheckpoint = true)))
+        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun aFolderWithoutGitOffersBothAndKeepsItsConfirmation() {
+        val b = backend(TaskDiff(false, emptyList(), 0, reason = "nogit"))
+        show(b)
+        rule.onNodeWithText("Aceptar").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("¿Deshacer esta tarea?").assertIsDisplayed()
-        // No file is counted: nobody knows them.
-        rule.onNodeWithText("Se restauran los archivos modificados por esta tarea. Los cambios posteriores se conservan.").assertIsDisplayed()
         assertEquals(emptyList<String>(), b.calls)
-        rule.onAllNodesWithText("Deshacer").onLast().performClick()
-        rule.waitForIdle()
-        assertEquals(listOf("undo 4"), b.calls)
     }
+
+    private fun refusalIsShownAsItIs(words: String) {
+        val b = backend(TaskDiff(true, files, 0))
+        show(b)
+        b.actionResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Refused(409, words)))
+        rule.onNodeWithText("Aceptar").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(words).assertIsDisplayed()
+    }
+
+    @Test fun thePcsRefusalForNoFinalPhotoIsShownAsItIs() =
+        refusalIsShownAsItIs("el PC no guardó el estado final de esta tarea; deshazla desde el PC, donde se ve lo que se perdería")
+
+    @Test fun thePcsRefusalForAnUnfinishedMergeIsShownAsItIs() =
+        refusalIsShownAsItIs("la unión de esta tarea quedó sin terminar; resuélvela en el PC")
 
     @Test fun aReasonThisAppDoesNotKnowKeepsTheGenericSentenceAndNoButtons() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "somethingnew")))

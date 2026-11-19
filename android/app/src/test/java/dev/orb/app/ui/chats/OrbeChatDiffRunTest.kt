@@ -150,16 +150,36 @@ class OrbeChatDiffRunTest {
         assertNull(vm.state.value.undoAsk)
     }
 
-    @Test fun aTaskJoinedByHandLosesUndoFromTheCardButKeepsAccept() = runTest(dispatcher) {
-        val actions = actionsOf(backend(TaskStat(0, null, null, joinedByHand = true)))
-        assertTrue(TaskAction.AcceptHeld in actions && TaskAction.SeeChanges in actions)
-        assertFalse(TaskAction.UndoHeld in actions)
+    private fun TestScope.cardFor(reason: String?, undone: Boolean = false): Pair<Boolean, Boolean> {
+        val b = backend(if (reason == null) TaskStat(0, null, null, unreadable = true) else TaskStat(0, null, null, reason = reason))
+        b.taskDetail = b.taskDetail.copy(undone = undone)
+        val actions = actionsOf(b)
+        assertTrue(TaskAction.SeeChanges in actions)
+        return (TaskAction.AcceptHeld in actions) to (TaskAction.UndoHeld in actions)
     }
 
-    @Test fun aTaskWithoutFinalPhotoLosesAcceptFromTheCardButKeepsUndo() = runTest(dispatcher) {
-        val actions = actionsOf(backend(TaskStat(0, null, null, noFinalPhoto = true)))
-        assertTrue(TaskAction.UndoHeld in actions && TaskAction.SeeChanges in actions)
-        assertFalse(TaskAction.AcceptHeld in actions)
+    /** The card follows the same table as the changes screen: accept, undo. */
+    @Test fun theCardOffersForEachReasonWhatTheChangesScreenOffers() = runTest(dispatcher) {
+        assertEquals(true to false, cardFor("nophoto"))
+        assertEquals(true to true, cardFor("nogit"))
+        assertEquals(false to false, cardFor("notdone"))
+        assertEquals(false to false, cardFor("nophotoafter"))
+        assertEquals(true to false, cardFor("joinedbyhand"))
+        assertEquals(false to false, cardFor("resolveonpc"))
+        assertEquals(true to false, cardFor("unknownrun"))
+        assertEquals(true to false, cardFor("gone"))
+    }
+
+    @Test fun aReasonThisAppDoesNotKnowOrNoValidReadTakesBothButtonsOffTheCard() = runTest(dispatcher) {
+        assertEquals(false to false, cardFor(null))
+        val b = backend(OrbeParser.taskStat(Json.parseToJsonElement("""{"available":false,"reason":"somethingnew","files":[],"more":0}""")))
+        val actions = actionsOf(b)
+        assertTrue(TaskAction.SeeChanges in actions)
+        assertFalse(TaskAction.AcceptHeld in actions || TaskAction.UndoHeld in actions)
+    }
+
+    @Test fun noPhotoOnATaskAlreadyUndoneOffersNoAcceptOnTheCard() = runTest(dispatcher) {
+        assertEquals(false to false, cardFor("nophoto", undone = true))
     }
 
     @Test fun parsesTheRunAndTheNotReadyReasonOfTheDiff() {
@@ -172,8 +192,9 @@ class OrbeChatDiffRunTest {
         assertTrue(noRun.runKnown && !noRun.isOfRun("cp8"))
         val notDone = parse("""{"available":false,"reason":"notdone","files":[],"more":0}""")!!
         assertTrue(notDone.notReady && !notDone.isOfRun("cp8"))
-        assertNull(parse("""{"available":false,"reason":"nophoto","files":[],"more":0}"""))
-        assertTrue(parse("""{"available":false,"reason":"joinedbyhand","files":[],"more":0}""")!!.joinedByHand)
-        assertTrue(parse("""{"available":false,"reason":"nophotoafter","files":[],"more":0}""")!!.noFinalPhoto)
+        assertEquals("nophoto", parse("""{"available":false,"reason":"nophoto","files":[],"more":0}""")!!.reason)
+        assertEquals("joinedbyhand", parse("""{"available":false,"reason":"joinedbyhand","files":[],"more":0}""")!!.reason)
+        assertEquals("nophotoafter", parse("""{"available":false,"reason":"nophotoafter","files":[],"more":0}""")!!.reason)
+        assertTrue(parse("""{"available":false,"reason":"somethingnew","files":[],"more":0}""")!!.unreadable)
     }
 }

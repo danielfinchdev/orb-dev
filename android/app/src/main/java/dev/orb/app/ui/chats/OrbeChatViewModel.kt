@@ -549,10 +549,12 @@ class OrbeChatViewModel(
             statRead != null && statRead.isFailure -> d.copy(actions = d.actions - TaskAction.AcceptHeld - TaskAction.UndoHeld)
             st == null -> d
             !st.isOfRun(d.checkpointId) -> d.copy(actions = d.actions - TaskAction.AcceptHeld - TaskAction.UndoHeld)
-            // The PC allows no undo of work joined by hand, and nothing is accepted that cannot be seen.
-            st.joinedByHand -> d.copy(actions = d.actions - TaskAction.UndoHeld)
-            st.noFinalPhoto -> d.copy(actions = d.actions - TaskAction.AcceptHeld)
-            else -> d
+            // An answer that cannot be read decides nothing; otherwise each button follows the changes screen's table for the PC's reason.
+            else -> d.copy(
+                actions = d.actions
+                    .let { if (st.allowsAccept(d.undone)) it else it - TaskAction.AcceptHeld }
+                    .let { if (st.allowsUndo) it else it - TaskAction.UndoHeld },
+            )
         }
         // A newer read of the task may have been asked while the counts were on their way.
         if (!isLatest(task, read)) return settled

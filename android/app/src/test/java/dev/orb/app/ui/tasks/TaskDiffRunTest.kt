@@ -177,17 +177,40 @@ class TaskDiffRunTest {
         assertEquals(emptyList<String?>(), b.undoCheckpoints)
     }
 
-    @Test fun aTaskWithoutFinalPhotoCanBeUndoneAfterTheDialogButNeverAccepted() = runTest(dispatcher) {
+    private fun buttonsFor(reason: String, undone: Boolean = false): Pair<Boolean, Boolean> {
+        val b = FakeTasksBackend().also {
+            it.details[4] = Result.success(detail(task(4, "Push", status = "done", undone = undone), hasCheckpoint = true, checkpointId = "run2"))
+            it.diffs[4] = Result.success(TaskDiff(false, emptyList(), 0, reason = reason))
+        }
+        var out = false to false
+        runTest(dispatcher) { val s = vm(b).state.value; out = s.canAccept to s.canUndo }
+        return out
+    }
+
+    /** One row of the PC's table per reason: accept, undo. */
+    @Test fun eachReasonForNoDiffOffersExactlyWhatThePcAllows() {
+        assertEquals("nophoto" to (true to false), "nophoto" to buttonsFor("nophoto"))
+        assertEquals("nogit" to (true to true), "nogit" to buttonsFor("nogit"))
+        assertEquals("notdone" to (false to false), "notdone" to buttonsFor("notdone"))
+        assertEquals("nophotoafter" to (false to false), "nophotoafter" to buttonsFor("nophotoafter"))
+        assertEquals("joinedbyhand" to (true to false), "joinedbyhand" to buttonsFor("joinedbyhand"))
+        assertEquals("resolveonpc" to (false to false), "resolveonpc" to buttonsFor("resolveonpc"))
+        assertEquals("unknownrun" to (true to false), "unknownrun" to buttonsFor("unknownrun"))
+        assertEquals("gone" to (true to false), "gone" to buttonsFor("gone"))
+        assertEquals("other" to (false to false), "other" to buttonsFor("somethingnew"))
+    }
+
+    @Test fun aTaskAlreadyUndoneWithNoPhotoIsNotOfferedAccept() {
+        assertEquals(false to false, buttonsFor("nophoto", undone = true))
+    }
+
+    @Test fun aTaskWithoutFinalPhotoOffersNothingAndNothingIsSent() = runTest(dispatcher) {
         val b = backend("run2", TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
         val vm = vm(b)
-        val s = vm.state.value
-        assertTrue(!s.canAccept && s.canUndo && !s.notReady)
-        vm.accept()
-        vm.askUndo()
-        vm.undo()
+        vm.accept(); vm.askUndo(); vm.undo()
         runCurrent()
         assertEquals(emptyList<String?>(), b.acceptCheckpoints)
-        assertEquals(listOf<String?>("run2"), b.undoCheckpoints)
+        assertEquals(emptyList<String?>(), b.undoCheckpoints)
     }
 
     @Test fun aReasonThisAppDoesNotKnowOffersNoButtons() = runTest(dispatcher) {

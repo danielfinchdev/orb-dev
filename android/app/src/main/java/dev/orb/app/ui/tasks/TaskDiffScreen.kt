@@ -199,6 +199,8 @@ private fun NoDiff(diff: TaskDiff) {
         "gone" -> Message(TaskTexts.REPO_GONE, TaskTexts.REPO_GONE_HINT, icon = OrbIcons.FolderGit2)
         TaskDiff.JOINED_BY_HAND -> Message(TaskTexts.JOINED_BY_HAND, TaskTexts.JOINED_BY_HAND_HINT, icon = OrbIcons.GitCompare)
         TaskDiff.NO_PHOTO_AFTER -> Message(TaskTexts.NO_PHOTO_AFTER, TaskTexts.NO_PHOTO_AFTER_HINT, icon = OrbIcons.History)
+        TaskDiff.RESOLVE_ON_PC -> Message(TaskTexts.RESOLVE_ON_PC, TaskTexts.RESOLVE_ON_PC_HINT, icon = OrbIcons.GitCompare)
+        TaskDiff.UNKNOWN_RUN -> Message(TaskTexts.UNKNOWN_RUN, TaskTexts.UNKNOWN_RUN_HINT, icon = OrbIcons.History)
         else -> Message(TaskTexts.NO_CHANGES, TaskTexts.NO_CHANGES_HINT, icon = OrbIcons.GitCompare)
     }
 }

@@ -265,6 +265,9 @@ object TaskTexts {
     const val UNDO = "Deshacer"
     const val UNDO_TASK_TITLE = "¿Deshacer esta tarea?"
     const val UNDO_TASK_BODY = "Se restauran los archivos modificados por esta tarea. Los cambios posteriores se conservan."
+
+    /** The task screen of a task Orb held reads no diff, so it cannot promise what happens to later changes. */
+    const val UNDO_HELD_BODY = "Se restauran los archivos modificados por esta tarea."
     const val UNDO_DONE = "Deshecho"
     fun heldLine(reasons: String, folder: String?) =
         if (folder.isNullOrBlank()) "Retenida para que la revises: $reasons." else "Retenida para que la revises: $reasons en $folder."
@@ -309,11 +312,15 @@ object TaskTexts {
     const val NO_GIT = "La carpeta no usa git"
     const val NO_GIT_HINT = "El PC no puede enseñar los cambios línea a línea de una carpeta sin git."
     const val REPO_GONE = "El repositorio ya no existe"
-    const val REPO_GONE_HINT = "La carpeta del proyecto ya no está en el PC, así que no hay cambios que enseñar."
+    const val REPO_GONE_HINT = "El repositorio de esta tarea ya no existe en el PC, así que no hay cambios que enseñar."
     const val JOINED_BY_HAND = "Cambios unidos a mano en el PC"
     const val JOINED_BY_HAND_HINT = "Los cambios de esta tarea se unieron a mano en el PC. Aquí no se pueden ver ni deshacer."
     const val NO_PHOTO_AFTER = "No hay cambios que enseñar"
-    const val NO_PHOTO_AFTER_HINT = "El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Deshacerla la devuelve a como estaba antes."
+    const val NO_PHOTO_AFTER_HINT = "El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Para deshacerla, hazlo desde el PC: allí se ve lo que se perdería."
+    const val RESOLVE_ON_PC = "La unión de los cambios quedó sin terminar"
+    const val RESOLVE_ON_PC_HINT = "La unión de los cambios de esta tarea quedó sin terminar. Resuélvela en el PC."
+    const val UNKNOWN_RUN = "Punto de vuelta anterior a la última actualización"
+    const val UNKNOWN_RUN_HINT = "Este punto de vuelta es anterior a la última actualización de Orb y no se puede comprobar a qué ejecución pertenece. Para deshacerla, hazlo desde el PC."
     const val NO_CHANGED_FILES = "La tarea no cambió ningún archivo."
     fun hiddenFiles(n: Int) =
         if (n == 1) "1 archivo no se enseña porque parece contener secretos." else "$n archivos no se enseñan porque parecen contener secretos."

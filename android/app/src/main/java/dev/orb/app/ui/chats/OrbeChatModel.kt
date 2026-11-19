@@ -85,16 +85,26 @@ data class OrbeQueued(val id: String, val text: String, val at: Long)
 /**
  * What a finished task changed, counts only (`tasks.diff {stat:true}`). The line counts are null when the PC cut the list.
  * [checkpointId] is the run those counts belong to ([runKnown]: the PC said so at all) and [notReady] that the PC has no diff
- * of the last run yet. [joinedByHand] and [noFinalPhoto] carry no counts: they only say which decision the PC does not allow.
+ * of the last run yet. [reason] is why the PC has no diff to count (carries no counts: it only says which decision may be offered
+ * on the card) and [unreadable] that the answer cannot be trusted at all, so the card decides nothing.
  */
 @Immutable
 data class TaskStat(
     val files: Int, val added: Int?, val removed: Int?,
     val checkpointId: String? = null, val runKnown: Boolean = false, val notReady: Boolean = false,
-    val joinedByHand: Boolean = false, val noFinalPhoto: Boolean = false,
+    val reason: String? = null, val unreadable: Boolean = false,
 ) {
     /** Whether this is a count of changed files and may be shown as one. */
-    val hasCounts get() = !notReady && !joinedByHand && !noFinalPhoto
+    val hasCounts get() = !notReady && reason == null && !unreadable
+
+    /** The PC's no-diff answer as the changes screen reads it, so a card and that screen decide the same way. */
+    private val asDiff get() = dev.orb.app.ui.tasks.TaskDiff(false, emptyList(), 0, reason = reason)
+
+    /** Whether «Aceptar» may be on the card: with counts it is; without a diff only where the changes screen offers it too. */
+    fun allowsAccept(undone: Boolean): Boolean = !unreadable && !notReady && (reason == null || asDiff.allowsAccept(undone))
+
+    /** Whether «Deshacer» may be on the card: with counts, or on a folder without git (restored from the PC's copy). */
+    val allowsUndo: Boolean get() = !unreadable && !notReady && (reason == null || asDiff.allowsUndo)
 
     /** Whether the counts are of the run [taskRun] the task is at now; a PC that does not name the run cannot disagree. */
     fun isOfRun(taskRun: String?): Boolean = !notReady && (!runKnown || (checkpointId != null && taskRun != null && checkpointId == taskRun))
@@ -257,7 +267,7 @@ object OrbeParser {
         // A task Orb stopped is reviewed on the task's changes screen, which shows what the PC rechecks before «Aceptar» and
         // asks before «Deshacer»; a card never offers either one, so accepting never skips why it was held.
         if (held) { out -= dev.orb.app.ui.tasks.TaskAction.AcceptHeld; out -= dev.orb.app.ui.tasks.TaskAction.UndoHeld; return out }
-        if (!d.accepted && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_ACCEPT)) out += dev.orb.app.ui.tasks.TaskAction.AcceptHeld
+        if (!d.accepted && !d.row.undone && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_ACCEPT)) out += dev.orb.app.ui.tasks.TaskAction.AcceptHeld
         if (d.hasCheckpoint && !d.row.undone && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_UNDO)) out += dev.orb.app.ui.tasks.TaskAction.UndoHeld
         return out
     }
@@ -268,14 +278,14 @@ object OrbeParser {
      */
     fun taskStat(el: kotlinx.serialization.json.JsonElement?): TaskStat? {
         val d = dev.orb.app.ui.tasks.TasksParser.diff(el ?: return null)
-        // The PC has no diff of the last run yet: no counts, but the card must not offer a decision on it.
+        // The PC has no diff of the last run yet: no counts, but the card must not offer a decision on it. A reason this app does not
+        // know, or no reason at all, is an answer that cannot be trusted: the card then decides nothing.
         if (!d.available) return when {
             d.reason == "notdone" -> TaskStat(0, null, null, notReady = true)
-            d.joinedByHand -> TaskStat(0, null, null, joinedByHand = true)
-            d.noFinalPhoto -> TaskStat(0, null, null, noFinalPhoto = true)
-            else -> null
+            d.reason != null && d.reason in dev.orb.app.ui.tasks.TaskDiff.KNOWN_REASONS -> TaskStat(0, null, null, reason = d.reason)
+            else -> TaskStat(0, null, null, unreadable = true)
         }
-        if (d.files.any { it.patch.isNotEmpty() }) return null
+        if (d.files.any { it.patch.isNotEmpty() }) return TaskStat(0, null, null, unreadable = true)
         val n = d.files.size + d.more
         if (n == 0) return null
         return TaskStat(n, d.added.takeIf { d.more == 0 }, d.removed.takeIf { d.more == 0 }, checkpointId = d.checkpointId, runKnown = d.runKnown)

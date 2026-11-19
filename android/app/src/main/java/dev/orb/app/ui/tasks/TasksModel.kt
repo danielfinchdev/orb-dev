@@ -111,7 +111,7 @@ data class TaskDetail(
 data class DiffFile(val status: String, val path: String, val added: Int, val removed: Int, val binary: Boolean, val patch: String, val cut: Boolean)
 
 /**
- * What `tasks.diff` says. [reason] is why there is no diff (`nophoto`, `nogit`, `notdone`, `gone`, `joinedbyhand`, `nophotoafter`) and [hidden] how many files
+ * What `tasks.diff` says. [reason] is why there is no diff (`nophoto`, `nogit`, `notdone`, `gone`, `joinedbyhand`, `nophotoafter`, `resolveonpc`, `unknownrun`) and [hidden] how many files
  * were left out because they look like secrets. [checkpointId] is the run the diff belongs to; [runKnown] tells a PC that does
  * not send the field at all (an older one) from one that sends it empty because it cannot tell.
  */
@@ -135,13 +135,37 @@ data class TaskDiff(
     /** The task's work was joined by hand on the PC: the stored diff no longer describes the folder, the PC allows no undo. */
     val joinedByHand get() = !available && reason == JOINED_BY_HAND
 
-    /** The PC could not take the final photo: there is nothing to see or accept, going back to before the task is still possible. */
+    /** The PC could not take the final photo: there is nothing to see, so nothing is decided from here. */
     val noFinalPhoto get() = !available && reason == NO_PHOTO_AFTER
+
+    /**
+     * Whether «Aceptar» may be offered for this diff. With a diff in sight it is; without one only where the PC allows the
+     * accept and no file is touched. [undone] is the task's own record: a task already undone has nothing left to accept.
+     * Anything not listed here (unfinished merge, no final photo, unknown reason, task still running) offers nothing.
+     */
+    fun allowsAccept(undone: Boolean): Boolean = when {
+        available || reason == null -> true
+        reason == NO_PHOTO -> !undone
+        reason in ACCEPT_WITHOUT_DIFF -> true
+        else -> false
+    }
+
+    /**
+     * Whether «Deshacer» may be offered for this diff. Undoing sends the whole folder back to before the task, so it is only
+     * offered when the person has seen what changes (a diff) or the PC keeps a copy to restore from a folder without git.
+     */
+    val allowsUndo: Boolean get() = available || reason == null || reason == NO_GIT
 
     companion object {
         const val JOINED_BY_HAND = "joinedbyhand"
         const val NO_PHOTO_AFTER = "nophotoafter"
-        val KNOWN_REASONS = setOf("nophoto", "nogit", "notdone", "gone", JOINED_BY_HAND, NO_PHOTO_AFTER)
+        const val NO_PHOTO = "nophoto"
+        const val RESOLVE_ON_PC = "resolveonpc"
+        const val UNKNOWN_RUN = "unknownrun"
+        const val NO_GIT = "nogit"
+        const val GONE = "gone"
+        val ACCEPT_WITHOUT_DIFF = setOf(NO_GIT, JOINED_BY_HAND, UNKNOWN_RUN, GONE)
+        val KNOWN_REASONS = setOf(NO_PHOTO, NO_GIT, "notdone", GONE, JOINED_BY_HAND, NO_PHOTO_AFTER, RESOLVE_ON_PC, UNKNOWN_RUN)
     }
 }
 

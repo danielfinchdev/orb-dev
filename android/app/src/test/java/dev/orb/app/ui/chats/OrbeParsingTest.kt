@@ -182,10 +182,10 @@ class OrbeParsingTest {
 -a
 +b
 "}],"more":0}""")
-        assertNull(OrbeParser.taskStat(old))
-        assertNull(OrbeParser.taskStat(json("""{"available":false,"reason":"nogit","files":[],"more":0}""")))
+        assertTrue(OrbeParser.taskStat(old)!!.unreadable)
+        assertEquals("nogit", OrbeParser.taskStat(json("""{"available":false,"reason":"nogit","files":[],"more":0}"""))!!.reason)
         assertNull(OrbeParser.taskStat(json("""{"available":true,"files":[],"more":0}""")))
-        assertNull(OrbeParser.taskStat(json("""[1,2]""")))
+        assertTrue(OrbeParser.taskStat(json("""[1,2]"""))!!.unreadable)
         assertNull(OrbeParser.taskStat(null))
         // Missing numbers are zero, not a crash.
         assertEquals(TaskStat(1, 0, 0), OrbeParser.taskStat(json("""{"available":true,"files":[{"path":"x"}]}""")))

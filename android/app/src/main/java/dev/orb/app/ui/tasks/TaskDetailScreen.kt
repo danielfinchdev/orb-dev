@@ -138,7 +138,7 @@ fun TaskDetailScreen(
         )
         Ask.Undo -> OrbDialog(
             close, TaskTexts.UNDO_TASK_TITLE, OrbDialogAction(TaskTexts.UNDO, { ask = null; vm.undo() }),
-            text = TaskTexts.UNDO_TASK_BODY, dismiss = OrbDialogAction(TaskTexts.DISMISS, close),
+            text = TaskTexts.UNDO_HELD_BODY, dismiss = OrbDialogAction(TaskTexts.DISMISS, close),
         )
         Ask.LaunchAnyway -> OrbDialog(
             close, TaskTexts.LAUNCH_ASK, OrbDialogAction(TaskTexts.LAUNCH_CONFIRM, { ask = null; vm.launchAnyway() }),

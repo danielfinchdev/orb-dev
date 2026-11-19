@@ -108,6 +108,8 @@ class TaskDiffShotsTest {
     @Test fun noPhoto() = shoot("-sin-punto-de-vuelta", TaskDiff(false, emptyList(), 0, reason = "nophoto"))
     @Test fun joinedByHand() = shoot("-unida-a-mano", TaskDiff(false, emptyList(), 0, reason = "joinedbyhand"), checkpoint = "run1")
     @Test fun noFinalPhoto() = shoot("-sin-foto-final", TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
+    @Test fun mergeUnfinished() = shoot("-union-sin-terminar", TaskDiff(false, emptyList(), 0, reason = "resolveonpc"))
+    @Test fun oldRestorePoint() = shoot("-punto-antiguo", TaskDiff(false, emptyList(), 0, reason = "unknownrun"))
     @Test fun noGit() = shoot("-sin-git", TaskDiff(false, emptyList(), 0, reason = "nogit"))
     @Test fun hiddenFiles() = shoot("-ocultos", TaskDiff(true, mockupFiles(), 0, hidden = 2))
 }
