@@ -48,14 +48,16 @@ class ScanScreenTest {
     @Test fun aRefusedPermissionOffersTheButtonThePasteAndTheCodeByHand() {
         var given = 0
         var pasted = 0
-        show(ScanUiState(permission = ScanPermission.Denied), ScanActions(give = { given++ }, paste = { pasted++ }))
+        var typed = 0
+        show(ScanUiState(permission = ScanPermission.Denied), ScanActions(give = { given++ }, paste = { pasted++ }, typeCode = { typed++ }))
         rule.onNodeWithText("Necesito la cámara").assertIsDisplayed()
         rule.onNodeWithText("Orb solo la usa para leer el QR de tu PC. La imagen no sale del móvil.").assertIsDisplayed()
         rule.onNodeWithText("Dar permiso de cámara").performClick()
         rule.onNodeWithText("Pegar el enlace del QR").performClick()
         rule.onNodeWithText("Escribir el código a mano").performClick()
         assertEquals(1, given)
-        assertEquals(2, pasted)
+        assertEquals(1, pasted)
+        assertEquals(1, typed)
     }
 
     @Test fun aPermissionRefusedForGoodOpensTheSettingsInstead() {

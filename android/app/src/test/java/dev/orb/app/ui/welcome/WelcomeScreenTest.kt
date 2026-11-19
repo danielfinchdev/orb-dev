@@ -77,11 +77,29 @@ class WelcomeScreenTest {
         vm.openSheet(); vm.setCode("ABCDEF"); vm.setAddress("http://8.8.8.8:3131"); vm.resolve()
         rule.waitForIdle()
         rule.onNodeWithText("Esa dirección no es privada: usa el Wi-Fi de casa o Tailscale.").assertIsDisplayed()
-        rule.onNodeWithText("Sin cámara: código corto").assertIsDisplayed()
+        // A page of its own: the welcome text and the short-code way are not drawn under the notice.
+        rule.onNodeWithText("Sin cámara: código corto").assertDoesNotExist()
+        rule.onNodeWithText("Enlaza el móvil con tu Orb").assertDoesNotExist()
         rule.onNodeWithText("Volver").performClick()
         rule.waitForIdle()
         assertEquals(null, vm.state.value.errorKind)
         rule.onNodeWithText("Escanear el código QR").assertIsDisplayed()
+    }
+
+    @Test fun theScannersPasteWayAsksOnlyForTheLink() {
+        val vm = vm()
+        show(vm)
+        vm.openLinkSheet()
+        rule.waitForIdle()
+        rule.onNodeWithText("Pegar el enlace del QR").assertIsDisplayed()
+        rule.onNodeWithText("Enlace").assertIsDisplayed()
+        rule.onNodeWithText("Pegar").assertIsDisplayed()
+        rule.onNodeWithText("Continuar").assertExists()
+        for (gone in listOf("Código", "Dirección del PC")) rule.onNodeWithText(gone).assertDoesNotExist()
+        vm.closeSheet()
+        vm.openSheet()
+        rule.waitForIdle()
+        rule.onNodeWithText("Dirección del PC").assertIsDisplayed()
     }
 
     @Test fun theNoticeQuestionHasItsBellAndKeepsBothAnswers() {

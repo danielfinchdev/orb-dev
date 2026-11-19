@@ -48,6 +48,7 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBanner
 import dev.orb.app.ui.kit.OrbBannerKind
 import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbFoot
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbCard
 import dev.orb.app.ui.kit.OrbDialog
@@ -131,7 +132,7 @@ fun WelcomeContent(state: WelcomeUiState, a: WelcomeActions, modifier: Modifier 
         if (state.stage == WelcomeStage.Entry && state.sheet) ShortCodeSheet(state, a)
         if (state.noticeDialog) {
             OrbDialog(
-                onDismiss = a.declineNotices, title = "¿Avisos de Orb?", icon = OrbIcons.Bell,
+                onDismiss = a.declineNotices, title = "¿Avisos de Orb?", icon = OrbIcons.Bell, iconSize = 16.dp, elevation = 24.dp,
                 text = "Mensajes nuevos y tareas que esperan tu OK. Puedes responder desde el aviso.",
                 confirm = OrbDialogAction("Activar", a.activateNotices), dismiss = OrbDialogAction("Ahora no", a.declineNotices),
             )
@@ -157,14 +158,26 @@ private fun Hero(title: String, modifier: Modifier = Modifier, text: androidx.co
 @Composable
 private fun EntryPage(state: WelcomeUiState, a: WelcomeActions) {
     val failure = state.errorKind?.let { kind -> state.error?.let { kind to it } }
-    Column(Modifier.fillMaxSize()) {
-        if (failure != null) {
-            val (kind, message) = failure
+    if (failure != null) {
+        // A spent code or a public address is a page of its own, as the mockup draws it: the notice, and the way out.
+        val (kind, message) = failure
+        Column(Modifier.fillMaxSize()) {
             OrbBanner(
-                message, if (kind == WelcomeErrorKind.CodeSpent) OrbIcons.Clock else OrbIcons.ShieldAlert, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                message, if (kind == WelcomeErrorKind.CodeSpent) OrbIcons.Clock else OrbIcons.ShieldAlert, Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
                 kind = if (kind == WelcomeErrorKind.CodeSpent) OrbBannerKind.Warning else OrbBannerKind.Error,
             )
+            Spacer(Modifier.weight(1f))
+            OrbFoot {
+                // The way out of a banner is the button; both bring the first page back as it was.
+                when (kind) {
+                    WelcomeErrorKind.CodeSpent -> OrbButton("Escanear otro QR", { a.dismissError(); a.onScan() }, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
+                    WelcomeErrorKind.NotPrivate -> OrbButton("Volver", a.dismissError, kind = OrbButtonKind.Primary, block = true, big = true)
+                }
+            }
         }
+        return
+    }
+    Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Hero(
                 "Enlaza el móvil con tu Orb", mark = true,
@@ -175,13 +188,8 @@ private fun EntryPage(state: WelcomeUiState, a: WelcomeActions) {
                 },
             )
         }
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            when (failure?.first) {
-                // The way out of a banner is the first button; both bring the first page back as it was.
-                WelcomeErrorKind.CodeSpent -> OrbButton("Escanear otro QR", { a.dismissError(); a.onScan() }, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
-                WelcomeErrorKind.NotPrivate -> OrbButton("Volver", a.dismissError, kind = OrbButtonKind.Primary, block = true, big = true)
-                null -> OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
-            }
+        OrbFoot(spacing = 6.dp) {
+            OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
             OrbButton("Sin cámara: código corto", a.openSheet, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
             OrbNote("Wi-Fi de casa o Tailscale. Todo va cifrado.", Modifier.fillMaxWidth().padding(top = 4.dp))
         }
@@ -193,24 +201,27 @@ private fun Label(text: String) = Text(text, color = OrbKit.mutedForeground, fon
 
 @Composable
 private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
-    OrbSheet(onDismiss = a.closeSheet, title = "Sin cámara: código corto", showClose = true, dismissible = !state.busy) {
+    val linkOnly = state.linkOnly
+    OrbSheet(onDismiss = a.closeSheet, title = if (linkOnly) "Pegar el enlace del QR" else "Sin cámara: código corto", showClose = true, dismissible = !state.busy) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Label("Pega el enlace")
+                Label(if (linkOnly) "Enlace" else "Pega el enlace")
                 OrbTextField(
                     state.link, a.setLink, "orb://enlazar…", leading = OrbIcons.Link, enabled = !state.busy, keyboardType = KeyboardType.Uri,
                     trailing = { OrbButton("Pegar", a.paste, kind = OrbButtonKind.Ghost, small = true, enabled = !state.busy) },
                 )
             }
-            OrbNote("o escribe el código y la dirección", Modifier.fillMaxWidth())
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Label("Código")
-                OrbTextField(state.code, a.setCode, "Código de 6 caracteres", enabled = !state.busy)
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Label("Dirección del PC")
-                OrbTextField(state.address, a.setAddress, "192.168.1.20:7780", enabled = !state.busy, keyboardType = KeyboardType.Uri)
-                OrbNote("Solo Wi-Fi de casa o Tailscale.")
+            if (!linkOnly) {
+                OrbNote("o escribe el código y la dirección", Modifier.fillMaxWidth())
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Label("Código")
+                    OrbTextField(state.code, a.setCode, "Código de 6 caracteres", enabled = !state.busy)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Label("Dirección del PC")
+                    OrbTextField(state.address, a.setAddress, "192.168.1.20:7780", enabled = !state.busy, keyboardType = KeyboardType.Uri)
+                    OrbNote("Solo Wi-Fi de casa o Tailscale.")
+                }
             }
             state.error?.let { Text(it, color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp) }
             if (state.busy) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -257,7 +268,7 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
                 Label("Contraseña maestra del PC")
                 val shown = if (state.checking) "•".repeat(state.passwordLength) else state.password
                 OrbTextField(
-                    shown, a.setPassword, "Contraseña maestra del PC", leading = OrbIcons.KeyRound, enabled = !state.checking,
+                    shown, a.setPassword, "Contraseña maestra del PC", placeholder = "", leading = OrbIcons.KeyRound, enabled = !state.checking,
                     secret = !state.showPassword && !state.checking, invalid = state.passwordError != null, onDone = a.confirm,
                     keyboardType = KeyboardType.Password,
                     trailing = {
@@ -272,7 +283,7 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
                 else OrbNote("Se queda en el móvil: solo demuestra que la sabes.")
             }
         }
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OrbFoot(spacing = 10.dp) {
             state.error?.let { Text(it, color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp) }
             if (state.checking) {
                 Waiting()
@@ -322,8 +333,8 @@ private fun LinkingPage(state: WelcomeUiState, a: WelcomeActions) {
                     }
                 }
             }
-            if (state.stage != WelcomeStage.Done) OrbProgress(state.stepsDone / 3f + 1f / 6f, Modifier.padding(horizontal = 24.dp, vertical = 24.dp), description = "Enlazando")
-            if (done) Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp)) {
+            if (state.stage != WelcomeStage.Done) OrbProgress(state.stepsDone / 3f + 1f / 6f, Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp), description = "Enlazando")
+            if (done) OrbFoot(Modifier.padding(top = 24.dp)) {
                 OrbButton("Ir a Chats", a.done, kind = OrbButtonKind.Primary, block = true, big = true)
             }
         }

@@ -187,6 +187,7 @@ class ScanViewModel(
 object ScanHandoff {
     const val KEY = "scanned-link"
     const val PASTE_KEY = "scan-paste"
+    const val CODE_KEY = "scan-code"
 
     fun deliver(target: SavedStateHandle?, text: String) {
         target?.set(KEY, text)
@@ -204,4 +205,11 @@ object ScanHandoff {
     }
 
     fun takePaste(source: SavedStateHandle): Boolean = source.remove<Boolean>(PASTE_KEY) == true
+
+    /** «Escribir el código a mano» on the scanner: the welcome page opens the short-code sheet. */
+    fun deliverCode(target: SavedStateHandle?) {
+        target?.set(CODE_KEY, true)
+    }
+
+    fun takeCode(source: SavedStateHandle): Boolean = source.remove<Boolean>(CODE_KEY) == true
 }

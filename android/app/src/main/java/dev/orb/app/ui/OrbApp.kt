@@ -273,9 +273,11 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val handle = entry.savedStateHandle
             val fromScanner by handle.getStateFlow<String?>(ScanHandoff.KEY, null).collectAsStateWithLifecycle()
             val pasteFromScanner by handle.getStateFlow<Boolean>(ScanHandoff.PASTE_KEY, false).collectAsStateWithLifecycle()
-            LaunchedEffect(fromScanner, pasteFromScanner) {
+            val codeFromScanner by handle.getStateFlow<Boolean>(ScanHandoff.CODE_KEY, false).collectAsStateWithLifecycle()
+            LaunchedEffect(fromScanner, pasteFromScanner, codeFromScanner) {
                 ScanHandoff.take(handle)?.let(vm::scanned)
-                if (ScanHandoff.takePaste(handle)) vm.openSheet()
+                if (ScanHandoff.takePaste(handle)) vm.openLinkSheet()
+                if (ScanHandoff.takeCode(handle)) vm.openSheet()
             }
             val noticesOn by container.notificationAccess.enabled.collectAsStateWithLifecycle()
             val toChats = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } }
@@ -301,6 +303,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 // The welcome page takes the text from its saved state (see ScanHandoff), as if it had been pasted.
                 onScanned = { text -> ScanHandoff.deliver(nav.previousBackStackEntry?.savedStateHandle, text); nav.popBackStack() },
                 onPaste = { ScanHandoff.deliverPaste(nav.previousBackStackEntry?.savedStateHandle); nav.popBackStack() },
+                onTypeCode = { ScanHandoff.deliverCode(nav.previousBackStackEntry?.savedStateHandle); nav.popBackStack() },
             )
         }
         composable<Home> {

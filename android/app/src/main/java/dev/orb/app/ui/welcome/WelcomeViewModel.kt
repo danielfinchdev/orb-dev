@@ -52,6 +52,8 @@ data class PcIdentity(val name: String, val groups: List<String>, val viaCode: B
 data class WelcomeUiState(
     val stage: WelcomeStage = WelcomeStage.Entry,
     val sheet: Boolean = false,
+    // The sheet asks only for the link (the scanner's «Pegar el enlace del QR»); false adds the short code and the address.
+    val linkOnly: Boolean = false,
     val link: String = "",
     val code: String = "",
     val address: String = "",
@@ -110,8 +112,9 @@ class WelcomeViewModel(
     // What step (a) resolved; the password step links against it. It never leaves the view model.
     private var resolved: ResolvedLink? = null
 
-    fun openSheet() = _state.update { it.copy(sheet = true, error = null) }
-    fun closeSheet() = _state.update { if (it.busy) it else it.copy(sheet = false, error = null, errorKind = null) }
+    fun openSheet() = _state.update { it.copy(sheet = true, linkOnly = false, error = null) }
+    fun openLinkSheet() = _state.update { it.copy(sheet = true, linkOnly = true, error = null) }
+    fun closeSheet() = _state.update { if (it.busy) it else it.copy(sheet = false, linkOnly = false, error = null, errorKind = null) }
 
     /** The banner's button: the failure is acknowledged and the entry page is as it was. */
     fun dismissError() = _state.update { it.copy(error = null, errorKind = null) }

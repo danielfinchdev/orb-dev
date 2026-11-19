@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.StartOffsetType
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -18,9 +20,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -48,15 +52,17 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBadge
+import dev.orb.app.ui.kit.OrbBadgeKind
 import dev.orb.app.ui.kit.OrbBanner
 import dev.orb.app.ui.kit.OrbBannerKind
 import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbFoot
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbIconButton
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.kit.RadiusBig
-import dev.orb.app.ui.kit.RadiusCtl
 import dev.orb.app.ui.theme.OrbFonts
 import kotlinx.coroutines.delay
 
@@ -65,6 +71,7 @@ class ScanActions(
     val back: () -> Unit = {},
     val toggleTorch: () -> Unit = {},
     val paste: () -> Unit = {},
+    val typeCode: () -> Unit = {},
     val give: () -> Unit = {},
     val settings: () -> Unit = {},
 )
@@ -82,6 +89,7 @@ fun ScanScreen(
     onScanned: (String) -> Unit,
     onPaste: () -> Unit,
     modifier: Modifier = Modifier,
+    onTypeCode: () -> Unit = onPaste,
     viewfinder: @Composable BoxScope.(ScanUiState) -> Unit = { s ->
         CameraViewfinder(s.torch, vm::flashFound, vm::onText, Modifier.matchParentSize())
     },
@@ -108,7 +116,7 @@ fun ScanScreen(
         onScanned(found)
     }
     val actions = ScanActions(
-        back = onBack, toggleTorch = vm::toggleTorch, paste = onPaste,
+        back = onBack, toggleTorch = vm::toggleTorch, paste = onPaste, typeCode = onTypeCode,
         give = { if (vm.canAskAgain()) { vm.asking(); launcher.launch(Manifest.permission.CAMERA) } else vm.openSettings() },
         settings = vm::openSettings,
     )
@@ -130,7 +138,9 @@ fun ScanContent(
             leading = { OrbIconButton(OrbIcons.ArrowLeft, ScanTexts.BACK, a.back) },
             actions = {
                 if (live && state.hasFlash && !read) {
-                    Box(Modifier.clip(RadiusCtl).then(if (state.torch) Modifier.background(OrbKit.accent) else Modifier)) {
+                    // The lit torch is a round 40 dp chip inside the 48 dp touch zone, so it keeps a margin from the edge.
+                    Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                        if (state.torch) Box(Modifier.size(40.dp).clip(CircleShape).background(OrbKit.accent))
                         OrbIconButton(if (state.torch) OrbIcons.FlashlightOff else OrbIcons.Flashlight, ScanTexts.TORCH, a.toggleTorch)
                     }
                 }
@@ -165,15 +175,12 @@ fun ScanContent(
                 }
             }
             if (read) {
-                Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Icon(OrbIcons.Check, null, Modifier.size(16.dp), tint = OrbKit.success)
-                    Text(ScanTexts.VALID, color = OrbKit.success, fontSize = 14.5.sp)
-                }
+                OrbBadge(ScanTexts.VALID, Modifier.padding(top = 16.dp), kind = OrbBadgeKind.Ok, icon = OrbIcons.Check)
             }
             state.hint?.let { OrbBanner(it, OrbIcons.CircleAlert, Modifier.padding(horizontal = 16.dp, vertical = 12.dp), kind = OrbBannerKind.Warning) }
         }
         if (!read) {
-            Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OrbFoot(spacing = 10.dp) {
                 OrbButton(ScanTexts.PASTE, a.paste, kind = OrbButtonKind.Secondary, block = true, icon = OrbIcons.Link, big = true)
                 when (state.permission) {
                     ScanPermission.Denied -> OrbButton(ScanTexts.GIVE, a.give, kind = OrbButtonKind.Primary, block = true, big = true)
@@ -181,7 +188,8 @@ fun ScanContent(
                     else -> {}
                 }
                 if (state.permission == ScanPermission.Denied || state.permission == ScanPermission.Blocked) {
-                    OrbButton(ScanTexts.TYPE_CODE, a.paste, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
+                    // The button's 48 dp touch zone would widen the 10 dp gap the mockup draws between the buttons.
+                    OrbButton(ScanTexts.TYPE_CODE, a.typeCode, Modifier.offset(y = (-4).dp), kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
                 }
             }
         }
@@ -216,7 +224,7 @@ private fun Corners(color: Color) {
 @Composable
 private fun Sweep() {
     val t = rememberInfiniteTransition(label = "sweep")
-    val f by t.animateFloat(0.18f, 0.82f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse), label = "line")
+    val f by t.animateFloat(0.18f, 0.82f, infiniteRepeatable(tween(1800, easing = LinearEasing), RepeatMode.Reverse, initialStartOffset = StartOffset(900, StartOffsetType.FastForward)), label = "line")
     val color = OrbKit.primaryText
     Canvas(Modifier.fillMaxSize()) {
         val inset = 20.dp.toPx()

@@ -44,7 +44,7 @@ class WelcomeShotsTest {
     @Test fun bienvenidaOceano() = shoot("01-bienvenida-oceano", WelcomeUiState(), OrbPaletteChoice.Oceano)
     @Test fun codigoCortoOceano() = shoot("01-bienvenida-codigo-corto-oceano", WelcomeUiState(sheet = true), OrbPaletteChoice.Oceano)
     // «Pegar el enlace del QR» on the scanner leaves for the welcome page with this sheet open (ScanHandoff.deliverPaste).
-    @Test fun pegarEnlace() = shoot("02-pegar-enlace", WelcomeUiState(sheet = true))
+    @Test fun pegarEnlace() = shoot("02-pegar-enlace", WelcomeUiState(sheet = true, linkOnly = true))
     @Test fun huellaQr() = shoot("03-huella-qr", WelcomeUiState(stage = WelcomeStage.Fingerprint, pc = qr, password = "secreto", passwordLength = 7))
     @Test fun huellaCodigoCorto() = shoot("03-huella-codigo-corto", WelcomeUiState(stage = WelcomeStage.Fingerprint, pc = short))
     @Test fun huellaComprobando() = shoot("03-huella-comprobando", WelcomeUiState(stage = WelcomeStage.Fingerprint, pc = qr, checking = true, passwordLength = 10))
