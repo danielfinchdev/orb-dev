@@ -76,6 +76,7 @@ class DatabaseFactory(
             System.loadLibrary("sqlcipher")
             val db = Room.databaseBuilder(context.applicationContext, OrbCacheDatabase::class.java, file.absolutePath)
                 .openHelperFactory(net.zetetic.database.sqlcipher.SupportOpenHelperFactory(passphrase))
+                .addMigrations(OrbCacheDatabase.MIGRATION_1_2)
                 // The cache can always be fetched again: a schema change without a migration starts it empty.
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()

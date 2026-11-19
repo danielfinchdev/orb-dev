@@ -105,3 +105,23 @@ data class OutboxEntity(
     val nextAttemptAt: Long,
     val sentAt: Long?,
 )
+
+/**
+ * One notice of the notices center (a chat line, a permission request, a task or a PC event), kept so the list survives
+ * the app closing. The destination is stored flat: [targetType] (`conversation`, `session`, `task`, `taskChanges`, `version`,
+ * `account`, `chats`) and the [targetId] it needs. A notice swiped away stays as a tombstone ([dismissed]) so a later
+ * `notes.list` does not bring it back.
+ */
+@Entity(tableName = "notices", indices = [Index("at")])
+data class NoticeEntity(
+    @PrimaryKey val id: String,
+    val kind: String,
+    val title: String,
+    val body: String,
+    val hidden: Boolean,
+    val at: Long,
+    val targetType: String?,
+    val targetId: String?,
+    val read: Boolean,
+    val dismissed: Boolean,
+)

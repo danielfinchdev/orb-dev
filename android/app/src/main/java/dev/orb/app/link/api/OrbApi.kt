@@ -39,6 +39,7 @@ object ApiMethods {
     val CHAT_QUEUE = m("chat.queue", requiresPc = "3.8.8")
     val CHAT_EDIT_QUEUED = m("chat.editQueued", requiresPc = "3.8.8")
     val SESSIONS_REWIND_INFO = m("sessions.rewindInfo", requiresPc = "3.8.8")
+    val NOTES_LIST = m("notes.list", requiresPc = "3.8.8")
     val INBOX_SECTIONS_LIST = m("inbox.sections.list")
     val INBOX_SECTIONS_CREATE = m("inbox.sections.create")
     val INBOX_SECTIONS_RENAME = m("inbox.sections.rename")
@@ -400,6 +401,10 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
     /** Marks notes as read: the given [ids], or all of them when [ids] is null. */
     suspend fun notesMarkRead(ids: List<String>? = null): Result<JsonElement> =
         run(ApiMethods.NOTES_MARK_READ, buildJsonObject { if (ids != null) put("ids", JsonArray(ids.map { JsonPrimitive(it) })) })
+
+    /** The notices the PC sent to the phones in the last days, newest first; [since] (ms, exclusive) asks only for newer ones. */
+    suspend fun notesList(since: Long? = null, limit: Int? = null): Result<JsonElement> =
+        run(ApiMethods.NOTES_LIST, buildJsonObject { if (since != null) put("since", since); if (limit != null) put("limit", limit) })
 
     private fun idOf(id: String) = buildJsonObject { put("id", id) }
 
