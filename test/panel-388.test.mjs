@@ -180,7 +180,10 @@ test('step 6D: the Ficha approves only what waits for approval and gives a held 
 });
 
 test('step 6D: the chip gives the reasoning levels the own model, not the first of the list', () => {
-  assert.match(session, /<AgentChip [^\n]*model=\{s\.model \?\? ''\}/);
+  // the chip gets selectedModel, which starts from the conversation's own model (an alias is mapped to its listed entry)
+  assert.match(session, /<AgentChip [^\n]*model=\{selectedModel\}/);
+  assert.match(session, /let selectedModel = s\.model \?\? '';/);
+  assert.doesNotMatch(session, /selectedModel = models\[0\]/);
   assert.doesNotMatch(session, /<AgentChip [^\n]*model=\{s\.model \|\|/);
 });
 
