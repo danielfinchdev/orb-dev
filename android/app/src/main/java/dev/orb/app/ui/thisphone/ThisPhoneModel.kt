@@ -236,7 +236,7 @@ class ThisPhoneViewModel(
         backend.enableLock { result ->
             lockMessage.value = when (result) {
                 AuthResult.Blocked -> ThisPhoneTexts.LOCK_BLOCKED
-                AuthResult.Failed -> ThisPhoneTexts.LOCK_FAILED
+                AuthResult.Failed, AuthResult.NotRecognized -> ThisPhoneTexts.LOCK_FAILED
                 AuthResult.NothingSet -> ThisPhoneTexts.LOCK_NOTHING_SET
                 AuthResult.Success, AuthResult.Cancelled -> null
             }

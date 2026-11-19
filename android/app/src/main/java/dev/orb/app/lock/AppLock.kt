@@ -122,6 +122,9 @@ sealed interface AuthResult {
     /** Too many wrong tries: the system blocks the sensor for a while. Nothing is lost. */
     data object Blocked : AuthResult
     data object Failed : AuthResult
+
+    /** The sensor could not read the finger (or nobody touched it in time): trying again is the whole advice. */
+    data object NotRecognized : AuthResult
     data object NothingSet : AuthResult
 }
 
@@ -134,7 +137,7 @@ interface Authenticator {
 }
 
 /** What the lock screen tells the person after an attempt. */
-enum class LockNotice { Blocked, Failed }
+enum class LockNotice { Blocked, Failed, NotRecognized }
 
 /** Ties the gate to the system authentication. The activity supplies the [authenticator] while it exists. */
 class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
@@ -172,6 +175,7 @@ class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
                 AuthResult.Success -> gate.unlock()
                 AuthResult.Blocked -> _notice.value = LockNotice.Blocked
                 AuthResult.Failed, AuthResult.NothingSet -> _notice.value = LockNotice.Failed
+                AuthResult.NotRecognized -> _notice.value = LockNotice.NotRecognized
                 AuthResult.Cancelled -> Unit
             }
         }
@@ -209,9 +213,11 @@ object LockTexts {
     const val USE_PIN = "Usar PIN del móvil"
     const val BLOCKED = "Demasiados intentos. Espera un momento o usa el PIN del móvil."
     const val FAILED = "No se pudo comprobar. Inténtalo otra vez o usa el PIN del móvil."
+    const val NOT_RECOGNIZED = "No se reconoció. Prueba otra vez."
 
     fun notice(n: LockNotice) = when (n) {
         LockNotice.Blocked -> BLOCKED
         LockNotice.Failed -> FAILED
+        LockNotice.NotRecognized -> NOT_RECOGNIZED
     }
 }

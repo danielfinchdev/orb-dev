@@ -152,6 +152,12 @@ class LockScreenTest {
         assertEquals(1, pins)
     }
 
+    @Test fun aFingerNotReadHasTheMockupsOneLine() {
+        content(LockNotice.NotRecognized)
+        rule.onNodeWithText("No se reconoció. Prueba otra vez.").assertIsDisplayed()
+        rule.onNodeWithText("Probar otra vez").assertIsDisplayed()
+    }
+
     @Test fun theAttemptsLimitKeepsItsOwnWords() {
         content(LockNotice.Blocked)
         rule.onNodeWithText(LockTexts.BLOCKED).assertIsDisplayed()

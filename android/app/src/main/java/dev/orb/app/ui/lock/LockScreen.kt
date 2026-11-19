@@ -27,6 +27,7 @@ import dev.orb.app.lock.LockTexts
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBanner
 import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbFoot
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbNote
@@ -61,7 +62,7 @@ fun LockContent(notice: LockNotice?, busy: Boolean, onUnlock: () -> Unit, onPin:
             // Both failures use the mockup's error banner; "blocked" only differs in its words.
             OrbBanner(LockTexts.notice(notice), OrbIcons.CircleAlert, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OrbFoot(spacing = 6.dp) {
             OrbButton(
                 if (notice != null) LockTexts.UNLOCK_AGAIN else LockTexts.UNLOCK, onUnlock, kind = OrbButtonKind.Primary, block = true,
                 enabled = !busy, icon = OrbIcons.Fingerprint, big = true,

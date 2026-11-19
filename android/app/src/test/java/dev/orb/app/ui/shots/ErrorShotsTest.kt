@@ -39,7 +39,7 @@ class ErrorShotsTest {
     }
 
     @Test fun desbloqueoEspera() = shoot("05-desbloqueo") { LockContent(null, busy = false, onUnlock = {}, onPin = {}) }
-    @Test fun desbloqueoFallo() = shoot("05-desbloqueo-fallo") { LockContent(LockNotice.Failed, busy = false, onUnlock = {}, onPin = {}) }
+    @Test fun desbloqueoFallo() = shoot("05-desbloqueo-fallo") { LockContent(LockNotice.NotRecognized, busy = false, onUnlock = {}, onPin = {}) }
     @Test fun desbloqueoBloqueado() = shoot("05-desbloqueo-bloqueado") { LockContent(LockNotice.Blocked, busy = false, onUnlock = {}, onPin = {}) }
 
     @Test fun qrCaducado() = shoot("08-qr-caducado") {

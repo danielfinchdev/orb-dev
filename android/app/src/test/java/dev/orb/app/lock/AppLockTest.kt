@@ -122,6 +122,17 @@ class AppLockTest {
         assertTrue(lock.gate.isOpen())
     }
 
+    @Test fun aFingerThatWasNotReadKeepsTheLockClosedAndSaysSoInOneLine() {
+        prefs.setEnabled(true)
+        val lock = AppLock(prefs, gate())
+        val auth = FakeAuthenticator().also { lock.authenticator = it }
+        lock.unlock()
+        auth.answer(AuthResult.NotRecognized)
+        assertEquals(LockNotice.NotRecognized, lock.notice.value)
+        assertFalse(lock.gate.isOpen())
+        assertEquals("No se reconoció. Prueba otra vez.", LockTexts.notice(LockNotice.NotRecognized))
+    }
+
     @Test fun tooManyTriesOnlyBlocksTheSensorAndKeepsTheSetting() {
         prefs.setEnabled(true)
         val lock = AppLock(prefs, gate())
