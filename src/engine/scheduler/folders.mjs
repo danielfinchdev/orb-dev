@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { gitAsync, repoRootAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { integrateIntoAsync } from '../../domain/tasks/checkpoints.mjs';
-import { lastLaunchId } from './run-id.mjs';
+import { lastLaunchId, mergedByHand } from './run-id.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export class FoldersPart {
@@ -76,7 +76,7 @@ export class FoldersPart {
       const key = `checkpoint:${task.id}`; const cp = board.settingJson(key);
       if (cp?.after && cp.after.run !== run) board.settingJson(key, { ...cp, after: { ...cp.after, run } });
     };
-    if (!tip) { keepPoint(); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
+    if (!tip) { if (!mergedByHand(board, task.id)) keepPoint(); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
     if (tip === info.base) { keepPoint(); this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
     const out = await integrateIntoAsync(repo, { base: info.base, tip });
     // Read again after the awaits: a join closed meanwhile writes nothing more, unless files were already written: then

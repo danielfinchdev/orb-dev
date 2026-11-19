@@ -194,20 +194,104 @@ test('a task of a copy without git: the stored point is of the current run, so t
   await call('tasks.undo', { id: task.id, checkpoint: await idOf() });
   assert.deepEqual(undone, [task.id]);
 });
-
-test('a finished task whose end photo failed: nophotoafter for the phone, notdone for the PC, undo as before', async () => {
-  const ctx = setup(); const { start, end, call, idOf, task, board, undone } = ctx;
-  start(); fs.writeFileSync(path.join(ctx.dir, 'a.txt'), 'dos\n'); await end();
-  const cp = board.settingJson(`checkpoint:${task.id}`); board.settingJson(`checkpoint:${task.id}`, { ...cp, after: null });
-  const phone = { channel: 'phone', device: 'd' };
-  assert.equal((await api(ctx).call('tasks.diff', { id: task.id }, phone)).reason, 'nophotoafter');
-  assert.equal((await call('tasks.diff', { id: task.id })).reason, 'notdone');
-  await call('tasks.undo', { id: task.id, checkpoint: await idOf() });
-  assert.deepEqual(undone, [task.id]);
+test('a finished task whose end photo failed: nophotoafter for the phone, notdone for the PC; only the PC may undo it', async () => {
+  for (const status of ['done', 'blocked', 'failed']) {
+    const ctx = setup(); const { start, end, call, idOf, task, board, undone } = ctx;
+    start(); fs.writeFileSync(path.join(ctx.dir, 'a.txt'), 'dos\n'); await end();
+    board.patch(task.id, { status }, 'orb', `task.${status}`);
+    const cp = board.settingJson(`checkpoint:${task.id}`); board.settingJson(`checkpoint:${task.id}`, { ...cp, after: null });
+    assert.equal((await api(ctx).call('tasks.diff', { id: task.id }, phone)).reason, 'nophotoafter');
+    assert.equal((await call('tasks.diff', { id: task.id })).reason, 'notdone');
+    // the phone cannot show what a full re-read of the folder would throw away: refused, nothing changes
+    await assert.rejects(call('tasks.undo', { id: task.id, checkpoint: await idOf() }), /el PC no guardó el estado final/);
+    assert.deepEqual(undone, []); assert.ok(board.settingJson(`checkpoint:${task.id}`)?.before); assert.equal(board.settingJson(`undone:${task.id}`), null);
+    assert.equal(fs.readFileSync(path.join(ctx.dir, 'a.txt'), 'utf8'), 'dos\n');
+    await call('tasks.undo', { id: task.id }); // the PC's window, as before
+    assert.deepEqual(undone, [task.id]);
+  }
   // while it runs, the phone still hears notdone
-  start(false); board.settingJson(`checkpoint:${task.id}`, { ...cp, after: null });
+  const ctx = setup(); const { start, end, board, task } = ctx;
+  start(); await end(); start(false);
+  const cp = board.settingJson(`checkpoint:${task.id}`); board.settingJson(`checkpoint:${task.id}`, { ...cp, after: null });
   assert.equal((await api(ctx).call('tasks.diff', { id: task.id }, phone)).reason, 'notdone');
 });
+
+test('nothing to join: a discarded copy keeps the point and marks it; a copy merged by hand in the PC does not', async () => {
+  const a = setup(); const ra = await rerunInCopy(a);
+  git(a.dir, 'branch', '-D', a.board.task(a.task.id).branch);
+  await ra.join();
+  assert.equal(a.board.settingJson(`checkpoint:${a.task.id}`).after.run, lastRun(a.board, a.task.id));
+  assert.equal((await api(a).call('tasks.diff', { id: a.task.id }, phone)).available, true);
+
+  const b = setup(); const rb = await rerunInCopy(b);
+  git(b.dir, 'branch', '-D', b.board.task(b.task.id).branch);
+  b.board.event(b.task.id, 'usuario', 'branch.merged', 'copy');
+  await rb.join();
+  assert.deepEqual(b.board.settingJson(`checkpoint:${b.task.id}`).after, rb.first.after);
+  assert.equal((await api(b).call('tasks.diff', { id: b.task.id }, phone)).reason, 'joinedbyhand');
+  assert.equal((await b.call('tasks.diff', { id: b.task.id })).available, true);
+  const id = await b.idOf();
+  await assert.rejects(b.call('tasks.undo', { id: b.task.id, checkpoint: id }), /se unió a mano/);
+  await b.call('tasks.accept', { id: b.task.id, checkpoint: id });
+  assert.equal(b.board.isAccepted(b.task.id), true); assert.deepEqual(b.undone, []);
+});
+
+// a conflict left to a join task
+async function conflicted(ctx) {
+  const r = await rerunInCopy(ctx, { change: true });
+  fs.writeFileSync(path.join(ctx.dir, 'b.txt'), 'otro\n'); git(ctx.dir, 'add', 'b.txt'); git(ctx.dir, 'commit', '-qm', 'folder');
+  await r.join();
+  return ctx.board.settingJson(`integrate:${ctx.task.id}`);
+}
+
+test('a hand join that ends well stays joinedbyhand until the task runs again', async () => {
+  const ctx = setup(); const info = await conflicted(ctx); const { board, task } = ctx;
+  board.patch(info.by, { status: 'done' }, 'orb', 'task.done');
+  ctx.sched.joinedBy(board.task(task.id), info);
+  assert.equal(board.settingJson(`integrate:${task.id}`), null);
+  assert.equal((await api(ctx).call('tasks.diff', { id: task.id }, phone)).reason, 'joinedbyhand');
+  ctx.start(false);
+  assert.notEqual((await api(ctx).call('tasks.diff', { id: task.id }, phone)).reason, 'joinedbyhand');
+});
+
+test('an abandoned hand join: resolveonpc for the phone, accept and undo with checkpoint refused, the PC as before', async () => {
+  for (const status of ['failed', 'cancelled']) {
+    const ctx = setup(); const info = await conflicted(ctx); const { board, task, undone } = ctx;
+    board.patch(info.by, { status }, 'orb', `task.${status}`);
+    ctx.sched.joinedBy(board.task(task.id), info);
+    assert.equal(board.one('SELECT kind FROM events WHERE task_id = ? ORDER BY id DESC LIMIT 1', task.id).kind, 'integrate.skipped');
+    const diff = await api(ctx).call('tasks.diff', { id: task.id }, phone);
+    assert.equal(diff.available, false); assert.equal(diff.reason, 'resolveonpc');
+    assert.equal((await ctx.call('tasks.diff', { id: task.id })).available, true);
+    const id = await ctx.idOf();
+    await assert.rejects(ctx.call('tasks.accept', { id: task.id, checkpoint: id }), /quedó sin terminar/);
+    await assert.rejects(ctx.call('tasks.undo', { id: task.id, checkpoint: id }), /quedó sin terminar/);
+    assert.equal(board.isAccepted(task.id), false); assert.deepEqual(undone, []);
+    await ctx.call('tasks.accept', { id: task.id }); // without checkpoint: as always
+    assert.equal(board.isAccepted(task.id), true);
+  }
+});
+
+test('an old point of unknown run: unknownrun for the phone, the PC sees the diff, accept works, undo is refused', async () => {
+  const ctx = setup(); const { start, end, call, idOf, task, board, undone } = ctx;
+  start(); fs.writeFileSync(path.join(ctx.dir, 'a.txt'), 'dos\n'); await end();
+  const cp = board.settingJson(`checkpoint:${task.id}`);
+  board.settingJson(`checkpoint:${task.id}`, { ...cp, after: { kind: 'git', repo: cp.after.repo, commit: cp.after.commit } });
+  await new Promise((r) => setTimeout(r, 5));
+  start(false); board.patch(task.id, { status: 'done' }, 'orb', 'task.done');
+  for (const extra of [{}, { stat: true }]) {
+    const d = await api(ctx).call('tasks.diff', { id: task.id, ...extra }, phone);
+    assert.equal(d.available, false); assert.equal(d.reason, 'unknownrun');
+    const pc = await call('tasks.diff', { id: task.id, ...extra });
+    assert.equal(pc.available, true); assert.equal(pc.checkpointId, null);
+  }
+  await assert.rejects(call('tasks.undo', { id: task.id, checkpoint: await idOf() }), /no se puede comprobar a qué ejecución/);
+  assert.deepEqual(undone, []);
+  await call('tasks.accept', { id: task.id, checkpoint: await idOf() });
+  assert.equal(board.isAccepted(task.id), true);
+});
+
+const phone = { channel: 'phone', device: 'd' };
 
 const lastRun = (board, id) => board.one("SELECT id FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", id).id;
 const api = (ctx) => ({ call: (m, p, who) => ctx.api.call(m, p, who) });

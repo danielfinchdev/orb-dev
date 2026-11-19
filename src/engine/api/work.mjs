@@ -21,7 +21,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 // Folders compared as the engine writes them: either separator, any case, no trailing separator.
@@ -41,6 +41,7 @@ function checkpointIdOf(board, taskId) {
 // A phone that sends the checkpointId is refused while the stored end photo still belongs to an earlier run (a task
 // re-run in an isolated copy keeps the previous undo point until its work is joined). A point whose run cannot be known
 // (an old one) only blocks what touches files: accepting just marks the task, so it passes with { files: false }.
+const JOIN_UNFINISHED = 'la unión de esta tarea quedó sin terminar; resuélvela en el PC';
 function assertPointCurrent(board, taskId, { files = true } = {}) {
   const cp = board.settingJson(`checkpoint:${taskId}`);
   const run = cp?.after?.run;
@@ -125,6 +126,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
       if (checkpoint != null && joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
+      if (checkpoint != null && joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
+      // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too; the
+      // PC's dialog says so, the phone cannot show it.
+      if (checkpoint != null) { const cp = board.settingJson(`checkpoint:${tid}`); if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail('el PC no guardó el estado final de esta tarea; deshazla desde el PC, donde se ve lo que se perdería'); }
       if (checkpoint != null) assertPointCurrent(board, tid);
       return scheduler.undo(tid);
     },
@@ -144,6 +149,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // folder (joined by hand), or a finished task whose end photo failed (the undo still works from the point before)
       const phone = Boolean(principal) && principal.channel !== 'desktop';
       if (phone && cp?.before && joinedByHand(board, task.id)) return { available: false, reason: 'joinedbyhand', files: [], more: 0 };
+      if (phone && cp?.before && joinAbandoned(board, task.id)) return { available: false, reason: 'resolveonpc', files: [], more: 0 };
       // the checkpointId of the run this diff belongs to (null when that cannot be known): the phone compares it with tasks.get's
       const diffId = () => {
         const current = lastLaunchId(board, task.id);
@@ -151,15 +157,18 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         return run == null ? null : runIdentifier(cp?.before, run);
       };
       // reason (why there is no diff): nophoto (no checkpoint), nogit (a copy checkpoint, no git), notdone (no photo after
-      // the work yet), nophotoafter (phone only: finished without one), joinedbyhand (phone only), gone (the repository is not there any more).
+      // the work yet), nophotoafter (phone only: finished without one), joinedbyhand, resolveonpc, unknownrun (phone only), gone (the repository is not there any more).
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) {
         const finished = !['queued', 'awaiting_approval', 'waiting', 'running'].includes(task.status);
         const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? 'nogit' : !cp.after?.commit ? (phone && finished && !cp.after ? 'nophotoafter' : 'notdone') : 'gone';
         return { available: false, reason, files: [], more: 0 };
       }
-      if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file), checkpointId: diffId() };
-      if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)), checkpointId: diffId() };
-      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit), checkpointId: diffId() };
+      // a diff of an unknown run is not shown to the phone: it could not tell which run it belongs to (a task never launched has no runs to tell apart)
+      const checkpointId = diffId();
+      if (phone && checkpointId == null && lastLaunchId(board, task.id)) return { available: false, reason: 'unknownrun', files: [], more: 0 };
+      if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file), checkpointId };
+      if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)), checkpointId };
+      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit), checkpointId };
     },
     // «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
     // one: scheduler.tick). One that waits for other tasks cannot: the answer says which. → { paused }
@@ -179,6 +188,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.accept': ({ id, unheld, checkpoint }) => {
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla');
+      if (checkpoint != null && joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
       if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));

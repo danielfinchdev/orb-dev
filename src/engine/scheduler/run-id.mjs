@@ -31,10 +31,27 @@ export function runOfAfter(board, taskId, cp, current) {
   return null;
 }
 
-// True while the work of the last run was left to a task that joins it by hand (a conflict joining its copy): the stored
-// diff then no longer describes what the folder has. It ends with a new launch or when that join is given up.
+// The last launch's join events, newest first: 'integrate.conflict' (left to a task that joins by hand), 'integrate.skipped'
+// (that join was given up, or there was no branch) and 'branch.merged' (the user pressed «Unir» in the PC).
+const joinEvents = (board, taskId) => board.all("SELECT kind FROM events WHERE task_id = ? AND id > ? AND kind IN ('integrate.conflict', 'integrate.skipped', 'branch.merged') ORDER BY id DESC", Number(taskId), lastLaunchId(board, taskId)).map((r) => r.kind);
+
+// True when the user joined the task's branch by hand in the PC after its last launch: the copy is gone, so the next
+// automatic join finds no branch and must not claim the kept point for the new run.
+export const mergedByHand = (board, taskId) => joinEvents(board, taskId).includes('branch.merged');
+
+// True while the work of the last run was left to a task that joins it by hand (a conflict joining its copy) or the user
+// joined it by hand: the stored diff then no longer describes what the folder has. It ends with a new launch or when
+// that join is given up.
 export function joinedByHand(board, taskId) {
-  const last = lastLaunchId(board, taskId);
-  const rows = board.all("SELECT kind FROM events WHERE task_id = ? AND id > ? AND kind IN ('integrate.conflict', 'integrate.skipped') ORDER BY id DESC LIMIT 1", Number(taskId), last);
-  return rows[0]?.kind === 'integrate.conflict';
+  const kinds = joinEvents(board, taskId);
+  return kinds.includes('branch.merged') || kinds[0] === 'integrate.conflict';
+}
+
+// True when the task that joined this run by hand failed or was cancelled and the point is still of an earlier run:
+// nothing will ever bring the folder and the stored diff together, so only the PC can settle it.
+export function joinAbandoned(board, taskId) {
+  const kinds = joinEvents(board, taskId);
+  if (kinds[0] !== 'integrate.skipped' || !kinds.includes('integrate.conflict') || kinds.includes('branch.merged')) return false;
+  const cp = board.settingJson(`checkpoint:${taskId}`);
+  return Boolean(cp?.before) && cp.after?.run !== lastLaunchId(board, taskId);
 }
