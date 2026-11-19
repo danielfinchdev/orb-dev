@@ -167,7 +167,7 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
           className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body compact:text-body compact:leading-5 leading-relaxed outline-none" />
         {/* the mock-up's button bar: 6 px above a 32 px row and 8 px below, whatever its buttons measure */}
         <div className="flex items-center gap-2 px-3 pt-1.5 pb-2">
-          <div className="flex min-h-(--ctl) min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="composer-bottom">{bottom}</div>
+          <div className="flex min-h-(--ctl) min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 max-sm:flex-nowrap max-sm:overflow-hidden" data-testid="composer-bottom">{bottom}</div>
           {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary-text animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className={cn('rounded-full', !disabled && 'disabled:opacity-100')} onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
