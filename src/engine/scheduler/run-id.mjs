@@ -59,9 +59,10 @@ function givenUp(board, taskId) {
   return Boolean(cp?.before) && cp.after?.run !== lastLaunchId(board, taskId);
 }
 
-// True once the user discarded the copy after that join was given up: nothing is left to join, so the kept point is the
-// one of the folder as it is.
-export const abandonSettled = (board, taskId) => givenUp(board, taskId) && lastOf(board, taskId, 'branch.discarded') > lastOf(board, taskId, 'integrate.skipped');
+// True once that join was given up and the user discarded the copy, in either order (the copy can be discarded while the
+// joining task still runs): nothing is left to join, so the kept point is the one of the folder as it is. A discard empties
+// the task's branch, so no later join of this launch can follow it.
+export const abandonSettled = (board, taskId) => givenUp(board, taskId) && lastOf(board, taskId, 'branch.discarded') > 0;
 
 // True when the task that joined this run by hand failed or was cancelled and the point is still of an earlier run:
 // nothing will ever bring the folder and the stored diff together, so only the PC can settle it (discarding the copy does).

@@ -74,9 +74,9 @@ test('tasks.undo without a principal is guarded like a remote caller; the PC win
   assert.deepEqual(calls, [task.id]);
 });
 
-// todo: a discard that lands before integrate.skipped is not counted by abandonSettled (it compares event order), so the
-// phone stays at «resolve on the PC» although no copy is left to discard.
-test('discarding the copy before the join task gave up (before integrate.skipped)', { todo: 'abandonSettled ignores a discard older than integrate.skipped' }, async () => {
+// The copy can be discarded while the joining task still runs; once that task gives up no copy is left to discard, so the
+// phone must not be sent to the PC for ever.
+test('discarding the copy before the join task gave up (before integrate.skipped)', async () => {
   const ctx = setup(); const { board, task, sched } = ctx;
   const info = await conflicted(ctx);
   assert.ok(info?.by, 'a join task was created');
