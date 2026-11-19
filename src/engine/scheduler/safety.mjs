@@ -8,6 +8,7 @@ import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, snapshotCommitAsync, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { isRailOn } from '../../domain/rules/rails.mjs';
+import { lastLaunchId } from './run-id.mjs';
 import { remotesOf, remotesOfAsync } from './common.mjs';
 import { phoneNoticeAllowed } from '../../domain/notes/announce.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
@@ -79,8 +80,8 @@ export class SafetyPart {
       // No git: remember when the task ended and how every file stands, so undo leaves alone what the user changes afterwards.
       // The end time is saved right now (undo works with it alone, by mtime); the per-file map is a background walk that
       // can take long on a big folder, so it only adds precision and is written only if no later round replaced this mark.
-      const at = Date.now(); const key = `checkpoint:${task.id}`; const state = stateFileOf(cp.before.copy);
-      this.board.settingJson(key, { ...cp, after: { kind: 'copia', at, state } });
+      const at = Date.now(); const run = lastLaunchId(this.board, task.id); const key = `checkpoint:${task.id}`; const state = stateFileOf(cp.before.copy);
+      this.board.settingJson(key, { ...cp, after: { kind: 'copia', at, state, run } });
       treeState(cp.before.dir).then(async (files) => {
         if (this.board.settingJson(key)?.after?.at !== at) return;
         await saveTreeState(state, at, files);
@@ -92,13 +93,14 @@ export class SafetyPart {
       this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id, ...(phoneNoticeAllowed(this.board, task) ? { quiet: true } : {}) });
       return tr('msg.scheduler.needsReview', { reasons: why });
     }
+    const run = lastLaunchId(this.board, task.id); // the run this photo is of, read before the awaits
     const at = Date.now(); // a file older than this that the snapshot missed was hidden from it (missedBy)
     const snap = await snapshotCommitAsync(cp.before.repo, { raw: Boolean(cp.before.raw), always: true, message: `orb: foto después de la tarea #${task.id}` });
     if (!snap) return '';
     await gitAsync(cp.before.repo, {}, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, snap.commit);
     // Read again after the awaits: only the photo this call started from is completed, never one a later round replaced.
     const key = `checkpoint:${task.id}`; const current = this.board.settingJson(key);
-    if (current?.before?.commit === cp.before.commit) this.board.settingJson(key, { ...current, after: { kind: 'git', repo: cp.before.repo, commit: snap.commit, at } });
+    if (current?.before?.commit === cp.before.commit) this.board.settingJson(key, { ...current, after: { kind: 'git', repo: cp.before.repo, commit: snap.commit, at, run } });
     const changed = await changedBetweenAsync(cp.before.repo, cp.before.commit, snap.commit);
     this.board.event(task.id, 'orb', 'files.changed', changed.length ? changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (changed.length > 60 ? ` … y ${changed.length - 60} más` : '') : 'ningún archivo');
     if (cp.remotes != null && (await remotesOfAsync(cp.before.repo)) !== cp.remotes) reasons.push(tr('msg.scheduler.safetyRemote'));
