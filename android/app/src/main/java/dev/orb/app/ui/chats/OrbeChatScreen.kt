@@ -111,7 +111,7 @@ fun OrbeChatScreen(
     val actions = remember(vm) {
         CardActions(
             vm::answer, vm::accept, vm::decideRequest, vm::approveFromCard, { rejectAsk = it }, vm::watchTask,
-            vm::acceptTask, vm::askUndo, onOpenChanges,
+            vm::acceptTask, vm::askUndo, onOpenChanges, { openTask(it) },
         )
     }
     // While a task runs (or the assistant may be starting one) its card is kept fresh; events cover the rest.
@@ -150,7 +150,7 @@ fun OrbeChatScreen(
     state.approval?.let { ApprovalDialog(it, onConfirm = vm::confirmApproval, onDismiss = vm::dismissApproval) }
     rejectAsk?.let { task ->
         OrbDialog(
-            onDismiss = { rejectAsk = null }, title = ChatTexts.REJECT_ASK_TITLE, text = ChatTexts.REJECT_ASK_BODY,
+            onDismiss = { rejectAsk = null }, title = ChatTexts.rejectAskTitle(task), text = ChatTexts.rejectAskBody(state.taskInfo[task]?.title),
             confirm = OrbDialogAction(ChatTexts.REJECT_CONFIRM, { rejectAsk = null; vm.rejectTask(task) }, danger = true),
             dismiss = OrbDialogAction(ChatTexts.REJECT_BACK, { rejectAsk = null }),
         )

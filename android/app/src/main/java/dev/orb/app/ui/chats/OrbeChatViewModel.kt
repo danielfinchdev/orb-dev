@@ -56,7 +56,7 @@ data class UndoAsk(val task: Long, val title: String, val files: Int?)
 
 /** The queued message being edited; [error] is what the PC answered to the last try, word for word. */
 @Immutable
-data class QueueEditor(val item: OrbeQueued, val busy: Boolean = false, val error: String? = null)
+data class QueueEditor(val item: OrbeQueued, val busy: Boolean = false, val error: String? = null, val revision: Int = 0)
 
 @Immutable
 data class OrbeChatState(
@@ -505,8 +505,19 @@ class OrbeChatViewModel(
         viewModelScope.launch { refreshTask(task) }
     }
 
+    /**
+     * Read numbers: only the answer of the latest read of a task is applied. An answer that left the PC before the OK was given
+     * and arrives after it would put the "Aprobar" button back on a task that was already decided.
+     */
+    private val readIssued = java.util.concurrent.ConcurrentHashMap<Long, Long>()
+    private val readCounter = java.util.concurrent.atomic.AtomicLong()
+    private fun issueRead(task: Long): Long = readCounter.incrementAndGet().also { readIssued[task] = it }
+    private fun isLatest(task: Long, read: Long) = readIssued[task] == read
+
     private suspend fun refreshTask(task: Long) {
+        val read = issueRead(task)
         backend.taskDetail(task).onSuccess { d ->
+            if (!isLatest(task, read)) return@onSuccess
             d.status?.let { s -> taskStatus.update { it + (task to s) } }
             taskInfo.update { it + (task to d) }
             // The counts are only worth asking for while there are changes to look at.
@@ -532,7 +543,8 @@ class OrbeChatViewModel(
         when {
             // Nothing read yet: the PC's description is fetched and shown in the dialog (or the task's screen opens).
             info == null -> askApproval(task)
-            shownHash.isNullOrBlank() || !info.approvable || TaskAction.Approve !in info.actions -> _opens.trySend(task)
+            // A description the card cut was not read whole: the task's own screen shows it.
+            shownHash.isNullOrBlank() || !info.approvable || !info.fitsCard || TaskAction.Approve !in info.actions -> _opens.trySend(task)
             // What was on screen is not the latest read: the new one is drawn first, the OK waits for a new tap.
             shownHash != info.hash -> _messages.trySend(ChatTexts.TASK_CHANGED)
             else -> {
@@ -551,10 +563,14 @@ class OrbeChatViewModel(
         if (key in busyCards.value) return
         busyCards.update { it + key }
         viewModelScope.launch {
+            val read = issueRead(task)
             backend.taskDetail(task).fold(
                 {
-                    taskInfo.update { m -> m + (task to it) }
-                    if (it.approvable && TaskAction.Approve in it.actions) approval.value = ApprovalAsk(it) else _opens.trySend(task)
+                    if (isLatest(task, read)) {
+                        taskInfo.update { m -> m + (task to it) }
+                        // The dialog shows the whole description (it scrolls), so a long one is still approved from it.
+                        if (it.approvable && TaskAction.Approve in it.actions) approval.value = ApprovalAsk(it) else _opens.trySend(task)
+                    }
                 },
                 { say(it) },
             )
@@ -593,6 +609,8 @@ class OrbeChatViewModel(
     private suspend fun decideTask(task: Long, approve: Boolean, hash: String?) {
         backend.decideTask(task, approve, hash).fold(
             onSuccess = {
+                // Reads still on their way were asked before this decision: whatever they say is old.
+                issueRead(task)
                 taskStatus.update { it + (task to if (approve) "queued" else "cancelled") }
                 // The card folds at once; the PC's own answer replaces this right after.
                 taskInfo.update { m ->
@@ -632,13 +650,25 @@ class OrbeChatViewModel(
         val ask = undoAsk.value ?: return
         undoAsk.value = null
         val key = taskKey(ask.task)
-        // The same rule as when it was asked: the task may have changed while the dialog was open.
-        if (key in busyCards.value || TaskAction.UndoHeld !in taskInfo.value[ask.task]?.actions.orEmpty()) return
+        if (key in busyCards.value) return
         busyCards.update { it + key }
         viewModelScope.launch {
-            backend.undoTask(ask.task).fold(
-                onSuccess = { _undone.trySend(ask.task); refreshTask(ask.task) },
-                onFailure = { say(it); refreshTask(ask.task) },
+            // The copy in memory may be as old as the dialog: the PC is asked again, and files are only touched if it still
+            // allows the undo (the task did not change, did not run again, still has its point of return).
+            val read = issueRead(ask.task)
+            backend.taskDetail(ask.task).fold(
+                onSuccess = { fresh ->
+                    if (isLatest(ask.task, read)) {
+                        fresh.status?.let { s -> taskStatus.update { it + (ask.task to s) } }
+                        taskInfo.update { it + (ask.task to fresh) }
+                    }
+                    if (TaskAction.UndoHeld !in fresh.actions) _messages.trySend(ChatTexts.UNDO_UNAVAILABLE)
+                    else backend.undoTask(ask.task).fold(
+                        onSuccess = { _undone.trySend(ask.task); refreshTask(ask.task) },
+                        onFailure = { say(it); refreshTask(ask.task) },
+                    )
+                },
+                onFailure = { say(it) },
             )
             busyCards.update { it - key }
         }
@@ -675,19 +705,35 @@ class OrbeChatViewModel(
         if (t == editing.item.text) { queueEditor.value = null; return }
         queueEditor.value = editing.copy(busy = true, error = null)
         viewModelScope.launch {
-            backend.editQueued(conversation, editing.item.id, t, remove = false).fold(
-                onSuccess = { list -> queueItems.value = list; queueEditor.value = null },
-                onFailure = { queueFailure(editing.item.id, it) },
+            // The message may have been edited on the PC while this editor was open: saving would silently replace that text.
+            val current = backend.queue(conversation).fold(
+                { list -> queueItems.value = list; list.firstOrNull { it.id == editing.item.id } ?: GONE },
+                { e -> queueFailure(editing.item.id, e); return@launch },
             )
+            when {
+                current === GONE -> { queueEditor.value = null; _messages.trySend(ChatTexts.QUEUE_STARTED) }
+                current.text != editing.item.text ->
+                    queueEditor.value = QueueEditor(current, error = ChatTexts.QUEUE_CHANGED, revision = editing.revision + 1)
+                else -> backend.editQueued(conversation, editing.item.id, t, remove = false).fold(
+                    onSuccess = { list -> queueItems.value = list; queueEditor.value = null },
+                    onFailure = { queueFailure(editing.item.id, it) },
+                )
+            }
         }
     }
 
+    /** Ids being removed: a second tap on the same "Quitar" must not ask the PC again and then say it already left. */
+    private val removing = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
+
     fun removeQueued(id: String) {
+        if (queueItems.value.none { it.id == id } || !removing.add(id)) return
         viewModelScope.launch {
-            backend.editQueued(conversation, id, null, remove = true).fold(
-                onSuccess = { list -> queueItems.value = list; if (queueEditor.value?.item?.id == id) queueEditor.value = null },
-                onFailure = { queueFailure(id, it) },
-            )
+            try {
+                backend.editQueued(conversation, id, null, remove = true).fold(
+                    onSuccess = { list -> queueItems.value = list; if (queueEditor.value?.item?.id == id) queueEditor.value = null },
+                    onFailure = { queueFailure(id, it) },
+                )
+            } finally { removing.remove(id) }
         }
     }
 
@@ -715,6 +761,7 @@ class OrbeChatViewModel(
         const val LIVE_GAP_MS = 1_500L
         const val QUEUE_GAP_MS = 1_000L
         private const val MAX_REFRESH = 12
+        private val GONE = OrbeQueued("", "", 0L)
         private val UNSETTLED = setOf("awaiting_approval", "queued", "running")
         private const val MENTION_WINDOW = 20
         private val MENTION = Regex("""(?<![\w&])#(\d{1,7})\b""")

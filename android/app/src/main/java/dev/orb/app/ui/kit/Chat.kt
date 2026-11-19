@@ -159,6 +159,8 @@ fun OrbTaskCard(
     line: String? = null,
     working: Boolean = false,
     lineMaxLines: Int = 1,
+    /** A card that asks for an OK passes [Int.MAX_VALUE]: nothing the person approves may be cut. */
+    titleMaxLines: Int = 2,
     icon: ImageVector? = null,
     lineRich: androidx.compose.ui.text.AnnotatedString? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
@@ -173,7 +175,7 @@ fun OrbTaskCard(
             ) {
                 if (icon != null) Icon(icon, null, Modifier.size(16.dp), tint = OrbKit.foreground)
                 else if (agent != null) AgentMark(agent, size = 16.dp, description = null)
-                Text(title, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(title, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, maxLines = titleMaxLines, overflow = TextOverflow.Ellipsis)
                 OrbBadge(badge, kind = badgeKind)
             }
             if (line != null || lineRich != null) {

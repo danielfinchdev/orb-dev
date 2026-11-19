@@ -84,7 +84,8 @@ fun ChatQueueBar(count: Int, modifier: Modifier = Modifier, queue: QueueActions?
     }
     val editing = queue?.editor
     if (queue != null && editing != null) {
-        var text by rememberSaveable(editing.item.id) { mutableStateOf(editing.item.text) }
+        // a new revision is the newer text of the PC loaded over what was being typed
+        var text by rememberSaveable(editing.item.id, editing.revision) { mutableStateOf(editing.item.text) }
         OrbDialog(
             onDismiss = queue.onClose, title = ChatTexts.TASK_EDIT_QUEUED,
             confirm = OrbDialogAction(ChatTexts.QUEUED_SAVE, { queue.onSave(text) }, enabled = text.isNotBlank() && !editing.busy),

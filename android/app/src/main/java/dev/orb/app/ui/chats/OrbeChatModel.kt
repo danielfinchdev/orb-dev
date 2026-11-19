@@ -195,18 +195,31 @@ object OrbeParser {
         val o = el as? JsonObject ?: return null
         val parsed = dev.orb.app.ui.tasks.TasksParser.detail(o)
         val review = o["review"] as? JsonObject
+        val held = parsed?.row?.held
         return TaskDetail(
-            id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"), agent = o.str("assigned_to") ?: o.str("agent"),
-            project = o.str("project_path") ?: o.str("project"),
+            id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"),
+            // `agent` is what the fingerprint covers; `assigned_to` is who runs it now.
+            agent = o.str("agent"), runner = o.str("assigned_to"),
+            project = o.str("project_path"),
             reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
             hash = o.str("previewHash"), model = o.str("model"),
             autonomy = o.str("autonomy"),
             approvalRequired = (o["approval"] as? JsonObject)?.takeIf { it["required"] != null }?.bool("required"),
-            held = parsed?.row?.held != null, accepted = parsed?.accepted == true, undone = parsed?.row?.undone == true,
+            held = held != null, heldReasons = held?.reasons.orEmpty(), heldFolder = held?.folder,
+            accepted = parsed?.accepted == true, undone = parsed?.row?.undone == true,
             actions = parsed?.let { cardActions(it, can) }.orEmpty(),
             reviewAgent = review?.str("agent"),
             decision = parsed?.events?.lastOrNull { it.kind in DECISIONS }?.kind?.let { if (it == "task.approved") "approved" else if (it == "task.rejected") "rejected" else null },
+            description = o.str("description"), readonly = o.bool("readonly"), mode = o.str("mode"), reasoning = o.str("reasoning"),
+            fast = o.bool("fast"), userAsked = stringList(o["user_asked"]),
         )
+    }
+
+    // `user_asked` arrives as a list (the PC parses it) but an old row may still hold the JSON text of one.
+    private fun stringList(el: kotlinx.serialization.json.JsonElement?): List<String> = when (el) {
+        is JsonArray -> el.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        is JsonPrimitive -> runCatching { (Json.parseToJsonElement(el.content) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull } }.getOrDefault(emptyList())
+        else -> emptyList()
     }
 
     /**
@@ -218,6 +231,9 @@ object OrbeParser {
         val held = d.row.held != null
         val finished = held || d.row.status == "done"
         val out = LinkedHashSet(dev.orb.app.ui.tasks.TaskActions.of(d, can))
+        // A task Orb stopped is reviewed on the task's changes screen, which shows what the PC rechecks before «Aceptar» and
+        // asks before «Deshacer»; a card never offers either one, so accepting never skips why it was held.
+        if (held) { out -= dev.orb.app.ui.tasks.TaskAction.AcceptHeld; out -= dev.orb.app.ui.tasks.TaskAction.UndoHeld; return out }
         if (!d.accepted && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_ACCEPT)) out += dev.orb.app.ui.tasks.TaskAction.AcceptHeld
         if (d.hasCheckpoint && !d.row.undone && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_UNDO)) out += dev.orb.app.ui.tasks.TaskAction.UndoHeld
         return out

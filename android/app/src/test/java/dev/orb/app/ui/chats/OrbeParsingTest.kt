@@ -92,7 +92,7 @@ class OrbeParsingTest {
         status: String = "done", extra: String = "", hash: String = """"previewHash":"h1",""",
         events: String = """[{"actor":"orb","kind":"task.created","detail":"queued","at":"x"}]""",
     ) = json(
-        """{"id":42,"title":"Registro","status":"$status","assigned_to":"codex","project_path":"C:/app-movil","model":"gpt","sensitivity":[],$hash
+        """{"id":42,"title":"Registro","status":"$status","assigned_to":"codex","project_path":"C:/app-movil","model":"gpt","sensitivity":[],"agent":"codex","description":"Añade el registro de notificaciones.",$hash
         "autonomy":"auto","approval":{"required":false,"signed":false},"hasCheckpoint":true,"accepted":false,
         "review":{"task":43,"verdict":"ok","agent":"claude"},"events":$events$extra}""",
     )

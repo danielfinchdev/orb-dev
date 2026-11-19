@@ -163,7 +163,8 @@ class ChatShotsTest {
         Shots.assumeEnabled()
         val rows = thread13() + line(3, "system", "La tarea #42 espera tu OK: toca la red", at(13, 56), """{"kind":"attention","task":42}""")
         val b = backend(rows, "Versión 2.0 de la app", "app-movil")
-        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "awaiting_approval", "codex", "C:/app-movil", listOf("red"), "h1", actions = setOf(TaskAction.Approve))
+        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "awaiting_approval", "codex", "C:/app-movil", listOf("red"), "h1", actions = setOf(TaskAction.Approve),
+            description = "Añade el registro de notificaciones push y pruébalo en el emulador.")
         shoot("13-chat", OrbPaletteChoice.Grafito, "-aprobar", vm(b))
     }
 
@@ -175,7 +176,16 @@ class ChatShotsTest {
     )
     private val task43 = TaskDetail(
         43, "Borrar build/ y reinstalar dependencias", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h43",
-        actions = setOf(TaskAction.Approve),
+        actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias con npm ci.",
+    )
+    private val task45 = TaskDetail(
+        45, "Limpiar la carpeta de pruebas", "blocked", "codex", "C:/app-movil", emptyList(), null, held = true,
+        heldReasons = "ha eliminado 2714 archivos", heldFolder = "C:/app-movil", actions = setOf(TaskAction.SeeChanges),
+    )
+    private val task46 = TaskDetail(
+        46, "Migrar el registro a Room", "awaiting_approval", "codex", "C:/app-movil", listOf("external_write"), "h46", model = "gpt",
+        actions = setOf(TaskAction.Approve), reasoning = "high",
+        description = (1..9).joinToString("\n") { "Paso $it: revisar el módulo $it, migrar sus consultas a Room y actualizar sus pruebas para que sigan pasando." },
     )
     private val task44 = TaskDetail(44, "Instalar dependencias", "running", "codex", "C:/app-movil", emptyList(), "h44", autonomy = "auto", approvalRequired = false)
 
@@ -243,6 +253,23 @@ class ChatShotsTest {
         OrbPaletteChoice.Grafito, "-deshecho",
         setup = { b -> b.onAction = { if (it == "undo 42") b.detailsOnPc[42] = task42.copy(undone = true, actions = emptySet()) } },
         after = { rule.onNodeWithText("Deshacer").performClick(); rule.waitForIdle(); holdClock(); rule.onNodeWithText("Deshacer esta tarea").performClick(); settle() },
+    )
+
+    private fun heldThread() = listOf(
+        line(1, "system", "La tarea #45 terminó", at(13, 57), """{"kind":"attention","task":45}"""),
+    )
+
+    private fun approvalsOn(palette: OrbPaletteChoice, suffix: String, rows: List<String>, detail: TaskDetail) {
+        Shots.assumeEnabled()
+        val b = backend(rows, "Versión 2.0 de la app", "app-movil").apply { detailsOnPc[detail.id] = detail; modeOnPc = "preguntar" }
+        shoot("14-aprobaciones", palette, suffix, vm(b))
+    }
+
+    @Test fun approvalsHeld() = approvalsOn(OrbPaletteChoice.Grafito, "-retenida", heldThread(), task45)
+
+    @Test fun approvalsLongDescription() = approvalsOn(
+        OrbPaletteChoice.Grafito, "-descripcion-larga",
+        listOf(line(1, "system", "La tarea #46 espera tu OK", at(13, 57), """{"kind":"attention","task":46}""")), task46,
     )
 
     @Test fun approvalsAgentQuestion() = approvals(OrbPaletteChoice.Grafito, "-pregunta", question = true)

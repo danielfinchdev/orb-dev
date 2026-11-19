@@ -47,7 +47,7 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     var actionResult: Result<Unit> = Result.success(Unit)
     var modeOnPc: String? = "preguntar"
     var chatOnPc: JsonObject? = null
-    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", actions = setOf(TaskAction.Approve))
+    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", actions = setOf(TaskAction.Approve), description = "Guarda el carrito en IndexedDB al cambiar.")
     /** What `tasks.get` answers per task; a task not listed answers [taskDetail]. */
     val detailsOnPc = HashMap<Long, TaskDetail>()
     var statOnPc: TaskStat? = null
@@ -107,7 +107,18 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     override suspend fun brain(conversation: Long): Result<BrainInfo?> { brainReads++; return Result.success(brainOnPc) }
     override suspend fun liveTasks(): Result<List<LiveTask>> { liveReads++; return Result.success(liveOnPc) }
 
-    override suspend fun taskDetail(id: Long): Result<TaskDetail> { calls += "detail $id"; detailGate?.await(); return Result.success(detailsOnPc[id] ?: taskDetail) }
+    /** Makes the next `tasks.get` answer as the PC was when it was asked and hold the answer until this completes. */
+    var staleNext: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    /** When set, `tasks.get` answers this instead (a task in the trash, an error). */
+    var detailResult: Result<TaskDetail>? = null
+    override suspend fun taskDetail(id: Long): Result<TaskDetail> {
+        calls += "detail $id"
+        detailResult?.let { detailGate?.await(); return it }
+        val stale = staleNext?.also { staleNext = null }
+        if (stale != null) { val old = detailsOnPc[id] ?: taskDetail; stale.await(); return Result.success(old) }
+        detailGate?.await()
+        return Result.success(detailsOnPc[id] ?: taskDetail)
+    }
     override suspend fun taskStat(id: Long): Result<TaskStat?> { calls += "stat $id"; return statResult ?: Result.success(statOnPc) }
     override suspend fun acceptTask(id: Long): Result<Unit> { calls += "taskaccept $id"; onAction("taskaccept $id"); return actionResult }
     override suspend fun undoTask(id: Long): Result<Unit> { calls += "undo $id"; onAction("undo $id"); return actionResult }

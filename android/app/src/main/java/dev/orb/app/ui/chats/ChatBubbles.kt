@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -267,7 +268,7 @@ private fun OrbeMessage(m: ChatMessage, state: OrbeChatState, now: Long, actions
 private fun SystemMessage(m: ChatMessage, state: OrbeChatState, actions: CardActions, modifier: Modifier) {
     when (val card = m.card) {
         is MsgCard.Permission -> PermissionCard(m, card, state.online, m.id in state.busyCards, actions, modifier)
-        is MsgCard.TaskAttention -> TaskCard(m, card.task, state, actions, modifier)
+        is MsgCard.TaskAttention -> TaskCard(m, card.task, state, actions, modifier, attention = true)
         // A task with no card of its own in the thread gets one when it ends; otherwise its card already says how it ended.
         is MsgCard.TaskEnd ->
             if (m.task != null && m.task !in state.attentionTasks) TaskCard(m, m.task, state, actions, modifier, result = card.result)
@@ -395,6 +396,8 @@ class CardActions(
     /** «Deshacer»: the screen confirms before the files of the PC are touched. */
     val undoTask: (Long) -> Unit,
     val openChanges: (Long) -> Unit,
+    /** The task's own screen: where a card that cannot show everything sends the person. */
+    val openTask: (Long) -> Unit = {},
 )
 
 @Composable
@@ -556,21 +559,25 @@ private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolea
     }
 }
 
-/** How a task's card is drawn now: asking for the OK, folded to one line after the answer, or by its state. */
-private enum class TaskCardKind { Waiting, Approved, Rejected, Accepted, Plain }
+/** How a task's card is drawn now: asking for the OK, held for review, folded to one line after the answer, or by its state. */
+private enum class TaskCardKind { Waiting, Held, Approved, Rejected, Accepted, Plain, Neutral }
 
 /**
- * A task of the thread, as the PC describes it. Waiting for the OK it shows what is approved (what the task is, who runs it,
- * where and why it asks) and «Aprobar» sends the fingerprint of exactly that; finished, it counts what it changed and
- * offers «Cambios», «Deshacer» and «Aceptar» where the PC allows them.
+ * A task of the thread, as the PC describes it. Waiting for the OK it shows what is approved (the description, who runs it, the
+ * folder and why it asks) and «Aprobar» sends the fingerprint of exactly that; held, it says why Orb stopped it and only offers
+ * to look; finished, it counts what it changed and offers «Cambios», «Deshacer» and «Aceptar» where the PC allows them.
+ * [attention] is a card the PC raised for a task that needs the person; without data any other card is neutral.
  */
 @Composable
-private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: CardActions, modifier: Modifier, result: String? = null) {
+private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: CardActions, modifier: Modifier, result: String? = null, attention: Boolean = false) {
     androidx.compose.runtime.LaunchedEffect(task) { actions.watchTask(task) }
     val info = state.taskInfo[task]
     val status = info?.status ?: state.taskStatus[task]
     val kind = when {
-        status == "awaiting_approval" || (info == null && status == null) -> TaskCardKind.Waiting
+        // «Espera tu OK» only when the PC said so; an attention card the PC raised may wait for its first answer.
+        status == "awaiting_approval" || (attention && info == null && status == null) -> TaskCardKind.Waiting
+        info == null && status == null -> TaskCardKind.Neutral
+        info?.held == true -> TaskCardKind.Held
         status == "cancelled" && info?.decision == "rejected" -> TaskCardKind.Rejected
         (status == "queued" || status == "running") && info?.decision == "approved" -> TaskCardKind.Approved
         status == "done" && info?.accepted == true -> TaskCardKind.Accepted
@@ -584,6 +591,11 @@ private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: 
         ) { k ->
             when (k) {
                 TaskCardKind.Waiting -> WaitingCard(m, task, info, state, busy, actions)
+                TaskCardKind.Held -> if (info != null) HeldCard(task, info, actions)
+                TaskCardKind.Neutral -> OrbTaskCard(
+                    title = m.body.removePrefix("⚠️").trim().ifBlank { ChatTexts.taskTitle(task, null) }, badge = ChatTexts.TASK_ENDED_BADGE, titleMaxLines = Int.MAX_VALUE,
+                    footer = { OrbButton(ChatTexts.TASK_SEE_TASK, { actions.openTask(task) }) },
+                )
                 TaskCardKind.Approved -> {
                     val (badge, bk) = taskBadge(status)
                     OrbTaskCard(ChatTexts.taskApproved(task), badge, badgeKind = bk, icon = OrbIcons.CircleCheck)
@@ -598,6 +610,19 @@ private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: 
     }
 }
 
+/**
+ * Everything the OK is about, none of it cut: why it asks first, then what the task will do, who runs it and where. These are
+ * the fields the PC's fingerprint covers; [preview] false (the dialog) shows the whole description however long.
+ */
+@Composable
+private fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
+    if (d.reasons.isNotEmpty()) Text(ChatTexts.asksBecause(d.reasons), color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (!d.description.isNullOrBlank()) Text(if (preview) d.descriptionPreview() else d.description.trim(), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
+    val who = d.agent?.takeIf { it.isNotBlank() }?.let { if (it == "any") ChatTexts.AGENT_ANY else agentName(it) ?: it }
+    if (who != null) Text(ChatTexts.approvalWho(who, d.model, d.reasoning, d.fast, d.mode, d.readonly, d.autonomy), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
+    if (!d.project.isNullOrBlank()) Text(d.project, color = OrbKit.mutedForeground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)
+}
+
 /** «Espera tu OK»: the card is the place where the person sees what they are about to approve. */
 @Composable
 private fun WaitingCard(m: ChatMessage, task: Long, info: TaskDetail?, state: OrbeChatState, busy: Boolean, actions: CardActions) {
@@ -605,23 +630,42 @@ private fun WaitingCard(m: ChatMessage, task: Long, info: TaskDetail?, state: Or
     val named = !info?.title.isNullOrBlank()
     // Under Auto a task that still asks is one the PC found delicate; its reasons are on the card.
     val delicate = state.mode == "auto" && info?.reasons?.isNotEmpty() == true
-    val approvable = info != null && info.approvable && dev.orb.app.ui.tasks.TaskAction.Approve in info.actions
+    // «Aprobar» only when the card shows the whole description and every field the fingerprint covers.
+    val approvable = info != null && info.approvable && info.fitsCard && dev.orb.app.ui.tasks.TaskAction.Approve in info.actions
     OrbTaskCard(
-        title = if (named) ChatTexts.taskTitle(task, info?.title) else body,
+        title = if (named) ChatTexts.taskTitle(task, info?.title) else body, titleMaxLines = Int.MAX_VALUE,
         badge = if (delicate) ChatTexts.TASK_SENSITIVE else ChatTexts.taskStatus("awaiting_approval"), badgeKind = OrbBadgeKind.Warn,
-        agent = info?.agent,
-        line = if (info != null && named) ChatTexts.approvalLine(info.agent?.let { agentName(it) ?: it }, info.model, info.project, info.reasons) else body,
-        lineMaxLines = 4,
+        agent = info?.agent?.takeIf { it != "any" },
+        line = if (info != null && named) null else body, lineMaxLines = Int.MAX_VALUE,
+        body = if (info != null && named) ({ ApprovalFacts(info, preview = true) }) else null,
         footer = {
             val enabled = state.online && !busy
             if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
             OrbButton(ChatTexts.REJECT, { actions.reject(task) }, enabled = enabled)
-            // The fingerprint sent is the one of the text above: a card that cannot show what is approved only opens the task.
-            val shown = info?.hash
+            // The fingerprint sent is the one of what is drawn above: a card that cannot show it all sends none and only opens the task.
             OrbButton(
-                if (approvable) ChatTexts.APPROVE else ChatTexts.SEE_AND_APPROVE, { actions.approve(task, shown) },
+                if (approvable) ChatTexts.APPROVE else ChatTexts.SEE_AND_APPROVE, { actions.approve(task, if (approvable) info?.hash else null) },
                 kind = OrbButtonKind.Primary, enabled = enabled,
             )
+        },
+    )
+}
+
+/**
+ * A task Orb stopped after it ran. The reason is on the card, and the only way forward is to look: «Aceptar» there would keep
+ * the work and free the tasks waiting for it, so it (and «Deshacer») live on the changes screen, with the PC's own recheck.
+ */
+@Composable
+private fun HeldCard(task: Long, info: TaskDetail, actions: CardActions) {
+    val canSee = dev.orb.app.ui.tasks.TaskAction.SeeChanges in info.actions
+    OrbTaskCard(
+        title = ChatTexts.taskTitle(task, info.title.ifBlank { null }), titleMaxLines = Int.MAX_VALUE,
+        badge = ChatTexts.TASK_HELD_BADGE, badgeKind = OrbBadgeKind.Warn, agent = (info.runner ?: info.agent)?.takeIf { it != "any" },
+        body = {
+            Text(dev.orb.app.ui.tasks.TaskTexts.heldLine(info.heldReasons, info.heldFolder), color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+        },
+        footer = {
+            if (canSee) OrbButton(ChatTexts.TASK_SEE_CHANGES, { actions.openChanges(task) }) else OrbButton(ChatTexts.TASK_SEE_TASK, { actions.openTask(task) })
         },
     )
 }
@@ -640,9 +684,10 @@ private fun PlainCard(task: Long, info: TaskDetail?, status: String?, state: Orb
     val green = OrbKit.success
     val red = OrbKit.destructive
     val rich = if (status == "done" && !undone && info != null) doneLine(info, stat, green, red) else null
+    val who = info?.let { it.runner ?: it.agent }?.takeIf { it != "any" }
     OrbTaskCard(
-        title = if (named) ChatTexts.taskTitle(task, info?.title) else ChatTexts.taskTitle(task, null), badge = badge, badgeKind = bk, agent = info?.agent,
-        line = if (rich != null || undone) null else if (autoPassed) ChatTexts.TASK_AUTO_PASSED else info?.agent?.let { agentName(it) ?: it },
+        title = if (named) ChatTexts.taskTitle(task, info?.title) else ChatTexts.taskTitle(task, null), badge = badge, badgeKind = bk, agent = who,
+        line = if (rich != null || undone) null else if (autoPassed) ChatTexts.TASK_AUTO_PASSED else who?.let { agentName(it) ?: it },
         lineRich = rich,
         footer = if (!undone && (canSee || canUndo || canAccept)) {
             {
@@ -710,7 +755,7 @@ fun LiveTaskCard(t: LiveTask, modifier: Modifier = Modifier) {
     )
 }
 
-/** What the PC's own window shows before approving a task: its title, agent, folder and why it waits. */
+/** What the PC's own window shows before approving a task: why it asks, what it will do, who runs it and where; nothing is cut. */
 @Composable
 fun ApprovalDialog(ask: ApprovalAsk, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val d = ask.detail
@@ -719,11 +764,10 @@ fun ApprovalDialog(ask: ApprovalAsk, onConfirm: () -> Unit, onDismiss: () -> Uni
         confirm = OrbDialogAction(ChatTexts.APPROVE, onConfirm),
         dismiss = OrbDialogAction(ChatTexts.CANCEL, onDismiss),
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        // A long brief scrolls inside the dialog instead of being cut, so the person can read all of it before «Aprobar».
+        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(d.title, color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
-            if (!d.agent.isNullOrBlank()) Text(ChatTexts.agentWithModel(agentName(d.agent) ?: d.agent, d.model), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
-            if (!d.project.isNullOrBlank()) Text(d.project, color = OrbKit.mutedForeground, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp)
-            if (d.reasons.isNotEmpty()) Text(d.reasons.joinToString(", ") { ChatTexts.reason(it) }, color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
+            ApprovalFacts(d, preview = false)
             Text(ChatTexts.ON_PC_NOTE, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
         }
     }

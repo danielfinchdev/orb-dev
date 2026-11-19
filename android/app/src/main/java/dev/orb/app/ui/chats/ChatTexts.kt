@@ -390,6 +390,23 @@ object ChatTexts {
         project?.takeIf { it.isNotBlank() },
         reasons.joinToString(", ") { reason(it) }.ifBlank { null },
     ).joinToString(" · ")
+    /** Who runs it and how, in the words of everything the PC's fingerprint covers besides the description, folder and reasons. */
+    fun approvalWho(agent: String, model: String?, reasoning: String?, fast: Boolean, mode: String?, readonly: Boolean, autonomy: String?): String = listOfNotNull(
+        agentWithModel(agent, model),
+        reasoning?.takeIf { it.isNotBlank() }?.let { reasoningText(it) },
+        if (fast) "modo rápido" else null,
+        if (mode == "aislada") "en una copia aislada" else null,
+        if (readonly) "solo lectura" else null,
+        if (autonomy == "preguntar") "permiso: Preguntar" else null,
+    ).joinToString(" · ")
+    fun asksBecause(reasons: List<String>) = "Pide tu OK porque: " + reasons.joinToString(", ") { reason(it) }
+    const val AGENT_ANY = "Automático"
+    const val TASK_HELD_BADGE = "Retenida"
+    const val TASK_SEE_CHANGES = "Ver cambios"
+    const val TASK_SEE_TASK = "Ver la tarea"
+    const val TASK_ENDED_BADGE = "Terminada"
+    const val UNDO_UNAVAILABLE = "Esa tarea ha cambiado en el PC y ya no se puede deshacer desde aquí: no se ha tocado nada."
+    const val QUEUE_CHANGED = "Este mensaje ha cambiado en el PC. Se ha cargado el texto nuevo: revísalo y guarda otra vez si quieres cambiarlo."
     const val TASK_CHANGES = "Cambios"
     const val TASK_UNDO = "Deshacer"
     const val TASK_ACCEPT = "Aceptar"
@@ -413,8 +430,8 @@ object ChatTexts {
     fun undoAskBody(files: Int?) =
         (if (files == null) "Se revierten los archivos que cambió." else "Se revierten los ${taskFiles(files)} que cambió.") + " Los cambios posteriores se conservan."
     const val UNDO_CONFIRM = "Deshacer esta tarea"
-    const val REJECT_ASK_TITLE = "¿Rechazar esta tarea?"
-    const val REJECT_ASK_BODY = "Rechazarla cancela la tarea."
+    fun rejectAskTitle(id: Long) = "¿Rechazar la tarea #$id?"
+    fun rejectAskBody(title: String?) = (title?.takeIf { it.isNotBlank() }?.let { "«$it». " } ?: "") + "Rechazarla cancela la tarea."
     const val REJECT_CONFIRM = "Rechazar y cancelar"
     const val REJECT_BACK = "Volver"
 

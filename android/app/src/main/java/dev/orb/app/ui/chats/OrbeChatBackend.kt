@@ -28,9 +28,11 @@ import kotlinx.serialization.json.put
 data class PcSnapshot(val mode: String?, val chat: JsonObject?)
 
 /**
- * The task behind a card, as the PC describes it in one `tasks.get`: what the person sees before agreeing ([title], [agent],
- * [model], [project], [reasons]) and the [hash] of exactly that, which goes back with the OK. [actions] are the ones the PC
- * allows for it now (the same rule as the task's own screen).
+ * The task behind a card, as the PC describes it in one `tasks.get`: what the person sees before agreeing and the [hash] of
+ * exactly that, which goes back with the OK. The PC's fingerprint (`approval.mjs › contentHash`) covers the description, the
+ * `agent`, the model, the folder, the sensitivity tags, the reasoning, the fast flag, the mode, read-only and the Preguntar
+ * level; every one of those is a field here so the card can show what the hash covers and nothing less.
+ * [actions] are the ones the PC allows for it now (the same rule as the task's own screen).
  */
 data class TaskDetail(
     val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>,
@@ -46,12 +48,48 @@ data class TaskDetail(
     val reviewAgent: String? = null,
     /** What the person last decided on the PC for this task: `approved` or `rejected` (from its history), else null. */
     val decision: String? = null,
+    /** What the task will really do: the brief the agent gets. The hash covers it, the title is not covered. */
+    val description: String? = null,
+    val readonly: Boolean = false,
+    /** `carpeta` or `aislada`. */
+    val mode: String? = null,
+    val reasoning: String? = null,
+    val fast: Boolean = false,
+    /** What the person's own message asked for (`user_asked`): covered by the hash, and the card has no room to word it. */
+    val userAsked: List<String> = emptyList(),
+    /** The agent that runs it now (`assigned_to`), which may differ from the [agent] the OK is about. */
+    val runner: String? = null,
+    /** Why Orb stopped it, and the folder the PC has for it now, when the task is held for review. */
+    val heldReasons: String = "",
+    val heldFolder: String? = null,
 ) {
+    /** The folder is the one the PC stored for the task; the hash covers the folder it has *now* (see [folderKnown]). */
+    val folderKnown: Boolean get() = !project.isNullOrBlank() && "ruta_cambiada" !in reasons
+
     /**
-     * Whether a card can show everything the OK is about: what the task is, who runs it and the fingerprint of it. Without
-     * these the OK is not given from the card (the person is sent to the task's own screen).
+     * Whether a card or dialog can show everything the OK is about. Anything the hash covers that the answer does not carry
+     * (the current folder of a task whose folder moved, what the person's message asked for) sends the person to the task's own
+     * screen instead of approving from here.
      */
-    val approvable: Boolean get() = title.isNotBlank() && !agent.isNullOrBlank() && !hash.isNullOrBlank() && status == "awaiting_approval"
+    val approvable: Boolean get() = title.isNotBlank() && !agent.isNullOrBlank() && !hash.isNullOrBlank() && status == "awaiting_approval" &&
+        !description.isNullOrBlank() && folderKnown && userAsked.isEmpty()
+
+    /** The whole description fits the card; longer ones are cut there, so the card cannot approve them. */
+    val fitsCard: Boolean get() = description.orEmpty().let { it.length <= CARD_DESCRIPTION_CHARS && it.count { c -> c == '\n' } < CARD_DESCRIPTION_LINES }
+
+    /** The description as a card draws it: whole when it [fitsCard], else its beginning and «…». */
+    fun descriptionPreview(): String {
+        val d = description.orEmpty().trim()
+        if (fitsCard) return d
+        val lines = d.lineSequence().take(CARD_DESCRIPTION_LINES).joinToString("\n")
+        return lines.take(CARD_DESCRIPTION_CHARS).trimEnd() + "…"
+    }
+
+    companion object {
+        /** A description longer than this is not approved from a card: it would not be read whole. */
+        const val CARD_DESCRIPTION_CHARS = 600
+        const val CARD_DESCRIPTION_LINES = 12
+    }
 }
 
 /**

@@ -243,17 +243,20 @@ class OrbeChatScreenTest {
     private val attention = raw(4, "system", "⚠️ La tarea #42 espera tu OK", """{"kind":"attention","task":42}""")
     private val waiting42 get() = TaskDetail(
         42, "Borrar build/ y reinstalar", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h1", model = "gpt",
-        actions = setOf(TaskAction.Approve),
+        actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias.",
     )
 
     @Test fun theWaitingCardShowsWhatIsApprovedAndOkSendsItsFingerprint() {
         val b = FakeOrbeChatBackend(thread + attention)
         b.taskDetail = waiting42
         screen(b)
-        rule.onNodeWithText("#42 Borrar build/ y reinstalar").assertIsDisplayed()
-        rule.onNodeWithText("Codex (gpt) · C:/app-movil · elimina datos").assertIsDisplayed()
+        rule.onNodeWithText("#42 Borrar build/ y reinstalar").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Pide tu OK porque: elimina datos").assertIsDisplayed()
+        rule.onNodeWithText("Borra la carpeta build/ y vuelve a instalar las dependencias.").assertIsDisplayed()
+        rule.onNodeWithText("Codex (gpt)").assertIsDisplayed()
+        rule.onNodeWithText("C:/app-movil").assertIsDisplayed()
         rule.onNodeWithText("Espera tu OK").assertIsDisplayed()
-        rule.onNodeWithText("Aprobar").performClick()
+        rule.onNodeWithText("Aprobar").performScrollTo().performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
         assertEquals(0, rule.onAllNodesWithText("Aprobar la tarea #42").fetchSemanticsNodes().size)
@@ -287,7 +290,8 @@ class OrbeChatScreenTest {
         b.taskDetail = waiting42
         screen(b)
         rule.onNodeWithText("Rechazar").performClick()
-        rule.onNodeWithText("¿Rechazar esta tarea?").assertIsDisplayed()
+        rule.onNodeWithText("¿Rechazar la tarea #42?").assertIsDisplayed()
+        rule.onNodeWithText("«Borrar build/ y reinstalar». Rechazarla cancela la tarea.").assertIsDisplayed()
         assertTrue(b.calls.none { it.startsWith("task ") })
         rule.onNodeWithText("Rechazar y cancelar").performClick()
         rule.waitForIdle()
@@ -299,7 +303,7 @@ class OrbeChatScreenTest {
         b.modeOnPc = "auto"
         b.taskDetail = waiting42
         screen(b)
-        rule.onNodeWithText("Delicado: pide tu OK").assertIsDisplayed()
+        rule.onNodeWithText("Delicado: pide tu OK").performScrollTo().assertIsDisplayed()
         rule.onNodeWithText("Auto: Orb aprueba lo normal y te pregunta lo delicado.").assertIsDisplayed()
     }
 
