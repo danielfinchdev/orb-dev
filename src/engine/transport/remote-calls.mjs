@@ -81,13 +81,18 @@ export function shapeResult(method, result) {
   // The phone approves the fingerprint of the full description: say when the folder cut above changed the text it shows.
   if (method === 'tasks.get' && result && typeof result.description === 'string') {
     const re = homePattern();
-    return { ...withoutPaths(result), descriptionCut: re ? cutHome(result.description, re) !== result.description : false };
+    // user_asked is part of the same fingerprint, so a cut there also counts.
+    const cut = (v) => Array.isArray(v) ? v.some(cut) : typeof v === 'string' && Boolean(re) && cutHome(v, re) !== v;
+    return { ...withoutPaths(result), descriptionCut: cut(result.description) || cut(result.user_asked) };
   }
   if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
   const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
   return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
+
+// A free text as a phone receives it (the assistant folder cut), to compare what the phone says it saw with what the PC holds.
+export const phoneText = (text) => (typeof text === 'string' ? cutHome(text, homePattern()) : text);
 
 export { IMAGE_NAME };
 

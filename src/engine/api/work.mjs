@@ -32,10 +32,14 @@ function outsideHome(folder) {
   const rel = path.relative(folderKey(ctx.home), folderKey(folder)).replace(/\\/g, '/');
   return rel === '..' || rel.startsWith('../') || path.isAbsolute(rel);
 }
-// Which run's undo point a task has now: changes when it runs again, so a stale «Deshacer» dialog can be refused.
-function checkpointIdOf(cp) {
+// Which run's undo point a task has now, so a stale «Deshacer»/«Aceptar» can be refused. It mixes where the run started
+// (before) with the id of the task's last launch event: that changes exactly once per run (a folder without git reuses
+// the same «copia», and a git one keeps its first commit) and never when held files are rechecked.
+function checkpointIdOf(board, taskId) {
+  const cp = board.settingJson(`checkpoint:${taskId}`);
   const before = cp?.before; if (!before) return null;
-  return createHash('sha1').update(JSON.stringify([before.kind, before.commit ?? before.copy ?? null, cp.after?.commit ?? null])).digest('hex').slice(0, 16);
+  const run = board.one("SELECT MAX(id) AS id FROM events WHERE task_id = ? AND kind = 'task.launched'", Number(taskId))?.id ?? 0;
+  return createHash('sha1').update(JSON.stringify([before.kind, before.commit ?? before.copy ?? null, run])).digest('hex').slice(0, 16);
 }
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
@@ -90,7 +94,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
       const now = board.projectPathNow(d) ?? null;
       const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
-      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board.settingJson(`checkpoint:${d.id}`)), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -112,7 +116,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
     'tasks.undo': ({ id, checkpoint }) => {
       const tid = int(id, 'tarea');
-      if (checkpoint != null && checkpoint !== checkpointIdOf(board.settingJson(`checkpoint:${tid}`))) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
       return scheduler.undo(tid);
     },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
@@ -151,8 +155,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // to its report does.
     // unheld: true (the phone, which may hold stale data) refuses a task the guard holds or that is no longer awaiting
     // acceptance, so a re-run that Orb held meanwhile is never accepted blind. Without it the PC's window accepts after showing the diff.
-    'tasks.accept': ({ id, unheld }) => {
+    // checkpoint (optional): the checkpointId the phone saw; if the task ran again since, nothing is accepted.
+    'tasks.accept': ({ id, unheld, checkpoint }) => {
       const tid = int(id, 'tarea');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla');
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
         if (board.heldInfo(t)) fail('la tarea está retenida por la guardia; revisa sus cambios en el PC antes de aceptarla');

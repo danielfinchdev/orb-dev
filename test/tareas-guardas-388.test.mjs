@@ -90,3 +90,50 @@ test('tasks.undo with a stale checkpoint is refused; matching or absent goes thr
   await call('tasks.undo', { id: task.id });
   assert.deepEqual(calls, [task.id, task.id]);
 });
+
+// A new run writes a task.launched event (launch.mjs); before.commit / before.copy do not change between runs.
+const launch = (board, id) => board.event(id, 'orb', 'task.launched', 'queued');
+const idOf = async (call, id) => (await call('tasks.get', { id })).checkpointId;
+
+test('checkpointId changes with every run, in a git folder and in a copy folder, and not with the held recheck', async () => {
+  for (const before of [{ kind: 'git', commit: 'aaa', repo: 'r' }, { kind: 'copia', copy: 'c1' }]) {
+    const { board, call, task } = setup();
+    board.settingJson(`checkpoint:${task.id}`, { before, after: null });
+    launch(board, task.id);
+    const run1 = await idOf(call, task.id);
+    assert.match(run1, /^[0-9a-f]{16}$/);
+    // the end of the run and a later recheck of held files move after.commit only
+    board.settingJson(`checkpoint:${task.id}`, { before, after: { commit: 'c1' } });
+    assert.equal(await idOf(call, task.id), run1);
+    board.settingJson(`checkpoint:${task.id}`, { before, after: { commit: 'c2' } });
+    assert.equal(await idOf(call, task.id), run1);
+    // the same task runs again with the same starting point
+    board.settingJson(`checkpoint:${task.id}`, { before, after: null });
+    launch(board, task.id);
+    assert.notEqual(await idOf(call, task.id), run1);
+  }
+  const { call, task } = setup();
+  assert.equal(await idOf(call, task.id), null);
+});
+
+test('tasks.accept {checkpoint}: a stale one is refused and changes nothing, the current one and none accept', async () => {
+  const { board, call, task } = setup();
+  board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'copia', copy: 'c1' } });
+  launch(board, task.id); if (board.task(task.id).status !== 'done') board.patch(task.id, { status: 'done' }, 'orb', 'task.done');
+  const old = await idOf(call, task.id);
+  launch(board, task.id); if (board.task(task.id).status !== 'done') board.patch(task.id, { status: 'done' }, 'orb', 'task.done');
+  await assert.rejects(call('tasks.accept', { id: task.id, checkpoint: old }), /vuelto a ejecutar/);
+  assert.equal(board.isAccepted(task.id), false);
+  await assert.rejects(call('tasks.accept', { id: task.id, checkpoint: old, unheld: true }), /vuelto a ejecutar/);
+  await call('tasks.accept', { id: task.id, checkpoint: await idOf(call, task.id), unheld: true });
+  assert.equal(board.isAccepted(task.id), true);
+  const other = setup(); other.board.patch(other.task.id, { status: 'done' }, 'orb', 'task.done');
+  await other.call('tasks.accept', { id: other.task.id });
+  assert.equal(other.board.isAccepted(other.task.id), true);
+});
+
+test('descriptionCut also tells when user_asked lost the assistant folder', async () => {
+  const { board, call, task } = setup();
+  board.run('UPDATE tasks SET user_asked = ? WHERE id = ?', JSON.stringify([`ver ${path.join(home.home, 'web')}\/x`]), task.id);
+  assert.equal(shapeResult('tasks.get', await call('tasks.get', { id: task.id })).descriptionCut, true);
+});
