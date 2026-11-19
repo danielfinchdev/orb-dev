@@ -79,6 +79,10 @@ fun DirectChatScreen(
     val forkAsk by vm.fork.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    FailedSendNotice(
+        state.items.mapNotNull { (it as? DItem.Waiting)?.pending?.takeIf { p -> p.state == PendingState.Failed }?.clientId }.toSet(),
+        state.loaded, snackbar,
+    )
     LaunchedEffect(vm) {
         vm.effects.collect { fx ->
             when (fx) {

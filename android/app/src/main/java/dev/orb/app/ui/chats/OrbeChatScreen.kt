@@ -100,6 +100,10 @@ fun OrbeChatScreen(
     val liveInfo by vm.liveInfo.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    FailedSendNotice(
+        state.items.mapNotNull { (it as? ChatItem.Waiting)?.pending?.takeIf { p -> p.state == PendingState.Failed }?.clientId }.toSet(),
+        state.loaded, snackbar,
+    )
     val openTask by rememberUpdatedState(onOpenTask)
     LaunchedEffect(vm) {
         vm.undone.collect { id ->

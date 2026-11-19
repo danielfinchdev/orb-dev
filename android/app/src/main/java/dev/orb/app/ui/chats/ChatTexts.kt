@@ -216,6 +216,7 @@ object ChatTexts {
     const val PENDING_ATTENTION = "Saldrá cuando el PC esté listo"
     const val PENDING_FAILED = "No enviado"
     const val PENDING_DISCARD = "Descartar"
+    const val SEND_FAILED_SNACK = "No se pudo enviar."
     const val PENDING_KEPT = "Tu mensaje sigue en este móvil y no se ha perdido."
     const val REMOVE = "Quitar"
 
