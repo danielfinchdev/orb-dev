@@ -98,7 +98,19 @@ class WelcomeScreenTest {
         rule.onNodeWithText("Sin cámara: código corto").assertIsDisplayed()
     }
 
-    @Test fun scanOpensTheShortCodeSheetUntilTheScannerExists() {
+    @Test fun theScanButtonCallsTheScannerOfTheHost() {
+        var scans = 0
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, false) {
+                WelcomeScreen(vm(), onDone = {}, onOpenThisPhone = {}, onScan = { scans++ })
+            }
+        }
+        rule.onNodeWithText("Escanear el código QR").performClick()
+        rule.waitForIdle()
+        assertEquals(1, scans)
+    }
+
+    @Test fun scanOpensTheShortCodeSheetWhenTheHostGivesNoScanner() {
         show(vm())
         rule.onNodeWithText("Escanear el código QR").performClick()
         rule.waitForIdle()

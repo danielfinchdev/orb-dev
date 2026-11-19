@@ -75,6 +75,17 @@ class WelcomeViewModelTest {
 
     private fun refused(reason: String?, left: Int? = null) = Result.failure<PairOk>(PairingException(PairError.Refused(403, "x", reason, left, null)))
 
+    @Test fun aScannedLinkTakesTheRoadOfAPastedOneAndAsksThePcOnce() {
+        val linker = FakeLinker(Result.success(ok()))
+        val vm = vm(linker)
+        vm.scanned("http://192.168.1.20:3131/#vincular=ABCDEF&pc=" + "A".repeat(43) + "&v=4")
+        assertEquals(1, linker.resolveCalls)
+        assertEquals(WelcomeStage.Fingerprint, vm.state.value.stage)
+        assertFalse(vm.state.value.sheet)
+        assertEquals("DanLaptop", vm.state.value.pc!!.name)
+        assertFalse(vm.state.value.pc!!.viaCode)
+    }
+
     @Test fun missingCodeIsExplainedAndNothingIsAsked() {
         val linker = FakeLinker(Result.success(ok()))
         val vm = vm(linker)

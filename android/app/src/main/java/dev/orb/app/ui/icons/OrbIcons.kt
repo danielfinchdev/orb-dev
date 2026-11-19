@@ -296,6 +296,15 @@ object OrbIcons {
     val ScanLine by lazy {
         lucide("scan-line", "M3 7V5a2 2 0 0 1 2-2h2", "M17 3h2a2 2 0 0 1 2 2v2", "M21 17v2a2 2 0 0 1-2 2h-2", "M7 21H5a2 2 0 0 1-2-2v-2", "M7 12h10")
     }
+    val Flashlight by lazy {
+        lucide("flashlight", "M18 6c0 2-2 2-2 4v10a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4V2h12z", "M6 6h12", "M12 12v.01")
+    }
+    val FlashlightOff by lazy {
+        lucide("flashlight-off", "M16 16v4a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2V10c0-2-2-2-2-4", "M7 2h11v4c0 2-2 2-2 4v1", "M11 6h7", "m2 2 20 20")
+    }
+    val CameraOff by lazy {
+        lucide("camera-off", "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h14.5", "M21 16.5V9a2 2 0 0 0-2-2h-3l-1.5-3", "M9.88 9.88a3 3 0 1 0 4.24 4.24", "m2 2 20 20")
+    }
     val Keyboard by lazy {
         lucide(
             "keyboard", "M10 8h.01", "M12 12h.01", "M14 8h.01", "M16 12h.01", "M18 8h.01", "M6 8h.01", "M7 16h10", "M8 12h.01",

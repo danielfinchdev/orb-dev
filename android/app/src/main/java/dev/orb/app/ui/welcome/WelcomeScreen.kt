@@ -93,8 +93,8 @@ fun systemClipboardText(context: Context): String? {
 }
 
 /**
- * First start: welcome, fingerprint and password, then the three steps of the link. [onScan] is the scan button (until the
- * scanner exists it opens the short-code sheet); [onDone] leaves for the chats and [onOpenThisPhone] for «Este móvil».
+ * First start: welcome, fingerprint and password, then the three steps of the link. [onScan] is the scan button (the scanner, or
+ * the short-code sheet on a phone with no camera); [onDone] leaves for the chats and [onOpenThisPhone] for «Este móvil».
  */
 @Composable
 fun WelcomeScreen(

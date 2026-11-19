@@ -115,6 +115,13 @@ class WelcomeViewModel(
     /** The banner's button: the failure is acknowledged and the entry page is as it was. */
     fun dismissError() = _state.update { it.copy(error = null, errorKind = null) }
 
+    /** A valid Orb link read from the QR: it takes the same road as a pasted one, so errors show in the sheet with the link in it. */
+    fun scanned(text: String) {
+        if (_state.value.busy) return
+        _state.update { it.copy(link = text, code = "", address = "", sheet = true, error = null, errorKind = null) }
+        resolve()
+    }
+
     fun setLink(v: String) = _state.update { it.copy(link = v, error = null) }
     fun setCode(v: String) = _state.update { it.copy(code = v, error = null) }
     fun setAddress(v: String) = _state.update { it.copy(address = v, error = null) }
