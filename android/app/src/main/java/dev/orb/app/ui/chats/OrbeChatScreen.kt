@@ -131,7 +131,7 @@ fun OrbeChatScreen(
             if (state.canSetMode && !state.deleted && state.asksForOk) ModeSelector(state.mode, vm::setMode)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    state.deleted -> DeletedChat(onBack, if (state.canRestore) vm::restore else null)
+                    state.deleted -> DeletedChatPage(onBack, if (state.canRestore) vm::restore else null)
                     !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                     else -> MessageList(vm, state, liveInfo, actions, draft, nowMs, stick, onStick = { stick = it })
                 }
@@ -229,22 +229,6 @@ private fun ChatTopBar(state: OrbeChatState, live: LiveInfo?, onBack: () -> Unit
             }
             state.brain?.label?.let { OrbSheetInfo(ChatTexts.BRAIN_DESC, OrbIcons.Brain, meta = it) }
         }
-    }
-}
-
-/** The PC says the conversation is gone. */
-@Composable
-private fun DeletedChat(onBack: () -> Unit, onRestore: (() -> Unit)?) {
-    Column(
-        Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(OrbIcons.Trash, null, Modifier.size(40.dp), tint = OrbTheme.colors.text3)
-        Text(ChatTexts.DELETED_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-        Text(ChatTexts.DELETED_BODY, color = OrbTheme.colors.text2, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-        if (onRestore != null) Button(onClick = onRestore) { Text(ChatTexts.RESTORE_ASK) }
-        if (onRestore != null) TextButton(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
-        else Button(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
     }
 }
 

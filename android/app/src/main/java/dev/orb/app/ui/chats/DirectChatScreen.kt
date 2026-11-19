@@ -103,7 +103,7 @@ fun DirectChatScreen(
             if (state.loaded && !state.deleted) ConnectionBand(state.connection)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    state.deleted -> DeletedDirect(onBack, if (state.canRestore) vm::restore else null)
+                    state.deleted -> DeletedChatPage(onBack, if (state.canRestore) vm::restore else null)
                     !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
                     else -> DirectList(vm, state, actions, nowMs, stick, onStick = { stick = it }, editingId = editingId, onEditQueued = { editingId = it.id })
                 }
@@ -268,22 +268,6 @@ private fun QueueEditBar(canSave: Boolean, onSave: () -> Unit, onCancel: () -> U
         Text(DirectTexts.QUEUE_EDIT_BAR, Modifier.weight(1f), color = OrbKit.mutedForeground, style = MaterialTheme.typography.labelMedium)
         OrbButton(ChatTexts.CANCEL, onCancel, kind = OrbButtonKind.Ghost, small = true)
         OrbButton(ChatTexts.QUEUED_SAVE, onSave, kind = OrbButtonKind.Primary, small = true, enabled = canSave)
-    }
-}
-
-/** The PC says the conversation is gone. */
-@Composable
-private fun DeletedDirect(onBack: () -> Unit, onRestore: (() -> Unit)?) {
-    Column(
-        Modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Icon(OrbIcons.Trash, null, Modifier.size(40.dp), tint = OrbTheme.colors.text3)
-        Text(ChatTexts.DELETED_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
-        Text(ChatTexts.DELETED_BODY, color = OrbTheme.colors.text2, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-        if (onRestore != null) OrbButton(ChatTexts.RESTORE_ASK, onRestore, kind = OrbButtonKind.Primary)
-        if (onRestore != null) OrbButton(ChatTexts.BACK_TO_CHATS, onBack, kind = OrbButtonKind.Ghost)
-        else OrbButton(ChatTexts.BACK_TO_CHATS, onBack, kind = OrbButtonKind.Primary)
     }
 }
 

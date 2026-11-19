@@ -338,9 +338,9 @@ object ChatTexts {
     }
 
     // Deleted chat
-    const val DELETED_TITLE = "Este chat se borró en el PC"
-    const val DELETED_BODY = "Ya no está en el PC y se quitará de lo guardado en este móvil. Si ha sido un error, el borrado se puede deshacer en el PC."
-    const val BACK_TO_CHATS = "Volver a Chats"
+    const val DELETED_TITLE = "Este chat ya no existe"
+    const val DELETED_BODY = "Se borró en el PC."
+    const val BACK_TO_CHATS = "Ir a Chats"
 
     fun reportAccepted(ids: List<Long>) = "Aceptado · tareas " + ids.joinToString(", ") { "#$it" }
     fun reportTasks(ids: List<Long>) = "Tareas " + ids.joinToString(", ") { "#$it" }

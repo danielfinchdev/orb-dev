@@ -316,7 +316,7 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Voy a migrar").assertIsDisplayed()
         b.events.tryEmit(LinkEvent("session:removed", json("""{"id":"s1"}""")))
         rule.waitForIdle()
-        rule.onNodeWithText("Este chat se borró en el PC").assertIsDisplayed()
+        rule.onNodeWithText("Este chat ya no existe").assertIsDisplayed()
     }
 
     @Test fun slashCompactAsksTheSameQuestionAsTheMenuBeforeCompacting() {

@@ -326,7 +326,10 @@ fun PendingRow(
         status = {
             if (p.state == PendingState.Failed) {
                 Column(Modifier.padding(top = 4.dp, end = 2.dp), horizontalAlignment = Alignment.End) {
-                    Text(ChatTexts.pendingFailed(p.error), color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 16.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(OrbIcons.CircleAlert, null, Modifier.size(14.dp), tint = OrbKit.destructive)
+                        Text(ChatTexts.pendingFailed(p.error), color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 16.sp)
+                    }
                     Text(ChatTexts.PENDING_KEPT, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         OrbButton(ChatTexts.RETRY, onRetry, small = true)

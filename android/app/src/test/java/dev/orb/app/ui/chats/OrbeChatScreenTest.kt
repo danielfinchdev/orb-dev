@@ -545,8 +545,8 @@ class OrbeChatScreenTest {
         val b = FakeOrbeChatBackend(thread)
         b.loadResult = refused("Esa conversación ya no existe.").map { 0 }
         screen(b)
-        rule.onNodeWithText("Este chat se borró en el PC").assertIsDisplayed()
-        rule.onNodeWithText("Volver a Chats").assertIsDisplayed()
+        rule.onNodeWithText("Este chat ya no existe").assertIsDisplayed()
+        rule.onNodeWithText("Ir a Chats").assertIsDisplayed()
     }
 
     @Test fun a28OffersToAskThePcToRestoreAndCallsIt() {
