@@ -7,6 +7,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.orb.app.lock.AppLock
@@ -78,7 +80,8 @@ class LockScreenTest {
         auth.answer(AuthResult.Blocked)
         rule.waitForIdle()
         rule.onNodeWithText(LockTexts.BLOCKED).assertIsDisplayed()
-        rule.onNodeWithText(LockTexts.UNLOCK).assertIsDisplayed()
+        rule.onNodeWithText(LockTexts.UNLOCK_AGAIN).assertIsDisplayed()
+        rule.onNodeWithText(LockTexts.USE_PIN).assertIsDisplayed()
         assertTrue(lock.settings.value.enabled)
     }
 
@@ -120,6 +123,39 @@ class LockScreenTest {
         rule.waitForIdle()
         rule.onNodeWithText("contenido").assertDoesNotExist()
         rule.onNodeWithText(LockTexts.LOCKED_TITLE).assertIsDisplayed()
+    }
+
+    private fun content(notice: LockNotice?, onUnlock: () -> Unit = {}, onPin: () -> Unit = {}) =
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { LockContent(notice, busy = false, onUnlock = onUnlock, onPin = onPin) } }
+
+    @Test fun theLockedPageHasTheMarkTheSentenceAndTheOneTrueWayToChangeIt() {
+        content(null)
+        rule.onNodeWithText("Desbloquea para ver tus chats").assertIsDisplayed()
+        rule.onNodeWithText("Huella, cara o PIN del móvil").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Orbe").assertIsDisplayed()
+        rule.onNodeWithText(LockTexts.UNLOCK).assertIsDisplayed()
+        rule.onNodeWithText(LockTexts.USE_PIN).assertIsDisplayed()
+        rule.onNodeWithText("Opcional · Menú › Este móvil › Bloqueo de la app").assertIsDisplayed()
+        rule.onNodeWithText("Nunca pide la contraseña maestra.").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("Más", substring = true).fetchSemanticsNodes().size)
+    }
+
+    @Test fun aFailedAttemptShowsABannerAndOffersToTryAgainStillWithThePin() {
+        var unlocks = 0
+        var pins = 0
+        content(LockNotice.Failed, onUnlock = { unlocks++ }, onPin = { pins++ })
+        rule.onNodeWithText(LockTexts.FAILED).assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText(LockTexts.UNLOCK).fetchSemanticsNodes().size)
+        rule.onNodeWithText("Probar otra vez").performClick()
+        rule.onNodeWithText(LockTexts.USE_PIN).performClick()
+        assertEquals(1, unlocks)
+        assertEquals(1, pins)
+    }
+
+    @Test fun theAttemptsLimitKeepsItsOwnWords() {
+        content(LockNotice.Blocked)
+        rule.onNodeWithText(LockTexts.BLOCKED).assertIsDisplayed()
+        rule.onNodeWithText("Probar otra vez").assertIsDisplayed()
     }
 
     @Test fun theButtonsWaitWhileTheSystemIsAsking() {
