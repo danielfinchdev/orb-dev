@@ -170,6 +170,10 @@ fun OrbApp(container: AppContainer) {
     }
 }
 
+/** Only the change from linked to unlinked sends the person to the welcome page, and never from the pages that belong to it. */
+internal fun shouldReturnToWelcome(wasLinked: Boolean, linked: Boolean, onWelcomeOrScan: Boolean): Boolean =
+    wasLinked && !linked && !onWelcomeOrScan
+
 /**
  * Puts «No llego a tu PC» over the app when it opens without a link, and the read-only bar over it when the person chose to look
  * at what the phone holds. The app stays composed underneath (navigation keeps working) but hidden from touch and screen readers.
@@ -178,12 +182,16 @@ fun OrbApp(container: AppContainer) {
 private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHostController, content: @Composable () -> Unit) {
     val gate = container.pcDown
     val down by gate.state.collectAsStateWithLifecycle()
-    // Back to the welcome page from the state itself (no link left), so a rotation while unlinking cannot lose the way.
-    val connection by container.offline.connection.collectAsStateWithLifecycle()
-    LaunchedEffect(connection is ConnectionState.Unlinked) {
-        if (connection is ConnectionState.Unlinked && nav.currentDestination?.hasRoute<Welcome>() != true) {
+    // Back to the welcome page when the local link has been erased (the person unlinked), so a rotation while unlinking cannot
+    // lose the way. The connection state is not used: the PC removing this phone leaves the saved chats and the notice in place.
+    val linked by container.runtime.collectAsStateWithLifecycle()
+    var wasLinked by rememberSaveable { mutableStateOf(linked != null) }
+    LaunchedEffect(linked != null) {
+        val here = nav.currentDestination
+        if (shouldReturnToWelcome(wasLinked, linked != null, here?.hasRoute<Welcome>() == true || here?.hasRoute<ScanRoute>() == true)) {
             nav.navigate(Welcome) { popUpTo(0) { inclusive = true } }
         }
+        wasLinked = linked != null
     }
     // Registered before the navigation host, so a deeper screen's own back step wins and this one only fires on the list.
     androidx.activity.compose.BackHandler(enabled = down.saved) { gate.closeSaved() }
@@ -271,12 +279,12 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
         composable<ScanRoute> {
             val context = androidx.compose.ui.platform.LocalContext.current
             val access = remember(context) { AndroidCameraAccess(context) }
-            // Only the Activity that shows the scanner now is known to the access, and it is let go with the screen.
-            DisposableEffect(access, context) {
-                access.attach(context.findActivity())
-                onDispose { access.attach(null) }
-            }
             val vm = viewModel<ScanViewModel>(factory = viewModelFactory { initializer { ScanViewModel(access) } })
+            // The view model keeps the first access across a recreation, so the current Activity goes to that one.
+            DisposableEffect(vm, context) {
+                vm.attachActivity(context.findActivity())
+                onDispose { vm.attachActivity(null) }
+            }
             ScanScreen(
                 vm, onBack = { nav.popBackStack() },
                 // The welcome page takes the text from its saved state (see ScanHandoff), as if it had been pasted.

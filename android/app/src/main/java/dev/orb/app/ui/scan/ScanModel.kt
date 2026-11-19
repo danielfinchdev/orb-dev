@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.update
 
 /** The camera as the scanner needs it: Android's permission and the system settings, nothing of the picture itself. */
 interface CameraAccess {
+    /** The Activity that shows the scanner now, or null when it goes away; accesses that need none ignore it. */
+    fun attach(current: android.app.Activity?) {}
+
     val hasCamera: Boolean
     fun granted(): Boolean
 
@@ -90,6 +93,9 @@ class ScanViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(ScanUiState(permission = if (access.granted()) ScanPermission.Granted else ScanPermission.Asking))
     val state: StateFlow<ScanUiState> = _state.asStateFlow()
+
+    /** Hands the current Activity to the access this view model keeps, which outlives the Activity that created it. */
+    fun attachActivity(current: android.app.Activity?) = access.attach(current)
 
     private var requested = false
     private var askedAt: Long? = null

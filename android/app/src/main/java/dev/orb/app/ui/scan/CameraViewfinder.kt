@@ -46,7 +46,7 @@ class AndroidCameraAccess(context: Context) : CameraAccess {
     override val hasCamera: Boolean get() = app.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
 
     /** The Activity currently showing the scanner (null when it goes away); only [canExplain] needs one. */
-    fun attach(current: Activity?) {
+    override fun attach(current: Activity?) {
         activity = current?.let { WeakReference(it) }
     }
 
