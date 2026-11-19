@@ -58,6 +58,12 @@ class ManifestPermissionsTest {
         return all.filter { it.first.exported }.map { it.first.name to it.second }
     }
 
+    // An empty affinity keeps another app's activity from being slipped into Orb's task (task hijacking on Android 7-10).
+    @Test fun theEntryActivityHasAnEmptyTaskAffinity() {
+        val info = context.packageManager.getActivityInfo(android.content.ComponentName(context, "dev.orb.app.MainActivity"), 0)
+        assertEquals("", info.taskAffinity)
+    }
+
     @Test fun theOnlyComponentsOthersCanStartAreTheEntryActivityAndTheBootReceiver() {
         // ComponentActivity is the host the debug-only Compose test library adds; it is not in a release build.
         val own = exported().filter { it.second == null && it.first != "androidx.activity.ComponentActivity" }.map { it.first }.sorted()
