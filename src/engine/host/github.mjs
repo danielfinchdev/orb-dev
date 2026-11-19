@@ -393,8 +393,10 @@ const checkUnpushed = async (dir, branch) => {
 // remote.<name>.uploadpack / receivepack or an ext:: URL): the command-line option beats the config, and ext:: is refused.
 const NO_EXT = ['-c', 'protocol.ext.allow=never'];
 const PACK = { fetch: '--upload-pack=git-upload-pack', 'ls-remote': '--upload-pack=git-upload-pack', pull: '--upload-pack=git-upload-pack', clone: '--upload-pack=git-upload-pack', push: '--receive-pack=git-receive-pack' };
+// a push must not walk into submodules either: their own remotes were never checked.
+const EXTRA = { push: '--recurse-submodules=no' };
 // args: the git subcommand, then its own arguments; returns the full list with the safe options in place.
-export const safeNetArgs = (sub, ...rest) => [...NO_EXT, sub, PACK[sub], ...rest].filter(Boolean);
+export const safeNetArgs = (sub, ...rest) => [...NO_EXT, sub, PACK[sub], EXTRA[sub], ...rest].filter(Boolean);
 
 export async function push(project, branch) {
   branchName(branch);
