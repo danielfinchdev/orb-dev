@@ -15,6 +15,7 @@ import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { finishFlow, deleteProjectFlow, renameFlow, unlinkFlow, commitFlow, publishFlow, pushFlow, chatHereFlow, changeIconFlow, clearIconFlow, changeCategory } from '@/components/project-flows.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { askReview, askSecurityReview } from './tasks.jsx';
+import { askNewTask } from '@/components/new-task.jsx';
 import { PrFilter, usePrCounts, usePrList, PrChecksBadge, usePrWatch, usePrRequests, PrAsk } from '@/components/pr-project.jsx';
 import { syncFlow, writeEntryFlow } from '@/components/project-sync.jsx';
 import { useOrbItems, openOrbItem } from './orb/inbox.jsx';
@@ -288,11 +289,17 @@ function GitPanel({ p, info, reload }) {
   );
 }
 
+// Opens the new-task dialog with the project already chosen, then shows the task it made.
+async function newTask(p, t) {
+  const made = await askNewTask(t, [p.name], p.name);
+  if (made?.id) go({ view: 'tasks', id: made.id });
+}
+
 // compact: the summary card's row (it keeps the rule under the card's title, as the mock-up draws it), one line with the state at the end; the tab's row also names the agent and approves.
 function TaskRow({ x, compact = false }) {
   const t = useT();
   return (
-    <ListRow data-testid="project-task-row" className={cn('border-border rounded-none border-t', compact ? 'px-0 py-2' : 'first:border-t-0')} leading={<AgentIcon agent={x.agent} className="size-4" />}
+    <ListRow data-testid="project-task-row" role="button" tabIndex={0} onClickCapture={(e) => { if (!e.target.closest('.acts')) go({ view: 'tasks', id: x.id }); }} onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) { e.preventDefault(); go({ view: 'tasks', id: x.id }); } }} className={cn('border-border cursor-pointer rounded-none border-t', compact ? 'px-0 py-2' : 'first:border-t-0')} leading={<AgentIcon agent={x.agent} className="size-4" />}
       title={`#${x.id} ${x.title}`} meta={compact ? null : (AGENT[x.agent] ?? x.agent)}
       trailing={<><TaskStatus task={x} board />{!compact && x.status === 'awaiting_approval' && !x.held ? <div className="acts flex shrink-0 items-center gap-1.5"><Button size="xs" variant="outline" onClick={() => rejectTask(x)}>{t('tasks.reject')}</Button><Button size="xs" onClick={() => approveTask(x)}>{t('tasks.approve.ok')}</Button></div> : null}</>} />
   );
@@ -394,7 +401,7 @@ export function ProjectPage({ p }) {
                 <PjCard icon={ClipboardCheck} title={t('projects.tasks.active')} aside={<Button variant="link" size="xs" className="text-info px-0 text-control font-semibold" onClick={() => go({ view: 'tasks', project: p.name })}>{t('projects.tasks.all')}</Button>}>
                   {active.length ? <ListCard className="border-0">{active.slice(0, 3).map((x) => <TaskRow key={x.id} x={x} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.tasks.none')}</p>}
                   <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
-                  <Actions><Button variant="outline" onClick={() => go({ view: 'tasks', project: p.name })}><Plus />{t('projects.tasks.new')}</Button></Actions>
+                  <Actions><Button variant="outline" onClick={() => newTask(p, t)}><Plus />{t('projects.tasks.new')}</Button></Actions>
                 </PjCard>
                 <PjCard icon={MessagesSquare} title={t('projects.chats.recent')} aside={items.length > 4 ? <Button variant="link" size="xs" className="text-info px-0 text-control font-semibold" onClick={() => setTab('chats')}>{t('projects.chats.all', { n: items.length })}</Button> : null}>
                   {items.length ? <ListCard className="border-0">{items.slice(0, 4).map((x) => <ChatRow key={x.key} x={x} assistant={assistant} compact />)}</ListCard> : <p className="text-muted-foreground text-control">{t('projects.chats.none')}</p>}
@@ -428,7 +435,7 @@ export function ProjectPage({ p }) {
               <p className="text-faint-foreground text-caption">{t('projects.tasks.week', { done: week.filter((x) => x.status === 'done' && !x.undone).length, undone: week.filter((x) => x.undone).length })}</p>
               <div className="flex flex-wrap items-center justify-end gap-2">
                 <div className="inline-flex" data-testid="project-new-task-split">
-                  <Button className="rounded-r-none" onClick={() => go({ view: 'tasks', project: p.name })} data-testid="project-new-task"><Plus />{t('projects.tasks.new')}</Button>
+                  <Button className="rounded-r-none" onClick={() => newTask(p, t)} data-testid="project-new-task"><Plus />{t('projects.tasks.new')}</Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button className="border-primary-foreground/25 rounded-l-none border-l px-2" aria-label={t('projects.tasks.moreKinds')} data-testid="project-new-task-more"><ChevronDown /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-72" data-testid="project-new-task-menu">

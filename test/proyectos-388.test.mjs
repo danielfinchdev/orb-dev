@@ -224,3 +224,16 @@ test('los +/− de cada archivo salen de un solo numstat y los comentarios de la
   assert.ok(gh.includes("'diff', 'HEAD', '--numstat', '-z'"));
   assert.ok(gh.includes('thread: (Array.isArray(x.comments)'));
 });
+
+test('«Encargar una tarea» abre el diálogo con el proyecto y las filas de tareas se abren con un clic', () => {
+  assert.match(page, /askNewTask\(t, \[p\.name\], p\.name\)/);
+  assert.ok(!page.includes("onClick={() => go({ view: 'tasks', project: p.name })}><Plus"));
+  assert.match(page, /data-testid="project-task-row"[^\n]*go\(\{ view: 'tasks', id: x\.id \}\)/);
+});
+
+test('los interruptores de los frenos pasan el desbloqueo del diálogo a changeRail', () => {
+  const usage = read('views/usage.jsx');
+  const tab = read('views/settings/usage-tab.jsx');
+  assert.match(usage, /changeRail\('freno-uso', \{ enabled \}, t\('rules\.railSaved'\), ok\.unlock\)/);
+  assert.match(tab, /changeRail\(rail\.id, \{ enabled \}, t\('rules\.railSaved'\), ok\.unlock\)/);
+});
