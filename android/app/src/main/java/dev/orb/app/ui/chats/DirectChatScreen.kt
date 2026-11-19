@@ -144,7 +144,8 @@ fun DirectChatScreen(
                 )
             }
         }
-        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp))
+        // Floats over the box with some air, as the mockup's `.snack`.
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 128.dp, start = 16.dp, end = 16.dp))
     }
     if (sheet) ChatSheet(
         state, onDismiss = { sheet = false },

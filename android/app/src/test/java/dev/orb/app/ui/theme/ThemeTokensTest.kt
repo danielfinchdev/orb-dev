@@ -26,7 +26,7 @@ class ThemeTokensTest {
         "primarySoft" to { p -> p.primarySoft }, "primaryText" to { p -> p.primaryText },
         "ok" to { p -> p.ok }, "okSoft" to { p -> p.okSoft }, "warn" to { p -> p.warn }, "warnSoft" to { p -> p.warnSoft },
         "err" to { p -> p.err }, "popover" to { p -> p.popover }, "secondary" to { p -> p.secondary }, "muted" to { p -> p.muted },
-        "accent" to { p -> p.accent }, "warnInk" to { p -> p.warnInk },
+        "accent" to { p -> p.accent }, "warnInk" to { p -> p.warnInk }, "bubble" to { p -> p.bubble },
     )
 
     // orb-ui.css: --background, --card, --sidebar, --bubble, --accent, --border, --input, --foreground, --muted-foreground,
@@ -38,7 +38,7 @@ class ThemeTokensTest {
         "primary" to "0.205 0 0", "onPrimary" to "0.985 0 0", "primarySoft" to "0.962 0.025 40", "primaryText" to "0.52 0.17 40",
         "ok" to "0.5 0.13 160", "okSoft" to "0.962 0.03 160", "warn" to "0.52 0.12 70", "warnSoft" to "0.967 0.04 85",
         "err" to "0.55 0.21 27", "popover" to "1 0 0", "secondary" to "0.967 0 0", "muted" to "0.962 0 0", "accent" to "0.958 0 0",
-        "warnInk" to "0.46 0.11 65",
+        "warnInk" to "0.46 0.11 65", "bubble" to "0.958 0 0",
     )
     private val grafitoDark = mapOf(
         "bg" to "0.164 0 0", "surface" to "0.178 0 0", "scLow" to "0.145 0 0", "sc" to "0.225 0 0", "scHigh" to "0.225 0 0",
@@ -46,7 +46,7 @@ class ThemeTokensTest {
         "primary" to "0.97 0 0", "onPrimary" to "0.205 0 0", "primarySoft" to "0.27 0.05 40", "primaryText" to "0.74 0.15 45",
         "ok" to "0.75 0.15 155", "okSoft" to "0.25 0.035 155", "warn" to "0.82 0.13 80", "warnSoft" to "0.26 0.04 70",
         "err" to "0.7 0.19 25", "popover" to "0.2 0 0", "secondary" to "0.205 0 0", "muted" to "0.205 0 0", "accent" to "0.225 0 0",
-        "warnInk" to "0.82 0.13 80",
+        "warnInk" to "0.82 0.13 80", "bubble" to "0.225 0 0",
     )
 
     // temas.css: what each palette overrides on top of Grafito, light then dark.
@@ -68,10 +68,20 @@ class ThemeTokensTest {
                 mapOf("primarySoft" to "0.28 0.04 70", "primaryText" to "0.8 0.11 75", "bg" to "0.17 0.008 70", "scLow" to "0.15 0.01 70", "sc" to "0.23 0.012 70", "surface" to "0.185 0.008 70")),
     )
 
+    // temas.css: `--bubble` of each palette, light then dark. It is the person's own message, so it must not stay Grafito's grey.
+    private val bubbles: Map<OrbPaletteChoice, Pair<String, String>> = mapOf(
+        OrbPaletteChoice.Oceano to ("0.955 0.008 250" to "0.225 0.012 255"),
+        OrbPaletteChoice.Bosque to ("0.955 0.008 150" to "0.225 0.012 160"),
+        OrbPaletteChoice.Uva to ("0.955 0.009 300" to "0.225 0.014 300"),
+        OrbPaletteChoice.Rubi to ("0.955 0.008 10" to "0.225 0.012 15"),
+        OrbPaletteChoice.Arena to ("0.95 0.014 85" to "0.23 0.012 70"),
+    )
+
     private fun expected(choice: OrbPaletteChoice, dark: Boolean): Map<String, String> {
         val base = if (dark) grafitoDark else grafitoLight
         val over = overrides[choice]?.let { if (dark) it.second else it.first } ?: emptyMap()
-        return base + over
+        val bubble = bubbles[choice]?.let { mapOf("bubble" to if (dark) it.second else it.first) } ?: emptyMap()
+        return base + over + bubble
     }
 
     @Test fun whiteAndBlackConvertExactly() {

@@ -33,7 +33,7 @@ object OrbKit {
     val accent: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.accent
     val sidebar: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerLow
     /** `--bubble`: the person's own message. */
-    val bubble: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.surfaceContainerHigh
+    val bubble: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.bubble
     val mutedForeground: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.text2
     val faintForeground: Color @Composable @ReadOnlyComposable get() = OrbTheme.colors.text3
     val border: Color @Composable @ReadOnlyComposable get() = MaterialTheme.colorScheme.outlineVariant

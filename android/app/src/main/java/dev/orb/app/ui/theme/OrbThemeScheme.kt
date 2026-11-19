@@ -30,5 +30,5 @@ fun colorSchemeFor(p: OrbPalette, dark: Boolean): ColorScheme {
 
 fun orbColorsFor(p: OrbPalette) = OrbColors(
     text2 = p.text2, text3 = p.text3, ok = p.ok, okSoft = p.okSoft, warn = p.warn, warnSoft = p.warnSoft, errSoft = p.errSoft, info = p.info,
-    popover = p.popover, secondary = p.secondary, muted = p.muted, accent = p.accent, warnInk = p.warnInk,
+    popover = p.popover, secondary = p.secondary, muted = p.muted, accent = p.accent, warnInk = p.warnInk, bubble = p.bubble,
 )

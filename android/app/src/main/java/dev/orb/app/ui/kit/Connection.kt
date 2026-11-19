@@ -19,7 +19,7 @@ import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.icons.OrbIcons
 
 /**
- * The band under the header when the PC cannot be reached: the reason in the destructive colour, with [action] to try
+ * The band under the header when the PC cannot be reached: the reason in the quiet text colour (a lost link is not a failure), with [action] to try
  * again at once. It sits in a card so it reads as part of the page, not as an alert over it.
  */
 @Composable
@@ -34,8 +34,8 @@ fun OrbConnectionBand(text: String, modifier: Modifier = Modifier, action: Strin
                     Modifier.weight(1f).semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.Top,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    Icon(OrbIcons.WifiOff, null, Modifier.padding(top = 1.dp).size(16.dp), tint = OrbKit.destructive)
-                    Text(text, color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 17.sp)
+                    Icon(OrbIcons.WifiOff, null, Modifier.padding(top = 1.dp).size(16.dp), tint = OrbKit.mutedForeground)
+                    Text(text, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 17.sp)
                 }
                 if (action != null && onAction != null) OrbButton(action, onAction, small = true)
             }

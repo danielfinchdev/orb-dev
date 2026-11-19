@@ -160,9 +160,9 @@ fun AgentMark(agent: String?, modifier: Modifier = Modifier, size: Dp = 16.dp, d
                 }
             }
             "codex" -> {
-                val w = s * 0.09f
-                drawCircle(color, radius = s * 0.36f - w / 2f, center = c, style = Stroke(w))
-                drawCircle(color, radius = s * 0.15f, center = c, style = Stroke(w))
+                val w = s * 0.07f
+                drawCircle(color, radius = s * 0.31f - w / 2f, center = c, style = Stroke(w))
+                drawCircle(color, radius = s * 0.12f, center = c, style = Stroke(w))
             }
             "cursor" -> {
                 val tri = Path().apply {

@@ -81,11 +81,10 @@ fun OrbMessageText(text: String, modifier: Modifier = Modifier) {
 
 /** `.who`: the mark and the name over a message of an agent. */
 @Composable
-fun OrbAuthor(agent: String?, name: String, modifier: Modifier = Modifier, time: String? = null) {
+fun OrbAuthor(agent: String?, name: String, modifier: Modifier = Modifier) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         AgentMark(agent, size = 16.dp, description = null)
         Text(name, color = OrbKit.foreground, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
-        if (!time.isNullOrEmpty()) Text(time, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
     }
 }
 

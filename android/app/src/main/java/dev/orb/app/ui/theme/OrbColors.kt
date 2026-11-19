@@ -10,6 +10,7 @@ class OrbColors(
     val text2: Color, val text3: Color,
     val ok: Color, val okSoft: Color, val warn: Color, val warnSoft: Color, val errSoft: Color, val info: Color,
     val popover: Color, val secondary: Color, val muted: Color, val accent: Color, val warnInk: Color,
+    val bubble: Color,
 )
 
 internal val LocalOrbColors = staticCompositionLocalOf<OrbColors> { error("OrbTheme is missing") }

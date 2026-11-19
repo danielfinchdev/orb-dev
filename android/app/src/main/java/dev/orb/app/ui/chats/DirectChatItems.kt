@@ -132,7 +132,7 @@ private fun UserLine(m: DItem.User, state: DirectChatState, now: Long, actions: 
 private fun AssistantLine(m: DItem.Assistant, state: DirectChatState, now: Long, actions: DirectActions, modifier: Modifier) {
     val blocks = remember(m.id, m.text) { LightMarkdown.parse(m.text) }
     Column(modifier.fillMaxWidth().forkable(m.id, state.canForkFrom, actions), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        OrbAuthor(state.agent, state.agentName ?: ChatTexts.AGENT_FALLBACK, time = ChatTime.short(m.at, now))
+        OrbAuthor(state.agent, state.agentName ?: ChatTexts.AGENT_FALLBACK)
         MarkdownBody(blocks)
     }
 }
@@ -351,6 +351,7 @@ fun AgentLiveBubble(agent: String?, name: String, activity: String?, text: () ->
             OrbAuthor(agent, name)
             MarkdownBody(blocks, caret = true)
         }
-        OrbThinking(activity ?: if (body.isNotEmpty()) ChatTexts.WRITING else ChatTexts.THINKING)
+        // The caret already says the text is arriving; the dots are for what is not visible (a tool, the first token).
+        if (activity != null || body.isEmpty()) OrbThinking(activity ?: ChatTexts.THINKING)
     }
 }
