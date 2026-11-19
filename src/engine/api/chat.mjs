@@ -15,6 +15,7 @@ import { assistantName } from '../../domain/tasks/board.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
+import { phoneText } from '../transport/remote-calls.mjs';
 import { fail, str, int, oneOf, images } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
@@ -58,7 +59,8 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // expect (optional): the text the phone showed; if the queued message changed meanwhile nothing is edited or removed.
       if (expect != null) {
         const now = orchestrator.queueOf(id).find((m) => String(m.id) === qid);
-        if (now && now.text !== expect) fail('el mensaje en cola ha cambiado desde que lo viste; ábrelo de nuevo');
+        // a phone gets the queue with the assistant folder cut out of each text (shapeResult), so it may send either form.
+        if (now && now.text !== expect && phoneText(now.text) !== expect) fail('el mensaje en cola ha cambiado desde que lo viste; ábrelo de nuevo');
       }
       if (remove) return orchestrator.editQueued(id, qid, { remove: true });
       const t = str(text, 'mensaje', 20000);

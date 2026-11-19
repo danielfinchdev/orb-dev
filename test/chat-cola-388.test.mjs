@@ -11,7 +11,7 @@ import { REMOTE_METHODS, DESKTOP } from '../src/domain/security/permissions.mjs'
 import { createProject } from '../src/domain/projects/projects.mjs';
 import { recordUserCall } from '../src/domain/activity/record.mjs';
 import { userLogFile } from '../src/domain/activity/user-log.mjs';
-import { guardCall } from '../src/engine/transport/remote-calls.mjs';
+import { guardCall, shapeResult } from '../src/engine/transport/remote-calls.mjs';
 
 const home = tempHome({ permissions: { mode: 'preguntar' } });
 after(() => home.cleanup());
@@ -268,4 +268,17 @@ test('editQueued with expect: equal goes through, different is refused untouched
   await call('chat.editQueued', { conversation, queueId: a.id, text: 'nuevo', expect: 'segundo' });
   assert.deepEqual((await call('chat.queue', { conversation })).map((q) => q.text), ['nuevo']);
   assert.deepEqual(await call('chat.editQueued', { conversation, queueId: a.id, remove: true }), []);
+});
+
+test('editQueued accepts the text as the phone saw it when it names the assistant folder', async () => {
+  const { o, call } = setup();
+  const conversation = start(o);
+  o.ask(`mira ${path.join(home.home, 'web')}/x y sigue`, '', { conversation }); o.ask(`otro ${home.home}`, '', { conversation });
+  const raw = await call('chat.queue', { conversation });
+  const seen = shapeResult('chat.queue', raw);
+  assert.notEqual(seen[0].text, raw[0].text, 'the phone does not see the folder');
+  await call('chat.editQueued', { conversation, queueId: raw[0].id, text: 'nuevo', expect: seen[0].text });
+  await call('chat.editQueued', { conversation, queueId: raw[1].id, remove: true, expect: seen[1].text });
+  assert.deepEqual((await call('chat.queue', { conversation })).map((q) => q.text), ['nuevo']);
+  await assert.rejects(call('chat.editQueued', { conversation, queueId: raw[0].id, text: 'x', expect: 'distinto' }), /ha cambiado/);
 });
