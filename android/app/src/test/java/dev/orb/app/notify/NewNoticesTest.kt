@@ -70,7 +70,7 @@ class NewNoticeKindsPlanTest {
         assertEquals(NoteChannel.Messages, plan(UPDATE).channel)
         // A task Orb stopped needs the person: it goes with the approvals.
         assertEquals(NoteChannel.Approvals, plan(HELD).channel)
-        assertEquals("Tienes un mensaje nuevo", plan(DONE).publicText)
+        assertEquals("Tienes un aviso nuevo", plan(DONE).publicText)
     }
 
     @Test fun aHiddenPreviewShowsOnlyTheGenericText() {
@@ -84,7 +84,7 @@ class NewNoticeKindsPlanTest {
     @Test fun withTheAppLockOnTheNewKindsShowNoContent() {
         val p = plan(HELD, NotifySettings(lockScreen = LockScreenNotice.Full, appLock = true))
         assertEquals("Orb", p.title)
-        assertEquals("Tienes un mensaje nuevo", p.text)
+        assertEquals("Tienes un aviso nuevo", p.text)
         assertEquals(LockScreenNotice.Generic, p.lockScreen)
         assertEquals("Orb", p.tap.title)
     }
@@ -132,7 +132,7 @@ class NoticeButtonsSecurityTest {
     }
 
     @Test fun theThreeButtonLimitStillHolds() {
-        val many = plan("""{"key":"k","actions":[{"id":"a"},{"id":"b"},{"id":"c"},{"id":"d"}]}""")
+        val many = plan("""{"key":"k","kind":"approval","card":{"method":"sessions.approve","id":"s","request":"r"},"actions":[{"id":"allow"},{"id":"deny"},{"id":"allow"},{"id":"deny"}]}""")
         assertEquals(3, many.actions.size)
     }
 }
@@ -210,7 +210,7 @@ class NewNoticesPosterTest {
     @Test fun theLockScreenOfTheNewKindsFollowsTheChoice() {
         poster.show(plan(DONE))
         assertEquals(Notification.VISIBILITY_PRIVATE, shown().single().visibility)
-        assertEquals("Tienes un mensaje nuevo", shown().single().publicVersion.extras.getString(Notification.EXTRA_TEXT))
+        assertEquals("Tienes un aviso nuevo", shown().single().publicVersion.extras.getString(Notification.EXTRA_TEXT))
         poster.show(plan(DONE, NotifySettings(lockScreen = LockScreenNotice.Hidden)))
         assertEquals(Notification.VISIBILITY_SECRET, shown().single().visibility)
     }

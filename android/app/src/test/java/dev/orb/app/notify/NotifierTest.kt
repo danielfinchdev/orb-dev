@@ -112,7 +112,7 @@ class NotePlannerTest {
     @Test fun nothingWithoutAKeyAndAtMostThreeButtons() {
         assertNull(PcNotes.parse(json("""{"title":"x"}""")))
         assertNull(PcNotes.parse(JsonPrimitive("x")))
-        val many = plan("""{"key":"k","actions":[{"id":"a"},{"id":"b"},{"id":"c"},{"id":"d"}]}""")
+        val many = plan("""{"key":"k","kind":"approval","card":{"method":"sessions.approve","id":"s","request":"r"},"actions":[{"id":"allow"},{"id":"deny"},{"id":"allow"},{"id":"deny"}]}""")
         assertEquals(3, many.actions.size)
     }
 }
