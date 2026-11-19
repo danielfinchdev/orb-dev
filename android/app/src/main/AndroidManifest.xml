@@ -8,6 +8,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Dictation asks the system's speech recognizer; without this the app could not see whether the phone has one. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.action.RECOGNIZE_SPEECH" />
+        </intent>
+    </queries>
+
     <!-- No backups: this phone's keys must not travel to another phone (they would not open there anyway).
          Plain http only to your own PC (res/xml/network_security_config.xml). -->
     <application
