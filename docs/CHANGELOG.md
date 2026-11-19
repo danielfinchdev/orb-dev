@@ -84,6 +84,31 @@ checks the program that is started, not what the editor loads afterwards from it
 **Plain words.** Activity and history no longer show internal names or JSON: every event is told in plain words, and the
 original line is still there when you hover it or copy it.
 
+**Android app.** The phone app follows the new design.
+
+- One theme, "Default" (the former Grafito), with six palettes and a light, dark or system mode; the Órbita and Cristal themes, the wallpaper colours option and following the PC's theme are gone, and saved preferences migrate to Grafito keeping the mode.
+- Orb UI 2.0 components across all six palettes (bars, buttons, switches, chips, rows, sheets, dialogs, snackbars, project dots, agent marks); titles in Outfit.
+- Chat list redrawn: PC and link state in the header, search field, four filters, foldable groups, a Completed group, swipe to read or archive with Undo; search opens tasks and projects.
+- Mute a chat for 1 hour, 8 hours or for good; postpone to in 1 hour, this afternoon or tomorrow; mark as unread.
+- New chat is a sheet; an Orbe chat starts as a draft and is created on the PC with the first message.
+- The Orbe chat and the direct chat follow the new design: delivery ticks, live task cards, context bar, a "Chat con <agent>" sheet, a stopped-session card, fork from a message (PC 3.8.8) and an editable queue.
+- Attach tray, @mentions of tasks, conversations and logs, the /compact command, dictation with the system recogniser (no microphone permission) and Share with Orb as a sheet.
+- A connection band with a real countdown; queued messages keep the hour they were written.
+- Tasks, changes, scheduled tasks, projects, menu and This phone redrawn in Orb UI 2.0; waiting reasons name a busy folder or a usage limit with its account and time; monthly schedules are shown as such; a schedule made by an assistant is approved only from a dialog that reads it again from the PC.
+- Approving a task happens only on its detail screen, where everything the approval covers is shown; accepting or undoing a task only works on the run you have seen, and the PC refuses otherwise.
+- The notices centre keeps its list in the encrypted database and catches up with the PC; grouped by day, swipe to dismiss with undo, a destination for every kind; task done, task held, usage limit back and update available show as system notifications; "Marcar leído" on chat notifications; with "Mantener conectado" notices keep coming after the PC was out of sight for a long time, after a reboot and after an app update.
+- This phone shows the PC, the key fingerprint and the route with latency, and the real state of notifications, camera and battery saving (reread when you come back from Settings); the notices switch is on only when a notice can arrive; three lock-screen options; each channel opens its system settings; the app lock offers on exit, 5 and 15 minutes; unlinking says everything it erases.
+- First run redrawn: welcome, QR scanner (CameraX and bundled ZXing, no Google services; camera asked only when the scanner opens), a step to compare the PC's key fingerprint before the master password, linking steps and a prompt before the notifications permission.
+- Full-screen "can't reach your PC" page with the last connection, a real countdown, read-only saved chats and linking with another PC; an update page that opens the download page in the browser (the app neither downloads nor installs) and opens from the version notice.
+- Saved chats open as a clean read-only page when the PC is unreachable; a message that fails to send is announced inside the open chat.
+- Lock screen, expired code, public address, deleted chat and unsent message redrawn.
+- A test pins the exact list of permissions; the reply button of a notice works on Android 11 and earlier.
+- Usage and agents redrawn: the current window and when it returns, per-account bars that turn amber from 85 %, history and model guide as sheets, detected agents with their state; history shows real spend per day with no invented percentages; the full spend card is under More options.
+
+**Engine, for the phone.** `inbox.mute` takes an optional `until`; chat rows report what a working chat is doing; `chat.queue` and `chat.editQueued`; `sessions.fork` takes `from`; `projects.list` can report branch and uncommitted count; `notes.list` and four new phone notice kinds; the phone no longer receives a task's approval hash and signature. `tasks.undo` refuses a call from anywhere but the PC window (or with no principal) when the final snapshot is missing or the join is unfinished, and an abandoned hand join is settled when the copy was discarded first. The PC tells the linked phones once per version when it finds an update, and the texts the engine sends to the phone follow Orb's language.
+
+**Undo says what is lost.** When a task has no snapshot of its end, the Undo dialog in the PC window now says that the folder goes back to how it was before the task and that later changes are lost too, instead of promising to keep them.
+
 ### Before going back to 3.8.7
 
 Pause or delete your monthly schedules first. 3.8.7 does not know "every month" and would run them far more often than
