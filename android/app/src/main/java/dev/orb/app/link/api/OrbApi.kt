@@ -36,6 +36,8 @@ object ApiMethods {
     val INBOX_SNOOZE = m("inbox.snooze")
     val INBOX_MARK_READ = m("inbox.markRead")
     val INBOX_MARK_UNREAD = m("inbox.markUnread", requiresPc = "3.8.8")
+    val CHAT_QUEUE = m("chat.queue", requiresPc = "3.8.8")
+    val CHAT_EDIT_QUEUED = m("chat.editQueued", requiresPc = "3.8.8")
     val INBOX_SECTIONS_LIST = m("inbox.sections.list")
     val INBOX_SECTIONS_CREATE = m("inbox.sections.create")
     val INBOX_SECTIONS_RENAME = m("inbox.sections.rename")
@@ -196,6 +198,8 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
         suspend fun answer(params: JsonObject = NONE) = run(ApiMethods.CHAT_ANSWER, params)
         suspend fun accept(params: JsonObject = NONE) = run(ApiMethods.CHAT_ACCEPT, params)
         suspend fun settings(params: JsonObject = NONE) = run(ApiMethods.CHAT_SETTINGS, params)
+        suspend fun queue(params: JsonObject = NONE) = run(ApiMethods.CHAT_QUEUE, params)
+        suspend fun editQueued(params: JsonObject = NONE) = run(ApiMethods.CHAT_EDIT_QUEUED, params)
     }
 
     val chat = Chat()
