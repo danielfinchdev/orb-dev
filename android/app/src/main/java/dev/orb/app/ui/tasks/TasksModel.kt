@@ -15,9 +15,20 @@ import kotlinx.serialization.json.intOrNull
 @Immutable
 data class WaitDep(val id: Long, val status: String?, val held: Boolean)
 
-/** Why a queued task waits: `paused`, `manual`, `deps` or `notice` (the PC's own words in [text]). */
+/**
+ * Why a queued task waits: `paused`, `manual`, `deps`, `folder` (another task writes there: [by]) or `notice` (the PC's own
+ * words in [text]; a usage limit also says the [account], when it comes back as [until] and how full it is as [percent]).
+ */
 @Immutable
-data class TaskWait(val kind: String, val text: String?, val on: List<WaitDep>)
+data class TaskWait(
+    val kind: String,
+    val text: String?,
+    val on: List<WaitDep>,
+    val by: Long? = null,
+    val account: String? = null,
+    val until: String? = null,
+    val percent: Int? = null,
+)
 
 /** What a task did that needs a look before the work stays. */
 @Immutable
@@ -39,6 +50,10 @@ data class TaskRow(
     val result: String?,
     val percent: Int? = null,
     val note: String? = null,
+    /** The person already accepted the result of a finished task. */
+    val accepted: Boolean = false,
+    /** When a task stopped by a usage limit continues by itself (ISO). */
+    val limitedUntil: String? = null,
 ) {
     val needsApproval get() = status == "awaiting_approval" || held != null
     val problem get() = held == null && (status == "failed" || status == "blocked" || status == "limited")
@@ -105,7 +120,12 @@ object TasksParser {
             val dep = d as? JsonObject ?: return@mapNotNull null
             WaitDep(dep.long("id") ?: return@mapNotNull null, dep.str("status"), dep.bool("held"))
         }
-        return TaskWait(kind, o.str("text"), on)
+        // The PC may send numbers as text; each field is read leniently and an unreadable one is simply absent.
+        fun number(k: String) = (o[k] as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content?.toDoubleOrNull()
+        return TaskWait(
+            kind, o.str("text"), on, by = number("by")?.toLong(), account = o.str("account")?.takeIf { it.isNotBlank() },
+            until = o.str("until")?.takeIf { it.isNotBlank() }, percent = number("percent")?.let { Math.round(it).toInt() },
+        )
     }
 
     private fun held(el: JsonElement?): TaskHeld? {
@@ -122,7 +142,7 @@ object TasksParser {
             waiting = wait(o["waiting"]), held = held(o["held"]),
             // A list entry says `undone: true`; the detail carries the PC's own record of it.
             undone = o["undone"].let { it != null && it !is JsonNull && (it !is JsonPrimitive || it.content != "false") },
-            result = o.str("result"),
+            result = o.str("result"), accepted = o.bool("accepted"), limitedUntil = o.str("limited_until")?.takeIf { it.isNotBlank() },
         )
     }
 

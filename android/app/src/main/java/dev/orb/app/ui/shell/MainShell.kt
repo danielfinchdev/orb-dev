@@ -173,7 +173,10 @@ fun MainShell(
             composable<TasksTab> {
                 if (tasks == null) Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) else {
                     val vm = viewModel<TasksViewModel>(factory = viewModelFactory { initializer { TasksViewModel(tasks) } })
-                    TasksScreen(vm, onOpenTask = actions.onOpenTask)
+                    TasksScreen(
+                        vm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                        onOpenTask = actions.onOpenTask,
+                    )
                 }
             }
             composable<ProjectsTab> {

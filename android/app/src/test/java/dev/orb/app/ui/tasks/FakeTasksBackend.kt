@@ -15,9 +15,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 fun task(
     id: Long, title: String = "Tarea $id", status: String = "queued", project: String? = "api-pagos", agent: String? = "claude",
     waiting: TaskWait? = null, held: TaskHeld? = null, result: String? = null, undone: Boolean = false,
+    accepted: Boolean = false, limitedUntil: String? = null, percent: Int? = null, note: String? = null,
 ) = TaskRow(
     id = id, title = title, project = project, status = status, agent = agent, model = null, readonly = false,
     createdAt = "2026-11-11T09:00:00.000Z", waiting = waiting, held = held, undone = undone, result = result,
+    percent = percent, note = note, accepted = accepted, limitedUntil = limitedUntil,
 )
 
 fun detail(
@@ -52,6 +54,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var diffs = HashMap<Long, Result<TaskDiff>>()
     var gate: CompletableDeferred<Unit>? = null
     var diffGate: CompletableDeferred<Unit>? = null
+    /** Holds the board read until completed: the first read is then still under way. */
+    var listGate: CompletableDeferred<Unit>? = null
     val reads = ArrayList<String>()
 
     override fun available(m: ApiMethod) = m.name !in unavailable
@@ -59,7 +63,7 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     val savedFlow = MutableStateFlow<TasksData?>(null)
     override fun saved() = kotlinx.coroutines.flow.flow { savedFlow.collect { if (it != null) emit(it) } }
 
-    override suspend fun list(): Result<TasksData> { listCount++; return listResult ?: Result.success(data) }
+    override suspend fun list(): Result<TasksData> { listCount++; listGate?.await(); return listResult ?: Result.success(data) }
     override suspend fun search(q: String): Result<List<SearchTask>> { searches += q; return searchResult }
 
     private suspend fun act(name: String): Result<Unit> {

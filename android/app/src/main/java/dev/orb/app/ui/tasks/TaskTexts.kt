@@ -8,16 +8,26 @@ object TaskTexts {
     const val CLOSE_SEARCH = "Cerrar la búsqueda"
     const val NO_RESULTS = "No hay tareas con ese texto"
 
-    const val FILTER_ALL = "Todas"
-    const val FILTER_QUEUED = "En cola"
-    const val FILTER_APPROVE = "Por aprobar"
-    const val FILTER_RUNNING = "En curso"
-    const val FILTER_PROBLEMS = "Incidencias"
-    const val FILTER_DONE = "Completadas"
+    // The sections of the board, in the order the mockup draws them
+    const val SECTION_APPROVE = "Por aprobar"
+    const val SECTION_RUNNING = "En curso"
+    const val SECTION_QUEUED = "En cola"
+    const val SECTION_PROBLEMS = "Incidencias"
+    const val SECTION_DONE = "Completadas"
+
+    // What the board shows, chosen in the «⋯» menu
+    const val VIEW_LABEL = "Mostrar"
+    const val VIEW_ACTIVE = "Activas"
+    const val VIEW_ALL = "Todas"
+    const val VIEW_DONE = "Completadas"
+    const val MORE = "Más opciones"
 
     const val EMPTY = "No hay tareas"
-    const val EMPTY_HINT = "Pídesela a Orbe en un chat, o crea una con «Nueva tarea»."
-    const val EMPTY_FILTER = "No hay tareas en este filtro"
+    const val EMPTY_HINT = "Cuando Orbe o un agente creen una, aparecerá aquí."
+    const val ALL_CLEAR = "Todo al día"
+    const val ALL_CLEAR_HINT = "No hay nada por aprobar, en curso ni esperando."
+    const val EMPTY_DONE = "Ninguna tarea completada"
+    const val SHOW_ALL = "Ver todas"
     const val LOAD_ERROR = "No se pudieron cargar las tareas desde el PC."
     const val RETRY = "Reintentar"
     const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
@@ -33,11 +43,30 @@ object TaskTexts {
     const val NEW_TASK_LOADING = "Cargando proyectos…"
     const val TASK_CREATED = "Tarea creada"
 
-    fun pausedBanner(waiting: Int) = if (waiting == 0) "Cola en pausa" else "Cola en pausa · $waiting esperando"
+    const val PAUSED_TITLE = "Cola en pausa"
+    fun waitingCount(n: Int) = "$n esperando"
+    fun pausedBanner(waiting: Int) = if (waiting == 0) PAUSED_TITLE else "$PAUSED_TITLE · ${waitingCount(waiting)}"
     const val RESUME = "Reanudar"
     const val PAUSE = "Pausar la cola"
+    const val RESUME_QUEUE = "Reanudar la cola"
     const val QUEUE_RESUMED = "Cola reanudada"
     const val QUEUE_PAUSED = "Cola en pausa"
+
+    /** The line under the title of the bar: what the queue is doing. */
+    fun queueLine(paused: Boolean, running: Int, waiting: Int): String = when {
+        paused -> pausedBanner(waiting)
+        running == 0 && waiting == 0 -> "Cola en marcha"
+        else -> listOfNotNull(running.takeIf { it > 0 }?.let { "$it en curso" }, waiting.takeIf { it > 0 }?.let(::waitingCount)).joinToString(" · ")
+    }
+
+    // The two buttons of a row that waits for the OK. The first only opens the task: the OK itself is given where all of it is shown.
+    const val SEE_AND_APPROVE = "Ver y aprobar"
+    const val SEE_AND_REVIEW = "Revisar"
+    const val WAITS_FOR_OK = "Espera tu OK"
+    fun waitsForOk(reasons: String?) = if (reasons.isNullOrBlank()) WAITS_FOR_OK else "$WAITS_FOR_OK: $reasons"
+    fun rejectAsk(id: Long) = "¿Rechazar la #$id?"
+    fun rejectBodyFor(id: Long, title: String) = "«$title» (#$id) se cancela y no se ejecuta."
+    const val TASK_CHANGED = "La tarea ha cambiado: ábrela para revisarla."
 
     // Why a queued task waits (the same words as the desktop app)
     const val WAIT_PAUSED = "En pausa"
@@ -48,6 +77,35 @@ object TaskTexts {
     const val WAIT_PAUSED_NOTE = "La cola de tareas está en pausa: ninguna tarea empieza hasta que la reanudes."
 
     private val STUCK = setOf("failed", "blocked", "cancelled")
+
+    const val WAIT_FOLDER = "Otra tarea escribe en esta carpeta"
+    fun waitFolder(by: Long?) = if (by == null) WAIT_FOLDER else "$WAIT_FOLDER (#$by)"
+
+    /** «Espera a la #43», «Espera a las #2, #5»; the reason comes after when a dependency needs the person. */
+    fun waitsFor(on: List<WaitDep>): String {
+        val ids = on.joinToString(", ") { "#${it.id}" }
+        val held = on.firstOrNull { it.held }
+        val stuck = on.firstOrNull { it.status in STUCK }
+        val lead = if (on.size == 1) "Espera a la $ids" else "Espera a las $ids"
+        return when {
+            held != null -> "$lead: #${held.id} está por aprobar"
+            stuck != null -> "$lead: #${stuck.id} está detenida"
+            else -> lead
+        }
+    }
+
+    /** «Claude al 94 % del límite · vuelve a las 15:00»; the PC's own words when it did not say the account or the time. */
+    fun noticeText(w: TaskWait, clock: String?): String {
+        val account = w.account
+        if (account != null && clock != null) {
+            val level = w.percent?.let { "al $it % del límite" } ?: "al límite"
+            return "$account $level · vuelve a las $clock"
+        }
+        return w.text?.takeIf { it.isNotBlank() } ?: WAIT_NOTICE
+    }
+
+    const val LIMITED = "Límite de uso"
+    fun limitedBack(clock: String?) = if (clock == null) LIMITED else "$LIMITED · vuelve a las $clock"
 
     fun waitText(w: TaskWait?): String = when {
         w == null -> WAIT_TURN
@@ -63,6 +121,7 @@ object TaskTexts {
                 else -> "Espera a $ids"
             }
         }
+        w.kind == "folder" -> waitFolder(w.by)
         w.kind == "notice" -> w.text?.takeIf { it.isNotBlank() } ?: WAIT_NOTICE
         else -> WAIT_TURN
     }

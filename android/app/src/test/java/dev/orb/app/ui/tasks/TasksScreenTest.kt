@@ -1,6 +1,10 @@
 package dev.orb.app.ui.tasks
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -8,11 +12,12 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import dev.orb.app.link.api.ApiMethods
-import dev.orb.app.ui.theme.OrbTheme
+import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.chats.ChatsMenu
 import dev.orb.app.ui.theme.OrbPaletteChoice
+import dev.orb.app.ui.theme.OrbTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import org.junit.After
@@ -25,9 +30,10 @@ import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
+/** The task board as Orb UI 2.0 draws it (screen 17): header, numbered sections, the two buttons of a row and the «⋯» menu. */
 @OptIn(ExperimentalCoroutinesApi::class)
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w390dp-h2000dp")
 class TasksScreenTest {
     @get:Rule val rule = createComposeRule()
 
@@ -35,94 +41,292 @@ class TasksScreenTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private val rows = listOf(
-        task(3, "Probar push en el emulador", status = "queued", waiting = TaskWait("deps", null, listOf(WaitDep(2, "running", false)))),
-        task(2, "Borrar build y reinstalar", status = "awaiting_approval"),
-        task(1, "Ajustar margen del pie", status = "done", result = "Hecho"),
+        task(43, "Borrar build y reinstalar", status = "blocked", project = "app-movil", agent = "codex", held = TaskHeld("borra 214 archivos", null)),
+        task(46, "Migrar la base", status = "awaiting_approval", project = "api-pagos"),
+        task(42, "Ajustar estilos", status = "running", project = "app-movil", agent = "cursor", percent = 60),
+        task(41, "Probar push en el emulador", project = "app-movil", agent = null, waiting = TaskWait("deps", null, listOf(WaitDep(43, "blocked", false)))),
+        task(44, "Traducir la FAQ al inglés", project = "api-pagos", waiting = TaskWait("notice", "Límite", emptyList(), account = "Claude", until = "2026-11-19T14:00:00.000Z", percent = 94)),
+        task(45, "Ajustar margen del pie", project = "app-movil", agent = null, waiting = TaskWait("folder", null, emptyList(), by = 42)),
+        task(30, "Revisar login", status = "failed"),
+        task(20, "Ajustar el menú", status = "done", result = "Hecho"),
+        task(21, "Subir la versión", status = "done", accepted = true),
     )
 
-    private fun show(b: FakeTasksBackend, onOpen: (Long) -> Unit = {}) {
+    private fun show(b: FakeTasksBackend, menu: ChatsMenu = ChatsMenu(onMenu = {}, unreadNotices = 2, onNotices = {}), onOpen: (Long) -> Unit = {}) {
+        b.detailFor(rows)
         val vm = TasksViewModel(b, reloadDebounceMs = 0, searchDebounceMs = 0)
-        rule.setContent {
-            OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TasksScreen(vm, onOpen) }
-        }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TasksScreen(vm, menu, onOpen) } }
         rule.waitForIdle()
     }
 
-    @Test fun listShowsRowsFiltersAndWhyAQueuedTaskWaits() {
+    private fun FakeTasksBackend.detailFor(all: List<TaskRow>) {
+        for (t in all) details[t.id] = Result.success(detail(t, previewHash = "h${t.id}"))
+    }
+
+    private fun more() = rule.onNodeWithContentDescription("Más opciones").performClick().also { rule.waitForIdle() }
+
+    // Header
+
+    @Test fun headerHasTheMenuTheQueueLineTheBellWithItsNumberAndTheMoreMenu() {
+        show(FakeTasksBackend(rows, paused = true))
+        rule.onNodeWithContentDescription("Menú").assertExists()
+        rule.onNodeWithText("Cola en pausa · 3 esperando").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Notificaciones, 2 sin leer").assertExists()
+        rule.onNodeWithContentDescription("Más opciones").assertExists()
+        rule.onNodeWithContentDescription("Buscar tareas").assertDoesNotExist()
+    }
+
+    @Test fun theQueueLineSaysWhatRunsAndWaitsWhenItIsNotPaused() {
+        show(FakeTasksBackend(rows, paused = false))
+        rule.onNodeWithText("1 en curso · 3 esperando").assertIsDisplayed()
+    }
+
+    @Test fun theBellIsHiddenWhenThereIsNoNoticesCenter() {
+        show(FakeTasksBackend(rows), ChatsMenu(onMenu = {}))
+        rule.onNodeWithContentDescription("Notificaciones", substring = true).assertDoesNotExist()
+    }
+
+    // Sections
+
+    @Test fun theBoardIsFourSectionsAndTheFinishedOnesAreNotInThem() {
         show(FakeTasksBackend(rows))
-        rule.onNodeWithText("#3 Probar push en el emulador").assertIsDisplayed()
-        rule.onNodeWithText("Espera a #2").assertIsDisplayed()
+        for (s in listOf("Por aprobar", "En curso", "En cola", "Incidencias")) rule.onNodeWithText(s).assertIsDisplayed()
+        val headings = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).fetchSemanticsNodes().size
+        // the title of the bar plus the four sections
+        assertEquals(5, headings)
+        rule.onNodeWithText("Ajustar el menú").assertDoesNotExist()
+    }
+
+    @Test fun rowsTellNumberProjectAgentAndTheirState() {
+        show(FakeTasksBackend(rows))
+        rule.onNodeWithText("#43 · app-movil · Codex").assertIsDisplayed()
+        rule.onNodeWithText("Espera tu OK: borra 214 archivos").assertIsDisplayed()
         rule.onNodeWithText("Espera tu OK").assertIsDisplayed()
-        for (chip in listOf("Todas", "Por aprobar", "En curso", "Incidencias", "Completadas")) rule.onNodeWithText(chip).assertIsDisplayed()
-        // The chip and the pill of the queued task both say «En cola».
-        assertEquals(2, rule.onAllNodesWithText("En cola").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Nueva tarea", useUnmergedTree = true).assertExists()
+        rule.onNodeWithText("#42 · app-movil · Cursor").assertIsDisplayed()
+        rule.onNodeWithText("Espera a la #43: #43 está detenida").assertIsDisplayed()
+        rule.onNodeWithText("Revisar login").assertIsDisplayed()
+        rule.onNodeWithText("Fallida").assertIsDisplayed()
     }
 
-    @Test fun aFilterChipNarrowsTheList() {
+    @Test fun eachReasonForWaitingIsSaid() {
+        val zone = TaskLines.clock("2026-11-19T14:00:00.000Z")
         show(FakeTasksBackend(rows))
-        rule.onNodeWithText("Completadas").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("#1 Ajustar margen del pie").assertIsDisplayed()
-        rule.onNodeWithText("#3 Probar push en el emulador").assertDoesNotExist()
+        rule.onNodeWithText("Claude al 94 % del límite · vuelve a las $zone").assertIsDisplayed()
+        rule.onNodeWithText("Otra tarea escribe en esta carpeta (#42)").assertIsDisplayed()
     }
 
-    @Test fun pausedQueueShowsTheBannerAndResumeAsksThePc() {
+    @Test fun aQueueWithoutAReasonIsSaidPausedWhilePaused() {
+        show(FakeTasksBackend(listOf(task(7, "Algo")), paused = true))
+        // the card and the row both say it
+        assertEquals(2, rule.onAllNodesWithText("Cola en pausa").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Algo").assertIsDisplayed()
+    }
+
+    @Test fun tappingARowOpensTheTask() {
+        var opened = 0L
+        show(FakeTasksBackend(rows), onOpen = { opened = it })
+        rule.onNodeWithText("Ajustar estilos").performClick()
+        assertEquals(42L, opened)
+    }
+
+    // A task that waits for the OK
+
+    @Test fun seeAndApproveOpensTheTaskAndNeverApproves() {
+        val opened = ArrayList<Long>()
+        val b = FakeTasksBackend(rows)
+        show(b, onOpen = { opened += it })
+        // «Aprobar» alone is not on the list: the OK is given where everything it covers is shown
+        rule.onNodeWithText("Aprobar").assertDoesNotExist()
+        assertEquals(1, rule.onAllNodesWithText("Ver y aprobar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Ver y aprobar").performClick()
+        assertEquals(listOf(46L), opened)
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun aTaskHeldForReviewOnlyOffersToReviewIt() {
+        show(FakeTasksBackend(listOf(rows[0])))
+        rule.onNodeWithText("Revisar").assertIsDisplayed()
+        rule.onNodeWithText("Rechazar").assertDoesNotExist()
+        rule.onNodeWithText("Ver y aprobar").assertDoesNotExist()
+    }
+
+    @Test fun rejectAsksFirstWithTheNumberAndTheTitleThenRefuses() {
+        val b = FakeTasksBackend(rows)
+        show(b)
+        rule.onNodeWithText("Rechazar").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("¿Rechazar la #46?").assertIsDisplayed()
+        rule.onNodeWithText("«Migrar la base» (#46)", substring = true).assertIsDisplayed()
+        assertTrue(b.calls.isEmpty())
+        rule.onNodeWithText("Rechazar y cancelar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("decide 46 false h46"), b.calls)
+    }
+
+    @Test fun cancellingTheDialogSendsNothing() {
+        val b = FakeTasksBackend(rows)
+        show(b)
+        rule.onNodeWithText("Rechazar").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.isEmpty())
+        rule.onNodeWithText("¿Rechazar la #46?").assertDoesNotExist()
+    }
+
+    @Test fun rejectIsHiddenWhenThePcDoesNotTakeIt() {
+        val b = FakeTasksBackend(rows)
+        b.unavailable = setOf(ApiMethods.TASKS_APPROVE.name)
+        show(b)
+        rule.onNodeWithText("Rechazar").assertDoesNotExist()
+        rule.onNodeWithText("Ver y aprobar").assertIsDisplayed()
+    }
+
+    // The «⋯» menu
+
+    @Test fun theMoreMenuHoldsSearchNewTaskThePauseAndTheViews() {
+        show(FakeTasksBackend(rows))
+        more()
+        for (item in listOf("Buscar tareas", "Nueva tarea", "Pausar la cola", "Activas", "Todas", "Completadas")) rule.onNodeWithText(item).assertIsDisplayed()
+    }
+
+    @Test fun whatThePcCannotDoIsNotInTheMenu() {
+        val b = FakeTasksBackend(rows)
+        b.unavailable = setOf(ApiMethods.TASKS_CREATE.name, ApiMethods.CONTROL_PAUSE.name)
+        show(b)
+        more()
+        rule.onNodeWithText("Nueva tarea").assertDoesNotExist()
+        rule.onNodeWithText("Pausar la cola").assertDoesNotExist()
+        rule.onNodeWithText("Buscar tareas").assertIsDisplayed()
+    }
+
+    @Test fun theViewsAddTheFinishedTasks() {
+        show(FakeTasksBackend(rows))
+        more()
+        rule.onNodeWithText("Todas").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Ajustar el menú").assertIsDisplayed()
+        rule.onNodeWithText("Completada").assertIsDisplayed()
+        rule.onNodeWithText("Aceptada").assertIsDisplayed()
+        rule.onNodeWithText("Ajustar estilos").assertIsDisplayed()
+        more()
+        rule.onNode(isSelectable() and hasText("Completadas", substring = true)).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Ajustar el menú").assertIsDisplayed()
+        rule.onNodeWithText("Ajustar estilos").assertDoesNotExist()
+    }
+
+    @Test fun searchOpensFromTheMenuAndListsThePcMatches() {
+        val b = FakeTasksBackend(rows)
+        b.searchResult = Result.success(listOf(dev.orb.app.ui.chats.SearchTask(40, "Pasarela sandbox", "done", "api-pagos", "…token…")))
+        show(b)
+        more()
+        rule.onNodeWithText("Buscar tareas").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Buscar en el título y el resultado").assertExists()
+        rule.onNodeWithContentDescription("Buscar en el título y el resultado").performTextInput("pasar")
+        rule.waitForIdle()
+        assertTrue(b.searches.contains("pasar"))
+        rule.onNodeWithText("#40 Pasarela sandbox").assertIsDisplayed()
+    }
+
+    @Test fun newTaskFormCreatesThroughThePc() {
+        val b = FakeTasksBackend(rows)
+        show(b)
+        more()
+        rule.onNodeWithText("Nueva tarea").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription("Título").performTextInput("Probar")
+        rule.onNodeWithContentDescription("Qué tiene que hacer").performTextInput("Arrancar la app")
+        rule.onNodeWithText("Crear tarea").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("create api-pagos|Probar|Arrancar la app"), b.calls)
+    }
+
+    // The queue
+
+    @Test fun pausedQueueShowsTheCardAndResumeAsksThePcThenOffersToGoBack() {
         val b = FakeTasksBackend(rows, paused = true)
         show(b)
-        rule.onNodeWithText("Cola en pausa", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Reanudar").performClick()
         rule.waitForIdle()
         assertEquals(listOf("paused false"), b.calls)
-        rule.onNodeWithText("Reanudar").assertDoesNotExist()
+        rule.onNodeWithText("Cola reanudada").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        // going back pauses it again
+        assertEquals(listOf("paused false", "paused true"), b.calls)
     }
 
-    @Test fun theBannerIsHiddenWhenThePcCannotPause() {
+    @Test fun pausingFromTheMenuAlsoOffersToGoBack() {
+        val b = FakeTasksBackend(rows)
+        show(b)
+        more()
+        rule.onNodeWithText("Pausar la cola").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("paused true"), b.calls)
+        rule.onNodeWithText("Deshacer").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("paused true", "paused false"), b.calls)
+    }
+
+    @Test fun theMenuOffersToResumeWhilePaused() {
+        show(FakeTasksBackend(rows, paused = true))
+        more()
+        rule.onNodeWithText("Reanudar la cola").assertIsDisplayed()
+    }
+
+    @Test fun theCardIsHiddenWhenThePcCannotPause() {
         val b = FakeTasksBackend(rows, paused = true)
         b.unavailable = setOf(ApiMethods.CONTROL_RESUME.name)
         show(b)
         rule.onNodeWithText("Reanudar").assertDoesNotExist()
     }
 
-    @Test fun theNewTaskButtonIsHiddenWhenThePcDoesNotListIt() {
-        val b = FakeTasksBackend(rows)
-        b.unavailable = setOf(ApiMethods.TASKS_CREATE.name)
-        show(b)
-        rule.onNodeWithText("Nueva tarea").assertDoesNotExist()
-    }
+    // States
 
-    @Test fun tappingARowOpensTheTask() {
-        var opened = 0L
-        show(FakeTasksBackend(rows), onOpen = { opened = it })
-        rule.onNodeWithText("#2 Borrar build y reinstalar").performClick()
-        assertEquals(2L, opened)
-    }
-
-    @Test fun newTaskFormCreatesThroughThePc() {
-        val b = FakeTasksBackend(rows)
-        show(b)
-        rule.onNodeWithText("Nueva tarea", useUnmergedTree = true).performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("Título").performTextInput("Probar")
-        rule.onNodeWithText("Qué tiene que hacer").performTextInput("Arrancar la app")
-        rule.onNodeWithText("Crear tarea").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf("create api-pagos|Probar|Arrancar la app"), b.calls)
-    }
-
-    @Test fun anEmptyBoardExplainsHowToStart() {
+    @Test fun anEmptyBoardSaysSo() {
         show(FakeTasksBackend())
         rule.onNodeWithText("No hay tareas").assertIsDisplayed()
+        rule.onNodeWithText("Cuando Orbe o un agente creen una, aparecerá aquí.").assertIsDisplayed()
     }
 
-    @Test fun searchListsThePcMatches() {
-        val b = FakeTasksBackend(rows)
-        b.searchResult = Result.success(listOf(dev.orb.app.ui.chats.SearchTask(40, "Pasarela sandbox", "done", "api-pagos", "…token…")))
-        show(b)
-        rule.onNodeWithContentDescription("Buscar tareas").performClick()
-        rule.onNodeWithText("Buscar en el título y el resultado").performTextInput("pasar")
+    @Test fun withNothingLeftToDoTheBoardIsUpToDate() {
+        show(FakeTasksBackend(listOf(task(1, status = "done"))))
+        rule.onNodeWithText("Todo al día").assertIsDisplayed()
+        rule.onNodeWithText("Ver todas").performClick()
         rule.waitForIdle()
-        assertTrue(b.searches.contains("pasar"))
-        rule.onNodeWithText("#40 Pasarela sandbox").assertIsDisplayed()
+        rule.onNodeWithText("Completadas").assertIsDisplayed()
+    }
+
+    @Test fun aFailedFirstReadShowsTheErrorWithRetry() {
+        val b = FakeTasksBackend()
+        b.listResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Offline))
+        show(b)
+        rule.onNodeWithText("No se pudieron cargar las tareas desde el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Reintentar").assertIsDisplayed()
+    }
+
+    @Test fun withoutTheLinkTheSavedBoardIsReadWithTheStrip() {
+        val b = FakeTasksBackend()
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        b.listResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Offline))
+        b.savedFlow.value = TasksData(rows, paused = false)
+        show(b)
+        rule.onNodeWithText("Ajustar estilos").assertIsDisplayed()
+        rule.onNodeWithText("Sin conexión con el PC", substring = true).assertIsDisplayed()
+        // refusing needs the PC: the button is there but cannot be used
+        rule.onNodeWithText("Rechazar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun whileTheFirstReadIsUnderWayNothingIsDrawnButTheHeader() {
+        val b = FakeTasksBackend()
+        b.listGate = kotlinx.coroutines.CompletableDeferred()
+        show(b)
+        rule.onNodeWithText("Tareas").assertIsDisplayed()
+        rule.onNodeWithText("No hay tareas").assertDoesNotExist()
     }
 }
