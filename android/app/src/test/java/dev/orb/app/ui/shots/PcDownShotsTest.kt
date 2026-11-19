@@ -27,7 +27,7 @@ import dev.orb.app.ui.offline.OfflineInfo
 import dev.orb.app.ui.offline.PcOffActions
 import dev.orb.app.ui.offline.PcOffContent
 import dev.orb.app.ui.offline.PcOffRetry
-import dev.orb.app.ui.offline.ReadOnlyBar
+import dev.orb.app.ui.offline.ReadOnlyMode
 import dev.orb.app.ui.theme.OrbPaletteChoice
 import dev.orb.app.ui.update.UpdateActions
 import dev.orb.app.ui.update.UpdateContent
@@ -51,9 +51,7 @@ import java.time.ZoneId
 class PcDownShotsTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private val palette = OrbPaletteChoice.Grafito
-
-    private fun shoot(name: String, content: @androidx.compose.runtime.Composable () -> Unit) {
+    private fun shoot(name: String, palette: OrbPaletteChoice = OrbPaletteChoice.Grafito, content: @androidx.compose.runtime.Composable () -> Unit) {
         Shots.assumeEnabled()
         var dark by mutableStateOf(false)
         rule.setContent { ShotFrame(palette, dark, content) }
@@ -66,25 +64,26 @@ class PcDownShotsTest {
 
     private val last = "Última conexión: hoy, 19:52."
 
-    @Test fun pcApagado() = shoot("06-pc-apagado") {
+    private fun pcApagado(palette: OrbPaletteChoice, tag: String) = shoot("06-pc-apagado$tag", palette) {
         PcOffContent("DanLaptop", last, PcOffRetry.Waiting("Reintento en 12 s", 0.6f), false, PcOffActions())
     }
 
-    @Test fun pcReintentandoAhora() = shoot("06-reintentando-ahora") {
+    private fun pcReintentando(palette: OrbPaletteChoice, tag: String) = shoot("06-reintentando-ahora$tag", palette) {
         PcOffContent("DanLaptop", last, PcOffRetry.Connecting, false, PcOffActions())
     }
 
-    @Test fun pcOtroPc() = shoot("06-otro-pc") {
+    private fun pcOtro(palette: OrbPaletteChoice, tag: String) = shoot("06-otro-pc$tag", palette) {
         PcOffContent("DanLaptop", last, PcOffRetry.Waiting("Reintento en 12 s", 0.6f), true, PcOffActions())
     }
 
-    @Test fun pcSinNombreNiHistorial() = shoot("06-sin-nombre-sin-historial") {
+    private fun pcSinNombre(palette: OrbPaletteChoice, tag: String) = shoot("06-sin-nombre-sin-historial$tag", palette) {
         PcOffContent(null, "Aún no se ha conectado con este PC.", PcOffRetry.Waiting("Reintento en 3 s", 0.1f), false, PcOffActions())
     }
 
     private fun at(h: Int, m: Int): Long = LocalDate.now().atTime(LocalTime.of(h, m)).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
 
-    @Test fun pcChatsGuardados() = shoot("06-chats-guardados") {
+    // The saved chats page as the app builds it: the list draws its own read-only header, and the bottom bar stays.
+    private fun pcChatsGuardados(palette: OrbPaletteChoice, tag: String) = shoot("06-chats-guardados$tag", palette) {
         val rows: List<ChatRow> = listOf(
             row("41", title = "Versión 2.0 de la app", pinned = true, unread = 2, lastText = "Tarea #41 espera tu OK", at = java.time.Instant.ofEpochMilli(at(13, 31)).toString()),
             row("r1", title = "Revisar pasarela", project = "api-pagos", unread = 1, at = java.time.Instant.ofEpochMilli(at(12, 10)).toString(), lastText = "Hecho, he añadido un límite de tres."),
@@ -95,14 +94,24 @@ class PcDownShotsTest {
         val tabs = listOf(OrbTab("chats", "Chats", OrbIcons.Chat, 3), OrbTab("tasks", "Tareas", OrbIcons.Tasks, 1), OrbTab("projects", "Proyectos", OrbIcons.FolderGit2))
         CompositionLocalProvider(LocalOffline provides info) {
             Column(Modifier.fillMaxSize()) {
-                ReadOnlyBar(info, onBack = {})
                 Box(Modifier.weight(1f).fillMaxWidth()) {
-                    ChatListScreen(vm, ChatsMenu(onMenu = {}, unreadNotices = 0, onNotices = {}), onOpenChat = {}, onSearch = {}, onNewChat = {})
+                    ChatListScreen(vm, ChatsMenu(onMenu = {}, unreadNotices = 0, onNotices = {}), onOpenChat = {}, onSearch = {}, onNewChat = {}, readOnly = ReadOnlyMode(info) {})
                 }
                 OrbBottomBar(tabs, "chats", {})
             }
         }
     }
+
+    @Test fun pcApagado() = pcApagado(OrbPaletteChoice.Grafito, "")
+    @Test fun pcApagadoOceano() = pcApagado(OrbPaletteChoice.Oceano, "-oceano")
+    @Test fun pcReintentandoAhora() = pcReintentando(OrbPaletteChoice.Grafito, "")
+    @Test fun pcReintentandoAhoraOceano() = pcReintentando(OrbPaletteChoice.Oceano, "-oceano")
+    @Test fun pcOtroPc() = pcOtro(OrbPaletteChoice.Grafito, "")
+    @Test fun pcOtroPcOceano() = pcOtro(OrbPaletteChoice.Oceano, "-oceano")
+    @Test fun pcSinNombreNiHistorial() = pcSinNombre(OrbPaletteChoice.Grafito, "")
+    @Test fun pcSinNombreNiHistorialOceano() = pcSinNombre(OrbPaletteChoice.Oceano, "-oceano")
+    @Test fun pcChatsGuardados() = pcChatsGuardados(OrbPaletteChoice.Grafito, "")
+    @Test fun pcChatsGuardadosOceano() = pcChatsGuardados(OrbPaletteChoice.Oceano, "-oceano")
 
     @Test fun actualizaApp() = shoot("07-actualiza-app") {
         UpdateContent(UpdateView.App("3.8.8", 5, "3.9.0"), false, UpdateActions())

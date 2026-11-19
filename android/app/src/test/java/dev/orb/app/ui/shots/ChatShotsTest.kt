@@ -119,6 +119,23 @@ class ChatShotsTest {
         shoot("13-chat", palette, suffix, vm)
     }
 
+    // ---- 08 · Envío fallido, dentro del chat entero (cabecera, lista y caja) con el aviso de abajo ----
+
+    private fun failedSend(palette: OrbPaletteChoice) {
+        Shots.assumeEnabled()
+        val b = backend(thread13(), "Versión 2.0 de la app", "app-movil")
+        val vm = vm(b)
+        // The clock stands still so the bottom notice, which only lasts a few seconds, is there for both pictures.
+        rule.mainClock.autoAdvance = false
+        shoot("08-envio-fallido", palette, "", vm) {
+            b.queue.value = listOf(PendingMessage("c1", "Y que no se pierdan si el PC está apagado", PendingState.Failed, "refused 400", ms(13, 54)))
+            rule.mainClock.advanceTimeBy(500)
+        }
+    }
+
+    @Test fun failedSend() = failedSend(OrbPaletteChoice.Grafito)
+    @Test fun failedSendOceano() = failedSend(OrbPaletteChoice.Oceano)
+
     @Test fun working() = working13(OrbPaletteChoice.Grafito)
     @Test fun workingOceano() = working13(OrbPaletteChoice.Oceano)
 

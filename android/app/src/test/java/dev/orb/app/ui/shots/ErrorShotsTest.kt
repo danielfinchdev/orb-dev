@@ -1,23 +1,12 @@
 package dev.orb.app.ui.shots
 
 import androidx.activity.ComponentActivity
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.unit.dp
 import dev.orb.app.lock.LockNotice
-import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.ui.chats.DeletedChatPage
-import dev.orb.app.ui.chats.PendingMessage
-import dev.orb.app.ui.chats.PendingRow
-import dev.orb.app.ui.chats.PendingState
 import dev.orb.app.ui.lock.LockContent
 import dev.orb.app.ui.theme.OrbPaletteChoice
 import dev.orb.app.ui.welcome.WelcomeActions
@@ -67,14 +56,4 @@ class ErrorShotsTest {
 
     @Test fun chatBorrado() = shoot("08-chat-borrado") { DeletedChatPage(onBack = {}, onRestore = null) }
     @Test fun chatBorradoRestaurable() = shoot("08-chat-borrado-restaurar") { DeletedChatPage(onBack = {}, onRestore = {}) }
-
-    @Test fun envioFallido() = shoot("08-envio-fallido") {
-        Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.Bottom) {
-            PendingRow(
-                PendingMessage("c1", "Añade notificaciones push al registro y pruébalo en el emulador", PendingState.Failed, "refused 400", 0L),
-                online = true, onRetry = {}, onDiscard = {}, connection = dev.orb.app.data.ONLINE,
-            )
-            Spacer(Modifier.padding(bottom = 48.dp))
-        }
-    }
 }
