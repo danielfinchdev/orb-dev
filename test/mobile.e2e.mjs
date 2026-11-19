@@ -83,7 +83,7 @@ try {
   assert.ok(tabs.bottom <= tabs.h + 1 && tabs.bottom > tabs.h - 120, `la barra abajo (${tabs.bottom} de ${tabs.h})`);
   assert.equal(await page.locator('[data-testid=nav-menu]:visible').count(), 1, '3.6: el menú ☰ arriba a la izquierda');
     assert.equal(await page.locator('[data-testid=chat-play], [data-testid=bar-games]').count(), 0, 'sin minijuegos en el móvil');
-  assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), 'orb', 'el móvil lleva el tema predeterminado');
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.skin), 'predeterminado', 'el móvil lleva el tema predeterminado');
   await page.click('[data-testid=nav-menu]:visible'); await page.waitForSelector('[data-testid=mobile-menu]'); await page.waitForTimeout(400);
   assert.equal(await page.locator('[data-testid=nav-settings]:visible, [data-testid=nav-agents]:visible, [data-testid=nav-expert]:visible').count(), 0, 'Ajustes, Agentes y modo experto solo en el PC');
   assert.equal(await page.locator('[data-testid=nav-phone]:visible').count(), 1, '«Este móvil» solo en el móvil');
@@ -102,7 +102,7 @@ try {
   await page.click('[data-testid=nav-chats]'); await page.click('[data-testid=notify-offer-later]');
   assert.equal(await page.locator('[data-testid=notify-offer]').count(), 0, '«Ahora no» la quita');
 
-  for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-memories', '05-bitacoras', 'Solo lectura'], ['memories-activity', '06-actividad', 'Tarea creada']]) {
+  for (const [testid, name, wait] of [['nav-tasks', '03-tareas', 'Publicar la web'], ['nav-projects', '04-proyectos', 'webviaproject'], ['nav-memories', '05-bitacoras', 'Solo lectura'], ['memories-activity', '06-actividad', 'Creaste la tarea']]) {
     step = name;
     await nav(testid);
     await page.waitForSelector(`text=${wait} >> visible=true`);
