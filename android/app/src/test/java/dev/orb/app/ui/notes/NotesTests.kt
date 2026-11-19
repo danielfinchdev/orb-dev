@@ -56,6 +56,7 @@ class MemoryNoticeStore : NoticeStore {
         for ((id, s) in rows.entries.toList()) if (ids == null || id in ids) rows[id] = s.copy(read = true)
     }
     override suspend fun setDismissed(id: String, dismissed: Boolean) { rows[id]?.let { rows[id] = it.copy(dismissed = dismissed) } }
+    override suspend fun remove(ids: Collection<String>) { ids.forEach { rows.remove(it) } }
     override suspend fun prune(cutoff: Long, keep: Int) {
         rows.values.filter { it.notice.at < cutoff }.forEach { rows.remove(it.notice.id) }
         rows.values.sortedByDescending { it.notice.at }.drop(keep).forEach { rows.remove(it.notice.id) }
@@ -76,6 +77,8 @@ class FakeNotesBackend : NotesBackend {
     override suspend fun refresh(): Result<Unit> { calls += "refresh"; return Result.success(Unit) }
     override suspend fun markRead(ids: List<String>?): Result<Unit> { calls += "markRead $ids"; feed.markRead(ids); return markResult }
     override fun markReadLocal(id: String) { calls += "local $id"; feed.markRead(listOf(id)) }
+    override fun markReadChat(key: String) { calls += "chat $key"; feed.markReadKey(key) }
+    override fun dismissChat(kind: String, id: String) { calls += "gone $kind $id"; feed.dismissChat(kind, id) }
     override fun dismiss(id: String): Boolean { calls += "dismiss $id"; return feed.dismiss(id) }
     override fun undoDismiss(id: String) { calls += "undo $id"; feed.undoDismiss(id) }
 }

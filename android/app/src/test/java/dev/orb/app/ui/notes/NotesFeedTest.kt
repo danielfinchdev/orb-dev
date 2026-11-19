@@ -60,8 +60,9 @@ class NotesParserTest {
     @Test fun theListKeepsTheTimeOfThePcAndTheSameIdAsTheLiveEvent() {
         val list = NotesParser.fromList(json("""{"notes":[{"id":9,"at":777,"key":"done:42","kind":"done","title":"Orb","body":"#42 terminada y revisada","hidden":false,"route":{"view":"tasks","id":42},"target":{"type":"task","id":42}},{"id":8,"at":700,"key":"conversation:7","kind":"message","title":"Orbe","body":"Hola","hidden":false,"route":{"view":"chat","id":7},"target":{"type":"chat","id":7},"line":4}]}"""), 1)
         assertEquals(listOf(777L, 700L), list.map { it.at })
-        assertEquals(parse(DONE).id, list[0].id)
-        assertEquals("note:conversation:7:4", list[1].id)
+        // The live note carries the same number as `nid`.
+        assertEquals(parse(DONE.replaceFirst("{", """{"nid":9,""")).id, list[0].id)
+        assertEquals("note:conversation:7:n8", list[1].id)
         assertTrue(NotesParser.fromList(json("""{"notes":"no"}"""), 1).isEmpty())
         assertTrue(NotesParser.fromList(null, 1).isEmpty())
     }

@@ -27,6 +27,10 @@ class RoomNoticeStore(private val dao: suspend () -> NoticeDao?) : NoticeStore {
         dao()?.prune(cutoff, keep)
     }
 
+    override suspend fun remove(ids: Collection<String>) {
+        if (ids.isNotEmpty()) dao()?.delete(ids.toList())
+    }
+
     override suspend fun since(): Long? = dao()?.mark(SINCE)
 
     override suspend fun setSince(at: Long) {

@@ -28,6 +28,8 @@ import dev.orb.app.notify.NoticeSettings
 import dev.orb.app.notify.AndroidServiceLauncher
 import dev.orb.app.notify.KeepAliveController
 import dev.orb.app.notify.KeepAlivePolicy
+import dev.orb.app.notify.LinkLine
+import dev.orb.app.notify.NoteReader
 import dev.orb.app.notify.LinkKind
 import dev.orb.app.notify.NoteActionRunner
 import dev.orb.app.notify.NoteOutcome
@@ -220,16 +222,33 @@ class AppContainer(private val app: Application) {
         network = AndroidNetworkWatcher(app),
         launcher = keepAliveLauncher,
         log = log::add,
+        park = ::parkLink,
+        onNetwork = ::retryLinkNow,
     ).also { it.start(scope) }
+
+    /** The PC stayed out of sight: the link stops retrying (the service stays, so it can come back); false lets it try again. */
+    private fun parkLink(parked: Boolean) = synchronized(runtimeLock) {
+        val client = _runtime.value?.client
+        if (parked) client?.pause() else if (foreground || keepAliveRunning.value) client?.resume()
+        Unit
+    }
+
+    /** Another network: a link that is not up tries again at once, whatever pause it was in the middle of. */
+    private fun retryLinkNow() = synchronized(runtimeLock) {
+        val client = _runtime.value?.client ?: return@synchronized
+        if ((foreground || keepAliveRunning.value) && client.connection.value !is ConnectionState.Online) client.resume()
+    }
 
     /** The fixed notice of the service: who it is connected to. */
     val keepAliveText: StateFlow<String> = runtime.flatMapLatest { rt ->
         if (rt == null) flowOf(NotifyTexts.connected(null))
-        else rt.client.connection.map { c ->
-            val pc = (c as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name
-            if (c is ConnectionState.Online) NotifyTexts.connected(pc) else NotifyTexts.searching(pc)
-        }
+        else LinkLine.lines(
+            online = rt.client.connection.map { it is ConnectionState.Online },
+            pc = { (rt.client.connection.value as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name },
+        )
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), NotifyTexts.connected(null))
+
+    private val noteReader = NoteReader({ startup.await() }, ::notesBackend)
 
     /** The database, opened off the main thread; null while the Keystore is busy. */
     suspend fun database(): OrbCacheDatabase? = withContext(Dispatchers.IO) { databaseFactory.open() }
@@ -338,9 +357,9 @@ class AppContainer(private val app: Application) {
         )
         val (job, outcome) = runner.run(token, typed) ?: return
         if (outcome is NoteOutcome.Read) {
-            // The button only reads the notice on this phone: the notification goes away and the list knows.
-            job.notice?.let { notesBackend()?.markReadLocal(it) }
+            // The button only reads the chat's notices on this phone: the notification goes away and the list knows.
             notePoster.cancel(job.group)
+            noteReader.read(job, wholeChat = true)
             return
         }
         notePoster.say(job, outcome.text, if (outcome.done) 4_000L else null)
@@ -352,9 +371,25 @@ class AppContainer(private val app: Application) {
         val token = intent?.getStringExtra(NoteIntents.EXTRA_TOKEN) ?: return
         intent.removeExtra(NoteIntents.EXTRA_TOKEN)
         // MainActivity is exported: only a token kept here counts, never extras made up by another app.
-        val job = noteJobs.take(token)
-        job?.notice?.let { notesBackend()?.markReadLocal(it) }
-        openTarget.value = job?.target?.toNotice() ?: return
+        val job = noteJobs.take(token) ?: return
+        // The activity can start before the link is read; the list is reached once the start-up is over.
+        scope.launch { noteReader.read(job, wholeChat = false) }
+        val target = job.target?.toNotice() ?: return
+        noticeChat = target as? NoticeTarget.Chat
+        openTarget.value = target
+    }
+
+    /** The chat a notice just opened, so a chat found deleted can take its notices away; consumed by [chatGone]. */
+    @Volatile
+    var noticeChat: NoticeTarget.Chat? = null
+
+    /** A notice led to a chat the PC no longer has: its notices leave the list. True when the chat was the one a notice opened. */
+    fun chatGone(kind: String, id: String): Boolean {
+        val opened = noticeChat ?: return false
+        if (opened.kind != kind || opened.id != id) return false
+        noticeChat = null
+        scope.launch { startup.await(); notesBackend()?.dismissChat(kind, id) }
+        return true
     }
 
     fun linkTestBackend(): LinkTestBackend? = _runtime.value?.let { RuntimeBackend(this, it) }

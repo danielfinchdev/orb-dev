@@ -66,6 +66,14 @@ class NoticeStoreTest {
         assertFalse(saved.getValue("b").read)
     }
 
+    @Test fun removingForgetsOnlyThoseNoticesAndTwoEqualTextsWithDifferentIdsAreTwoRows() = runTest {
+        store.merge(listOf(n("note:limit:claude:n5", 10), n("note:limit:claude:n9", 20), n("old", 5)))
+        assertEquals(3, store.load()!!.size)
+        store.remove(listOf("old"))
+        store.remove(emptyList())
+        assertEquals(setOf("note:limit:claude:n5", "note:limit:claude:n9"), store.load()!!.map { it.notice.id }.toSet())
+    }
+
     @Test fun markAllReadAndUndoDismiss() = runTest {
         store.merge(listOf(n("a", 1), n("b", 2)))
         store.setDismissed("a", true)

@@ -32,6 +32,9 @@ abstract class NoticeDao {
     @Query("DELETE FROM notices WHERE id NOT IN (SELECT id FROM notices ORDER BY at DESC LIMIT :keep)")
     abstract suspend fun trimTo(keep: Int)
 
+    @Query("DELETE FROM notices WHERE id IN (:ids)")
+    abstract suspend fun delete(ids: List<String>)
+
     @Query("DELETE FROM notices")
     abstract suspend fun clear()
 

@@ -20,6 +20,7 @@ object NotesTexts {
 
     const val FOOTNOTE = "Desliza un aviso para descartarlo. Tocarlo te lleva a la tarea o al chat."
     const val DISMISSED = "Aviso descartado"
+    const val CHAT_GONE = "Ese chat ya no existe"
     const val UNDO = "Deshacer"
     const val DISMISS = "Descartar aviso"
     const val NEWS = "Novedades"

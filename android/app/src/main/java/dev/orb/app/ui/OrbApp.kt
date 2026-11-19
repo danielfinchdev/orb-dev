@@ -269,11 +269,15 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.orbeChatBackend() }
             if (route.kind == "conversation" && conversation != null && backend != null) {
                 val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation, attach = container.attachController()) } })
+                val gone by vm.state.collectAsStateWithLifecycle()
+                ChatGoneFromNotice(container, nav, route.kind, route.id, gone.deleted)
                 OrbeChatScreen(vm, onBack = { nav.popBackStack() }, mentions = remember { container.mentionSource() })
             } else if (route.kind == "session") {
                 val direct = remember { container.directChatBackend() }
                 if (direct != null) {
                     val vm = viewModel<DirectChatViewModel>(key = "session:${route.id}", factory = viewModelFactory { initializer { DirectChatViewModel(direct, route.id, attach = container.attachController()) } })
+                    val gone by vm.state.collectAsStateWithLifecycle()
+                    ChatGoneFromNotice(container, nav, route.kind, route.id, gone.deleted)
                     DirectChatScreen(
                         vm, onBack = { nav.popBackStack() },
                         onOpenChat = { nav.navigate(ChatRoute("session", it)) },
@@ -341,7 +345,10 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 val vm = viewModel<NotesViewModel>(factory = viewModelFactory { initializer { NotesViewModel(backend) } })
                 NotesScreen(
                     vm, onBack = { nav.popBackStack() },
-                    onOpen = { target -> if (target == NoticeTarget.ChatsTab) nav.popBackStack() else openNotice(nav, target) },
+                    onOpen = { target ->
+                        container.noticeChat = target as? NoticeTarget.Chat
+                        if (target == NoticeTarget.ChatsTab) nav.popBackStack() else openNotice(nav, target)
+                    },
                 )
             }
         }
@@ -412,6 +419,21 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 val vm = viewModel<LinkTestViewModel>(factory = viewModelFactory { initializer { LinkTestViewModel(backend) } })
                 LinkTestScreen(vm, onBack = { nav.popBackStack() })
             }
+        }
+    }
+}
+
+/**
+ * A tapped notice led to a chat the PC no longer has: instead of a dead chat the person is told so, back where they came
+ * from, and the notice leaves the list. Only for a chat opened from a notice; a chat deleted while it is open keeps its screen.
+ */
+@Composable
+private fun ChatGoneFromNotice(container: AppContainer, nav: androidx.navigation.NavHostController, kind: String, id: String, deleted: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(deleted) {
+        if (deleted && container.chatGone(kind, id)) {
+            android.widget.Toast.makeText(context, dev.orb.app.ui.notes.NotesTexts.CHAT_GONE, android.widget.Toast.LENGTH_SHORT).show()
+            nav.popBackStack()
         }
     }
 }

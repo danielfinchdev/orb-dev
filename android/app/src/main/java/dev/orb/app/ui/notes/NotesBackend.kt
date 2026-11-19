@@ -30,6 +30,12 @@ interface NotesBackend {
     /** Marks one notice read on the phone only: the PC's ids are not the phone's. */
     fun markReadLocal(id: String)
 
+    /** Marks read every notice of one chat (the `key` of the PC's note): the notification that covered it was read. */
+    fun markReadChat(key: String)
+
+    /** The chat no longer exists on the PC: its notices leave the list. */
+    fun dismissChat(kind: String, id: String)
+
     /** Swipes a notice away on this phone only; false when it cannot be hidden (a permission request that still waits). */
     fun dismiss(id: String): Boolean
 
@@ -81,6 +87,10 @@ class RuntimeNotesBackend(
     }
 
     override fun markReadLocal(id: String) = feed.markRead(listOf(id))
+
+    override fun markReadChat(key: String) = feed.markReadKey(key)
+
+    override fun dismissChat(kind: String, id: String) = feed.dismissChat(kind, id)
 
     override fun dismiss(id: String) = feed.dismiss(id)
 

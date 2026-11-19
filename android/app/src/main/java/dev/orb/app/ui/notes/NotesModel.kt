@@ -62,7 +62,15 @@ data class Notice(
     val target: NoticeTarget?,
     /** The PC's preview setting was off: [body] is a generic text, never the real one. */
     val hidden: Boolean = false,
-)
+    /**
+     * The id this notice would have without the PC's own identifier (the chat line, or a hash of kind, title and text). Set
+     * only when the id is the PC's, so a copy kept under the old id can hand its read and dismissed state over.
+     */
+    val legacyId: String? = null,
+) {
+    /** The chat or source this notice came from (the `key` of the PC's note), taken from the id; null for a permission request. */
+    val sourceKey: String? get() = if (id.startsWith("note:")) id.removePrefix("note:").substringBeforeLast(':') else null
+}
 
 @Immutable
 data class NoticeRow(val notice: Notice, val unread: Boolean)
@@ -71,25 +79,29 @@ object NotesParser {
     /** A `note` event of the PC (the same payload the desktop shows as a notification). Null when it says nothing. */
     fun fromEvent(payload: JsonElement, nowMs: Long): Notice? {
         val o = payload as? JsonObject ?: return null
-        return build(o, nowMs)
+        // A live note carries the saved row's id as `nid`; its own `id` is the id of the system notification.
+        return build(o, nowMs, o.long("nid"))
     }
 
     /** The answer of `notes.list`: each notice keeps the time the PC gave it. */
     fun fromList(result: JsonElement?, nowMs: Long): List<Notice> =
         (((result as? JsonObject)?.get("notes")) as? JsonArray).orEmpty().mapNotNull { x ->
             val o = x as? JsonObject ?: return@mapNotNull null
-            build(o, o.long("at") ?: nowMs)
+            build(o, o.long("at") ?: nowMs, o.long("id"))
         }
 
-    private fun build(o: JsonObject, at: Long): Notice? {
+    private fun build(o: JsonObject, at: Long, occurrence: Long?): Notice? {
         val key = o.str("key") ?: return null
         val kind = o.str("kind") ?: NoticeKinds.MESSAGE
         val body = o.str("body").orEmpty()
         val title = o.str("title").orEmpty().ifBlank { "Orb" }
-        // One notice per line of a chat; without one, the same kind, title and text count as the same notice
-        // (the time would make every repeat of the event look new).
+        // The PC numbers every occurrence (`nid` live, `id` in the list), so two equal notices are two rows and one notice
+        // seen live and in the list is one. Without it (an older PC): one notice per line of a chat, and without a line the
+        // same kind, title and text count as the same notice (the time would make every repeat look new).
         val line = o.long("line")?.toString() ?: "c" + listOf(kind, title, body).joinToString("\u0000").hashCode().toUInt().toString(16)
-        return Notice("note:$key:$line", title, body, kind, at, targetOf(o, key, kind), o.flag("hidden"))
+        val legacy = "note:$key:$line"
+        val id = occurrence?.takeIf { it > 0 }?.let { "note:$key:n$it" }
+        return Notice(id ?: legacy, title, body, kind, at, targetOf(o, key, kind), o.flag("hidden"), legacyId = legacy.takeIf { id != null })
     }
 
     /** The destination: the one the PC states (`target`), else the one a live chat note implies (its card, key or route). */
@@ -165,6 +177,9 @@ interface NoticeStore {
     suspend fun setDismissed(id: String, dismissed: Boolean)
     suspend fun prune(cutoff: Long, keep: Int)
 
+    /** Forgets the notices under these ids (a copy kept under the old id once the PC's own identifier replaced it). */
+    suspend fun remove(ids: Collection<String>)
+
     /** The PC's time of the newest notice `notes.list` handed over, to ask only for newer ones next time. */
     suspend fun since(): Long?
     suspend fun setSince(at: Long)
@@ -188,6 +203,7 @@ class NotesFeed(
     private val entries = MutableStateFlow<Map<String, StoredNotice>>(emptyMap())
     private val pending = MutableStateFlow<List<Notice>>(emptyList())
     private val pendingRead = MutableStateFlow<Set<String>>(emptySet())
+    private val pendingReadKeys = MutableStateFlow<Set<String>>(emptySet())
     private val _rows = MutableStateFlow<List<NoticeRow>>(emptyList())
     val rows: StateFlow<List<NoticeRow>> = _rows.asStateFlow()
 
@@ -215,14 +231,35 @@ class NotesFeed(
         val s = store ?: return
         val saved = runCatching { s.load() }.getOrNull() ?: return
         restored = true
+        var marked = emptyList<String>()
+        var adopted = emptyList<Adoption>()
         entries.update { now ->
-            val both = saved.associateBy { it.notice.id }.toMutableMap()
+            // A read mark made before the list was loaded (a notification button with the app just started) still counts.
+            val readNow = pendingRead.value
+            val keys = pendingReadKeys.value
+            val both = saved.map { s ->
+                if (s.read || (s.notice.id !in readNow && s.notice.sourceKey !in keys)) s else s.copy(read = true)
+            }.associateBy { it.notice.id }.toMutableMap()
+            val unreadBefore = saved.filter { !it.read }.map { it.notice.id }.toSet()
+            marked = both.values.filter { it.read && it.notice.id in unreadBefore }.map { it.notice.id }
+            val handed = ArrayList<Adoption>()
             for ((id, n) in now) {
                 val old = both[id]
-                both[id] = if (old == null) n else n.copy(notice = n.notice.copy(at = maxOf(old.notice.at, n.notice.at)), read = n.read || old.read, dismissed = n.dismissed || old.dismissed)
+                var row = if (old == null) n else n.copy(notice = n.notice.copy(at = maxOf(old.notice.at, n.notice.at)), read = n.read || old.read, dismissed = n.dismissed || old.dismissed)
+                // The copy kept under the old id may be saved next to this one already (written before the list was loaded).
+                val legacy = n.notice.legacyId?.let { both[it] }
+                if (legacy != null && inherits(n.notice, legacy.notice)) {
+                    row = row.copy(notice = row.notice.copy(at = maxOf(row.notice.at, legacy.notice.at)), read = row.read || legacy.read, dismissed = row.dismissed || legacy.dismissed)
+                    handed += Adoption(legacy.notice.id, row)
+                }
+                both[id] = row
             }
+            adopted = handed
+            for (a in handed) both.remove(a.oldId)
             trim(both)
         }
+        if (marked.isNotEmpty()) save { markRead(marked) }
+        saveAdoptions(adopted)
         publish()
     }
 
@@ -232,17 +269,48 @@ class NotesFeed(
     /** Notices from `notes.list`: those the phone already has are not added again. */
     fun merge(list: List<Notice>) {
         if (list.isEmpty()) return
+        var adopted = emptyList<Adoption>()
         entries.update { current ->
             val next = LinkedHashMap(current)
+            val handed = ArrayList<Adoption>()
             for (n in list) {
                 val old = next[n.id]
-                next[n.id] = if (old == null) StoredNotice(n, read = false, dismissed = false) else old.copy(notice = n.copy(at = maxOf(old.notice.at, n.at)))
+                if (old != null) { next[n.id] = old.copy(notice = n.copy(at = maxOf(old.notice.at, n.at))); continue }
+                // The same notice kept before the PC numbered its notices: what the person did with it carries over.
+                val legacy = n.legacyId?.let { current[it] }
+                if (legacy != null && inherits(n, legacy.notice)) {
+                    next[n.id] = StoredNotice(n.copy(at = maxOf(n.at, legacy.notice.at)), legacy.read, legacy.dismissed)
+                    handed += Adoption(legacy.notice.id, next.getValue(n.id))
+                } else next[n.id] = StoredNotice(n, read = false, dismissed = false)
             }
+            adopted = handed
+            for (a in handed) next.remove(a.oldId)
             trim(next)
         }
         save { merge(list) }
+        saveAdoptions(adopted)
         save { prune(nowMs() - keepMs, max) }
         publish()
+    }
+
+    private class Adoption(val oldId: String, val row: StoredNotice)
+
+    /**
+     * An occurrence inherits what was done to the old copy only if the old copy could have been it: one that happened after
+     * the old copy's last time is a new occurrence of the same text (the limit came back) and starts unread.
+     */
+    private fun inherits(n: Notice, old: Notice) = n.at <= old.at + CLOCK_SLACK_MS
+
+    private fun saveAdoptions(list: List<Adoption>) {
+        if (list.isEmpty()) return
+        save {
+            for (a in list) {
+                merge(listOf(a.row.notice))
+                if (a.row.read) markRead(listOf(a.row.notice.id))
+                if (a.row.dismissed) setDismissed(a.row.notice.id, true)
+            }
+            remove(list.map { it.oldId })
+        }
     }
 
     /** Replaces the permission requests that wait on the PC; one that was answered there disappears. */
@@ -259,6 +327,22 @@ class NotesFeed(
         pendingRead.update { it + all }
         entries.update { cur -> cur.mapValues { (id, e) -> if (id in all) e.copy(read = true) else e } }
         save { markRead(ids) }
+        publish()
+    }
+
+    /** Marks read every notice of one chat (the `key` of the PC's note): what a notification button that covers a chat does. */
+    fun markReadKey(key: String) {
+        pendingReadKeys.update { it + key }
+        val ids = entries.value.values.filter { it.notice.sourceKey == key }.map { it.notice.id }
+        if (ids.isNotEmpty()) markRead(ids)
+    }
+
+    /** The chat is gone from the PC: its notices leave the list (hidden, so the PC's copy does not bring them back). */
+    fun dismissChat(kind: String, id: String) {
+        val hit = entries.value.values.filter { !it.dismissed && it.notice.target == NoticeTarget.Chat(kind, id) }.map { it.notice.id }.toSet()
+        if (hit.isEmpty()) return
+        entries.update { cur -> cur.mapValues { (k, e) -> if (k in hit) e.copy(dismissed = true) else e } }
+        for (h in hit) save { setDismissed(h, true) }
         publish()
     }
 
@@ -287,6 +371,7 @@ class NotesFeed(
         entries.value = emptyMap()
         pending.value = emptyList()
         pendingRead.value = emptySet()
+        pendingReadKeys.value = emptySet()
         publish()
     }
 
@@ -301,5 +386,8 @@ class NotesFeed(
         /** What the PC keeps for the phones. */
         const val MAX = 100
         const val KEEP_MS = 7L * 24 * 60 * 60 * 1000
+
+        /** The PC's clock and the phone's differ a little; a notice this close to the old copy's time was already folded into it. */
+        const val CLOCK_SLACK_MS = 2L * 60 * 1000
     }
 }
