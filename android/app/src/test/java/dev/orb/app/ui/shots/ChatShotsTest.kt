@@ -176,7 +176,7 @@ class ChatShotsTest {
     )
     private val task43 = TaskDetail(
         43, "Borrar build/ y reinstalar dependencias", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h43", folderNow = "C:/app-movil",
-        actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias con npm ci.",
+        folderMoved = false, actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias con npm ci.",
     )
     private val task45 = TaskDetail(
         45, "Limpiar la carpeta de pruebas", "blocked", "codex", "C:/app-movil", emptyList(), null, held = true,

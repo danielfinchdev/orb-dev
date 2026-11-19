@@ -538,17 +538,27 @@ class OrbeChatViewModel(
     }
 
     /** Shows what one read of the task said, unless a later read (or a decision) was asked after it. */
-    private suspend fun applyRead(task: Long, read: Long, d: TaskDetail) {
-        if (!isLatest(task, read)) return
+    private suspend fun applyRead(task: Long, read: Long, d: TaskDetail): TaskDetail {
+        // The counts are only worth asking for while there are changes to look at. They are asked before the card is drawn: a task
+        // that ran again may still have the earlier run's diff on the PC, and a card that offered «Aceptar» or «Deshacer» for a
+        // moment on it would let the person decide on work nobody has seen.
+        val statRead = if (TaskAction.SeeChanges in d.actions) backend.taskStat(task) else null
+        val st = statRead?.getOrNull()
+        val settled = if (st == null || st.isOfRun(d.checkpointId)) d else d.copy(actions = d.actions - TaskAction.AcceptHeld - TaskAction.UndoHeld)
+        // A newer read of the task may have been asked while the counts were on their way.
+        if (!isLatest(task, read)) return settled
         d.status?.let { s -> taskStatus.update { it + (task to s) } }
-        taskInfo.update { it + (task to d) }
-        // The counts are only worth asking for while there are changes to look at.
-        if (TaskAction.SeeChanges in d.actions) {
-            backend.taskStat(task).onSuccess { st ->
-                // The counts come from a second request: a newer read of the task may have been asked while it was on its way.
-                if (isLatest(task, read)) taskStat.update { m -> if (st != null) m + (task to st) else m - task }
+        taskInfo.update { it + (task to settled) }
+        taskStat.update { m ->
+            when {
+                statRead == null -> m - task
+                // A failed read keeps what was known.
+                statRead.isFailure -> m
+                st != null && !st.notReady -> m + (task to st)
+                else -> m - task
             }
-        } else taskStat.update { it - task }
+        }
+        return settled
     }
 
     /**
@@ -673,8 +683,9 @@ class OrbeChatViewModel(
             val read = issueRead(task)
             backend.taskDetail(task).fold(
                 onSuccess = { fresh ->
-                    applyRead(task, read, fresh)
-                    if (fresh.status != "done" || fresh.held || TaskAction.AcceptHeld !in fresh.actions) _messages.trySend(ChatTexts.ACCEPT_UNAVAILABLE)
+                    val shown = applyRead(task, read, fresh)
+                    // «Aceptar» only if the diff on the PC is of this run too (`shown` has it taken away if not).
+                    if (fresh.status != "done" || fresh.held || TaskAction.AcceptHeld !in shown.actions) _messages.trySend(ChatTexts.ACCEPT_UNAVAILABLE)
                     else if (fresh.checkpointId != painted) _messages.trySend(ChatTexts.ACCEPT_CHANGED)
                     else backend.acceptTask(task, unheld = true, checkpoint = painted).fold(
                         onSuccess = { _messages.trySend(ChatTexts.TASK_ACCEPTED); refreshTask(task) },
@@ -708,8 +719,8 @@ class OrbeChatViewModel(
             val read = issueRead(ask.task)
             backend.taskDetail(ask.task).fold(
                 onSuccess = { fresh ->
-                    applyRead(ask.task, read, fresh)
-                    if (TaskAction.UndoHeld !in fresh.actions) _messages.trySend(ChatTexts.UNDO_UNAVAILABLE)
+                    val shown = applyRead(ask.task, read, fresh)
+                    if (TaskAction.UndoHeld !in shown.actions) _messages.trySend(ChatTexts.UNDO_UNAVAILABLE)
                     // The point of return is the one the dialog was opened on: the PC refuses if the task ran again since.
                     else backend.undoTask(ask.task, ask.checkpoint).fold(
                         onSuccess = { _undone.trySend(ask.task); refreshTask(ask.task) },

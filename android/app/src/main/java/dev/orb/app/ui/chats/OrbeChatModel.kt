@@ -82,9 +82,19 @@ data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reaso
 @Immutable
 data class OrbeQueued(val id: String, val text: String, val at: Long)
 
-/** What a finished task changed, counts only (`tasks.diff {stat:true}`). The line counts are null when the PC cut the list. */
+/**
+ * What a finished task changed, counts only (`tasks.diff {stat:true}`). The line counts are null when the PC cut the list.
+ * [checkpointId] is the run those counts belong to ([runKnown]: the PC said so at all) and [notReady] that the PC has no diff
+ * of the last run yet.
+ */
 @Immutable
-data class TaskStat(val files: Int, val added: Int?, val removed: Int?)
+data class TaskStat(
+    val files: Int, val added: Int?, val removed: Int?,
+    val checkpointId: String? = null, val runKnown: Boolean = false, val notReady: Boolean = false,
+) {
+    /** Whether the counts are of the run [taskRun] the task is at now; a PC that does not name the run cannot disagree. */
+    fun isOfRun(taskRun: String?): Boolean = !notReady && (!runKnown || (checkpointId != null && taskRun != null && checkpointId == taskRun))
+}
 
 /** A task that is running now (`tasks.live`): what it is doing, said by the PC. */
 @Immutable
@@ -254,10 +264,12 @@ object OrbeParser {
      */
     fun taskStat(el: kotlinx.serialization.json.JsonElement?): TaskStat? {
         val d = dev.orb.app.ui.tasks.TasksParser.diff(el ?: return null)
-        if (!d.available || d.files.any { it.patch.isNotEmpty() }) return null
+        // The PC has no diff of the last run yet: no counts, but the card must not offer a decision on it.
+        if (!d.available) return if (d.reason == "notdone") TaskStat(0, null, null, notReady = true) else null
+        if (d.files.any { it.patch.isNotEmpty() }) return null
         val n = d.files.size + d.more
         if (n == 0) return null
-        return TaskStat(n, d.added.takeIf { d.more == 0 }, d.removed.takeIf { d.more == 0 })
+        return TaskStat(n, d.added.takeIf { d.more == 0 }, d.removed.takeIf { d.more == 0 }, checkpointId = d.checkpointId, runKnown = d.runKnown)
     }
 
     /** `chat.queue` / `chat.editQueued` → the queue in the PC's order; an entry without an id is dropped. */
