@@ -206,4 +206,7 @@ test('git config of a remote transport (url, uploadpack, receivepack) asks; ordi
 test('git config of a push redirect or a proxy asks; an ordinary identity does not', () => {
   for (const c of ['git config url.ssh://x/.pushInsteadOf https://github.com/', 'git config http.proxy http://x', 'git config http.sslVerify false', 'git config http.https://a.b/.extraHeader x', 'git config push.recurseSubmodules on-demand']) assert.ok(riskOf(c), c);
   assert.equal(riskOf('git config user.email a@b'), null);
+  // reading is free, however the read is spelt; a read flag hidden inside a value does not excuse a write
+  for (const c of ['git config --get remote.origin.url', 'git config remote.origin.url', 'git config --local --get remote.origin.url', 'git config --get core.sshCommand', 'git config --list', 'git config get remote.origin.url']) assert.equal(riskOf(c), null, c);
+  for (const c of ['git config remote.origin.url ext::sh', 'git -C repo config remote.origin.url "/tmp/x"', 'git config set remote.origin.url /tmp/x', 'git config --comment "a --get" core.sshCommand evil', 'git config -l; git config core.fsmonitor ./x']) assert.ok(riskOf(c), c);
 });
