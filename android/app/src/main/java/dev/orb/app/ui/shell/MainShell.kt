@@ -194,7 +194,10 @@ fun MainShell(
             composable<ProjectsTab> {
                 if (projects == null) Message(ChatTexts.SOON_PROJECTS, ChatTexts.SOON_HINT) else {
                     val vm = viewModel<ProjectsViewModel>(factory = viewModelFactory { initializer { ProjectsViewModel(projects) } })
-                    ProjectsScreen(vm, onOpenProject = actions.onOpenProject)
+                    ProjectsScreen(
+                        vm, onOpenProject = actions.onOpenProject,
+                        menu = ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                    )
                 }
             }
         }

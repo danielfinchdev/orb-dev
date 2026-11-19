@@ -45,15 +45,40 @@ class ProjectsViewModelTest {
     )
     private val done = listOf(FinishedProject("k1", "viejo", "web", "2026-10-01T10:00:00Z"))
 
-    @Test fun parserReadsTheListIconsAndFinished() {
+    @Test fun parserReadsTheListApprovalsAndFinished() {
         val l = Json.parseToJsonElement("""[{"name":"a","category":"web","active":true,"open":3,"path":"C:/a"},{"x":1}]""")
-        val icons = Json.parseToJsonElement("""{"a":"data:image/png;base64,AAAA","b":"nope"}""") as JsonObject
-        val items = ProjectsParser.list(l, icons)
+        val items = ProjectsParser.list(l, mapOf("a" to 2))
         assertEquals(1, items.size)
-        assertEquals(ProjectItem("a", "web", true, 3, "data:image/png;base64,AAAA"), items[0])
-        assertNull(ProjectsParser.list(l, null)[0].icon)
+        assertEquals(ProjectItem("a", "web", true, 3, approve = 2), items[0])
+        assertEquals(0, ProjectsParser.list(l)[0].approve)
         val f = ProjectsParser.finished(Json.parseToJsonElement("""[{"key":"k","name":"n","category":null,"at":"2026-01-01"}]"""))
         assertEquals(listOf(FinishedProject("k", "n", null, "2026-01-01")), f)
+    }
+
+    @Test fun parserTakesGitOnlyFromRowsThatCameWithChanges() {
+        val l = Json.parseToJsonElement(
+            """[{"name":"a","branch":"dev","changes":2},{"name":"b","branch":null,"changes":0},{"name":"c"},{"name":"d","branch":"main"}]""",
+        )
+        assertEquals(mapOf("a" to ProjectGit("dev", 2, null, null), "b" to ProjectGit(null, 0, null, null)), ProjectsParser.git(l))
+    }
+
+    @Test fun gitLineSaysBranchAndChangesAndStaysOutWithoutData() {
+        assertEquals("dev · 2 cambios", ProjectTexts.gitLine(ProjectGit("dev", 2, null, null)))
+        assertEquals("main · al día", ProjectTexts.gitLine(ProjectGit("main", 0, null, null)))
+        assertEquals("main · 1 cambio", ProjectTexts.gitLine(ProjectGit("main", 1, null, null)))
+        assertEquals("HEAD suelto · 3 cambios", ProjectTexts.gitLine(ProjectGit(null, 3, null, null)))
+        assertNull(ProjectTexts.gitLine(null))
+        assertNull(ProjectTexts.gitLine(ProjectGit("main", null, null, null)))
+    }
+
+    @Test fun approvalsCountTheTasksWaitingForAnOkPerProject() {
+        val rows = listOf(
+            dev.orb.app.ui.tasks.task(1, status = "awaiting_approval", project = "App-Movil"),
+            dev.orb.app.ui.tasks.task(2, status = "awaiting_approval", project = "app-movil"),
+            dev.orb.app.ui.tasks.task(3, status = "running", project = "app-movil"),
+            dev.orb.app.ui.tasks.task(4, status = "awaiting_approval", project = null),
+        )
+        assertEquals(mapOf("app-movil" to 2), ProjectsParser.approvals(rows))
     }
 
     @Test fun savedProjectsShowWhileThePcIsUnreachableAndTheFreshAnswerWins() = runTest(dispatcher) {
@@ -83,6 +108,49 @@ class ProjectsViewModelTest {
         assertEquals(3, s.projects.size)
         assertEquals(listOf("android", "web"), s.categories)
         assertEquals(1, s.finished.size)
+    }
+
+    @Test fun theGitLineCompletesTheCardsWhenItArrivesAndNeverHoldsTheListBack() = runTest(dispatcher) {
+        val b = FakeProjectsBackend(list, done)
+        b.gitGate = CompletableDeferred()
+        b.gitResult = Result.success(mapOf("app-movil" to ProjectGit("dev", 2, null, null), "api-pagos" to ProjectGit("main", 0, null, null)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.loaded)
+        assertEquals(3, vm.state.value.projects.size)
+        assertTrue(vm.state.value.projects.all { it.git == null })
+        b.gitGate!!.complete(Unit)
+        advanceUntilIdle()
+        val byName = vm.state.value.projects.associateBy { it.name }
+        assertEquals("dev", byName["app-movil"]?.git?.branch)
+        assertEquals(0, byName["api-pagos"]?.git?.changes)
+        assertNull(byName["tienda-online"]?.git)
+    }
+
+    @Test fun anOlderPcIsNeverAskedForGit() = runTest(dispatcher) {
+        val b = FakeProjectsBackend(list, done).also { it.gitReadable = false }
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(0, b.gitCount)
+        assertTrue(vm.state.value.projects.all { it.git == null })
+    }
+
+    @Test fun aFailedGitReadLeavesTheCardsWithoutALine() = runTest(dispatcher) {
+        val b = FakeProjectsBackend(list, done).also { it.gitResult = Result.failure(LinkException(LinkError.Timeout)) }
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(1, b.gitCount)
+        assertEquals(3, vm.state.value.projects.size)
+        assertTrue(vm.state.value.projects.all { it.git == null })
+        assertFalse(vm.state.value.loadFailed)
+    }
+
+    @Test fun newProjectOffersTheMockupsCategoriesAndTheFreeOnesOfThePc() = runTest(dispatcher) {
+        val b = FakeProjectsBackend(list + project("raro", "rust"), listOf(FinishedProject("k", "viejo", "godot", null)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(listOf("web", "android", "windows", "linux", "ios", "multi", "rust", "godot"), vm.state.value.newCategories)
+        assertEquals(listOf("web", "android", "windows", "linux", "ios", "multi"), vm(FakeProjectsBackend()).state.value.newCategories)
     }
 
     @Test fun aCategoryFilterNarrowsTheGridAndFallsBackWhenEmpty() = runTest(dispatcher) {
