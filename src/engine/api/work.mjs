@@ -194,11 +194,15 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     // unheld: true (the phone, which may hold stale data) refuses a task the guard holds or that is no longer awaiting
     // acceptance, so a re-run that Orb held meanwhile is never accepted blind. Without it the PC's window accepts after showing the diff.
     // checkpoint (optional): the checkpointId the phone saw; if the task ran again since, nothing is accepted.
-    'tasks.accept': ({ id, unheld, checkpoint }) => {
+    // Only an explicit desktop principal may accept without the guards: the web UI of a linked browser and a stolen phone
+    // session send none, so for them a held task is refused whatever the client sent, as «tasks.undo» does.
+    'tasks.accept': ({ id, unheld, checkpoint }, principal) => {
       const tid = int(id, 'tarea');
+      const remote = principal?.channel !== 'desktop';
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.accept.rerunSinceSeen'));
-      if (checkpoint != null && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
+      if ((checkpoint != null || remote) && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
       if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
+      if (remote && checkpoint == null && board.heldInfo(board.task(tid))) fail(tr('msg.accept.held'));
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
         if (board.heldInfo(t)) fail(tr('msg.accept.held'));

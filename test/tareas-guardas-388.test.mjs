@@ -7,7 +7,7 @@ import path from 'node:path';
 import { tempHome } from './helpers.mjs';
 import { Board } from '../src/domain/tasks/board.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
-import { DESKTOP } from '../src/domain/security/permissions.mjs';
+import { DESKTOP, principalOf } from '../src/domain/security/permissions.mjs';
 import { shapeResult } from '../src/engine/transport/remote-calls.mjs';
 
 const home = tempHome();
@@ -47,6 +47,21 @@ test('tasks.accept without the parameter keeps accepting a held task', async () 
   const { board, call, task } = setup(); hold(board, task.id);
   await call('tasks.accept', { id: task.id });
   assert.equal(board.task(task.id).status, 'done'); assert.equal(board.isAccepted(task.id), true);
+});
+
+const PHONE = principalOf({ device: { kind: 'phone', id: 'p1' } });
+test('tasks.accept from a linked device without the guards refuses a held task and leaves it held', async () => {
+  const { board, api, task } = setup(); hold(board, task.id);
+  await assert.rejects(api.call('tasks.accept', { id: task.id }, PHONE), /retenida por la guardia/);
+  assert.equal(board.task(task.id).status, 'blocked'); assert.equal(board.isAccepted(task.id), false);
+});
+test('tasks.accept from a linked device accepts a normal task; the PC window still accepts a held one', async () => {
+  const { board, api, task } = setup(); board.patch(task.id, { status: 'done' }, 'orb', 'task.done');
+  await api.call('tasks.accept', { id: task.id }, PHONE);
+  assert.equal(board.isAccepted(task.id), true);
+  const held = setup(); hold(held.board, held.task.id);
+  await held.call('tasks.accept', { id: held.task.id });
+  assert.equal(held.board.isAccepted(held.task.id), true);
 });
 
 test('folderMoved and folderOutside in the four cases', async () => {
