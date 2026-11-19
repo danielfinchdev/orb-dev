@@ -197,3 +197,8 @@ test('lo protegido (de serie, los gestores de contraseñas) no se toca nunca, ni
     assert.equal(decide({ permission: 'total', tool: 'Bash', command: 'docker exec vaultwarden ls' }).decision, 'allow', 'ya no está en la lista');
   } finally { ctx.config = before; }
 });
+
+test('git config of a remote transport (url, uploadpack, receivepack) asks; ordinary git config and reading remotes do not', () => {
+  for (const c of ['git config remote.origin.uploadpack "x"', 'git config remote.origin.url ext::sh', 'git config --local remote.origin.receivepack x', 'git config remote.origin.pushurl y']) assert.ok(riskOf(c), c);
+  for (const c of ['git config user.name x', 'git remote -v', 'git config --get remote.origin.fetch']) assert.equal(riskOf(c), null, c);
+});

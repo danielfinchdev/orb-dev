@@ -389,10 +389,17 @@ const checkUnpushed = async (dir, branch) => {
   if (found.length) throw new Error(tr('msg.github.secretBeforePush', { files: found.slice(0, 5).join(', ') }));
 };
 
+// Network git must not run a command taken from the repository's own config (an agent may have written
+// remote.<name>.uploadpack / receivepack or an ext:: URL): the command-line option beats the config, and ext:: is refused.
+const NO_EXT = ['-c', 'protocol.ext.allow=never'];
+const PACK = { fetch: '--upload-pack=git-upload-pack', 'ls-remote': '--upload-pack=git-upload-pack', pull: '--upload-pack=git-upload-pack', clone: '--upload-pack=git-upload-pack', push: '--receive-pack=git-receive-pack' };
+// args: the git subcommand, then its own arguments; returns the full list with the safe options in place.
+export const safeNetArgs = (sub, ...rest) => [...NO_EXT, sub, PACK[sub], ...rest].filter(Boolean);
+
 export async function push(project, branch) {
   branchName(branch);
   await checkUnpushed(project.path, branch);
-  must(await run('git', ['-C', project.path, 'push', '-u', 'origin', branch], { timeoutMs: 180_000 }), tr('msg.github.pushFailed'));
+  must(await run('git', ['-C', project.path, ...safeNetArgs('push', '-u', 'origin', branch)], { timeoutMs: 180_000 }), tr('msg.github.pushFailed'));
   return { ok: true };
 }
 
@@ -415,10 +422,10 @@ async function syncState(project) {
   // Only this branch's remote-tracking ref is refreshed: no tags, no submodules and no external transport helpers, whatever
   // the repository's own config (an agent may have written it) says.
   // A refspec of a branch the remote lacks makes fetch fail: ask first (exit code 2 = no such branch there).
-  const probe = await netGit(dir, '-c', 'protocol.ext.allow=never', 'ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`);
+  const probe = await netGit(dir, ...safeNetArgs('ls-remote', '--exit-code', '--heads', 'origin', `refs/heads/${branch}`));
   if (probe.status === 2) return { ...base, state: 'noRemoteBranch' };
   if (probe.status !== 0) throw new Error(tr('msg.github.syncFetchFailed', { detail: oneLine(probe.stderr, 300) }));
-  const fetched = await netGit(dir, '-c', 'protocol.ext.allow=never', 'fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`);
+  const fetched = await netGit(dir, ...safeNetArgs('fetch', '--no-tags', '--no-recurse-submodules', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`));
   if (fetched.status !== 0) throw new Error(tr('msg.github.syncFetchFailed', { detail: oneLine(fetched.stderr, 300) }));
   const ref = `refs/remotes/origin/${branch}`;
   const counts = (await git(dir, 'rev-list', '--left-right', '--count', `HEAD...${ref}`)).stdout.trim().split(/\s+/).map(Number);
@@ -477,7 +484,7 @@ export async function clone(repo, name, category) {
   if (fs.existsSync(folder)) throw new Error(tr('msg.github.folderExists', { folder }));
   const exe = ghExe();
   const r = exe ? await run(exe, ['repo', 'clone', String(repo).trim(), folder], { timeoutMs: 600_000 })
-    : await run('git', ['clone', '--', /^https:/.test(repo) ? repo : `https://github.com/${repo}.git`, folder], { timeoutMs: 600_000 });
+    : await run('git', [...safeNetArgs('clone', '--', /^https:/.test(repo) ? repo : `https://github.com/${repo}.git`, folder)], { timeoutMs: 600_000 });
   // the usual case (a wrong name or a private repository of someone else) in the user's words, not gh's.
   if (!r.ok && /could not resolve to a repository|repository not found|not found|HTTP 404|does not exist/i.test(`${r.err} ${r.out}`)) {
     fs.rmSync(folder, { recursive: true, force: true });

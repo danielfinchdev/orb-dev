@@ -18,7 +18,7 @@ const RISKY = [
   // a push under another name (git -c alias.p=push p, git config alias.up push).
   [/\balias\.[\w.-]+\s*[= ]\s*["']?!?\s*(?:git\s+)?(push|send-pack)\b/i, 'msg.guard.push'],
   // git settings that make git run a program (Orb's own snapshots run git in the project): they ask.
-  [new RegExp(`${GIT}config\\b[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.insteadOf|include(?:If\\.\\S+)?\\.path|diff\\.external|gpg\\.(?:[\\w-]+\\.)?program)\\b`, 'i'), 'msg.guard.gitRuns'],
+  [new RegExp(`${GIT}config\\b[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.insteadOf|include(?:If\\.\\S+)?\\.path|diff\\.external|gpg\\.(?:[\\w-]+\\.)?program|remote\\.[^\\s]*\\.(?:url|pushurl|uploadpack|receivepack|vcs|proxy))\\b`, 'i'), 'msg.guard.gitRuns'],
   [/\bgh(\.exe)?\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
   [/\b(npm|pnpm|yarn)(\.cmd)?\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
   // images, packages and sites published by their own tools.
