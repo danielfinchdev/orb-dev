@@ -57,6 +57,7 @@ object PcOffTexts {
     const val OTHER_PC = "Vincular con otro PC"
     const val OTHER_PC_TITLE = "¿Vincular con otro PC?"
     const val OTHER_PC_CONFIRM = "Vincular"
+    const val UNLINKING = "Desvinculando…"
     const val BACK_TO_PC = "Volver a «No llego a tu PC»"
 
     fun body(pc: String?) = "${pc?.takeIf { it.isNotBlank() } ?: "Tu PC"} está apagado o fuera de tu red."
@@ -88,7 +89,7 @@ class PcOffActions(
 
 /** The 06 page as a pure function of what it shows. */
 @Composable
-fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, confirmingOther: Boolean, actions: PcOffActions, modifier: Modifier = Modifier) {
+fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, confirmingOther: Boolean, actions: PcOffActions, modifier: Modifier = Modifier, unlinking: Boolean = false) {
     Column(modifier.fillMaxSize()) {
         OrbTopBar("Orb", center = { OrbWordmark() })
         Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
@@ -134,7 +135,7 @@ fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, con
     }
     if (confirmingOther) {
         OrbDialog(
-            actions.dismissDialog, PcOffTexts.OTHER_PC_TITLE, OrbDialogAction(PcOffTexts.OTHER_PC_CONFIRM, actions.confirmOther),
+            actions.dismissDialog, PcOffTexts.OTHER_PC_TITLE, OrbDialogAction(if (unlinking) PcOffTexts.UNLINKING else PcOffTexts.OTHER_PC_CONFIRM, actions.confirmOther, enabled = !unlinking),
             text = PcOffTexts.otherPcBody(pcName), dismiss = OrbDialogAction(ThisPhoneTexts.CANCEL, actions.dismissDialog),
         )
     }
@@ -145,7 +146,7 @@ fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, con
  * [onSeeSaved] enters the read-only app; [onLinkOther] runs after the dialog said everything that is erased.
  */
 @Composable
-fun PcOffScreen(info: OfflineInfo, onSeeSaved: () -> Unit, onLinkOther: () -> Unit, modifier: Modifier = Modifier) {
+fun PcOffScreen(info: OfflineInfo, onSeeSaved: () -> Unit, onLinkOther: () -> Unit, modifier: Modifier = Modifier, unlinking: Boolean = false) {
     val connection by info.connection.collectAsStateWithLifecycle()
     val lastContact by info.lastContact.collectAsStateWithLifecycle()
     val now by produceState(info.clock(), info) { while (true) { value = info.clock(); delay(1_000) } }
@@ -169,6 +170,7 @@ fun PcOffScreen(info: OfflineInfo, onSeeSaved: () -> Unit, onLinkOther: () -> Un
             confirmOther = { confirming = false; onLinkOther() },
         ),
         modifier,
+        unlinking = unlinking,
     )
 }
 

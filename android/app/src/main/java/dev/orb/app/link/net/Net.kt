@@ -66,6 +66,11 @@ class LinkException(val error: LinkError) : Exception(error.toString())
 /** The two protocols and the Orb's version the PC reported in `me`. */
 data class PcVersions(val v: Int?, val min: Int?, val version: String?)
 
+private val PC_VERSION = Regex("^\\d+(\\.\\d+){0,3}([-+][0-9A-Za-z.]{1,16})?$")
+
+/** The PC's own version text only when it looks like one: it is shown to the person, so nothing else is let through. */
+fun pcVersionOrNull(raw: String?): String? = raw?.takeIf { it.length <= 32 && PC_VERSION.matches(it) }
+
 sealed class ConnectionState {
     data object Connecting : ConnectionState()
     data class Online(val base: String, val pcName: String?, val versions: PcVersions) : ConnectionState()

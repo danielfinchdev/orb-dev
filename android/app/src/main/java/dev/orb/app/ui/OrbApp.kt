@@ -31,6 +31,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavDestination.Companion.hasRoute
+import dev.orb.app.link.net.ConnectionState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.orb.app.AppContainer
@@ -176,6 +178,13 @@ fun OrbApp(container: AppContainer) {
 private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHostController, content: @Composable () -> Unit) {
     val gate = container.pcDown
     val down by gate.state.collectAsStateWithLifecycle()
+    // Back to the welcome page from the state itself (no link left), so a rotation while unlinking cannot lose the way.
+    val connection by container.offline.connection.collectAsStateWithLifecycle()
+    LaunchedEffect(connection is ConnectionState.Unlinked) {
+        if (connection is ConnectionState.Unlinked && nav.currentDestination?.hasRoute<Welcome>() != true) {
+            nav.navigate(Welcome) { popUpTo(0) { inclusive = true } }
+        }
+    }
     // Registered before the navigation host, so a deeper screen's own back step wins and this one only fires on the list.
     androidx.activity.compose.BackHandler(enabled = down.saved) { gate.closeSaved() }
     Column(Modifier.fillMaxSize()) {
@@ -191,13 +200,9 @@ private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHost
                     when (full) {
                         dev.orb.app.ui.offline.DownKind.PcOff -> dev.orb.app.ui.offline.PcOffScreen(
                             container.offline, onSeeSaved = gate::openSaved,
-                            onLinkOther = {
-                                // Not tied to this screen: it leaves the composition as soon as the link is gone.
-                                container.scope.launch {
-                                    container.unlink()
-                                    withContext(Dispatchers.Main) { nav.navigate(Welcome) { popUpTo(0) { inclusive = true } } }
-                                }
-                            },
+                            // Runs on the container's scope: the screen leaves the composition as soon as the link is gone.
+                            onLinkOther = { gate.unlink(container.scope) { container.unlink() } },
+                            unlinking = down.unlinking,
                         )
                         dev.orb.app.ui.offline.DownKind.UpdateApp, dev.orb.app.ui.offline.DownKind.UpdatePc ->
                             dev.orb.app.ui.update.UpdateScreen(container.offline, seeSaved = gate::openSaved)

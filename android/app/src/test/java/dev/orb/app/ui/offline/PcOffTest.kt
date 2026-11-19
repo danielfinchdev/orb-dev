@@ -80,17 +80,46 @@ class PcDownGateTest {
         assertEquals(PcDownState(), g.state.value)
     }
 
-    @Test fun anOldOfflineStateIsNotNewsWhenTheAppComesBack() {
+    @Test fun comingBackWhileStillOfflineKeepsTheCover() {
         val g = PcDownGate()
         g.onConnection(online)
         val old = ConnectionState.Offline(10_000, 5_000)
         g.onConnection(old)
         g.reopened(old)
-        g.onConnection(old)
-        assertEquals(PcDownState(), g.state.value)
-        g.onConnection(ConnectionState.Connecting)
-        g.onConnection(ConnectionState.Offline(99_000, 5_000))
         assertEquals(DownKind.PcOff, g.state.value.full)
+        g.onConnection(old)
+        assertEquals(DownKind.PcOff, g.state.value.full)
+    }
+
+    @Test fun comingBackWhileStillOfflineFromTheSavedChatsReturnsToTheCover() {
+        val g = PcDownGate()
+        g.onConnection(ConnectionState.Offline(10_000, 5_000))
+        g.openSaved()
+        assertTrue(g.state.value.saved)
+        g.reopened(ConnectionState.Offline(10_000, 5_000))
+        assertEquals(PcDownState(full = DownKind.PcOff), g.state.value)
+    }
+
+    @Test fun comingBackOnALiveLinkWhileViewingSavedChatsClearsEverything() {
+        val g = PcDownGate()
+        g.onConnection(ConnectionState.Offline(10_000, 5_000))
+        g.openSaved()
+        g.reopened(online)
+        assertEquals(PcDownState(), g.state.value)
+    }
+
+    @Test fun twoTapsOnUnlinkingDropTheLinkOnce() {
+        val g = PcDownGate()
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Unconfined)
+        val hold = kotlinx.coroutines.CompletableDeferred<Unit>()
+        var calls = 0
+        g.unlink(scope) { calls++; hold.await() }
+        assertTrue(g.state.value.unlinking)
+        g.unlink(scope) { calls++ }
+        assertEquals(1, calls)
+        hold.complete(Unit)
+        g.onConnection(ConnectionState.Unlinked)
+        assertEquals(PcDownState(), g.state.value)
     }
 
     @Test fun aNewAttemptAfterReopeningIsNewsEvenWithoutSeeingConnecting() {
