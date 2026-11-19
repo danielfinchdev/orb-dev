@@ -46,6 +46,41 @@ object OfflineTexts {
 
     fun lastConnection(at: Long?, now: Long) = if (at == null) NEVER else "Última conexión ${ago(at, now)}"
 
+    /**
+     * The moment as a person reads a clock: «hoy, 19:52», «ayer, 19:52», «12 nov, 19:52» (with the year when it is not this
+     * one). Plain java.util on purpose: the app supports Android 7, where java.time is not there.
+     */
+    fun absolute(at: Long, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()): String {
+        val then = java.util.GregorianCalendar(tz).apply { timeInMillis = at }
+        val today = java.util.GregorianCalendar(tz).apply { timeInMillis = now }
+        val clock = "${then.get(java.util.Calendar.HOUR_OF_DAY).toString().padStart(2, '0')}:${then.get(java.util.Calendar.MINUTE).toString().padStart(2, '0')}"
+        val days = dayNumber(today) - dayNumber(then)
+        return when {
+            days == 0L -> "hoy, $clock"
+            days == 1L -> "ayer, $clock"
+            else -> {
+                val year = then.get(java.util.Calendar.YEAR)
+                val date = "${then.get(java.util.Calendar.DAY_OF_MONTH)} ${MONTHS[then.get(java.util.Calendar.MONTH)]}"
+                (if (year == today.get(java.util.Calendar.YEAR)) date else "$date $year") + ", $clock"
+            }
+        }
+    }
+
+    private val MONTHS = arrayOf("ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic")
+
+    private fun dayNumber(c: java.util.Calendar): Long =
+        java.util.GregorianCalendar(java.util.TimeZone.getTimeZone("UTC")).apply {
+            clear(); set(c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH))
+        }.timeInMillis / 86_400_000L
+
+    /** «Última conexión: hoy, 19:52.»; with no record, that the app never reached this PC. */
+    fun lastConnectionAbsolute(at: Long?, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()) =
+        if (at == null) "$NEVER." else "Última conexión: ${absolute(at, now, tz)}."
+
+    /** The note of the read-only app. */
+    fun readOnlyBanner(at: Long?, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()) =
+        "Sin conexión · solo lectura. " + if (at == null) "$SAVED_UNKNOWN." else "Última conexión ${absolute(at, now, tz)}."
+
     fun savedNote(at: Long?, now: Long) = if (at == null) SAVED_UNKNOWN else "Datos guardados de ${ago(at, now)}"
 
     /** Counts down to the next attempt; a retry already due reads «Reintentando…». */

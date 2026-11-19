@@ -156,7 +156,13 @@ class AppContainer(private val app: Application) {
             .stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting),
         lastContact = lastContact.at,
         retryNow = { _runtime.value?.client?.resume() },
+        pcName = { _runtime.value?.client?.let { it.pcInfo.value?.name ?: it.currentSession.name } },
     )
+
+    /** When the app takes the whole screen to say the PC is out of reach or the app is out of date. */
+    val pcDown = dev.orb.app.ui.offline.PcDownGate().also { gate ->
+        scope.launch { offline.connection.collect(gate::onConnection) }
+    }
 
     /** Content another app shared, kept until the person chooses where it goes (or drops it). */
     val pendingShare = MutableStateFlow<dev.orb.app.share.ShareRequest?>(null)
@@ -323,6 +329,7 @@ class AppContainer(private val app: Application) {
 
     fun onForeground() = synchronized(runtimeLock) {
         foreground = true
+        pcDown.reopened(offline.connection.value)
         lock.gate.onForeground()
         _runtime.value?.client?.resume()
         // The app lists the notices itself now.

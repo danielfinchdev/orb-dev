@@ -27,6 +27,8 @@ class OfflineInfo(
     val lastContact: StateFlow<Long?>,
     val retryNow: () -> Unit,
     val clock: () -> Long = System::currentTimeMillis,
+    /** The linked PC's name, for the screens that talk about it; null when it is not known. */
+    val pcName: () -> String? = { null },
 )
 
 val LocalOffline = compositionLocalOf<OfflineInfo?> { null }

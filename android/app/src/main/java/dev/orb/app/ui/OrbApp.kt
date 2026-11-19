@@ -6,6 +6,14 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -143,10 +151,51 @@ fun OrbApp(container: AppContainer) {
                 val nav = rememberNavController()
                 androidx.compose.runtime.CompositionLocalProvider(dev.orb.app.ui.offline.LocalOffline provides container.offline) {
                     LockGate(container.lock, Modifier.systemBarsPadding()) {
-                        Box(Modifier.fillMaxSize()) {
-                            OrbNav(container, start, nav)
-                            ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                        PcDownHost(container, nav) {
+                            Box(Modifier.fillMaxSize()) {
+                                OrbNav(container, start, nav)
+                                ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                            }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Puts «No llego a tu PC» over the app when it opens without a link, and the read-only bar over it when the person chose to look
+ * at what the phone holds. The app stays composed underneath (navigation keeps working) but hidden from touch and screen readers.
+ */
+@Composable
+private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHostController, content: @Composable () -> Unit) {
+    val gate = container.pcDown
+    val down by gate.state.collectAsStateWithLifecycle()
+    // Registered before the navigation host, so a deeper screen's own back step wins and this one only fires on the list.
+    androidx.activity.compose.BackHandler(enabled = down.saved) { gate.closeSaved() }
+    Column(Modifier.fillMaxSize()) {
+        if (down.saved) dev.orb.app.ui.offline.ReadOnlyBar(container.offline, gate::closeSaved)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.fillMaxSize().then(if (down.full != null) Modifier.clearAndSetSemantics {} else Modifier)) { content() }
+            val full = down.full
+            if (full != null) {
+                Surface(
+                    Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } },
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.background,
+                ) {
+                    when (full) {
+                        dev.orb.app.ui.offline.DownKind.PcOff -> dev.orb.app.ui.offline.PcOffScreen(
+                            container.offline, onSeeSaved = gate::openSaved,
+                            onLinkOther = {
+                                // Not tied to this screen: it leaves the composition as soon as the link is gone.
+                                container.scope.launch {
+                                    container.unlink()
+                                    withContext(Dispatchers.Main) { nav.navigate(Welcome) { popUpTo(0) { inclusive = true } } }
+                                }
+                            },
+                        )
+                        else -> Unit
                     }
                 }
             }

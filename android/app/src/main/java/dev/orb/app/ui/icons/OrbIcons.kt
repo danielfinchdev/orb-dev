@@ -201,6 +201,7 @@ object OrbIcons {
             "M2 8.82a15 15 0 0 1 4.177-2.643", "M22 8.82a15 15 0 0 0-11.288-3.764", "m2 2 20 20",
         )
     }
+    val Database by lazy { lucide("database", "M3 5a9 3 0 1 0 18 0a9 3 0 1 0 -18 0", "M3 5V19A9 3 0 0 0 21 19V5", "M3 12A9 3 0 0 0 21 12") }
     val ListEnd by lazy { lucide("list-end", "M16 12H3", "M16 6H3", "M10 18H3", "M21 6v10a2 2 0 0 1-2 2h-4", "m17 15-3 3 3 3") }
     val ShieldCheck by lazy {
         lucide(
