@@ -47,7 +47,7 @@ test('freno semanal: mismo camino que «Uso» y «Normas»', () => {
   assert.match(tab, /import \{ changeRail \} from '@\/lib\/rules-actions\.js';/);
   assert.match(tab, /import \{ confirmPauseRail, confirmResumeRail \} from '@\/views\/rules-dialogs\.jsx';/);
   assert.match(tab, /\(enabled \? confirmResumeRail\(rail\) : confirmPauseRail\(rail\)\)/);
-  assert.match(tab, /changeRail\(rail\.id, \{ enabled \}, t\('rules\.railSaved'\)\)/);
+  assert.match(tab, /changeRail\(rail\.id, \{ enabled \}, t\('rules\.railSaved'\), ok\.unlock\)/);
   assert.match(tab, /call\('rails\.list', \{\}\)/);
   // no call of its own to the engine's rails or config: values go through save() (which asks the password every time for a rail's value)
   assert.doesNotMatch(tab, /call\('rails\.set'|call\('config\.save'|unlockCore/);

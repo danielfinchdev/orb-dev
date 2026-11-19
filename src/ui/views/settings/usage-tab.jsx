@@ -96,8 +96,8 @@ export function BrakeRails({ c }) {
   const load = () => call('rails.list', {}).then((r) => setRails(Array.isArray(r) ? r : []), quiet);
   useEffect(() => { load(); }, []);
   const flip = async (rail, enabled) => {
-    if (!(await (enabled ? confirmResumeRail(rail) : confirmPauseRail(rail)))) return;
-    if (await changeRail(rail.id, { enabled }, t('rules.railSaved'))) load();
+    const ok = await (enabled ? confirmResumeRail(rail) : confirmPauseRail(rail));
+    if (ok && await changeRail(rail.id, { enabled }, t('rules.railSaved'), ok.unlock)) load();
   };
   const row = (id, label, hint, testid) => {
     const rail = rails.find((r) => r.id === id);
