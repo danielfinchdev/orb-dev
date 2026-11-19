@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.AppContainer
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.link.net.pcDisplayName
 import dev.orb.app.lock.AuthCapability
 import dev.orb.app.lock.AuthResult
 import dev.orb.app.lock.LockDelay
@@ -80,7 +81,7 @@ interface ThisPhoneBackend {
 class RuntimeThisPhoneBackend(private val container: AppContainer) : ThisPhoneBackend {
     private val link = container.runtime.flatMapLatest { rt ->
         if (rt == null) flowOf<Pair<String?, ConnectionState>>(null to ConnectionState.Unlinked)
-        else rt.client.connection.map { c -> ((c as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name) to c }
+        else rt.client.connection.map { c -> rt.client.pcDisplayName(c) to c }
     }.stateIn(container.scope, SharingStarted.Eagerly, null to ConnectionState.Connecting)
 
     override val pcName: StateFlow<String?> = link.map { it.first }.stateIn(container.scope, SharingStarted.Eagerly, null)

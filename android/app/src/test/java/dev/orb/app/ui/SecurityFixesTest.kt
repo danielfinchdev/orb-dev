@@ -65,6 +65,12 @@ class PairTextViaTest {
 }
 
 class PcNameTextTest {
+    @Test fun formatCharactersAreDropped() {
+        // U+202E reverses what follows; U+200B and U+2060 are invisible.
+        assertEquals("Mi PC", pcNameOrNull("\u202EMi\u200B P\u2060C"))
+        assertNull(pcNameOrNull("\u202E\u200B"))
+    }
+
     @Test fun aNormalNamePasses() = assertEquals("Mi PC", pcNameOrNull("Mi PC"))
 
     @Test fun lineBreaksAndControlsBecomeOneLine() {

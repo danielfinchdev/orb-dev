@@ -16,6 +16,7 @@ import dev.orb.app.link.net.LinkClient
 import dev.orb.app.link.net.LinkSession
 import dev.orb.app.link.net.LinkSessionCodec
 import dev.orb.app.link.net.PairOk
+import dev.orb.app.link.net.pcDisplayName
 import dev.orb.app.link.net.pcNameOrNull
 import dev.orb.app.link.net.Pairing
 import dev.orb.app.link.net.ResolvedLink
@@ -255,7 +256,7 @@ class AppContainer(private val app: Application) {
         if (rt == null) flowOf(NotifyTexts.connected(null))
         else LinkLine.lines(
             online = rt.client.connection.map { it is ConnectionState.Online },
-            pc = { (rt.client.connection.value as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name },
+            pc = { rt.client.pcDisplayName() },
         )
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), NotifyTexts.connected(null))
 

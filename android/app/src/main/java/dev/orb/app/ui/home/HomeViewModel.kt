@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.AppContainer
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.link.net.pcDisplayName
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -28,7 +29,7 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     private val link: StateFlow<Pair<String?, ConnectionState>?> = container.runtime
         .flatMapLatest { rt ->
             if (rt == null) flowOf(null)
-            else rt.client.connection.map { c -> ((c as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name) to c }
+            else rt.client.connection.map { c -> rt.client.pcDisplayName(c) to c }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 

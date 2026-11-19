@@ -45,6 +45,31 @@ class ManifestPermissionsTest {
         assertEquals(expected, requested())
     }
 
+    /** Every component other apps can start, whoever declared it. */
+    private fun exported(): List<Pair<String, String?>> {
+        val info = context.packageManager.getPackageInfo(
+            context.packageName,
+            PackageManager.GET_ACTIVITIES or PackageManager.GET_SERVICES or PackageManager.GET_RECEIVERS or PackageManager.GET_PROVIDERS,
+        )
+        val all = (info.activities.orEmpty().map { it as android.content.pm.ComponentInfo to it.permission } +
+            info.services.orEmpty().map { it as android.content.pm.ComponentInfo to it.permission } +
+            info.receivers.orEmpty().map { it as android.content.pm.ComponentInfo to it.permission } +
+            info.providers.orEmpty().map { it as android.content.pm.ComponentInfo to (it.readPermission ?: it.writePermission) })
+        return all.filter { it.first.exported }.map { it.first.name to it.second }
+    }
+
+    @Test fun theOnlyComponentsOthersCanStartAreTheEntryActivityAndTheBootReceiver() {
+        // ComponentActivity is the host the debug-only Compose test library adds; it is not in a release build.
+        val own = exported().filter { it.second == null && it.first != "androidx.activity.ComponentActivity" }.map { it.first }.sorted()
+        assertEquals(listOf("dev.orb.app.MainActivity", "dev.orb.app.notify.BootReceiver").sorted(), own)
+    }
+
+    @Test fun libraryComponentsThatAreExportedStayBehindAPermission() {
+        // Not a failure: written down so a new one is noticed (profileinstaller's receiver is guarded by DUMP).
+        val guarded = exported().filter { it.second != null }
+        println("exported library components behind a permission: $guarded")
+    }
+
     @Test fun nothingBeyondTheListCanSneakIn() {
         val forbidden = listOf(
             "RECORD_AUDIO", "READ_EXTERNAL_STORAGE", "WRITE_EXTERNAL_STORAGE", "MANAGE_EXTERNAL_STORAGE", "READ_MEDIA_IMAGES",

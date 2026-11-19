@@ -79,7 +79,10 @@ fun pcNameOrNull(raw: String?): String? {
     val sb = StringBuilder()
     var gap = false
     for (ch in raw) {
-        val breaks = Character.isISOControl(ch) || Character.getType(ch).let { it == Character.LINE_SEPARATOR.toInt() || it == Character.PARAGRAPH_SEPARATOR.toInt() }
+        val type = Character.getType(ch)
+        val breaks = Character.isISOControl(ch) || type == Character.LINE_SEPARATOR.toInt() || type == Character.PARAGRAPH_SEPARATOR.toInt()
+        // Format characters (right-to-left override, zero-width) draw nothing or reorder the line, so they are dropped, not turned into a gap.
+        if (type == Character.FORMAT.toInt()) continue
         if (breaks) gap = true else { if (gap && sb.isNotEmpty()) sb.append(' '); gap = false; sb.append(ch) }
     }
     var line = sb.toString().trim()
@@ -90,6 +93,10 @@ fun pcNameOrNull(raw: String?): String? {
     }
     return line.ifEmpty { null }
 }
+
+/** The PC's name for a screen, from one place: the live answer first, then the saved session name (an older version may have stored it unbounded). */
+fun LinkClient.pcDisplayName(state: ConnectionState = connection.value): String? =
+    (state as? ConnectionState.Online)?.pcName ?: pcInfo.value?.name ?: pcNameOrNull(currentSession.name)
 
 sealed class ConnectionState {
     data object Connecting : ConnectionState()

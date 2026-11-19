@@ -100,9 +100,7 @@ class AndroidNotificationAccess(
     }
 
     private fun openSettings() {
-        val intent = Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
-            .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val intent = SettingsIntents.appNotices(context.packageName)
         try { context.startActivity(intent) } catch (e: Exception) { /* no settings screen to show */ }
     }
 }

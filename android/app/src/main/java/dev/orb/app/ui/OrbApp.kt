@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -155,9 +156,11 @@ fun OrbApp(container: AppContainer) {
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
                 // Kept above the lock so the person returns to where they were; while locked, no screen is composed at all.
                 val nav = rememberNavController()
+                // Also above the lock: the host below leaves the composition while locked, and an unlink that ends then must still send the person to the welcome page.
+                val wasLinked = rememberSaveable { mutableStateOf(container.runtime.value != null) }
                 androidx.compose.runtime.CompositionLocalProvider(dev.orb.app.ui.offline.LocalOffline provides container.offline) {
                     LockGate(container.lock, Modifier.systemBarsPadding()) {
-                        PcDownHost(container, nav) {
+                        PcDownHost(container, nav, wasLinked) {
                             Box(Modifier.fillMaxSize()) {
                                 OrbNav(container, start, nav)
                                 ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
@@ -179,19 +182,18 @@ internal fun shouldReturnToWelcome(wasLinked: Boolean, linked: Boolean, onWelcom
  * at what the phone holds. The app stays composed underneath (navigation keeps working) but hidden from touch and screen readers.
  */
 @Composable
-private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHostController, content: @Composable () -> Unit) {
+private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHostController, wasLinked: MutableState<Boolean>, content: @Composable () -> Unit) {
     val gate = container.pcDown
     val down by gate.state.collectAsStateWithLifecycle()
     // Back to the welcome page when the local link has been erased (the person unlinked), so a rotation while unlinking cannot
     // lose the way. The connection state is not used: the PC removing this phone leaves the saved chats and the notice in place.
     val linked by container.runtime.collectAsStateWithLifecycle()
-    var wasLinked by rememberSaveable { mutableStateOf(linked != null) }
     LaunchedEffect(linked != null) {
         val here = nav.currentDestination
-        if (shouldReturnToWelcome(wasLinked, linked != null, here?.hasRoute<Welcome>() == true || here?.hasRoute<ScanRoute>() == true)) {
+        if (shouldReturnToWelcome(wasLinked.value, linked != null, here?.hasRoute<Welcome>() == true || here?.hasRoute<ScanRoute>() == true)) {
             nav.navigate(Welcome) { popUpTo(0) { inclusive = true } }
         }
-        wasLinked = linked != null
+        wasLinked.value = linked != null
     }
     // Registered before the navigation host, so a deeper screen's own back step wins and this one only fires on the list.
     androidx.activity.compose.BackHandler(enabled = down.saved) { gate.closeSaved() }
