@@ -12,7 +12,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val pcName: String? = null,
@@ -36,14 +35,4 @@ class HomeViewModel(private val container: AppContainer) : ViewModel() {
     val state: StateFlow<HomeUiState> = kotlinx.coroutines.flow.combine(link, busy, done) { l, b, d ->
         HomeUiState(pcName = l?.first, connection = l?.second ?: ConnectionState.Unlinked, unlinking = b, unlinked = d)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), HomeUiState())
-
-    fun unlink() {
-        if (busy.value) return
-        busy.value = true
-        viewModelScope.launch {
-            container.unlink()
-            done.value = true
-            busy.value = false
-        }
-    }
 }
