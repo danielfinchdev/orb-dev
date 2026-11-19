@@ -81,6 +81,14 @@ object OfflineTexts {
     fun readOnlyBanner(at: Long?, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()) =
         "Sin conexión · solo lectura. " + if (at == null) "$SAVED_UNKNOWN." else "Última conexión ${absolute(at, now, tz)}."
 
+    /** Milliseconds until the next local midnight (plus a second, so the wake-up lands on the new day). */
+    fun untilNextDay(now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()): Long {
+        val c = java.util.GregorianCalendar(tz).apply { timeInMillis = now }
+        c.set(java.util.Calendar.HOUR_OF_DAY, 0); c.set(java.util.Calendar.MINUTE, 0); c.set(java.util.Calendar.SECOND, 0); c.set(java.util.Calendar.MILLISECOND, 0)
+        c.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        return c.timeInMillis - now + 1_000
+    }
+
     fun savedNote(at: Long?, now: Long) = if (at == null) SAVED_UNKNOWN else "Datos guardados de ${ago(at, now)}"
 
     /** Counts down to the next attempt; a retry already due reads «Reintentando…». */

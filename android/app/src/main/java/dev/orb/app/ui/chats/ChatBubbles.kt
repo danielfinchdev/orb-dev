@@ -37,14 +37,11 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -62,6 +59,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
@@ -328,7 +327,10 @@ fun PendingRow(
                 Column(Modifier.padding(top = 4.dp, end = 2.dp), horizontalAlignment = Alignment.End) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(OrbIcons.CircleAlert, null, Modifier.size(14.dp), tint = OrbKit.destructive)
-                        Text(ChatTexts.pendingFailed(p.error), color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 16.sp)
+                        Text(
+                            ChatTexts.pendingFailed(p.error), Modifier.semantics { contentDescription = ChatTexts.pendingFailedSpoken(p.error) },
+                            color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 16.sp,
+                        )
                     }
                     Text(ChatTexts.PENDING_KEPT, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -505,9 +507,7 @@ private fun ReportCard(m: ChatMessage, r: MsgCard.Report, online: Boolean, sendi
                 }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button(onClick = { actions.accept(m) }, enabled = online && !sending) {
-                        Icon(OrbIcons.Check, null, Modifier.size(16.dp)); Text(ChatTexts.ACCEPT_REPORT, Modifier.padding(start = 6.dp))
-                    }
+                    OrbButton(ChatTexts.ACCEPT_REPORT, { actions.accept(m) }, kind = OrbButtonKind.Primary, enabled = online && !sending, icon = OrbIcons.Check)
                     Text(ChatTexts.reportTasks(r.tasks), color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelMedium)
                 }
             }
@@ -542,10 +542,10 @@ private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolea
             // Same layout as the direct chat: the main action on the right, «always» apart so it is never hit by mistake.
             val enabled = online && !sending
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton({ actions.decideRequest(m, "deny") }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.DENY) }
-                Button({ actions.decideRequest(m, "allow") }, Modifier.weight(1f).heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.PERMIT) }
+                OrbButton(ChatTexts.DENY, { actions.decideRequest(m, "deny") }, Modifier.weight(1f), big = true, block = true, enabled = enabled)
+                OrbButton(ChatTexts.PERMIT, { actions.decideRequest(m, "allow") }, Modifier.weight(1f), kind = OrbButtonKind.Primary, big = true, block = true, enabled = enabled)
             }
-            TextButton({ actions.decideRequest(m, "always") }, Modifier.fillMaxWidth().heightIn(min = 48.dp), enabled = enabled) { Text(ChatTexts.PERMIT_ALWAYS) }
+            OrbButton(ChatTexts.PERMIT_ALWAYS, { actions.decideRequest(m, "always") }, kind = OrbButtonKind.Ghost, big = true, block = true, enabled = enabled)
         } else {
             Text(
                 when (p.status) {

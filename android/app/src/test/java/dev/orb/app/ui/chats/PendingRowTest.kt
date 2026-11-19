@@ -74,8 +74,9 @@ class PendingRowTest {
 
     @Test fun aFailedMessageIsKeptAndCanBeRetriedOrDiscarded() {
         show(PendingState.Failed, online = true, error = "refused 400", link = ONLINE_LINK)
-        rule.onNodeWithText(ChatTexts.pendingFailed("refused 400")).assertIsDisplayed()
-        rule.onNodeWithText("No enviado: refused 400").assertIsDisplayed()
+        rule.onNodeWithText("No enviado: el PC lo rechazó").assertIsDisplayed()
+        rule.onNodeWithText("refused", substring = true).assertDoesNotExist()
+        rule.onNodeWithContentDescription("No enviado: el PC lo rechazó. Motivo técnico: refused 400").assertExists()
         rule.onNodeWithText(ChatTexts.PENDING_KEPT).assertIsDisplayed()
         rule.onNodeWithText("Reintentar").performClick()
         rule.onNodeWithText("Descartar").performClick()

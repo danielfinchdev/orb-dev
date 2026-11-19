@@ -13,6 +13,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -27,7 +29,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.delay
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBanner
@@ -180,8 +185,15 @@ fun ReadOnlyBar(info: OfflineInfo, onBack: () -> Unit, modifier: Modifier = Modi
     val lastContact by info.lastContact.collectAsStateWithLifecycle()
     val connection by info.connection.collectAsStateWithLifecycle()
     val seen = (connection as? ConnectionState.Offline)?.lastSeen ?: lastContact
+    // «Today» in the banner is read again when the screen comes back and when the day turns, not once per composition.
+    var now by remember { mutableLongStateOf(info.clock()) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { now = info.clock() }
+    LaunchedEffect(now) {
+        delay(OfflineTexts.untilNextDay(now))
+        now = info.clock()
+    }
     Row(modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         OrbIconButton(OrbIcons.ArrowLeft, PcOffTexts.BACK_TO_PC, onBack)
-        OrbBanner(OfflineTexts.readOnlyBanner(seen, info.clock()), OrbIcons.Database, Modifier.weight(1f), kind = OrbBannerKind.Warning)
+        OrbBanner(OfflineTexts.readOnlyBanner(seen, now), OrbIcons.Database, Modifier.weight(1f), kind = OrbBannerKind.Warning)
     }
 }

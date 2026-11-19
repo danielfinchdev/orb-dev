@@ -179,6 +179,13 @@ class AbsoluteTimeTest {
         assertTrue(OfflineTexts.readOnlyBanner(null, now, utc).startsWith("Sin conexión · solo lectura."))
     }
 
+    @Test fun theDayTurnsAtLocalMidnight() {
+        assertEquals(10 * 60_000L + 1_000, OfflineTexts.untilNextDay(at(2026, 11, 19, 23, 50), utc))
+        assertEquals(24 * 3_600_000L + 1_000, OfflineTexts.untilNextDay(at(2026, 11, 19, 0, 0), utc))
+        // Madrid is an hour ahead in winter: 23:30 UTC is already 00:30 there, so midnight is 23.5 h away.
+        assertEquals(23 * 3_600_000L + 30 * 60_000L + 1_000, OfflineTexts.untilNextDay(at(2026, 11, 18, 23, 30), TimeZone.getTimeZone("Europe/Madrid")))
+    }
+
     @Test fun theCountdownLineRoundsUp() {
         assertEquals("Reintento en 12 s", PcOffTexts.retryIn(now + 12_000, now))
         assertEquals("Reintento en 3 s", PcOffTexts.retryIn(now + 2_100, now))
@@ -254,5 +261,24 @@ class PcOffScreenTest {
         rule.onNodeWithText("Vincular con otro PC").performClick()
         rule.onNodeWithText("Vincular").performClick()
         assertEquals(1, other)
+    }
+
+    @Test fun theReadOnlyBarReadsTodayAgainWhenTheDayTurns() {
+        val saved = TimeZone.getDefault()
+        TimeZone.setDefault(TimeZone.getTimeZone("UTC"))
+        try {
+            val seen = java.util.GregorianCalendar(TimeZone.getTimeZone("UTC")).apply { clear(); set(2026, 10, 19, 19, 52) }.timeInMillis
+            var clockNow = seen + 4 * 3_600_000L // 23:52
+            val info = OfflineInfo(MutableStateFlow(ConnectionState.Offline(null, seen)), MutableStateFlow(seen), {}, clock = { clockNow })
+            rule.mainClock.autoAdvance = false
+            rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { ReadOnlyBar(info, onBack = {}) } }
+            rule.mainClock.advanceTimeByFrame()
+            rule.onNode(hasText("hoy, 19:52", substring = true)).assertIsDisplayed()
+            clockNow += 30 * 60_000L
+            rule.mainClock.advanceTimeBy(30 * 60_000L)
+            rule.onNode(hasText("ayer, 19:52", substring = true)).assertIsDisplayed()
+        } finally {
+            TimeZone.setDefault(saved)
+        }
     }
 }

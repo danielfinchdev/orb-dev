@@ -353,7 +353,24 @@ object ChatTexts {
         is dev.orb.app.link.net.ConnectionState.Attention -> PENDING_ATTENTION
         else -> PENDING_WAITING
     }
-    fun pendingFailed(reason: String?) = if (reason.isNullOrBlank()) PENDING_FAILED else "$PENDING_FAILED: $reason"
+    /** The outbox keeps a technical word for why a send failed; the screen says it in plain Spanish and leaves the word to the screen reader. */
+    fun pendingFailed(reason: String?): String {
+        val plain = failedPlain(reason)
+        return if (plain == null) PENDING_FAILED else "$PENDING_FAILED: $plain"
+    }
+
+    fun failedPlain(reason: String?): String? = when {
+        reason.isNullOrBlank() -> null
+        reason.startsWith("refused") -> "el PC lo rechazó"
+        reason == "not linked" -> "este móvil ya no está enlazado"
+        reason == "bad answer" -> "no se entiende la respuesta del PC"
+        reason.startsWith("unsupported") -> "esta versión del PC no lo admite"
+        reason.startsWith("not retried") -> "pasó demasiado tiempo y puede que ya haya llegado"
+        else -> null
+    }
+
+    fun pendingFailedSpoken(reason: String?): String =
+        if (reason.isNullOrBlank()) pendingFailed(reason) else "${pendingFailed(reason)}. Motivo técnico: $reason"
 
     fun unread(n: Int) = if (n == 1) "1 sin leer" else "$n sin leer"
     fun chatsOf(n: Int) = if (n == 1) "1 chat" else "$n chats"
