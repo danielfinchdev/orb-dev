@@ -44,6 +44,17 @@ class DiffParserTest {
         assertEquals("  await register(app.token);", l[4].text)
     }
 
+    @Test fun numbersTheLinesFromTheHunkHeading() {
+        val l = DiffParser.lines("@@ -10,3 +20,4 @@\n keep\n-gone\n+new one\n+new two\n tail\n")
+        // context and additions carry the new number, a removal its old one
+        assertEquals(listOf<Int?>(null, 20, 11, 21, 22, 23), l.map { it.no })
+    }
+
+    @Test fun eachHunkRestartsTheNumbers() {
+        val l = DiffParser.lines("@@ -1,1 +1,1 @@\n-a\n+b\n@@ -40,2 +48,2 @@\n ctx\n+c\n")
+        assertEquals(listOf<Int?>(null, 1, 1, null, 48, 49), l.map { it.no })
+    }
+
     @Test fun anEmptyPatchHasNoLines() {
         assertTrue(DiffParser.lines("").isEmpty())
     }
