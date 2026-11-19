@@ -94,7 +94,8 @@ class AndroidNotePoster(
                 .setAction("dev.orb.app.NOTE_ACTION.${plan.id}.$i")
                 .putExtra(NoteIntents.EXTRA_TOKEN, jobs.keep(a.job))
             val pending = PendingIntent.getBroadcast(context, plan.id * 8 + slot, intent, flags(mutable = a.input))
-            val action = NotificationCompat.Action.Builder(0, a.label, pending).setAuthenticationRequired(true)
+            // Marking a notice read changes nothing on the PC and shows nothing: it needs no unlocking, unlike a button that acts there.
+            val action = NotificationCompat.Action.Builder(0, a.label, pending).setAuthenticationRequired(!a.job.local)
             if (a.input) action.addRemoteInput(RemoteInput.Builder(NoteIntents.REPLY_KEY).setLabel(a.label).build()).setAllowGeneratedReplies(false)
             b.addAction(action.build())
         }
@@ -112,6 +113,11 @@ class AndroidNotePoster(
         if (lockScreen() == LockScreenNotice.Hidden) b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
         if (goneAfterMs != null) b.setTimeoutAfter(goneAfterMs)
         notify(job.group, b)
+    }
+
+    override fun cancel(id: Int) {
+        jobs.drop(id)
+        context.getSystemService(NotificationManager::class.java)?.cancel(id)
     }
 
     override fun clearNotes() {

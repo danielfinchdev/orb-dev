@@ -80,7 +80,7 @@ class AndroidNotePosterTest {
 
     @Test fun aReplyTakesTypedText() {
         poster.show(plan(message))
-        val reply = shadowOf(nm).allNotifications.single().actions.single()
+        val reply = shadowOf(nm).allNotifications.single().actions.first()
         assertEquals("Responder", reply.title.toString())
         assertTrue(reply.remoteInputs.single().resultKey == NoteIntents.REPLY_KEY)
     }

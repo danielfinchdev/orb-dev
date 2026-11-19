@@ -41,7 +41,7 @@ class NotePlannerTest {
         assertEquals(NoteChannel.Messages, p.channel)
         assertEquals("Revisar pasarela", p.title)
         assertEquals(27091, p.id)
-        val reply = p.actions.single()
+        val reply = p.actions.first()
         assertTrue(reply.input)
         assertEquals("Responder", reply.label)
         assertEquals("chat.send", reply.job.method)
@@ -52,7 +52,7 @@ class NotePlannerTest {
 
     @Test fun aReplyToTheMainChatNamesNoConversation() {
         val p = plan("""{"key":"orb","route":{"view":"chat"},"actions":[{"id":"reply","title":"Responder","input":true}]}""")
-        assertTrue(p.actions.single().job.params!!.isEmpty())
+        assertTrue(p.actions.first().job.params!!.isEmpty())
         assertEquals(JobTarget("chats"), p.tap.target)
     }
 
@@ -175,6 +175,8 @@ private class FakePoster : NotePoster {
     var cleared = 0
     override fun show(plan: NotificationPlan) { shown += plan }
     override fun say(job: NoteJob, text: String, goneAfterMs: Long?) { said += text }
+    val cancelled = mutableListOf<Int>()
+    override fun cancel(id: Int) { cancelled += id }
     override fun clearNotes() { cleared++ }
 }
 

@@ -30,6 +30,7 @@ import dev.orb.app.notify.KeepAliveController
 import dev.orb.app.notify.KeepAlivePolicy
 import dev.orb.app.notify.LinkKind
 import dev.orb.app.notify.NoteActionRunner
+import dev.orb.app.notify.NoteOutcome
 import dev.orb.app.notify.NoteIntents
 import dev.orb.app.notify.NoteJobs
 import dev.orb.app.notify.Notifier
@@ -274,6 +275,8 @@ class AppContainer(private val app: Application) {
         val runtime = LinkRuntime(client, api, sender)
         synchronized(runtimeLock) {
             _runtime.value = runtime
+            // The list listens from the moment the link exists, so a notice that arrives with the screen closed is kept too.
+            notesBackend()
             client.start()
             if (!foreground && !keepAliveRunning.value) client.pause()
         }
@@ -334,6 +337,12 @@ class AppContainer(private val app: Application) {
             onStart = { notePoster.say(it, NotifyTexts.SENDING, null) },
         )
         val (job, outcome) = runner.run(token, typed) ?: return
+        if (outcome is NoteOutcome.Read) {
+            // The button only reads the notice on this phone: the notification goes away and the list knows.
+            job.notice?.let { notesBackend()?.markReadLocal(it) }
+            notePoster.cancel(job.group)
+            return
+        }
         notePoster.say(job, outcome.text, if (outcome.done) 4_000L else null)
         log.add("aviso respondido")
     }
@@ -343,8 +352,9 @@ class AppContainer(private val app: Application) {
         val token = intent?.getStringExtra(NoteIntents.EXTRA_TOKEN) ?: return
         intent.removeExtra(NoteIntents.EXTRA_TOKEN)
         // MainActivity is exported: only a token kept here counts, never extras made up by another app.
-        val target = noteJobs.take(token)?.target?.toNotice() ?: return
-        openTarget.value = target
+        val job = noteJobs.take(token)
+        job?.notice?.let { notesBackend()?.markReadLocal(it) }
+        openTarget.value = job?.target?.toNotice() ?: return
     }
 
     fun linkTestBackend(): LinkTestBackend? = _runtime.value?.let { RuntimeBackend(this, it) }
@@ -365,7 +375,7 @@ class AppContainer(private val app: Application) {
     /** One notices list per link, so the bell keeps counting while the center is closed. */
     fun notesBackend(): dev.orb.app.ui.notes.NotesBackend? = synchronized(runtimeLock) {
         val rt = _runtime.value ?: return null
-        notes?.takeIf { it.first === rt }?.second ?: dev.orb.app.ui.notes.RuntimeNotesBackend(rt, scope).also { notes?.second?.close(); notes = rt to it }
+        notes?.takeIf { it.first === rt }?.second ?: dev.orb.app.ui.notes.RuntimeNotesBackend(rt, scope, store = dev.orb.app.ui.notes.RoomNoticeStore { database()?.notices() }).also { notes?.second?.close(); notes = rt to it }
     }
 
     fun whiteboardBackend(): dev.orb.app.ui.web.WhiteboardBackend? = _runtime.value?.let { rt -> projectsBackend()?.let { dev.orb.app.ui.web.RuntimeWhiteboardBackend(rt, it) } }

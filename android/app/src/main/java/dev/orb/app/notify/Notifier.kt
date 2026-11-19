@@ -13,6 +13,9 @@ interface NotePoster {
     /** Says how a button ended, in place of the notification it was on. */
     fun say(job: NoteJob, text: String, goneAfterMs: Long?)
 
+    /** Takes one notification away (its notice was read from a button). */
+    fun cancel(id: Int)
+
     /** Removes every notice of the chats (the app is in front again and shows them itself). */
     fun clearNotes()
 }
