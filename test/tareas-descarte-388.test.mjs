@@ -86,9 +86,11 @@ test('discarding the copy before the join task gave up (before integrate.skipped
   assert.equal(board.one('SELECT kind FROM events WHERE task_id = ? ORDER BY id DESC LIMIT 1', task.id).kind, 'integrate.skipped');
   // nothing is left to discard in the PC, so the phone must not be sent there for ever
   const diff = await ctx.mobile('tasks.diff', { id: task.id });
-  assert.notEqual(diff.reason, 'resolveonpc');
+  assert.equal(diff.available, true); assert.equal(diff.checkpointId, await ctx.idOf());
   await ctx.mobile('tasks.accept', { id: task.id, checkpoint: await ctx.idOf() });
   assert.equal(board.isAccepted(task.id), true);
+  await ctx.mobile('tasks.undo', { id: task.id });
+  assert.deepEqual(ctx.undone, [task.id]);
 });
 
 test('the PC window undoes a task joined by hand; the phone is told to use the PC', async () => {
