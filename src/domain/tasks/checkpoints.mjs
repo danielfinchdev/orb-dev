@@ -177,11 +177,19 @@ export async function fullSnapshot(repo, { message }) {
 // What a fast snapshot `after` missed, by a full one taken later: files whose content now is not the one it recorded
 // although their date says nobody wrote them after it was taken (at: when it started; an older one without it, its
 // commit's second). A file written after it (the user's later edit) has a newer date and is not counted. → [{ status, path }]
-export function missedBy(repo, after, full) {
+// The date of a file's last write can be set back (by the task, or by a copy or an unzip the user made later, which keep the
+// source's date), but its change date (ctime) cannot: one newer than the snapshot means somebody touched the file after the
+// task ended, so it is not counted as hidden. Those paths go to `later` (when given): left as they are and reported.
+export function missedBy(repo, after, full, later = []) {
   const at = after.at ?? Number(git(repo, 'show', '-s', '--format=%ct', after.commit).stdout.trim()) * 1000;
   return changedBetween(repo, after.commit, full.commit).filter((c) => {
     if (isSecretPath(c.path)) return false;
-    try { return fs.statSync(path.join(repo, c.path)).mtimeMs < at; } catch { return false; } // gone: git always sees that
+    try {
+      const st = fs.statSync(path.join(repo, c.path)); // gone: git always sees that
+      if (st.mtimeMs >= at) return false;
+      if (Math.floor(st.ctimeMs) > at) { later.push(c.path); return false; } // whole ms: `at` is one, so a write in that same ms is the task's
+      return true;
+    } catch { return false; }
   });
 }
 // Whole or not at all (another snapshot may be reading it): written beside and renamed over. Losing it only costs time.

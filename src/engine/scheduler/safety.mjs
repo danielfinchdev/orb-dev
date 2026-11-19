@@ -138,7 +138,9 @@ export class SafetyPart {
         if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
         const after = cp.after?.commit ? cp.after : full;
         out = undoCheckpoint(cp.before, after);
-        const missed = after === full ? [] : missedBy(cp.before.repo, after, full);
+        const later = [];
+        const missed = after === full ? [] : missedBy(cp.before.repo, after, full, later);
+        out.skipped.push(...later.filter((x) => !out.skipped.includes(x)));
         if (missed.length) {
           const more = undoCheckpoint(cp.before, full, { only: new Set(missed.map((c) => c.path)) });
           for (const k of ['restored', 'removed', 'skipped']) out[k].push(...more[k]);

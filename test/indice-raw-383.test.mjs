@@ -62,6 +62,20 @@ test('Deshacer también devuelve un archivo cambiado con su fecha restaurada, y 
   assert.equal(fs.readFileSync(path.join(repo, 'c.txt'), 'utf8'), 'TRES (Dani, después)\n');
 });
 
+test('Deshacer deja intacto y avisa de un archivo que el usuario copió después con una fecha antigua', async () => {
+  const { repo, task } = hiddenTask();
+  await new Promise((r) => setTimeout(r, 30));
+  // what Explorer or an unzip do: new content (or a new file) that keeps the source's old date, but gets a new change date
+  fs.writeFileSync(path.join(repo, 'c.txt'), 'TRES (copiado después)\n'); fs.utimesSync(path.join(repo, 'c.txt'), OLD, OLD);
+  fs.writeFileSync(path.join(repo, 'd.txt'), 'nuevo copiado\n'); fs.utimesSync(path.join(repo, 'd.txt'), OLD, OLD);
+  const out = await call('tasks.undo', { id: task.id });
+  assert.equal(fs.readFileSync(path.join(repo, 'c.txt'), 'utf8'), 'TRES (copiado después)\n');
+  assert.equal(fs.readFileSync(path.join(repo, 'd.txt'), 'utf8'), 'nuevo copiado\n');
+  assert.ok(out.skipped.includes('c.txt') && out.skipped.includes('d.txt'), JSON.stringify(out.skipped));
+  // what the task did hide is still given back
+  assert.equal(fs.readFileSync(path.join(repo, 'b.txt'), 'utf8'), 'dos\n');
+});
+
 test('el diff de una tarea retenida lo enseña todo, y el índice en bruto se rehace con lo releído', async () => {
   const { repo, task } = hiddenTask();
   board.patch(task.id, { status: 'blocked' }, 'orb', 'task.blocked');
