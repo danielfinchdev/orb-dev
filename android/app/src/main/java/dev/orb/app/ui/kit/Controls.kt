@@ -169,9 +169,13 @@ fun OrbChip(
 
 /** `.segm`: a track with one raised choice; for two to four short options. [stretch] makes the choices share the full width. */
 @Composable
-fun OrbSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, stretch: Boolean = false) {
+fun OrbSegmented(
+    options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, stretch: Boolean = false,
+    /** The track spans the width while the choices keep their own size (the mockup's `.segm` at 100 %). */
+    track: Boolean = false,
+) {
     Row(
-        modifier.then(if (stretch) Modifier.fillMaxWidth() else Modifier).clip(RadiusCtl).background(OrbKit.secondary).padding(2.dp).selectableGroup(),
+        modifier.then(if (stretch || track) Modifier.fillMaxWidth() else Modifier).clip(RadiusCtl).background(OrbKit.secondary).padding(2.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         options.forEachIndexed { i, label ->

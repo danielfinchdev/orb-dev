@@ -54,6 +54,12 @@ import dev.orb.app.ui.theme.OrbMotion
 /** One way to send a message while the agent works. */
 class ComposerChoice(val label: String, val send: (String) -> Unit)
 
+/**
+ * The box while it answers a question of the agent: what it asks for, whether options are already picked (so an empty box can still
+ * send) and where the answer goes. [enabled] false (no link) keeps the send button off, since an answer cannot wait in the queue.
+ */
+class ComposerAnswer(val placeholder: String, val hasPicks: Boolean, val enabled: Boolean, val onSend: (String) -> Unit)
+
 /** Text that fills the box once for each [key] (a queued message brought back to be edited). */
 class ComposerSeed(val key: Long, val text: String)
 
@@ -88,6 +94,8 @@ internal fun Composer(
     mentions: MentionSource? = null,
     /** What «/» offers: only commands that do something in this chat. */
     commands: List<ComposerCommand> = emptyList(),
+    /** Non-null while the box sends an answer to a question instead of a message; attachments are not part of an answer. */
+    answer: ComposerAnswer? = null,
 ) {
     // A TextFieldValue, not a String: «@» is looked for at the cursor and a pick is written there.
     var field by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue("")) }
@@ -112,7 +120,9 @@ internal fun Composer(
     val launchers = if (attach != null) rememberAttachLaunchers(attach) { problem = it } else null
     // Sending waits for every upload: a message that left before them would reach the PC without its files.
     val attachOk = attached.all { it.state == AttachState.Ready }
-    val canSend = text.isNotBlank() && attachOk
+    val canSend = if (answer != null) answer.enabled && (text.isNotBlank() || answer.hasPicks) else text.isNotBlank() && attachOk
+    val shownPlaceholder = answer?.placeholder ?: placeholder
+    val canAttach = attach != null && answer == null
     if (sheet && attach != null && launchers != null) AttachSheet(attach.currentPolicy, launchers, onDismiss = { sheet = false })
 
     val cursor = if (field.selection.collapsed) field.selection.end else -1
@@ -144,21 +154,20 @@ internal fun Composer(
     } else if (commandRows.isNotEmpty()) {
         CommandList(commandRows, onPick = { setText(""); it.run() })
     }
+    // Loose cards over the box, as the mockup draws them, not inside it.
+    if (attach != null && answer == null) AttachStrip(attached, attachNotice ?: problem, attach::remove, attach::retry)
     OrbComposerFrame {
-        if (attach != null) {
-            AttachStrip(attached, attachNotice ?: problem, attach::remove, attach::retry, Modifier.padding(end = 8.dp))
-        }
         Box(Modifier.fillMaxWidth().heightIn(min = 22.dp, max = 160.dp).padding(end = 4.dp), contentAlignment = Alignment.CenterStart) {
             BasicTextField(
-                field, { field = it }, Modifier.fillMaxWidth().semantics { contentDescription = placeholder },
+                field, { field = it }, Modifier.fillMaxWidth().semantics { contentDescription = shownPlaceholder },
                 textStyle = MaterialTheme.typography.bodyLarge.copy(color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp),
                 cursorBrush = SolidColor(OrbKit.foreground), maxLines = 8,
                 keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
             )
-            if (text.isEmpty()) Text(placeholder, color = OrbKit.faintForeground, fontSize = 15.sp, lineHeight = 22.sp)
+            if (text.isEmpty()) Text(shownPlaceholder, color = OrbKit.faintForeground, fontSize = 15.sp, lineHeight = 22.sp)
         }
         AnimatedVisibility(
-            busy && canSend && busyChoices.isNotEmpty() && sendOverride == null,
+            busy && canSend && busyChoices.isNotEmpty() && sendOverride == null && answer == null,
             enter = fadeIn(tween(OrbMotion.Short)) + expandVertically(OrbMotion.standard(OrbMotion.Short)),
             exit = fadeOut(tween(OrbMotion.Fast)) + shrinkVertically(OrbMotion.standard(OrbMotion.Fast)),
         ) {
@@ -169,7 +178,7 @@ internal fun Composer(
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (attach != null) {
+            if (canAttach) {
                 // «+» turns a quarter of a turn into «×» while the tray is open; the turn is drawn by the layer, not recomposed.
                 val turn by animateFloatAsState(if (sheet) 45f else 0f, kitTween(OrbMotion.Short), label = "attach-turn")
                 OrbComposerIcon(
@@ -187,10 +196,11 @@ internal fun Composer(
             }
             // Parar only when there is nothing to send: with text, the message goes to the PC's queue behind the turn.
             OrbSendButton(
-                stop = busy && !canSend && sendOverride == null, enabled = canSend, sendLabel = if (sendOverride != null) ChatTexts.QUEUED_SAVE else ChatTexts.SEND,
+                stop = busy && !canSend && sendOverride == null && answer == null, enabled = canSend, sendLabel = if (sendOverride != null) ChatTexts.QUEUED_SAVE else ChatTexts.SEND,
                 stopLabel = ChatTexts.STOP,
                 onClick = {
-                    if (sendOverride != null) { if (canSend) { val t = text; setText(""); sendOverride(t) } }
+                    if (answer != null) { if (canSend) { val t = text; setText(""); answer.onSend(t) } }
+                    else if (sendOverride != null) { if (canSend) { val t = text; setText(""); sendOverride(t) } }
                     else if (busy && !canSend) onStop() else {
                         val t = text; setText("")
                         if (busy && busyChoices.isNotEmpty()) busyChoices.first().send(t) else onSend(t)

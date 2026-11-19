@@ -184,7 +184,7 @@ object ChatTexts {
     const val CHAT_SOON = "El chat se abre aquí en el siguiente paso."
 
     // Orbe chat
-    const val MESSAGE_FIELD = "Mensaje para Orbe"
+    const val MESSAGE_FIELD = "Escribe a Orbe…"
     const val SEND = "Enviar"
     const val STOP = "Parar"
     const val STOP_HINT = "Para el turno de Orbe en el PC"
@@ -255,12 +255,14 @@ object ChatTexts {
         listOfNotNull(agent?.takeIf { it.isNotBlank() }, doing?.takeIf { it.isNotBlank() }, percent?.let { "$it %" }).joinToString(" · ")
 
     // Cards
-    const val ANSWER_PICK = "Elige una opción o escribe otra. Responde al agente en el PC."
-    const val ANSWER_PICK_MANY = "Elige hasta 4 opciones o escribe otra. Responde al agente en el PC."
     const val ANSWER_OTHER = "Otra respuesta"
     const val ANSWER_OTHER_CHIP = "Otra respuesta…"
-    const val ANSWER_SEND = "Responder"
-    const val ANSWER_SKIP = "Saltar"
+    /** In the card's «⋯»: skipping is a real action of the PC, kept off the card itself. */
+    const val ANSWER_SKIP = "Saltar esta pregunta"
+    fun asks(name: String) = "$name pregunta"
+    fun answerField(name: String) = "Responde a $name…"
+    fun answeringBar(name: String) = "Respondiendo a $name"
+    const val ANSWER_MANY_HINT = "Elige hasta 4 opciones y envía, o escribe otra respuesta."
     const val ANSWERED = "Respondida"
     const val SKIPPED = "Saltada"
     const val ASKED_BY_ORBE = "Orbe te pregunta"
@@ -325,7 +327,7 @@ object ChatTexts {
     const val PLAN = "Plan"
     const val AGENT_FALLBACK = "El agente"
 
-    fun directField(agent: String?) = "Mensaje para ${agent ?: "el agente"}"
+    fun directField(agent: String?) = "Escribe a ${agent ?: "el agente"}…"
     fun emptyDirect(agent: String?) = "Conversación con ${agent ?: "el agente"}. Lo que escribas lo hace el agente en el PC."
     fun queueTitle(n: Int) = "En cola ($n)"
     fun agentWorking(agent: String?) = "${agent ?: "El agente"} está trabajando…"

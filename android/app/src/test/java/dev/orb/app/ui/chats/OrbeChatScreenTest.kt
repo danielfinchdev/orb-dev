@@ -64,7 +64,7 @@ class OrbeChatScreenTest {
         rule.onNodeWithText("Carrito que no guarda").assertIsDisplayed()
         rule.onNodeWithText("tienda-online · al día").assertIsDisplayed()
         rule.onNodeWithText("El carrito no guarda los productos cuando recargo.").assertIsDisplayed()
-        rule.onNodeWithText("Mensaje para Orbe").assertIsDisplayed()
+        rule.onNodeWithText("Escribe a Orbe…").assertIsDisplayed()
         rule.onNodeWithText("Orbe").assertIsDisplayed()
     }
 
@@ -93,7 +93,8 @@ class OrbeChatScreenTest {
         b.events.tryEmit(stateEvent(7, busy = true, partial = "Voy a revisar el almacén"))
         rule.waitForIdle()
         rule.onNodeWithText("Voy a revisar el almacén").assertIsDisplayed()
-        rule.onNodeWithText("Escribiendo…").assertIsDisplayed()
+        // The caret says the text is arriving: no «Escribiendo…» and no counter of seconds.
+        assertEquals(0, rule.onAllNodesWithText("Escribiendo…").fetchSemanticsNodes().size)
         b.events.tryEmit(stateEvent(7, busy = false, answer = raw(5, "orb", "Listo, ya guarda.")))
         rule.waitForIdle()
         rule.onNodeWithText("Listo, ya guarda.").assertIsDisplayed()
@@ -109,23 +110,69 @@ class OrbeChatScreenTest {
         rule.onNodeWithText("1 en cola").assertIsDisplayed()
     }
 
-    @Test fun tapAnOptionAndAnswerCallsAnswer() {
+    @Test fun tappingAnOptionAnswersAtOnceAndNamesWhoAsks() {
         val b = FakeOrbeChatBackend(thread + raw(3, "orb", "¿Dónde guardo el carrito?", questionMeta()))
         screen(b)
+        rule.onNodeWithText("Orbe pregunta").performScrollTo().assertIsDisplayed()
+        // The mockup draws no help sentence and no buttons on the card: the chips are the answer.
+        assertEquals(0, rule.onAllNodesWithText("Responder").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Saltar").fetchSemanticsNodes().size)
         rule.onNodeWithText("IndexedDB").performScrollTo().performClick()
-        rule.onNodeWithText("Responder").performScrollTo().performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("answer 3 IndexedDB - false"))
         // The card closes into the answer.
         rule.onNodeWithText("Respondida: IndexedDB").assertIsDisplayed()
     }
 
-    @Test fun answerIsDisabledWithoutAChoice() {
+    @Test fun anOwnAnswerIsWrittenInTheBoxAndGoesAsTheAnswer() {
         val b = FakeOrbeChatBackend(thread + raw(3, "orb", "¿Dónde guardo el carrito?", questionMeta()))
         screen(b)
-        rule.onNodeWithText("Responder").performClick()
+        rule.onNodeWithText("Otra respuesta…").performScrollTo().performClick()
         rule.waitForIdle()
+        rule.onNodeWithText("Respondiendo a Orbe").assertIsDisplayed()
+        rule.onNode(hasSetTextAction()).performTextInput("En SQLite")
+        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("answer 3  En SQLite false"))
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("send ") })
+    }
+
+    @Test fun cancellingTheAnswerGivesTheBoxBackToOrdinaryMessages() {
+        val b = FakeOrbeChatBackend(thread + raw(3, "orb", "¿Dónde guardo el carrito?", questionMeta()))
+        screen(b)
+        rule.onNodeWithText("Otra respuesta…").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithText("Respondiendo a Orbe").fetchSemanticsNodes().size)
+        rule.onNode(hasSetTextAction()).performTextInput("Otra cosa")
+        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("send Otra cosa"))
+    }
+
+    @Test fun aQuestionThatTakesSeveralIsAnsweredFromTheBoxWithTheChipsPicked() {
+        val b = FakeOrbeChatBackend(thread + raw(3, "orb", "¿Dónde guardo el carrito?", questionMeta(multi = true)))
+        screen(b)
+        rule.onNodeWithText("IndexedDB").performScrollTo().performClick()
+        rule.onNodeWithText("localStorage").performClick()
+        rule.waitForIdle()
+        // Nothing left yet; the box sends the picked options even with no text.
         assertTrue(b.calls.none { it.startsWith("answer") })
+        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("answer 3 IndexedDB|localStorage - false"))
+    }
+
+    @Test fun skippingAQuestionLivesInItsMoreMenu() {
+        val b = FakeOrbeChatBackend(thread + raw(3, "orb", "¿Dónde guardo el carrito?", questionMeta()))
+        screen(b)
+        rule.onNodeWithText("Orbe pregunta").performScrollTo()
+        // The header of the question has its own «⋯»; the header of the screen has another.
+        rule.onAllNodesWithContentDescription("Más opciones")[1].performClick()
+        rule.onNodeWithText("Saltar esta pregunta").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("answer 3  - true"))
     }
 
     @Test fun reportHasAnAcceptButton() {
@@ -162,13 +209,34 @@ class OrbeChatScreenTest {
         val b = FakeOrbeChatBackend(thread)
         b.brainOnPc = BrainInfo("Claude Code", "Opus", "high")
         screen(b)
-        // The selector under the header; the label of the box only says the current mode.
-        rule.onAllNodesWithText("Preguntar").assertCountEquals(1)
+        // The label of the box says the current mode; the selector itself is under the header only where an OK is asked.
+        assertEquals(0, rule.onAllNodesWithText("Preguntar").fetchSemanticsNodes().size)
         rule.onNodeWithContentDescription("Permisos de las tareas: Preguntar").assertIsDisplayed()
-        rule.onNodeWithText("Preguntar: te pido el OK antes de cada cambio.").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("Preguntar: te pido el OK antes de cada cambio.").fetchSemanticsNodes().size)
         rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
         rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsNotEnabled()
         assertTrue(b.brainReads > 0)
+    }
+
+    @Test fun theModeSelectorAppearsUnderTheHeaderWhereAnOkIsAsked() {
+        val b = FakeOrbeChatBackend(thread + attention)
+        b.taskDetail = waiting42
+        screen(b)
+        rule.onNodeWithText("Preguntar: te pido el OK antes de cada cambio.").assertIsDisplayed()
+        rule.onNodeWithText("Auto").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("mode auto"))
+    }
+
+    @Test fun theMenuHoldsTheModeWhenNothingAsksForAnOk() {
+        val b = FakeOrbeChatBackend(thread)
+        screen(b)
+        rule.onNodeWithContentDescription("Más opciones").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Preguntar: te pido el OK antes de cada cambio.").assertIsDisplayed()
+        rule.onNodeWithText("Auto").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("mode auto"))
     }
 
     @Test fun withoutWhatThePcSaysTheBrainIsNotInvented() {
@@ -247,20 +315,21 @@ class OrbeChatScreenTest {
         actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias.",
     )
 
-    @Test fun theWaitingCardShowsWhatIsApprovedAndOkSendsItsFingerprint() {
+    @Test fun theWaitingCardIsCompactAndItsButtonNeverApproves() {
         val b = FakeOrbeChatBackend(thread + attention)
         b.taskDetail = waiting42
         screen(b)
         rule.onNodeWithText("#42 Borrar build/ y reinstalar").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("Pide tu OK porque: elimina datos").assertIsDisplayed()
-        rule.onNodeWithText("Borra la carpeta build/ y vuelve a instalar las dependencias.").assertIsDisplayed()
-        rule.onNodeWithText("Codex (gpt)").assertIsDisplayed()
-        rule.onNodeWithText("C:/app-movil").assertIsDisplayed()
+        rule.onNodeWithText("Codex · app-movil · elimina datos").assertIsDisplayed()
         rule.onNodeWithText("Espera tu OK").assertIsDisplayed()
-        rule.onNodeWithText("Aprobar").performScrollTo().performClick()
+        // What the OK covers is read whole in the task's own screen, not on the card.
+        assertEquals(0, rule.onAllNodesWithText("Borra la carpeta build/ y vuelve a instalar las dependencias.").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Pide tu OK porque: elimina datos").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Ver y aprobar").performScrollTo().performClick()
         rule.waitForIdle()
-        assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
-        assertEquals(0, rule.onAllNodesWithText("Aprobar la tarea #42").fetchSemanticsNodes().size)
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
     @Test fun afterTheOkTheCardFoldsToOneLine() {
@@ -268,9 +337,13 @@ class OrbeChatScreenTest {
         b.taskDetail = waiting42
         // The PC answers «approved» only once it has been asked to approve.
         b.onAction = { if (it == "task 42 true") b.detailsOnPc[42] = waiting42.copy(status = "running", actions = emptySet(), decision = "approved") }
-        screen(b)
+        val vm = screen(b)
+        // The dialog is the only place of the chat that approves, with the fingerprint of the text it shows.
+        vm.askApproval(42)
+        rule.waitForIdle()
         rule.onNodeWithText("Aprobar").performClick()
         rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
         rule.onNodeWithText("#42 Aprobada").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
         rule.onNodeWithText("En curso").assertIsDisplayed()
@@ -393,13 +466,6 @@ class OrbeChatScreenTest {
         assertEquals(0, rule.onAllNodesWithText("Aceptar").fetchSemanticsNodes().size)
     }
 
-    @Test fun permissionModeSelectorAsksThePcToChange() {
-        val b = FakeOrbeChatBackend(thread)
-        screen(b)
-        rule.onNodeWithText("Auto").performClick()
-        rule.waitForIdle()
-        assertTrue(b.calls.contains("mode auto"))
-    }
 
     @Test fun theLabelOfTheBoxOnlyShowsTheMode() {
         val b = FakeOrbeChatBackend(thread)
@@ -520,13 +586,13 @@ class OrbeChatScreenTest {
 
     @Test fun anotherPalettePaintsTheSameChat() {
         screen(FakeOrbeChatBackend(thread), OrbPaletteChoice.Oceano)
-        rule.onNodeWithText("Mensaje para Orbe").assertIsDisplayed()
+        rule.onNodeWithText("Escribe a Orbe…").assertIsDisplayed()
     }
 
     @Test fun slashCompactIsListedAndAsksThePcWithoutAnExtraQuestion() {
         val b = FakeOrbeChatBackend(thread)
         screen(b)
-        rule.onNodeWithContentDescription("Mensaje para Orbe").performTextInput("/")
+        rule.onNodeWithContentDescription("Escribe a Orbe…").performTextInput("/")
         rule.onNodeWithText("/compact").assertIsDisplayed()
         rule.onNodeWithText("Resume la conversación para liberar contexto").assertIsDisplayed()
         rule.onNodeWithText("/compact").performClick()
@@ -540,11 +606,11 @@ class OrbeChatScreenTest {
     @Test fun anAtInTheBoxListsWhatThePcOffersAndInsertsTheToken() {
         val src = MentionSource { listOf(MentionOption("@tarea:43", "#43 Borrar build/", "tarea · app-movil", MentionKind.Task)) }
         screen(FakeOrbeChatBackend(thread), mentions = src)
-        rule.onNodeWithContentDescription("Mensaje para Orbe").performTextInput("Revisa el @")
+        rule.onNodeWithContentDescription("Escribe a Orbe…").performTextInput("Revisa el @")
         rule.waitForIdle()
         rule.onNodeWithText("#43 Borrar build/").assertIsDisplayed()
         rule.onNodeWithText("#43 Borrar build/").performClick()
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("Mensaje para Orbe").assertTextContains("Revisa el @tarea:43 ")
+        rule.onNodeWithContentDescription("Escribe a Orbe…").assertTextContains("Revisa el @tarea:43 ")
     }
 }

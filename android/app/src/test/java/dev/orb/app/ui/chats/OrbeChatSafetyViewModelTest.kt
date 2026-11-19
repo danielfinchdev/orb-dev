@@ -51,24 +51,12 @@ class OrbeChatSafetyViewModelTest {
         val vm = vm(b)
         vm.watchTask(42)
         runCurrent()
-        vm.approveFromCard(42, "h1")
-        vm.approveFromCard(42, "h1")
+        vm.askApproval(42)
+        runCurrent()
+        vm.confirmApproval()
+        vm.confirmApproval()
         runCurrent()
         assertEquals(1, b.calls.count { it.startsWith("task 42 true") })
-    }
-
-    @Test fun aDescriptionTheCardCutIsNeverApprovedFromTheCard() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two + attention)
-        b.taskDetail = b.taskDetail.copy(description = "x".repeat(TaskDetail.CARD_DESCRIPTION_CHARS + 1))
-        val vm = vm(b)
-        val opened = ArrayList<Long>()
-        backgroundScope.launch { vm.openTask.collect { opened += it } }
-        vm.watchTask(42)
-        runCurrent()
-        vm.approveFromCard(42, "h1")
-        runCurrent()
-        assertTrue(b.calls.none { it.startsWith("task ") })
-        assertEquals(listOf(42L), opened)
     }
 
     @Test fun anOldReadThatArrivesAfterTheOkDoesNotBringTheButtonBack() = runTest(dispatcher) {
@@ -78,12 +66,14 @@ class OrbeChatSafetyViewModelTest {
         val vm = vm(b)
         vm.watchTask(42)
         runCurrent()
+        vm.askApproval(42)
+        runCurrent()
         // A read leaves the PC while the task still waits and is slow to arrive.
         val late = CompletableDeferred<Unit>()
         b.staleNext = late
         b.events.tryEmit(LinkEvent("board:changed", json("""{}""")))
         runCurrent()
-        vm.approveFromCard(42, "h1")
+        vm.confirmApproval()
         runCurrent()
         assertEquals("running", vm.state.value.taskInfo[42]?.status)
         late.complete(Unit)

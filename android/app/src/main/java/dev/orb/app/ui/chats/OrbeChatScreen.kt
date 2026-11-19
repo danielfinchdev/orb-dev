@@ -72,6 +72,7 @@ import dev.orb.app.ui.kit.OrbDialogAction
 import dev.orb.app.ui.kit.OrbSegmented
 import dev.orb.app.ui.kit.OrbSheetInfo
 import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.OrbSheetLabel
 import dev.orb.app.ui.kit.OrbSnackbarHost
 import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.offline.ConnectionBand
@@ -109,10 +110,11 @@ fun OrbeChatScreen(
         }
     }
     var stick by remember { mutableStateOf(true) }
+    val draft = remember(vm) { AnswerDraft() }
     var rejectAsk by rememberSaveable { mutableStateOf<Long?>(null) }
     val actions = remember(vm) {
         CardActions(
-            vm::answer, vm::accept, vm::decideRequest, vm::approveFromCard, { rejectAsk = it }, vm::watchTask,
+            vm::answer, vm::accept, vm::decideRequest, { rejectAsk = it }, vm::watchTask,
             vm::acceptTask, vm::askUndo, onOpenChanges, { openTask(it) },
         )
     }
@@ -124,14 +126,15 @@ fun OrbeChatScreen(
 
     Box(modifier.fillMaxSize().imePadding()) {
         Column(Modifier.fillMaxSize()) {
-            ChatTopBar(state, liveInfo, onBack, onCompact = vm::compact)
+            ChatTopBar(state, liveInfo, onBack, onCompact = vm::compact, onMode = vm::setMode)
             if (state.loaded && !state.deleted) ConnectionBand(state.connection)
-            if (state.canSetMode && !state.deleted) ModeSelector(state.mode, vm::setMode)
+            // Under the header only where an OK is being asked, as in the mockup; everywhere else the mode is in «⋯».
+            if (state.canSetMode && !state.deleted && state.asksForOk) ModeSelector(state.mode, vm::setMode)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.deleted -> DeletedChat(onBack, if (state.canRestore) vm::restore else null)
                     !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    else -> MessageList(vm, state, liveInfo, actions, nowMs, stick, onStick = { stick = it })
+                    else -> MessageList(vm, state, liveInfo, actions, draft, nowMs, stick, onStick = { stick = it })
                 }
             }
             if (!state.deleted) {
@@ -144,15 +147,29 @@ fun OrbeChatScreen(
                     onRemove = { vm.removeQueued(it.id) },
                 ) else null
                 ChatQueueBar(liveInfo?.queued ?: 0, queue = queue)
+                // A pending question is answered from the box once the person picks several options or asks to write their own.
+                val pendingQuestions = state.items.mapNotNull { (it as? ChatItem.Msg)?.message }.filter { (it.card as? MsgCard.Question)?.pending == true }
+                val asked = pendingQuestions.firstOrNull { it.id == draft.question }
+                LaunchedEffect(asked == null) { if (asked == null) draft.reset() }
+                val askerName = asked?.let { questionAsker(it, state).second }
+                val answer = if (asked != null && askerName != null && draft.active) ComposerAnswer(
+                    placeholder = ChatTexts.answerField(askerName), hasPicks = draft.picked.isNotEmpty(), enabled = state.online && asked.id !in state.busyCards,
+                    onSend = { text ->
+                        actions.answer(asked, if (text.isBlank()) draft.picked.toList() else emptyList(), text.takeIf { it.isNotBlank() }, false)
+                        draft.reset()
+                    },
+                ) else null
                 Composer(
                     online = state.online, busy = liveInfo?.busy == true, mode = state.mode, canSetMode = state.canSetMode,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop,
                     attach = vm.attach, brain = state.brain?.label ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
-                    mentions = mentions, commands = commands,
+                    mentions = mentions, commands = commands, answer = answer,
+                    above = if (answer != null && askerName != null) ({ _, clear -> AnswerBar(askerName, onCancel = { draft.reset(); clear() }) }) else null,
                 )
             }
         }
-        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp))
+        // Floats over the box with some air, as the mockup's `.snack`.
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 128.dp, start = 16.dp, end = 16.dp))
     }
     state.approval?.let { ApprovalDialog(it, onConfirm = vm::confirmApproval, onDismiss = vm::dismissApproval) }
     rejectAsk?.let { task ->
@@ -177,7 +194,7 @@ private fun ModeSelector(mode: String?, onMode: (String) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         OrbSegmented(
             listOf(ChatTexts.MODE_AUTO, ChatTexts.MODE_ASK), selected = when (mode) { "auto" -> 0; "preguntar" -> 1; else -> -1 },
-            onSelect = { onMode(if (it == 0) "auto" else "preguntar") }, stretch = true,
+            onSelect = { onMode(if (it == 0) "auto" else "preguntar") }, track = true,
             modifier = Modifier.semantics { contentDescription = ChatTexts.MODE_SELECTOR },
         )
         val note = when (mode) { "auto" -> ChatTexts.MODE_NOTE_AUTO; "preguntar" -> ChatTexts.MODE_NOTE_ASK; else -> null }
@@ -194,18 +211,24 @@ internal fun headerLine(state: OrbeChatState, live: LiveInfo?): String = when {
 }
 
 @Composable
-private fun ChatTopBar(state: OrbeChatState, live: LiveInfo?, onBack: () -> Unit, onCompact: () -> Unit) {
+private fun ChatTopBar(state: OrbeChatState, live: LiveInfo?, onBack: () -> Unit, onCompact: () -> Unit, onMode: (String) -> Unit) {
     var open by rememberSaveable { mutableStateOf(false) }
     OrbTopBar(
         state.title, sub = headerLine(state, live), sideWidth = 56.dp,
         subColor = if (state.online) OrbKit.mutedForeground else OrbKit.destructive,
         leading = { OrbIconButton(OrbIcons.ArrowLeft, ChatTexts.BACK, onBack) },
-        actions = { if (state.canCompact && !state.deleted) OrbIconButton(OrbIcons.MoreVertical, ChatTexts.MORE, { open = true }) },
+        actions = { if ((state.canCompact || state.canSetMode) && !state.deleted) OrbIconButton(OrbIcons.MoreVertical, ChatTexts.MORE, { open = true }) },
     )
     if (open) {
         OrbSheet(onDismiss = { open = false }) {
-            if (state.online) OrbSheetItem(ChatTexts.COMPACT, onClick = { open = false; onCompact() }, icon = OrbIcons.FoldVertical)
-            else OrbSheetInfo(ChatTexts.COMPACT, OrbIcons.FoldVertical, meta = ChatTexts.NEEDS_PC)
+            if (state.canCompact) {
+                if (state.online) OrbSheetItem(ChatTexts.COMPACT, onClick = { open = false; onCompact() }, icon = OrbIcons.FoldVertical)
+                else OrbSheetInfo(ChatTexts.COMPACT, OrbIcons.FoldVertical, meta = ChatTexts.NEEDS_PC)
+            }
+            if (state.canSetMode) {
+                OrbSheetLabel(ChatTexts.MODE_SELECTOR)
+                if (state.online) ModeSelector(state.mode, onMode) else OrbSheetInfo(ChatTexts.MODE_SELECTOR, OrbIcons.ShieldCheck, meta = ChatTexts.NEEDS_PC)
+            }
             state.brain?.label?.let { OrbSheetInfo(ChatTexts.BRAIN_DESC, OrbIcons.Brain, meta = it) }
         }
     }
@@ -229,7 +252,7 @@ private fun DeletedChat(onBack: () -> Unit, onRestore: (() -> Unit)?) {
 
 @Composable
 private fun MessageList(
-    vm: OrbeChatViewModel, state: OrbeChatState, liveInfo: LiveInfo?, actions: CardActions, nowMs: () -> Long,
+    vm: OrbeChatViewModel, state: OrbeChatState, liveInfo: LiveInfo?, actions: CardActions, draft: AnswerDraft, nowMs: () -> Long,
     stick: Boolean, onStick: (Boolean) -> Unit,
 ) {
     val listState = rememberLazyListState()
@@ -276,7 +299,7 @@ private fun MessageList(
                     fadeOutSpec = tween(OrbMotion.Fast),
                 )
                 when (item) {
-                    is ChatItem.Msg -> MessageRow(item, state, now, actions, enter)
+                    is ChatItem.Msg -> MessageRow(item, state, now, actions, enter, draft)
                     is ChatItem.Waiting -> PendingRow(
                         item.pending, state.online, { vm.retrySend(item.pending.clientId) }, { vm.discard(item.pending.clientId) }, enter,
                         connection = state.connection,
@@ -288,7 +311,7 @@ private fun MessageList(
             }
             if (liveInfo != null) item(key = "live", contentType = "live") {
                 val live by vm.liveText.collectAsStateWithLifecycle()
-                LiveBubble(liveInfo, text = { live.text }, nowMs = nowMs, modifier = Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)))
+                LiveBubble(liveInfo, text = { live.text }, modifier = Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)))
             }
         }
         AnimatedVisibility(
@@ -307,4 +330,23 @@ internal suspend fun LazyListState.toEnd() {
     scrollToItem(last)
     // A last row taller than the screen is shown from its top by the line above; this brings its end into view.
     scrollBy(100_000f)
+}
+
+/** An OK is being asked in this thread: a task waits for it or an agent's question is still open. */
+internal val OrbeChatState.asksForOk: Boolean
+    get() = items.any { item ->
+        val card = (item as? ChatItem.Msg)?.message?.card
+        card is MsgCard.TaskAttention || (card is MsgCard.Question && card.pending)
+    }
+
+/** `.ctxbar` over the box while it answers a question: whom it answers and a way back to ordinary messages. */
+@Composable
+private fun AnswerBar(name: String, onCancel: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(ChatTexts.answeringBar(name), Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1)
+        OrbButton(ChatTexts.CANCEL, onCancel, kind = OrbButtonKind.Ghost, small = true)
+    }
 }

@@ -319,8 +319,8 @@ class OrbeChatGuardsViewModelTest {
         assertFalse(d.approvableFromCard)
     }
 
-    @Test fun aCardNeverApprovesDirectlyAMovedFolderOrACutText() = runTest(dispatcher) {
-        for (extra in listOf(""","folderMoved":true""", ""","folderOutside":true""", ""","descriptionCut":true""")) {
+    @Test fun aMovedOrOutsideFolderIsNotApprovedFromTheDialogEitherAndOpensTheTask() = runTest(dispatcher) {
+        for (extra in listOf(""","folderMoved":true""", ""","folderOutside":true""")) {
             val b = FakeOrbeChatBackend(two + attention(5, 42))
             b.taskDetail = waiting(extra).copy(actions = setOf(TaskAction.Approve))
             val vm = vm(b)
@@ -328,9 +328,11 @@ class OrbeChatGuardsViewModelTest {
             backgroundScope.launch { vm.openTask.collect { opened += it } }
             vm.watchTask(42)
             runCurrent()
-            vm.approveFromCard(42, "h")
+            vm.askApproval(42)
             runCurrent()
             assertTrue(extra, b.calls.none { it.startsWith("task 42") })
+            assertNull(extra, vm.state.value.approval)
+            assertEquals(extra, listOf(42L), opened)
         }
     }
 

@@ -101,7 +101,7 @@ class ChatShotsTest {
         Shots.save(rule.activity, "$name-${palette.key}-oscuro$suffix")
     }
 
-    private fun vm(b: FakeOrbeChatBackend) = OrbeChatViewModel(b, 7, dispatcher = Dispatchers.Unconfined)
+    private fun vm(b: FakeOrbeChatBackend) = OrbeChatViewModel(b, 7, dispatcher = Dispatchers.Unconfined, attach = shotAttach())
 
     private val quoted = listOf(OrbeQueued("q1", "y luego súbelo a la rama dev", 1_000L))
 
@@ -222,11 +222,14 @@ class ChatShotsTest {
         repeat(2) { org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle(); rule.mainClock.advanceTimeBy(300) }
     }
 
-    private fun approvals(palette: OrbPaletteChoice, suffix: String = "", auto: Boolean = false, question: Boolean = false, setup: (FakeOrbeChatBackend) -> Unit = {}, after: () -> Unit = {}) {
+    private fun approvals(palette: OrbPaletteChoice, suffix: String = "", auto: Boolean = false, question: Boolean = false, setup: (FakeOrbeChatBackend) -> Unit = {}, after: () -> Unit = {},
+        afterWith: (OrbeChatViewModel) -> Unit = {},
+    ) {
         Shots.assumeEnabled()
         val b = backend14(auto, question)
         setup(b)
-        shoot("14-aprobaciones", palette, suffix, vm(b), after = after)
+        val vm = vm(b)
+        shoot("14-aprobaciones", palette, suffix, vm, after = { after(); afterWith(vm) })
     }
 
     @Test fun approvalsAsk() = approvals(OrbPaletteChoice.Grafito)
@@ -236,7 +239,8 @@ class ChatShotsTest {
     @Test fun approvalsApproved() = approvals(
         OrbPaletteChoice.Grafito, "-aprobada",
         setup = { b -> b.onAction = { if (it == "task 43 true") b.detailsOnPc[43] = task43.copy(status = "running", actions = emptySet(), decision = "approved") } },
-        after = { holdClock(); rule.onNodeWithText("Aprobar").performClick(); settle() },
+        // The card only opens the task: the OK of this picture is given the one way the chat still has, its dialog.
+        afterWith = { vm -> vm.askApproval(43); rule.waitForIdle(); holdClock(); rule.onNodeWithText("Aprobar").performClick(); settle() },
     )
 
     @Test fun approvalsRejected() = approvals(
@@ -282,6 +286,11 @@ class ChatShotsTest {
     )
 
     @Test fun approvalsAgentQuestion() = approvals(OrbPaletteChoice.Grafito, "-pregunta", question = true)
+
+    @Test fun approvalsAgentQuestionOwnAnswer() = approvals(
+        OrbPaletteChoice.Grafito, "-pregunta-propia", question = true,
+        after = { rule.onNodeWithText("Otra respuesta…").performClick(); rule.waitForIdle() },
+    )
 
     // ---- 28 · Sin conexión dentro de un chat ----
 

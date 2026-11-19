@@ -587,31 +587,9 @@ class OrbeChatViewModel(
     }
 
     /**
-     * The card's «Aprobar». The card showed the task as [shownHash] fingerprints it: only that is approved. If the card
-     * cannot show what the OK is about, or what it showed is no longer what was read last, nothing is approved here.
+     * The PC's description in a dialog, read now, to approve with the fingerprint of the text it shows; a task that is still not
+     * describable opens its own screen instead. A task's card never calls this: «Ver y aprobar» only opens the task.
      */
-    fun approveFromCard(task: Long, shownHash: String?) {
-        val key = taskKey(task)
-        if (key in busyCards.value) return
-        val info = taskInfo.value[task]
-        when {
-            // Nothing read yet: the PC's description is fetched and shown in the dialog (or the task's screen opens).
-            info == null -> askApproval(task)
-            // A description the card cut was not read whole: the task's own screen shows it.
-            shownHash.isNullOrBlank() || !info.approvableFromCard || TaskAction.Approve !in info.actions -> _opens.trySend(task)
-            // What was on screen is not the latest read: the new one is drawn first, the OK waits for a new tap.
-            shownHash != info.hash -> _messages.trySend(ChatTexts.TASK_CHANGED)
-            else -> {
-                busyCards.update { it + key }
-                viewModelScope.launch {
-                    decideTask(task, true, shownHash)
-                    busyCards.update { it - key }
-                }
-            }
-        }
-    }
-
-    /** The PC's description in a dialog, read now; a task that is still not describable opens its own screen instead. */
     fun askApproval(task: Long) {
         val key = taskKey(task)
         if (key in busyCards.value) return

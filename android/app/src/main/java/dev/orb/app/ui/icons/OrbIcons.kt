@@ -144,6 +144,8 @@ object OrbIcons {
     val ArrowUp by lazy { lucide("arrow-up", "m5 12 7-7 7 7", "M12 19V5") }
     val ChevronUp by lazy { lucide("chevron-up", "m18 15-6-6-6 6") }
     val ChevronRight by lazy { lucide("chevron-right", "m9 18 6-6-6-6") }
+    val SkipForward by lazy { lucide("skip-forward", "M21 4v16", "M6.029 4.285A2 2 0 0 0 3 6v12a2 2 0 0 0 3.029 1.715l9.997-5.998a2 2 0 0 0 .003-3.432z") }
+    val RotateCw by lazy { lucide("rotate-cw", "M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8", "M21 3v5h-5") }
     val ListOrdered by lazy {
         lucide("list-ordered", "M11 5h10", "M11 12h10", "M11 19h10", "M4 4h1v5", "M4 9h2", "M6.5 20H3.4c0-1 2.6-1.925 2.6-3.5a1.5 1.5 0 0 0-2.6-1.02")
     }

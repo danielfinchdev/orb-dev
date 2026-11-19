@@ -89,9 +89,12 @@ import dev.orb.app.ui.kit.OrbDelivery
 import dev.orb.app.ui.kit.OrbDialog
 import dev.orb.app.ui.kit.OrbDialogAction
 import dev.orb.app.ui.kit.OrbDeliveryMark
+import dev.orb.app.ui.kit.OrbIconButton
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbMessageText
 import dev.orb.app.ui.kit.OrbNote
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetItem
 import dev.orb.app.ui.kit.OrbTaskCard
 import dev.orb.app.ui.kit.OrbThinking
 import androidx.compose.foundation.layout.fillMaxSize
@@ -219,12 +222,13 @@ private fun timeOf(at: String?, now: Long) = ChatTime.short(at, now)
 @Composable
 fun MessageRow(
     item: ChatItem.Msg, state: OrbeChatState, now: Long, actions: CardActions, modifier: Modifier = Modifier,
+    draft: AnswerDraft = remember { AnswerDraft() },
 ) {
     val m = item.message
     when (m.role) {
         // A line that came back from the PC is saved there: two ticks.
         MsgRole.User -> UserBubble(m.body, timeOf(m.at, now), modifier, delivery = OrbDelivery.Saved)
-        MsgRole.Orbe -> OrbeMessage(m, state, now, actions, modifier)
+        MsgRole.Orbe -> OrbeMessage(m, state, actions, draft, modifier)
         MsgRole.System -> SystemMessage(m, state, actions, modifier)
     }
 }
@@ -248,14 +252,14 @@ fun UserBubble(
 }
 
 @Composable
-private fun OrbeMessage(m: ChatMessage, state: OrbeChatState, now: Long, actions: CardActions, modifier: Modifier) {
+private fun OrbeMessage(m: ChatMessage, state: OrbeChatState, actions: CardActions, draft: AnswerDraft, modifier: Modifier) {
     val blocks = remember(m.id, m.body) { LightMarkdown.parse(m.body) }
     val card = m.card
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        OrbAuthor("orbe", "Orbe", time = timeOf(m.at, now))
+        if (card is MsgCard.Question) QuestionHeader(m, card, state, actions) else OrbAuthor("orbe", "Orbe")
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (card is MsgCard.Question) {
-                QuestionCard(m, card, state.online, m.id in state.busyCards, actions)
+                QuestionCard(m, card, state.online, m.id in state.busyCards, actions, draft)
             } else {
                 MarkdownBody(blocks)
                 if (card is MsgCard.Report) ReportCard(m, card, state.online, m.id in state.busyCards, actions)
@@ -350,7 +354,7 @@ fun PendingRow(
  * the list is not drawn again while the assistant writes.
  */
 @Composable
-fun LiveBubble(info: LiveInfo, text: () -> String, nowMs: () -> Long, modifier: Modifier = Modifier) {
+fun LiveBubble(info: LiveInfo, text: () -> String, modifier: Modifier = Modifier) {
     val body = text()
     val blocks = remember(body) { if (body.isEmpty()) emptyList() else LightMarkdown.parse(body) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -361,21 +365,8 @@ fun LiveBubble(info: LiveInfo, text: () -> String, nowMs: () -> Long, modifier: 
         if (info.waiting && !info.busy) {
             Text(ChatTexts.WAITING_TURN, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodyMedium)
         } else {
-            LiveActivity(info, nowMs)
-        }
-    }
-}
-
-/** What the assistant is doing now, with the bobbing dots and how long the turn has taken. */
-@Composable
-private fun LiveActivity(info: LiveInfo, nowMs: () -> Long) {
-    val label = info.activity ?: if (info.hasText) ChatTexts.WRITING else ChatTexts.THINKING
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        OrbThinking(label, Modifier.weight(1f, fill = false))
-        val since = info.since
-        if (since != null) {
-            val now by produceState(nowMs()) { while (true) { delay(1000); value = nowMs() } }
-            OrbNote(elapsedText(now - since))
+            // The caret already says the text is arriving; the dots are for what is not visible (a tool, the first token).
+            if (info.activity != null || !info.hasText) OrbThinking(info.activity ?: ChatTexts.THINKING)
         }
     }
 }
@@ -387,8 +378,6 @@ class CardActions(
     val answer: (ChatMessage, List<String>, String?, Boolean) -> Unit,
     val accept: (ChatMessage) -> Unit,
     val decideRequest: (ChatMessage, String) -> Unit,
-    /** «Aprobar» of a task's card with the fingerprint of what the card showed. */
-    val approve: (Long, String?) -> Unit,
     /** «Rechazar»: the screen confirms before the task is cancelled. */
     val reject: (Long) -> Unit,
     val watchTask: (Long) -> Unit,
@@ -413,68 +402,77 @@ internal fun CardFrame(modifier: Modifier = Modifier, warn: Boolean = false, con
     )
 }
 
-/** The agent's question with its options, «Otra respuesta» and «Saltar». Answered, it closes into one line. */
+/** Who asks: the agent running the task the question belongs to, else Orbe; never a name the message does not carry. */
+internal fun questionAsker(m: ChatMessage, state: OrbeChatState): Pair<String, String> {
+    val agent = m.task?.let { state.taskInfo[it] }?.let { it.runner ?: it.agent }?.takeIf { it.isNotBlank() && it != "any" }
+    return if (agent == null) "orbe" to "Orbe" else agent to (agentName(agent) ?: agent)
+}
+
+/** `.who` of a question: «✳ Claude pregunta» and, while it is open, its «⋯» with what the PC lets the person do besides answering. */
 @Composable
-fun QuestionCard(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions) {
+private fun QuestionHeader(m: ChatMessage, q: MsgCard.Question, state: OrbeChatState, actions: CardActions) {
+    val (agent, name) = questionAsker(m, state)
+    var menu by rememberSaveable(m.id) { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OrbAuthor(agent, ChatTexts.asks(name), Modifier.weight(1f))
+        if (q.pending) OrbIconButton(OrbIcons.MoreVertical, ChatTexts.MORE, { menu = true })
+    }
+    if (menu) OrbSheet(onDismiss = { menu = false }) {
+        OrbSheetItem(
+            ChatTexts.ANSWER_SKIP, { menu = false; actions.answer(m, emptyList(), null, true) }, icon = OrbIcons.SkipForward,
+            enabled = state.online && m.id !in state.busyCards, meta = if (state.online) null else ChatTexts.NEEDS_PC,
+        )
+    }
+}
+
+/** The agent's question and its options as chips. Answered, it closes into one line. */
+@Composable
+fun QuestionCard(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions, draft: AnswerDraft = remember { AnswerDraft() }) {
     AnimatedContent(
         q.pending, label = "question",
         transitionSpec = { (fadeIn(tween(OrbMotion.Medium)) + slideInVertically(OrbMotion.standard()) { it / 8 }) togetherWith fadeOut(tween(OrbMotion.Fast)) },
     ) { pending ->
-        if (pending) OpenQuestion(m, q, online, sending, actions) else ClosedQuestion(q)
+        if (pending) OpenQuestion(m, q, online, sending, actions, draft) else ClosedQuestion(q)
     }
 }
 
+/**
+ * The question as the mockup draws it: the text and one chip per option, then «Otra respuesta…». A question that takes one
+ * answer is answered by tapping its chip; one that takes several, or the person's own words, is answered from the writing box.
+ */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun OpenQuestion(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions) {
-    val picked = remember(m.id) { mutableStateListOf<String>() }
-    var other by rememberSaveable(m.id) { mutableStateOf("") }
-    var typing by rememberSaveable(m.id) { mutableStateOf(false) }
+private fun OpenQuestion(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions, draft: AnswerDraft) {
+    val mine = draft.question == m.id
     val limit = if (q.multi) 4 else 1
-    val canSend = online && !sending && (picked.isNotEmpty() || other.isNotBlank())
-    // The question reads as the person's own thread (the mockup's `.chips`): the text, one chip per option, «Otra respuesta…».
+    val enabled = online && !sending
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (!q.header.isNullOrBlank()) Text(q.header, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
         OrbMessageText(q.question.ifBlank { m.body })
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             for (o in q.options) {
-                val on = o.label in picked
+                val on = mine && o.label in draft.picked
                 OrbChip(o.label, on, {
-                    if (!online || sending) return@OrbChip
-                    if (q.multi) { if (on) picked.remove(o.label) else if (picked.size < limit) picked.add(o.label) }
-                    else { picked.clear(); picked.add(o.label) }
-                    if (picked.isNotEmpty()) typing = false
+                    if (!enabled) return@OrbChip
+                    if (!q.multi) { actions.answer(m, listOf(o.label), null, false); return@OrbChip }
+                    draft.take(m.id)
+                    if (on) draft.picked.remove(o.label) else if (draft.picked.size < limit) draft.picked.add(o.label)
+                    if (draft.picked.isNotEmpty()) draft.typing = false
                 })
             }
-            OrbChip(ChatTexts.ANSWER_OTHER_CHIP, typing || other.isNotBlank(), {
-                if (!online || sending) return@OrbChip
-                typing = true
-                if (!q.multi) picked.clear()
+            OrbChip(ChatTexts.ANSWER_OTHER_CHIP, mine && draft.typing, {
+                if (!enabled) return@OrbChip
+                draft.take(m.id)
+                draft.typing = !draft.typing
+                if (draft.typing) draft.picked.clear()
             })
         }
         // What an option means, for the ones the person has chosen: the chips keep to a word.
-        for (o in q.options) if (o.label in picked && !o.description.isNullOrBlank()) {
+        if (mine) for (o in q.options) if (o.label in draft.picked && !o.description.isNullOrBlank()) {
             Text(o.description, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
         }
-        Text(if (q.multi) ChatTexts.ANSWER_PICK_MANY else ChatTexts.ANSWER_PICK, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
-        AnimatedVisibility(typing || other.isNotBlank(), enter = expandVertically(OrbMotion.standard()) + fadeIn(), exit = shrinkVertically(OrbMotion.standard()) + fadeOut()) {
-            BasicTextField(
-                other, { other = it.take(2000) }, enabled = online && !sending,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = OrbKit.foreground),
-                cursorBrush = SolidColor(OrbKit.foreground),
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(OrbKit.card)
-                    .border(BorderStroke(1.dp, OrbKit.border), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
-            )
-        }
+        if (q.multi && !mine) Text(ChatTexts.ANSWER_MANY_HINT, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
         if (!online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-            OrbButton(ChatTexts.ANSWER_SKIP, { actions.answer(m, emptyList(), null, true) }, kind = OrbButtonKind.Ghost, enabled = online && !sending)
-            OrbButton(
-                ChatTexts.ANSWER_SEND,
-                { actions.answer(m, if (other.isBlank()) picked.toList() else emptyList(), other.takeIf { it.isNotBlank() }, false) },
-                kind = OrbButtonKind.Primary, enabled = canSend,
-            )
-        }
     }
 }
 
@@ -631,33 +629,37 @@ internal fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
     if (d.folderOutside) Text(ChatTexts.FOLDER_OUTSIDE_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
 }
 
-/** «Espera tu OK»: the card is the place where the person sees what they are about to approve. */
+/**
+ * «Espera tu OK» as the mockup draws it: a compact card with the fingerprint of what is asked on one line. It never approves:
+ * «Ver y aprobar» opens the task, where everything the PC's fingerprint covers is shown whole and the OK is given with it.
+ * «Rechazar» stays here and asks for confirmation first.
+ */
 @Composable
 private fun WaitingCard(m: ChatMessage, task: Long, info: TaskDetail?, state: OrbeChatState, busy: Boolean, actions: CardActions) {
     val body = m.body.removePrefix("⚠️").trim()
     val named = !info?.title.isNullOrBlank()
-    // Under Auto a task that still asks is one the PC found delicate; its reasons are on the card.
+    // Under Auto a task that still asks is one the PC found delicate.
     val delicate = state.mode == "auto" && info?.reasons?.isNotEmpty() == true
-    // «Aprobar» only when the card shows the whole description and every field the fingerprint covers.
-    val approvable = info != null && info.approvableFromCard && dev.orb.app.ui.tasks.TaskAction.Approve in info.actions
+    val who = info?.agent?.takeIf { it != "any" }
     OrbTaskCard(
-        title = if (named) ChatTexts.taskTitle(task, info?.title) else body, titleMaxLines = Int.MAX_VALUE,
+        title = if (named) ChatTexts.taskTitle(task, info?.title) else body, titleMaxLines = 2,
         badge = if (delicate) ChatTexts.TASK_SENSITIVE else ChatTexts.taskStatus("awaiting_approval"), badgeKind = OrbBadgeKind.Warn,
-        agent = info?.agent?.takeIf { it != "any" },
-        line = if (info != null && named) null else body, lineMaxLines = Int.MAX_VALUE,
-        body = if (info != null && named) ({ ApprovalFacts(info, preview = true) }) else null,
+        agent = who,
+        line = if (info != null && named) {
+            ChatTexts.approvalLine(who?.let { agentName(it) ?: it }, null, info.folderShown?.let(::lastFolder), info.reasons).ifBlank { null }
+        } else body,
+        lineMaxLines = 2,
         footer = {
             val enabled = state.online && !busy
             if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
             OrbButton(ChatTexts.REJECT, { actions.reject(task) }, enabled = enabled)
-            // The fingerprint sent is the one of what is drawn above: a card that cannot show it all sends none and only opens the task.
-            OrbButton(
-                if (approvable) ChatTexts.APPROVE else ChatTexts.SEE_AND_APPROVE, { actions.approve(task, if (approvable) info?.hash else null) },
-                kind = OrbButtonKind.Primary, enabled = enabled,
-            )
+            OrbButton(ChatTexts.SEE_AND_APPROVE, { actions.openTask(task) }, kind = OrbButtonKind.Primary)
         },
     )
 }
+
+/** The last name of a folder path (`app-movil` of `C:\work\app-movil`), the way the mockup names the project. */
+private fun lastFolder(path: String): String = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\').ifBlank { path }
 
 /**
  * A task Orb stopped after it ran. The reason is on the card, and the only way forward is to look: «Aceptar» there would keep

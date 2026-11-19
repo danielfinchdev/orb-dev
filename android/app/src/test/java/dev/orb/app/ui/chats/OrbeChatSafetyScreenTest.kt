@@ -48,21 +48,6 @@ class OrbeChatSafetyScreenTest {
         rule.waitForIdle()
     }
 
-    /**
-     * The text has no line cap: the layout was asked with no `maxLines`, so nothing can end in an ellipsis however long the
-     * text or large the font. Robolectric measures every character one pixel wide and never wraps, so the size of the box says
-     * nothing here; the input of the layout does, and the pictures of the card show the rest.
-     */
-    private fun assertNoCap(text: String) {
-        rule.onNodeWithText(text, substring = true, useUnmergedTree = true).performScrollTo()
-        val node = rule.onNodeWithText(text, substring = true, useUnmergedTree = true).fetchSemanticsNode()
-        val out = ArrayList<TextLayoutResult>()
-        node.config[SemanticsActions.GetTextLayoutResult].action!!.invoke(out)
-        val input = out.first().layoutInput
-        assertEquals("«${text.take(40)}…» has a line cap", Int.MAX_VALUE, input.maxLines)
-        assertEquals(2f, input.density.fontScale, 0f)
-    }
-
     private val attention = raw(4, "system", "⚠️ La tarea #42 espera tu OK", """{"kind":"attention","task":42}""")
     private val ended = raw(4, "system", "La tarea #42 terminó", """{"kind":"task-end","task":42,"status":"done","result":"Listo"}""")
 
@@ -111,7 +96,7 @@ class OrbeChatSafetyScreenTest {
 
     // ---------- the card that asks for the OK ----------
 
-    @Test fun nothingTheOkIsAboutIsCutAndTheButtonStillSaysApprove() {
+    @Test fun theCardKeepsToTheFingerprintLineAndNothingTheOkCoversIsOnIt() {
         val title = "Migrar el registro de notificaciones push a Room. ".repeat(18).trim()
         val path = "C:/Users/dani/proyectos/clientes/tienda-online/aplicaciones/movil/android/".repeat(10).trim()
         val description = "Revisa cada consulta del módulo y actualiza las pruebas. ".repeat(10).trim()
@@ -119,22 +104,21 @@ class OrbeChatSafetyScreenTest {
         val b = FakeOrbeChatBackend(listOf(attention))
         b.taskDetail = waiting { copy(title = title, project = path, folderNow = path, reasons = codes, description = description, reasoning = "high") }
         screen(b, fontScale = 2f)
-        assertNoCap("#42 " + title)
-        assertNoCap("Pide tu OK porque: ${codes.first()}")
-        assertNoCap(description)
-        assertNoCap(path)
-        assertEquals(0, rule.onAllNodesWithText("Ver y aprobar").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Aprobar").performScrollTo().performClick()
+        // The description, the folder and the reasons sentence are read whole on the task's own screen.
+        assertEquals(0, rule.onAllNodesWithText(description, substring = true).fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Pide tu OK porque", substring = true).fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Ver y aprobar").performScrollTo().performClick()
         rule.waitForIdle()
-        assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
-    @Test fun aDescriptionOverTheLimitIsCutSoTheButtonOnlyOpensTheTask() {
-        val long = "x".repeat(TaskDetail.CARD_DESCRIPTION_CHARS + 1)
+    /** Whatever the fingerprint covers (or the PC does not say), the card only opens the task and calls nothing. */
+    private fun assertOnlyOpensTheTask(detail: TaskDetail) {
         val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(description = long) }
+        b.taskDetail = detail
         screen(b)
-        rule.onNodeWithText("…", substring = true).assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
         rule.onNodeWithText("Ver y aprobar").performClick()
         rule.waitForIdle()
@@ -142,85 +126,33 @@ class OrbeChatSafetyScreenTest {
         assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
-    @Test fun aDescriptionOfManyShortLinesIsAlsoOverTheLimit() {
-        val lines = (1..TaskDetail.CARD_DESCRIPTION_LINES + 1).joinToString("\n") { "paso $it" }
-        val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(description = lines) }
-        screen(b)
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.none { it.startsWith("task ") })
-    }
+    @Test fun aLongDescriptionOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(description = "x".repeat(TaskDetail.CARD_DESCRIPTION_CHARS + 1)) })
 
-    @Test fun theCardShowsTheAgentAndFolderTheFingerprintCoversNotWhoRunsIt() {
+    @Test fun aDescriptionOfManyShortLinesOnlyOpensTheTask() =
+        assertOnlyOpensTheTask(waiting { copy(description = (1..TaskDetail.CARD_DESCRIPTION_LINES + 1).joinToString("\n") { "paso $it" }) })
+
+    @Test fun aTaskWhoseFolderMovedOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(reasons = listOf("ruta_cambiada")) })
+
+    @Test fun aPcThatDoesNotSayIfTheFolderMovedOnlyOpensTheTask() =
+        assertOnlyOpensTheTask(waiting { copy(project = "C:/viejo/app-movil", folderNow = "C:/nuevo/app-movil", folderMoved = null) })
+
+    @Test fun aFolderThePcSaysMovedOnlyOpensTheTask() =
+        assertOnlyOpensTheTask(waiting { copy(project = "D:/otros/app-movil", folderNow = "C:/app-movil", folderMoved = true) })
+
+    @Test fun aFolderOutsideOrbsOwnOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(folderNow = "app-movil", folderOutside = true) })
+
+    @Test fun aCutDescriptionOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(descriptionCut = true) })
+
+    @Test fun aPcThatDoesNotSayTheCurrentFolderOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(folderNow = null) })
+
+    @Test fun aPerfectlyApprovableTaskStillOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting())
+
+    @Test fun theCardSaysWhoAndWhereTheFingerprintCoversNotWhoRunsIt() {
         val b = FakeOrbeChatBackend(listOf(attention))
         b.taskDetail = waiting { copy(runner = "claude", readonly = true, mode = "aislada", fast = true) }
         screen(b)
-        rule.onNodeWithText("Codex (gpt) · modo rápido · en una copia aislada · solo lectura").assertIsDisplayed()
-        rule.onNodeWithText("C:/app-movil").assertIsDisplayed()
+        rule.onNodeWithText("Codex · app-movil · elimina datos").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Claude", substring = true).fetchSemanticsNodes().size)
-    }
-
-    @Test fun aTaskWhoseFolderMovedCannotBeApprovedFromTheCard() {
-        val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(reasons = listOf("ruta_cambiada")) }
-        screen(b)
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.none { it.startsWith("task ") })
-    }
-
-    @Test fun aPcThatDoesNotSayIfTheFolderMovedOnlyOpensTheTask() {
-        val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(project = "C:/viejo/app-movil", folderNow = "C:/nuevo/app-movil", folderMoved = null) }
-        screen(b)
-        rule.onNodeWithText("C:/nuevo/app-movil").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("C:/viejo/app-movil").fetchSemanticsNodes().size)
-        // Without the PC's word on it the card does not approve directly.
-        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
-    }
-
-    @Test fun aFolderThePcSaysMovedShowsTheWarningAndOnlyOpensTheTask() {
-        val b = FakeOrbeChatBackend(listOf(attention))
-        // Two folders with the same last name: the trimmed names alone would not tell them apart.
-        b.taskDetail = waiting { copy(project = "D:/otros/app-movil", folderNow = "C:/app-movil", folderMoved = true) }
-        screen(b)
-        rule.onNodeWithText(ChatTexts.FOLDER_CHANGED_NOTE).assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
-    }
-
-    @Test fun aFolderOutsideOrbsOwnSaysSoNextToItAndOnlyOpensTheTask() {
-        val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(folderNow = "app-movil", folderOutside = true) }
-        screen(b)
-        rule.onNodeWithText("app-movil").assertIsDisplayed()
-        rule.onNodeWithText(ChatTexts.FOLDER_OUTSIDE_NOTE).assertIsDisplayed()
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.none { it.startsWith("task ") })
-    }
-
-    @Test fun aCutDescriptionSaysSoAndOnlyOpensTheTaskFromTheCard() {
-        val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(descriptionCut = true) }
-        screen(b)
-        rule.onNodeWithText(ChatTexts.DESCRIPTION_CUT_NOTE).assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
     @Test fun theDialogSaysTheDescriptionIsAbbreviatedToo() {
@@ -232,16 +164,6 @@ class OrbeChatSafetyScreenTest {
         rule.waitForIdle()
         assertTrue(rule.onAllNodesWithText(ChatTexts.DESCRIPTION_CUT_NOTE).fetchSemanticsNodes().isNotEmpty())
         assertTrue(rule.onAllNodesWithText(ChatTexts.FOLDER_OUTSIDE_NOTE).fetchSemanticsNodes().isNotEmpty())
-    }
-
-    @Test fun aPcThatDoesNotSayTheCurrentFolderOnlyOpensTheTask() {
-        val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(folderNow = null) }
-        screen(b)
-        rule.onNodeWithText("Ver y aprobar").performClick()
-        rule.waitForIdle()
-        assertEquals(listOf(42L), openedTasks)
-        assertTrue(b.calls.none { it.startsWith("task ") })
     }
 
     // ---------- a card without data ----------
