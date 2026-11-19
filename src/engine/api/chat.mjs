@@ -192,12 +192,13 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // as the user asking for something («Auto» publishes or deletes on the user's own words, board.currentRequest).
       return orchestrator.ask(text, '', { conversation: row.conversation_id, meta: { answer: true, own: skip ? '' : own } });
     },
-    'chat.accept': ({ id }) => {
+    'chat.accept': ({ id }, principal) => {
       const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
       // the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
       // that changed build files, for instance), which the report already explained: left alone, they would stay blocked for ever.
-      const held = row.conversation_id ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
+      // Only the PC window settles them: a phone or browser must not release held tasks through the report, as «tasks.accept» refuses.
+      const held = row.conversation_id && principal?.channel === 'desktop' ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
         .map((r) => r.id).filter((tid) => board.heldInfo(board.task(tid))) : [];
       for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       const out = accept([...row.meta.tasks, ...held], row.meta.project);

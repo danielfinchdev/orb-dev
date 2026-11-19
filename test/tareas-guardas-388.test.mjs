@@ -152,3 +152,18 @@ test('descriptionCut also tells when user_asked lost the assistant folder', asyn
   board.run('UPDATE tasks SET user_asked = ? WHERE id = ?', JSON.stringify([`ver ${path.join(home.home, 'web')}\/x`]), task.id);
   assert.equal(shapeResult('tasks.get', await call('tasks.get', { id: task.id })).descriptionCut, true);
 });
+
+test('chat.accept: the OK to a report from a linked device leaves a held task held; the PC window settles it', async () => {
+  for (const [principal, status] of [[PHONE, 'blocked'], [DESKTOP, 'done']]) {
+    const { board, task } = setup();
+    const api = buildApi({ board, sessions: { list: () => [] }, orchestrator: { state: () => ({ busy: false }) }, scheduler: {}, emit: () => {}, log: () => {}, version: 'test', remoteRef: { current: null, link: null } });
+    const conv = board.createConversation({ title: 'c' }).id;
+    board.run('UPDATE tasks SET conversation_id = ? WHERE id = ?', conv, task.id);
+    hold(board, task.id);
+    const ok = board.createTask({ project: task.project, title: 'ok', description: 'x', agent: 'claude' }, 'usuario');
+    board.patch(ok.id, { status: 'done' }, 'orb', 'task.done');
+    const report = board.addChat('assistant', 'listo', { kind: 'report', tasks: [ok.id], project: null }, conv);
+    await api.call('chat.accept', { id: report.id ?? report }, principal);
+    assert.equal(board.task(task.id).status, status);
+  }
+});
