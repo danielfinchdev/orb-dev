@@ -57,6 +57,9 @@ class AndroidNotePoster(
     private val jobs: NoteJobs,
     // What the person chose for the lock screen; «nothing» also applies to the result notices.
     private val lockScreen: () -> LockScreenNotice = { LockScreenNotice.Generic },
+    // True while the phone itself is locked: the Android setting that hides private content is not under our control, so with
+    // «Solo "Orb"» the real text must never be handed to the system at all.
+    private val deviceLocked: () -> Boolean = { false },
     // True while the Orb lock is on: the result notice then carries no chat title.
     private val hideTitles: () -> Boolean = { false },
 ) : NotePoster {
@@ -89,8 +92,12 @@ class AndroidNotePoster(
         if (!allowed()) return
         NotifyChannels.ensure(context)
         jobs.drop(plan.id)
-        val b = base(plan.channel, plan.title, plan.text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(plan.text))
+        // Posted as content, with no real text and no button that could reveal it, like the Orb lock does in the planner.
+        val bare = plan.lockScreen == LockScreenNotice.Generic && deviceLocked()
+        val title = if (bare) plan.publicTitle else plan.title
+        val text = if (bare) plan.publicText else plan.text
+        val b = base(plan.channel, title, text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(openApp(plan.id, 0, plan.tap))
@@ -104,7 +111,7 @@ class AndroidNotePoster(
             // SECRET: nothing at all while locked; no public version is given, so there is nothing to show instead.
             LockScreenNotice.Hidden -> b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
         }
-        plan.actions.forEachIndexed { i, a ->
+        (if (bare) emptyList() else plan.actions).forEachIndexed { i, a ->
             val slot = i + 1
             if (!a.job.acts) {
                 b.addAction(0, a.label, openApp(plan.id, slot, a.job))
@@ -125,7 +132,7 @@ class AndroidNotePoster(
     override fun say(job: NoteJob, text: String, goneAfterMs: Long?) {
         if (!allowed()) return
         NotifyChannels.ensure(context)
-        val title = if (hideTitles()) "Orb" else job.title
+        val title = if (hideTitles() || (deviceLocked() && lockScreen() == LockScreenNotice.Generic)) "Orb" else job.title
         val tap = NoteJob(job.group, "tap", title, target = job.target)
         val b = base(NoteChannel.Messages, title, text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))

@@ -78,6 +78,30 @@ class AndroidNotePosterTest {
         assertEquals(Notification.VISIBILITY_PRIVATE, shadowOf(nm).allNotifications.single().visibility)
     }
 
+    @Test fun orbOnlyOnALockedPhoneHandsOverNoRealTextNorButtons() {
+        var locked = true
+        val p2 = AndroidNotePoster(context, jobs, deviceLocked = { locked })
+        p2.show(plan(message))
+        val n = shadowOf(nm).allNotifications.single()
+        assertEquals("Orb", n.extras.getString(Notification.EXTRA_TITLE))
+        assertEquals("Tienes un mensaje nuevo", n.extras.getString(Notification.EXTRA_TEXT))
+        assertEquals("Tienes un mensaje nuevo", n.extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString())
+        assertTrue(n.actions.isNullOrEmpty())
+        locked = false
+        p2.show(plan(message))
+        val open = shadowOf(nm).allNotifications.single()
+        assertEquals("Orbe", open.extras.getString(Notification.EXTRA_TITLE))
+        assertEquals(2, open.actions.size)
+    }
+
+    @Test fun aLockedPhoneDoesNotChangeTheOtherLockScreenChoices() {
+        val p2 = AndroidNotePoster(context, jobs, deviceLocked = { true })
+        p2.show(plan(message, NotifySettings(lockScreen = LockScreenNotice.Full)))
+        assertEquals("Orbe", shadowOf(nm).allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+        p2.show(plan(message, NotifySettings(lockScreen = LockScreenNotice.Hidden)))
+        assertEquals("Orbe", shadowOf(nm).allNotifications.single().extras.getString(Notification.EXTRA_TITLE))
+    }
+
     @Test fun aReplyTakesTypedText() {
         poster.show(plan(message))
         val reply = shadowOf(nm).allNotifications.single().actions.first()

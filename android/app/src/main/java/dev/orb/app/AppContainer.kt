@@ -118,7 +118,10 @@ class AppContainer(private val app: Application) {
     /** What the phone remembers about its notices and the «Mantener conectado» service; not secrets. */
     val notifyPrefs = NotifyPrefs(SharedPrefsStore(app.getSharedPreferences("orb.notify", android.content.Context.MODE_PRIVATE)))
     val noteJobs = NoteJobs(SharedPrefsJobStorage(app.getSharedPreferences("orb.notes", android.content.Context.MODE_PRIVATE)))
-    private val notePoster = AndroidNotePoster(app, noteJobs, { notifyPrefs.settings.value.lockScreen }) { lockPrefs.settings.value.enabled }
+    private val notePoster = AndroidNotePoster(
+        app, noteJobs, { notifyPrefs.settings.value.lockScreen },
+        deviceLocked = { app.getSystemService(android.app.KeyguardManager::class.java)?.isDeviceLocked == true },
+    ) { lockPrefs.settings.value.enabled }
     /** Opens Android's own notice settings of the app and of each channel (their sound lives there). */
     val noticeSettings: NoticeSettings = AndroidNoticeSettings(app)
     val notificationAccess = AndroidNotificationAccess(app, notifyPrefs)
