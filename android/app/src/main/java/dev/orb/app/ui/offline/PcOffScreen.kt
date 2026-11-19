@@ -14,6 +14,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -179,21 +180,46 @@ fun PcOffScreen(info: OfflineInfo, onSeeSaved: () -> Unit, onLinkOther: () -> Un
     )
 }
 
-/** The note of the read-only app: why nothing can be sent, since when the phone has not seen the PC, and the way back. */
+/** The read-only app is on: the phone shows what it holds and [onBack] returns to «No llego a tu PC». */
+class ReadOnlyMode(val info: OfflineInfo, val onBack: () -> Unit)
+
+/** Set by the app host while the person looks at saved chats; screens that have a clean read-only layout read it. */
+val LocalReadOnly = compositionLocalOf<ReadOnlyMode?> { null }
+
+/** The text of the read-only notice. «Today» is read again when the screen comes back and when the day turns. */
 @Composable
-fun ReadOnlyBar(info: OfflineInfo, onBack: () -> Unit, modifier: Modifier = Modifier) {
+private fun readOnlyText(info: OfflineInfo): String {
     val lastContact by info.lastContact.collectAsStateWithLifecycle()
     val connection by info.connection.collectAsStateWithLifecycle()
     val seen = (connection as? ConnectionState.Offline)?.lastSeen ?: lastContact
-    // «Today» in the banner is read again when the screen comes back and when the day turns, not once per composition.
     var now by remember { mutableLongStateOf(info.clock()) }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { now = info.clock() }
     LaunchedEffect(now) {
         delay(OfflineTexts.untilNextDay(now))
         now = info.clock()
     }
+    return OfflineTexts.readOnlyBanner(seen, now)
+}
+
+/** The note of the read-only app over a screen that keeps its own header: the way back and why nothing leaves. */
+@Composable
+fun ReadOnlyBar(info: OfflineInfo, onBack: () -> Unit, modifier: Modifier = Modifier) {
+    val text = readOnlyText(info)
     Row(modifier.fillMaxWidth().padding(end = 16.dp), verticalAlignment = Alignment.CenterVertically) {
         OrbIconButton(OrbIcons.ArrowLeft, PcOffTexts.BACK_TO_PC, onBack)
-        OrbBanner(OfflineTexts.readOnlyBanner(seen, now), OrbIcons.Database, Modifier.weight(1f), kind = OrbBannerKind.Warning)
+        OrbBanner(text, OrbIcons.Database, Modifier.weight(1f), kind = OrbBannerKind.Warning)
+    }
+}
+
+/** The header of the saved chats list (06 «Chats guardados»): back arrow, ORB·E with its line, and one notice below. */
+@Composable
+fun ReadOnlyHeader(mode: ReadOnlyMode, modifier: Modifier = Modifier) {
+    val text = readOnlyText(mode.info)
+    Column(modifier.fillMaxWidth()) {
+        OrbTopBar(
+            "Orb", sub = OfflineTexts.READ_ONLY_TITLE, center = { OrbWordmark() },
+            leading = { OrbIconButton(OrbIcons.ArrowLeft, PcOffTexts.BACK_TO_PC, mode.onBack) },
+        )
+        OrbBanner(text, OrbIcons.Database, Modifier.padding(start = 16.dp, end = 16.dp, bottom = 4.dp), kind = OrbBannerKind.Warning)
     }
 }

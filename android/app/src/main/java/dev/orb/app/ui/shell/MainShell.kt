@@ -5,6 +5,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Badge
@@ -55,6 +56,8 @@ import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBottomBar
 import dev.orb.app.ui.kit.OrbTab
+import dev.orb.app.ui.offline.LocalReadOnly
+import dev.orb.app.ui.offline.ReadOnlyBar
 import dev.orb.app.ui.theme.DarkMode
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
@@ -187,32 +190,37 @@ fun MainShell(
             )
         },
     ) { padding ->
-        NavHost(
-            nav, startDestination = ChatsTab, modifier = Modifier.padding(padding),
-            enterTransition = { fadeIn(tween(fade, easing = OrbMotion.EaseOut)) },
-            exitTransition = { fadeOut(tween(fade, easing = OrbMotion.EaseIn)) },
-        ) {
-            composable<ChatsTab> {
-                ChatListScreen(
-                    chatsVm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
-                    onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat,
-                )
-            }
-            composable<TasksTab> {
-                if (tasksVm == null) Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) else {
-                    TasksScreen(
-                        tasksVm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
-                        onOpenTask = actions.onOpenTask,
+        val readOnly = LocalReadOnly.current
+        Column(Modifier.padding(padding)) {
+            // The saved chats list draws its own read-only header; the other tabs keep theirs and get the note above.
+            if (readOnly != null && current?.destination?.hasRoute(ChatsTab::class) != true) ReadOnlyBar(readOnly.info, readOnly.onBack)
+            NavHost(
+                nav, startDestination = ChatsTab, modifier = Modifier.weight(1f),
+                enterTransition = { fadeIn(tween(fade, easing = OrbMotion.EaseOut)) },
+                exitTransition = { fadeOut(tween(fade, easing = OrbMotion.EaseIn)) },
+            ) {
+                composable<ChatsTab> {
+                    ChatListScreen(
+                        chatsVm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                        onOpenChat = actions.onOpenChat, onSearch = actions.onSearch, onNewChat = actions.onNewChat, readOnly = readOnly,
                     )
                 }
-            }
-            composable<ProjectsTab> {
-                if (projects == null) Message(ChatTexts.SOON_PROJECTS, ChatTexts.SOON_HINT) else {
-                    val vm = viewModel<ProjectsViewModel>(factory = viewModelFactory { initializer { ProjectsViewModel(projects) } })
-                    ProjectsScreen(
-                        vm, onOpenProject = actions.onOpenProject,
-                        menu = ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
-                    )
+                composable<TasksTab> {
+                    if (tasksVm == null) Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) else {
+                        TasksScreen(
+                            tasksVm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                            onOpenTask = actions.onOpenTask,
+                        )
+                    }
+                }
+                composable<ProjectsTab> {
+                    if (projects == null) Message(ChatTexts.SOON_PROJECTS, ChatTexts.SOON_HINT) else {
+                        val vm = viewModel<ProjectsViewModel>(factory = viewModelFactory { initializer { ProjectsViewModel(projects) } })
+                        ProjectsScreen(
+                            vm, onOpenProject = actions.onOpenProject,
+                            menu = ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                        )
+                    }
                 }
             }
         }

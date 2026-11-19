@@ -38,6 +38,7 @@ import androidx.navigation.NavDestination.Companion.hasRoute
 import dev.orb.app.link.net.ConnectionState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import dev.orb.app.AppContainer
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -199,10 +200,16 @@ private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHost
     }
     // Registered before the navigation host, so a deeper screen's own back step wins and this one only fires on the list.
     androidx.activity.compose.BackHandler(enabled = down.saved) { gate.closeSaved() }
+    val readOnly = remember(container, gate) { dev.orb.app.ui.offline.ReadOnlyMode(container.offline, gate::closeSaved) }
+    // The tabs (inside Home) draw the read-only note themselves; any screen opened over them gets it here.
+    val outer by nav.currentBackStackEntryAsState()
+    val onHome = outer?.destination?.hasRoute<Home>() == true
     Column(Modifier.fillMaxSize()) {
-        if (down.saved) dev.orb.app.ui.offline.ReadOnlyBar(container.offline, gate::closeSaved)
+        if (down.saved && !onHome) dev.orb.app.ui.offline.ReadOnlyBar(container.offline, gate::closeSaved)
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            Box(Modifier.fillMaxSize().then(if (down.full != null) Modifier.clearAndSetSemantics {} else Modifier)) { content() }
+            Box(Modifier.fillMaxSize().then(if (down.full != null) Modifier.clearAndSetSemantics {} else Modifier)) {
+                androidx.compose.runtime.CompositionLocalProvider(dev.orb.app.ui.offline.LocalReadOnly provides readOnly.takeIf { down.saved }) { content() }
+            }
             val full = down.full
             if (full != null) {
                 Surface(

@@ -57,6 +57,8 @@ import dev.orb.app.ui.notes.NotesTexts
 import dev.orb.app.ui.offline.LocalOffline
 import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.offline.OfflineTexts
+import dev.orb.app.ui.offline.ReadOnlyHeader
+import dev.orb.app.ui.offline.ReadOnlyMode
 import androidx.compose.material3.Text
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +82,8 @@ fun ChatListScreen(
     onSearch: () -> Unit,
     onNewChat: () -> Unit,
     modifier: Modifier = Modifier,
+    // Set while the app shows only what the phone holds: the list drops everything that needs the PC.
+    readOnly: ReadOnlyMode? = null,
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -108,19 +112,23 @@ fun ChatListScreen(
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            ChatsTopBar(menu, ChatTexts.linkLine(state.connection))
-            if (!state.online && state.loaded) OfflineStrip()
-            OrbSearchButton(ChatTexts.SEARCH, onSearch, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp))
-            ChatFilters(state, vm::setFilter)
+            if (readOnly != null) {
+                ReadOnlyHeader(readOnly)
+            } else {
+                ChatsTopBar(menu, ChatTexts.linkLine(state.connection))
+                if (!state.online && state.loaded) OfflineStrip()
+                OrbSearchButton(ChatTexts.SEARCH, onSearch, Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp))
+                ChatFilters(state, vm::setFilter)
+            }
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 ListBody(
-                    state, onOpenChat, selected = actionsFor, onLongPress = { actionsFor = it.key }, onRetry = vm::refresh, onCloseDigest = vm::closeDigest,
+                    state, onOpenChat, selected = actionsFor, onLongPress = { if (readOnly == null) actionsFor = it.key }, readOnly = readOnly != null, onRetry = vm::refresh, onCloseDigest = vm::closeDigest,
                     onReorder = vm::reorder, onToggleGroup = vm::toggleGroup, onShowAll = { vm.setFilter(ChatFilter.All) },
                     onMarkRead = vm::markRead, onArchive = vm::archive, onRestore = { vm.unarchive(it.ref) },
                 )
             }
         }
-        OrbFab(ChatTexts.NEW_CHAT, OrbIcons.SquarePen, onNewChat, Modifier.align(Alignment.BottomEnd).padding(16.dp), lifted = snackbar.currentSnackbarData != null)
+        if (readOnly == null) OrbFab(ChatTexts.NEW_CHAT, OrbIcons.SquarePen, onNewChat, Modifier.align(Alignment.BottomEnd).padding(16.dp), lifted = snackbar.currentSnackbarData != null)
         OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
@@ -185,7 +193,7 @@ private fun ChatFilters(state: ChatListState, onFilter: (ChatFilter) -> Unit) {
 
 @Composable
 private fun ListBody(
-    state: ChatListState, onOpen: (ChatRef) -> Unit, selected: String?, onLongPress: (ChatRow) -> Unit, onRetry: () -> Unit,
+    state: ChatListState, onOpen: (ChatRef) -> Unit, selected: String?, onLongPress: (ChatRow) -> Unit, readOnly: Boolean, onRetry: () -> Unit,
     onCloseDigest: () -> Unit, onReorder: () -> Unit, onToggleGroup: (String) -> Unit, onShowAll: () -> Unit,
     onMarkRead: (ChatRow) -> Boolean, onArchive: (ChatRow) -> Boolean, onRestore: (ChatRow) -> Boolean,
 ) {
@@ -214,10 +222,10 @@ private fun ListBody(
                                 row, ChatTime.listTime(row.at, now),
                                 onClick = { onOpen(row.ref) }, onLongClick = { onLongPress(row) },
                                 modifier = Modifier.animateItem(), selected = row.key == selected,
-                                onMarkRead = { onMarkRead(row) },
+                                onMarkRead = if (readOnly) null else ({ onMarkRead(row) }),
                                 // A finished chat is brought back from the same gesture instead of archived again.
-                                onArchive = if (row.done) null else ({ onArchive(row) }),
-                                onRestore = if (row.done) ({ onRestore(row) }) else null,
+                                onArchive = if (row.done || readOnly) null else ({ onArchive(row) }),
+                                onRestore = if (row.done && !readOnly) ({ onRestore(row) }) else null,
                             )
                         }
                     }
