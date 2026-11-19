@@ -244,7 +244,7 @@ class ThisPhoneTest {
         show()
         rule.onNodeWithText("Sonido de cada canal").performScrollTo().performClick()
         rule.waitForIdle()
-        for (t in listOf("Mensajes", "Aprobaciones", "Estado de la conexión")) rule.onNodeWithText(t).assertIsDisplayed()
+        for (t in listOf("Mensajes", "Aprobaciones", "Estado")) rule.onNodeWithText(t).assertIsDisplayed()
         rule.onNodeWithText("Aprobaciones").performClick()
         rule.waitForIdle()
         assertEquals(listOf(NoteChannel.Approvals), backend.channels)
@@ -254,7 +254,7 @@ class ThisPhoneTest {
         rule.onNodeWithText("Mensajes").performClick()
         rule.onNodeWithText("Sonido de cada canal").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Estado de la conexión").performClick()
+        rule.onNodeWithText("Estado").performClick()
         assertEquals(listOf(NoteChannel.Approvals, NoteChannel.Messages, NoteChannel.Status), backend.channels)
     }
 

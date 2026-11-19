@@ -39,6 +39,9 @@ class Notifier(
     internal fun handle(event: LinkEvent) {
         if (isForeground()) return
         val note = PcNotes.parse(event.payload) ?: return
+        // The PC decides what stays silent (a muted chat, a schedule told not to notify) and sends nothing then; if a note
+        // still says so, it is not shown.
+        if (note.quiet) return
         poster.show(NotePlanner.plan(note, settings()))
         log("aviso ${note.kind}")
     }

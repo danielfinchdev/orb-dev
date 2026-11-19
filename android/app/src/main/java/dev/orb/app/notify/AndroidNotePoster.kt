@@ -21,12 +21,15 @@ object NoteIntents {
 object NotifyChannels {
     const val STATUS_ID = 19_001
 
-    /** Creates the three channels (the id «orb-chats» of the messages is kept from the old app). */
+    /**
+     * Creates the three channels of the mock-ups (Mensajes, Aprobaciones, Estado; the id «orb-chats» of the messages is kept from
+     * the old app). Creating one that exists only refreshes its visible name: the importance and the sound the person chose stay.
+     */
     fun ensure(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         fun make(c: NoteChannel, name: String, importance: Int) {
-            if (nm.getNotificationChannel(c.id) == null) nm.createNotificationChannel(NotificationChannel(c.id, name, importance))
+            nm.createNotificationChannel(NotificationChannel(c.id, name, importance))
         }
         make(NoteChannel.Messages, NotifyTexts.CHANNEL_MESSAGES, NotificationManager.IMPORTANCE_HIGH)
         make(NoteChannel.Approvals, NotifyTexts.CHANNEL_APPROVALS, NotificationManager.IMPORTANCE_HIGH)
@@ -66,7 +69,15 @@ class AndroidNotePoster(
             .setContentText(text)
             .setAutoCancel(true)
 
+    /** Android lets this app show notices; without it nothing is built, no button is kept and nothing is posted. */
+    private fun allowed(): Boolean = try {
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    } catch (e: Exception) {
+        false
+    }
+
     override fun show(plan: NotificationPlan) {
+        if (!allowed()) return
         NotifyChannels.ensure(context)
         jobs.drop(plan.id)
         val b = base(plan.channel, plan.title, plan.text)
@@ -103,6 +114,7 @@ class AndroidNotePoster(
     }
 
     override fun say(job: NoteJob, text: String, goneAfterMs: Long?) {
+        if (!allowed()) return
         NotifyChannels.ensure(context)
         val title = if (hideTitles()) "Orb" else job.title
         val tap = NoteJob(job.group, "tap", title, target = job.target)
@@ -110,7 +122,15 @@ class AndroidNotePoster(
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSilent(true)
             .setContentIntent(openApp(job.group, 0, tap))
-        if (lockScreen() == LockScreenNotice.Hidden) b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
+        // The chat's name never shows on the lock screen unless the person chose so; «Enviado» alone says nothing.
+        when (lockScreen()) {
+            LockScreenNotice.Full -> b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            LockScreenNotice.Generic -> {
+                b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                b.setPublicVersion(base(NoteChannel.Messages, "Orb", text).build())
+            }
+            LockScreenNotice.Hidden -> b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
+        }
         if (goneAfterMs != null) b.setTimeoutAfter(goneAfterMs)
         notify(job.group, b)
     }
