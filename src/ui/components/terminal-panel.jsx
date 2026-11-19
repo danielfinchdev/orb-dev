@@ -58,7 +58,7 @@ export function TerminalPanel({ dir, draft, onDraftTaken, onClose, dock = false,
     const r = await act(call('terminal.open', { dir }));
     if (!r) return r;
     if (gone.current) { call('terminal.close', { id: r.id }).catch(quiet); return r; }
-    opened.current.add(r.id); track(r.id);
+    opened.current.add(r.id); if (dock) track(r.id);
     if (name) setNames((p) => ({ ...p, [r.id]: name }));
     setTerms((p) => [...p, r]); setActive(r.id);
     return r;

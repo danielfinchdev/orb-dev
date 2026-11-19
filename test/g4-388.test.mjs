@@ -111,3 +111,8 @@ test('la acción se consume una vez, la línea es por pestaña, el comando se ve
   assert.ok(es['terminal.previewWindow'] && en['terminal.previewWindow']);
   assert.match(view, /onTerminalPaste\(\(line, from\)/); assert.match(view, /bridge\.mobile \|\| !info\?\.path \? undefined : onTerminalPaste/);
 });
+
+test('only the God mode dock marks a shell as its own, so it never closes the chat terminal', () => {
+  assert.match(panel, /opened\.current\.add\(r\.id\); if \(dock\) track\(r\.id\);/);
+  assert.doesNotMatch(panel, /opened\.current\.add\(r\.id\); track\(r\.id\);/);
+});
