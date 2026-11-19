@@ -57,7 +57,7 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Codex · api-pagos · Editar archivos").assertIsDisplayed()
         rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").assertIsDisplayed()
         rule.onNodeWithText("Ejecutó en el PC npm test").assertIsDisplayed()
-        rule.onNodeWithText("Mensaje para Codex").assertIsDisplayed()
+        rule.onNodeWithText("Escribe a Codex…").assertIsDisplayed()
     }
 
     @Test fun theRequestCardShowsWhatTheAgentWantsAndTheThreeButtons() {
@@ -105,7 +105,7 @@ class DirectChatScreenTest {
         rule.onNodeWithText("32 pasaron").assertIsDisplayed()
     }
 
-    @Test fun theQueueIsACardInTheThreadWithEditRemoveAndMoves() {
+    @Test fun theQueueIsACardInTheThreadWhoseRowsOpenASheetWithEditRemoveAndMoves() {
         val b = FakeDirectChatBackend(thread.take(4))
         val vm = screen(b)
         b.infoOnPc = sessionInfo(status = "running")
@@ -115,13 +115,21 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Documenta el cambio").assertIsDisplayed()
         rule.onNodeWithText("Sube la versión").assertIsDisplayed()
         b.queueOnPc = vm.state.value.queue
-        // «Subir» and «Bajar» live under the «⋯» of each message
-        rule.onAllNodesWithContentDescription("Más opciones del mensaje en cola")[1].performClick()
+        // No buttons on the rows: not even a «⋮».
+        assertEquals(0, rule.onAllNodesWithContentDescription("Más opciones del mensaje en cola").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithContentDescription("Quitar de la cola").fetchSemanticsNodes().size)
+        // A tap opens the sheet: «Subir» and «Bajar» sit with «Editar» and «Quitar».
+        rule.onNodeWithText("Sube la versión").performClick()
         rule.waitForIdle()
+        rule.onNodeWithText("Editar").assertIsDisplayed()
+        rule.onNodeWithText("Bajar").assertIsNotEnabled()
         rule.onNodeWithText("Subir").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("edit 2 - false up"))
-        rule.onAllNodesWithContentDescription("Quitar de la cola")[0].performClick()
+        // A long press opens the same sheet.
+        rule.onNodeWithText("Documenta el cambio").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Quitar de la cola").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("edit 1 - true -"))
     }
@@ -133,7 +141,9 @@ class DirectChatScreenTest {
         b.events.tryEmit(queueEvent("Documenta el cambio", "Sube la versión"))
         rule.waitForIdle()
         b.queueOnPc = vm.state.value.queue
-        rule.onAllNodesWithContentDescription("Editar")[0].performClick()
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Editando un mensaje de la cola").assertIsDisplayed()
         rule.onNodeWithText("Editando este mensaje de la cola").assertIsDisplayed()
@@ -143,7 +153,9 @@ class DirectChatScreenTest {
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("edit 1 Documenta y sube false -"))
         assertEquals(0, rule.onAllNodesWithText("Editando un mensaje de la cola").fetchSemanticsNodes().size)
-        rule.onAllNodesWithContentDescription("Editar")[0].performClick()
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Cancelar").performClick()
         rule.waitForIdle()
@@ -329,13 +341,17 @@ class DirectChatScreenTest {
         rule.waitForIdle()
         b.queueOnPc = vm.state.value.queue
         rule.onNode(hasSetTextAction()).performTextInput("borrador a medias")
-        rule.onAllNodesWithContentDescription("Editar")[0].performClick()
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
         rule.waitForIdle()
         rule.onNode(hasSetTextAction()).assertTextContains("Documenta el cambio")
         rule.onNodeWithText("Cancelar").performClick()
         rule.waitForIdle()
         rule.onNode(hasSetTextAction()).assertTextContains("borrador a medias")
-        rule.onAllNodesWithContentDescription("Editar")[0].performClick()
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Guardar").performClick()
         rule.waitForIdle()

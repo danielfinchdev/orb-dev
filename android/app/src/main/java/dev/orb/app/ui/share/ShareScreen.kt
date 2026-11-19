@@ -53,13 +53,15 @@ import dev.orb.app.ui.kit.OrbBadgeKind
 import dev.orb.app.ui.kit.OrbButton
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbSheet
 import dev.orb.app.ui.kit.OrbSheetLabel
 import dev.orb.app.ui.kit.ProjectDot
 import dev.orb.app.ui.theme.OrbFonts
 
 /**
- * «Compartir con Orb» as the mockup's sheet, full screen because the app opens on it: the title with what is shared,
- * the text to send with it, where it goes («Enviar a») and the two buttons. Nothing leaves until «Enviar a Orb».
+ * «Compartir con Orb» as the mockup's bottom sheet, over a dimmed page: the title with what is shared, the text to send with
+ * it, where it goes («Enviar a») and the two buttons. The app opens on it when another app shares something, so the page
+ * behind is only the background the sheet dims. Nothing leaves until «Enviar a Orb»; closing the sheet is «Cancelar».
  */
 @Composable
 fun ShareScreen(vm: ShareViewModel, onClose: () -> Unit, modifier: Modifier = Modifier) {
@@ -67,38 +69,39 @@ fun ShareScreen(vm: ShareViewModel, onClose: () -> Unit, modifier: Modifier = Mo
     val items by vm.attach.items.collectAsStateWithLifecycle()
     val notice by vm.attach.notice.collectAsStateWithLifecycle()
     val cancel = { vm.discard(); onClose() }
-    Column(modifier.fillMaxSize().background(OrbKit.background).imePadding()) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 10.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
+    val nothing = state.empty && items.isEmpty()
+    Box(modifier.fillMaxSize().background(OrbKit.background))
+    OrbSheet(
+        onDismiss = cancel,
+        header = {
             Text(
                 AttachTexts.SHARE_TITLE, Modifier.weight(1f, fill = false).semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp,
                 lineHeight = 22.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val what = sharedLabel(items.map { it.name }, state.text.isNotBlank())
             if (what != null) OrbBadge(what, kind = OrbBadgeKind.Acc)
-        }
-        if (state.empty && items.isEmpty()) {
+        },
+        footer = {
+            state.message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp) }
+            ActionBar(onCancel = cancel, onSend = if (nothing) null else vm::send, sending = state.sending, modifier = Modifier.imePadding())
+        },
+    ) {
+        if (nothing) {
             Text(AttachTexts.SHARE_EMPTY, Modifier.padding(16.dp), color = OrbKit.mutedForeground, fontSize = 15.sp, lineHeight = 22.sp)
-            Box(Modifier.weight(1f))
-            ActionBar(onCancel = cancel, onSend = null, sending = false)
-            return@Column
+            return@OrbSheet
         }
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(Modifier.imePadding(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (state.skipped > 0) Note(AttachTexts.SHARE_SKIPPED)
                 if (state.textCut) Note(AttachTexts.SHARE_CUT)
-                AttachStrip(items, notice, vm.attach::remove, vm.attach::retry)
+                AttachStrip(items, notice, vm.attach::remove, vm.attach::retry, inset = 0.dp)
                 ShareText(state.text, vm::setText)
             }
             OrbSheetLabel(AttachTexts.SHARE_TO)
             // The recent chats come straight under «Enviar a», as in the mockup.
-            if (state.recents.isNotEmpty()) {
-                for (row in state.recents) {
-                    val dest = ShareDest.Chat(ChatRef(row.kind, row.id))
-                    DestRow(row.title.ifBlank { ChatTexts.UNTITLED }, row.project, state.dest == dest, { vm.choose(dest) }) { ChatMark(row) }
-                }
+            for (row in state.recents) {
+                val dest = ShareDest.Chat(ChatRef(row.kind, row.id))
+                DestRow(row.title.ifBlank { ChatTexts.UNTITLED }, row.project, state.dest == dest, { vm.choose(dest) }) { ChatMark(row) }
             }
             if (state.projects.isNotEmpty()) {
                 OrbSheetLabel(AttachTexts.SHARE_PROJECTS)
@@ -111,8 +114,6 @@ fun ShareScreen(vm: ShareViewModel, onClose: () -> Unit, modifier: Modifier = Mo
                 Icon(OrbIcons.SquarePen, null, Modifier.size(18.dp), tint = OrbKit.mutedForeground)
             }
         }
-        state.message?.let { Text(it, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp) }
-        ActionBar(onCancel = cancel, onSend = vm::send, sending = state.sending)
     }
 }
 
@@ -169,10 +170,12 @@ private fun ChatMark(row: ChatRow) {
 
 /** `.actbar`: a line over two buttons at the end. [onSend] null leaves only «Cancelar» (there is nothing to send). */
 @Composable
-private fun ActionBar(onCancel: () -> Unit, onSend: (() -> Unit)?, sending: Boolean) {
-    Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
-        OrbButton(AttachTexts.SHARE_CANCEL, onCancel, kind = OrbButtonKind.Ghost)
-        if (onSend != null) OrbButton(AttachTexts.SHARE_SEND, onSend, kind = OrbButtonKind.Primary, enabled = !sending)
+private fun ActionBar(onCancel: () -> Unit, onSend: (() -> Unit)?, sending: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+            OrbButton(AttachTexts.SHARE_CANCEL, onCancel, kind = OrbButtonKind.Ghost)
+            if (onSend != null) OrbButton(AttachTexts.SHARE_SEND, onSend, kind = OrbButtonKind.Primary, enabled = !sending)
+        }
     }
 }

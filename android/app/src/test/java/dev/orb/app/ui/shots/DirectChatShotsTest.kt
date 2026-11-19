@@ -91,7 +91,7 @@ class DirectChatShotsTest {
         return backend(rows, "running").apply { queueOnPc = queued }
     }
 
-    private fun vm(b: FakeDirectChatBackend) = DirectChatViewModel(b, "s1", dispatcher = Dispatchers.Unconfined)
+    private fun vm(b: FakeDirectChatBackend) = DirectChatViewModel(b, "s1", dispatcher = Dispatchers.Unconfined, attach = shotAttach())
 
     private fun shoot(
         palette: OrbPaletteChoice, suffix: String, vm: DirectChatViewModel, info: OfflineInfo? = null, after: () -> Unit = {},
@@ -128,7 +128,15 @@ class DirectChatShotsTest {
 
     @Test fun editingTheQueue() {
         Shots.assumeEnabled()
-        shoot(OrbPaletteChoice.Grafito, "-cola", vm(workingBackend()), after = { rule.onAllNodesWithContentDescription("Editar")[0].performClick() })
+        shoot(
+            OrbPaletteChoice.Grafito, "-cola", vm(workingBackend()),
+            after = { rule.onNodeWithText("Luego sube el cambio a la rama dev").performClick(); rule.waitForIdle(); rule.onNodeWithText("Editar").performClick() },
+        )
+    }
+
+    @Test fun theQueueSheet() {
+        Shots.assumeEnabled()
+        shoot(OrbPaletteChoice.Grafito, "-cola-hoja", vm(workingBackend()), after = { rule.onNodeWithText("Y avísame cuando esté").performClick() })
     }
 
     @Test fun stopped() {

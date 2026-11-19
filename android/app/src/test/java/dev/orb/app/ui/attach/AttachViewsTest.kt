@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -81,7 +84,7 @@ class AttachViewsTest {
     private fun item(id: Long, state: AttachState, error: String? = null, retry: Boolean = false) =
         Attachment(id, "captura-$id.png", AttachType.Png, state, error = error, canRetry = retry)
 
-    @Test fun theStripShowsProgressAndTheErrorWithRetry() {
+    @Test fun theStripShowsProgressAndAFailedCardOffersRetryAndRemoveInASheet() {
         var retried = -1L
         var removed = -1L
         strip(
@@ -89,10 +92,31 @@ class AttachViewsTest {
             onRemove = { removed = it }, onRetry = { retried = it },
         )
         rule.onNodeWithContentDescription(AttachTexts.UPLOADING).assertIsDisplayed()
+        // Loose cards with the whole name and no button on them.
+        rule.onNodeWithText("captura-1.png").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithContentDescription(AttachTexts.REMOVE).fetchSemanticsNodes().size)
         rule.onNodeWithText("${AttachTexts.UPLOAD_FAILED}. ${AttachTexts.RETRY}").performClick()
+        rule.onNodeWithText(AttachTexts.RETRY).performClick()
         assertEquals(2L, retried)
-        rule.onAllNodesWithContentDescription(AttachTexts.REMOVE)[0].performClick()
+        rule.onAllNodesWithText("captura-1.png")[0].performClick()
+        rule.onNodeWithText(AttachTexts.REMOVE_ONE).performClick()
         assertEquals(1L, removed)
+    }
+
+    @Test fun aLongPressOpensTheSameSheetAndAGoodCardHasNoRetry() {
+        var removed = -1L
+        strip(listOf(item(1, AttachState.Ready)), onRemove = { removed = it })
+        rule.onNodeWithText("captura-1.png").performTouchInput { longClick() }
+        rule.onNodeWithText(AttachTexts.RETRY).assertDoesNotExist()
+        rule.onNodeWithText(AttachTexts.REMOVE_ONE).performClick()
+        assertEquals(1L, removed)
+    }
+
+    @Test fun aScreenReaderGetsRemoveAndRetryAsActionsOfTheCard() {
+        strip(listOf(item(1, AttachState.Failed, AttachTexts.UPLOAD_FAILED, retry = true)))
+        val node = rule.onNodeWithText("${AttachTexts.UPLOAD_FAILED}. ${AttachTexts.RETRY}", useUnmergedTree = false).fetchSemanticsNode()
+        val labels = node.config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].map { it.label }
+        assertEquals(listOf(AttachTexts.RETRY, AttachTexts.REMOVE_ONE), labels)
     }
 
     @Test fun aNoticeShowsWithoutChips() {
