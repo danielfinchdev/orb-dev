@@ -79,6 +79,7 @@ object OrbIcons {
         )
     }
     val Gauge by lazy { lucide("gauge", "m12 14 4-4", "M3.34 19a10 10 0 1 1 17.32 0") }
+    val Download by lazy { lucide("download", "M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5") }
     val GraduationCap by lazy {
         lucide("graduation-cap", "M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.08a1 1 0 0 0 0 1.832l8.57 3.908a2 2 0 0 0 1.66 0z", "M22 10v6", "M6 12.5V16a6 3 0 0 0 12 0v-3.5")
     }

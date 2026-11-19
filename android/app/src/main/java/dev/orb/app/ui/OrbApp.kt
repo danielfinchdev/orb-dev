@@ -341,13 +341,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 val vm = viewModel<NotesViewModel>(factory = viewModelFactory { initializer { NotesViewModel(backend) } })
                 NotesScreen(
                     vm, onBack = { nav.popBackStack() },
-                    onOpen = { target ->
-                        when (target) {
-                            is NoticeTarget.Chat -> nav.navigate(ChatRoute(target.kind, target.id))
-                            is NoticeTarget.Task -> nav.navigate(TaskRoute(target.id))
-                            NoticeTarget.ChatsTab -> nav.popBackStack()
-                        }
-                    },
+                    onOpen = { target -> if (target == NoticeTarget.ChatsTab) nav.popBackStack() else openNotice(nav, target) },
                 )
             }
         }
@@ -430,11 +424,22 @@ private fun OpenFromNotice(container: AppContainer, nav: androidx.navigation.Nav
         val t = target ?: return@LaunchedEffect
         container.openTarget.value = null
         if (container.runtime.value == null) return@LaunchedEffect
-        when (t) {
-            is NoticeTarget.Chat -> nav.navigate(ChatRoute(t.kind, t.id))
-            is NoticeTarget.Task -> nav.navigate(TaskRoute(t.id))
-            NoticeTarget.ChatsTab -> Unit
-        }
+        openNotice(nav, t)
+    }
+}
+
+/**
+ * Where a notice leads. The announced version has no screen of its own yet, so it opens «Este móvil», where the PC's
+ * version and the phone's are shown.
+ */
+private fun openNotice(nav: androidx.navigation.NavHostController, t: NoticeTarget) {
+    when (t) {
+        is NoticeTarget.Chat -> nav.navigate(ChatRoute(t.kind, t.id))
+        is NoticeTarget.Task -> nav.navigate(TaskRoute(t.id))
+        is NoticeTarget.TaskChanges -> nav.navigate(TaskChangesRoute(t.id))
+        is NoticeTarget.Account -> nav.navigate(UsageRoute)
+        is NoticeTarget.Version -> nav.navigate(ThisPhoneRoute)
+        NoticeTarget.ChatsTab -> Unit
     }
 }
 
