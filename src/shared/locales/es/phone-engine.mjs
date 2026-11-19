@@ -8,6 +8,7 @@ export default {
   'msg.notice.limit': '{account} ya tiene límite otra vez',
   'msg.notice.hidden': 'Tienes un aviso nuevo',
   'msg.board.waitFolder': 'espera a que la tarea #{by} termine de escribir en la misma carpeta',
+  'msg.queue.changed': 'el mensaje en cola ha cambiado desde que lo viste; ábrelo de nuevo',
   'msg.queue.slashCommand': 'un mensaje en cola no puede ser un comando (/clear, /compact): quítalo y envía el comando',
   'msg.undo.joinUnfinished': 'la unión de esta tarea quedó sin terminar; resuélvela en el PC',
   'msg.undo.runNotReady': 'los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento',

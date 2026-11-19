@@ -60,7 +60,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       if (expect != null) {
         const now = orchestrator.queueOf(id).find((m) => String(m.id) === qid);
         // a phone gets the queue with the assistant folder cut out of each text (shapeResult), so it may send either form.
-        if (now && now.text !== expect && phoneText(now.text) !== expect) fail('el mensaje en cola ha cambiado desde que lo viste; ábrelo de nuevo');
+        if (now && now.text !== expect && phoneText(now.text) !== expect) fail(tr('msg.queue.changed'));
       }
       if (remove) return orchestrator.editQueued(id, qid, { remove: true });
       const t = str(text, 'mensaje', 20000);

@@ -131,7 +131,7 @@ class PrDetailViewModel(private val backend: ProjectsBackend, val name: String, 
                 } else {
                     _state.update { it.copy(merging = false) }
                     // The branch moved after the person looked: show what is new instead of the PC's raw sentence, and merge nothing.
-                    val moved = ProjectTexts.pcError(e).contains("rama del pull request cambió", ignoreCase = true)
+                    val moved = ProjectTexts.pcError(e).let { it.contains("rama del pull request cambió", ignoreCase = true) || it.contains("pull request branch changed", ignoreCase = true) }
                     load(keepError = if (moved) ProjectTexts.PR_BRANCH_CHANGED else ProjectTexts.pcError(e))
                 }
             }

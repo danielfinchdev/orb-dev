@@ -7,6 +7,7 @@ export default {
   'msg.notice.limit': '{account} has usage available again',
   'msg.notice.hidden': 'You have a new notice',
   'msg.board.waitFolder': 'waiting for task #{by} to finish writing in the same folder',
+  'msg.queue.changed': 'the waiting message has changed since you saw it; open it again',
   'msg.queue.slashCommand': 'a waiting message cannot become a command (/clear, /compact): remove it and send the command',
   'msg.undo.joinUnfinished': 'the join of this task was left unfinished; resolve it on the PC',
   'msg.undo.runNotReady': 'the changes of the last run are not ready yet; open it again in a moment',
