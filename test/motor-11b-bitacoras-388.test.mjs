@@ -54,8 +54,8 @@ test('counts: true da el total por fuente y por nivel, y cuadra con las líneas'
   assert.deepEqual(Object.keys(sources), ['orb', 'subagentes', 'usuario', 'app']);
   assert.deepEqual(Object.keys(levels), ['info', 'warn', 'error']);
   assert.equal(sources.orb, 3);
-  assert.equal(sources.usuario, 2);
-  assert.equal(sources.subagentes, 4); // project.saved, task.created, task.updated (failed), task.launched
+  assert.equal(sources.usuario, 4); // rule.save, rail.set, plus the project.saved and task.created the user did
+  assert.equal(sources.subagentes, 2); // task.updated (failed), task.launched
   assert.equal(sources.app, 0);
   const total = Object.values(sources).reduce((a, b) => a + b, 0);
   assert.equal(Object.values(levels).reduce((a, b) => a + b, 0), total);
@@ -73,10 +73,10 @@ test('los totales siguen los demás filtros: la fuente cuenta con el nivel, el n
   assert.equal(onlyErrors.levels.info > 0, true);
   const onlyOrb = (await call('activity.list', { ...all, sources: ['orb'], counts: true })).counts;
   assert.equal(onlyOrb.levels.info + onlyOrb.levels.warn + onlyOrb.levels.error, 3);
-  assert.equal(onlyOrb.sources.usuario, 2); // a source's total ignores the source filter
+  assert.equal(onlyOrb.sources.usuario, 4); // a source's total ignores the source filter
   const byProject = (await call('activity.list', { ...all, project: 'tanda8', counts: true })).counts;
   assert.equal(byProject.sources.orb, 0);
-  assert.equal(byProject.sources.usuario, 1);
+  assert.equal(byProject.sources.usuario, 2); // rule.save and task.created (project.saved carries no project)
 });
 
 test('las páginas siguientes no repiten los totales', async () => {
@@ -87,11 +87,14 @@ test('las páginas siguientes no repiten los totales', async () => {
 });
 
 test('una fila de los subagentes lleva el id de su tarea, y solo mientras la tarea existe', async () => {
-  const rows = (await call('activity.list', all)).items.filter((i) => i.source === 'subagentes');
-  assert.ok(rows.length >= 3);
-  assert.ok(rows.filter((r) => r.kind.startsWith('task.')).every((r) => r.task === task.id));
-  assert.equal(rows.find((r) => r.kind === 'project.saved').task, undefined);
-  for (const r of (await call('activity.list', all)).items.filter((i) => i.source !== 'subagentes')) assert.equal(r.task, undefined);
+  const items = (await call('activity.list', all)).items;
+  const rows = items.filter((i) => i.source === 'subagentes');
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((r) => r.kind.startsWith('task.') && r.task === task.id));
+  // a task row the user wrote (task.created) is filed under usuario and still links to its task
+  assert.equal(items.find((r) => r.kind === 'task.created').task, task.id);
+  assert.equal(items.find((r) => r.kind === 'project.saved').task, undefined);
+  for (const r of items.filter((i) => i.source !== 'subagentes' && !i.kind.startsWith('task.'))) assert.equal(r.task, undefined);
   const phoneRows = (await call('activity.list', all, phone)).items.filter((i) => i.kind.startsWith('task.'));
   assert.equal(phoneRows[0].task, task.id);
   board.run('DELETE FROM tasks WHERE id = ?', task.id);
