@@ -178,9 +178,9 @@ private fun EntryPage(state: WelcomeUiState, a: WelcomeActions) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             when (failure?.first) {
                 // The way out of a banner is the first button; both bring the first page back as it was.
-                WelcomeErrorKind.CodeSpent -> OrbButton("Escanear otro QR", { a.dismissError(); a.onScan() }, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine)
-                WelcomeErrorKind.NotPrivate -> OrbButton("Volver", a.dismissError, kind = OrbButtonKind.Primary, block = true)
-                null -> OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine)
+                WelcomeErrorKind.CodeSpent -> OrbButton("Escanear otro QR", { a.dismissError(); a.onScan() }, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
+                WelcomeErrorKind.NotPrivate -> OrbButton("Volver", a.dismissError, kind = OrbButtonKind.Primary, block = true, big = true)
+                null -> OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
             }
             OrbButton("Sin cámara: código corto", a.openSheet, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
             OrbNote("Wi-Fi de casa o Tailscale. Todo va cifrado.", Modifier.fillMaxWidth().padding(top = 4.dp))
@@ -280,7 +280,7 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
             }
             OrbButton(
                 when { state.checking -> "Comprobando…"; pc.viaCode -> "Coincide con la del PC"; else -> "Coincide, enlazar" },
-                a.confirm, kind = OrbButtonKind.Primary, block = true, enabled = !state.checking,
+                a.confirm, kind = OrbButtonKind.Primary, block = true, enabled = !state.checking, big = true,
             )
         }
     }
@@ -324,7 +324,7 @@ private fun LinkingPage(state: WelcomeUiState, a: WelcomeActions) {
             }
             if (state.stage != WelcomeStage.Done) OrbProgress(state.stepsDone / 3f + 1f / 6f, Modifier.padding(horizontal = 24.dp, vertical = 24.dp), description = "Enlazando")
             if (done) Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 24.dp)) {
-                OrbButton("Ir a Chats", a.done, kind = OrbButtonKind.Primary, block = true)
+                OrbButton("Ir a Chats", a.done, kind = OrbButtonKind.Primary, block = true, big = true)
             }
         }
         if (state.noticesLater && done) {

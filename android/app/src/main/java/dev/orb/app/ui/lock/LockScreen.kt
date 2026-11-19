@@ -67,7 +67,7 @@ fun LockContent(notice: LockNotice?, busy: Boolean, onUnlock: () -> Unit, onPin:
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             OrbButton(
                 if (notice != null) LockTexts.UNLOCK_AGAIN else LockTexts.UNLOCK, onUnlock, kind = OrbButtonKind.Primary, block = true,
-                enabled = !busy, icon = OrbIcons.Fingerprint,
+                enabled = !busy, icon = OrbIcons.Fingerprint, big = true,
             )
             OrbButton(LockTexts.USE_PIN, onPin, kind = OrbButtonKind.Ghost, block = true, enabled = !busy)
             OrbNote(LockTexts.WHERE_TO_CHANGE, Modifier.fillMaxWidth().padding(top = 4.dp), center = true)

@@ -59,7 +59,7 @@ internal val RadiusBig = RoundedCornerShape(18.dp)
 enum class OrbButtonKind { Primary, Secondary, Ghost, Danger }
 
 /**
- * `.btn`: 40 dp (32 with [small]) inside a 48 dp touch zone. Primary is the neutral one (black by day, white by
+ * `.btn`: 40 dp (32 with [small], 48 with [big]) inside a 48 dp touch zone. Primary is the neutral one (black by day, white by
  * night); Secondary has an outline; Danger paints destructive text and border; Ghost has neither.
  */
 @Composable
@@ -72,6 +72,7 @@ fun OrbButton(
     block: Boolean = false,
     enabled: Boolean = true,
     icon: ImageVector? = null,
+    big: Boolean = false,
 ) {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
@@ -92,7 +93,7 @@ fun OrbButton(
         else -> null
     }
     val hover = OrbKit.accent
-    val h = if (small) 32.dp else 40.dp
+    val h = if (small) 32.dp else if (big) 48.dp else 40.dp
     Box(
         modifier.then(if (block) Modifier.fillMaxWidth() else Modifier)
             .clickable(source, null, enabled = enabled, role = Role.Button, onClick = onClick)
