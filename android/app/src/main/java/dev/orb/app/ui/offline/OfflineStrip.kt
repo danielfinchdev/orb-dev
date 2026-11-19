@@ -7,7 +7,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -67,7 +68,7 @@ fun OfflineStrip(modifier: Modifier = Modifier) {
             )
             Text(OfflineTexts.savedNote(seen, now), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
         }
-        TextButton(onClick = info.retryNow) { Text(OfflineTexts.RETRY_NOW) }
+        OrbButton(OfflineTexts.RETRY_NOW, info.retryNow, kind = OrbButtonKind.Ghost)
     }
 }
 

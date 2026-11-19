@@ -4,7 +4,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbSpinner
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Column
@@ -150,7 +152,7 @@ fun OrbApp(container: AppContainer) {
             // The saved link is read off the main thread; until it is known there is nothing to show.
             val linked by produceState<Boolean?>(null, container) { value = container.startup.await() }
             if (linked == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
             } else {
                 // Decided once at launch; a restored back stack wins over it after a rotation.
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
@@ -607,7 +609,7 @@ private fun Placeholder(text: String, onBack: () -> Unit) {
     androidx.compose.foundation.layout.Column(
         Modifier.fillMaxSize().padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
     ) {
-        androidx.compose.material3.TextButton(onClick = onBack) { androidx.compose.material3.Text(ChatTexts.BACK) }
+        OrbButton(ChatTexts.BACK, onBack, kind = OrbButtonKind.Ghost)
         androidx.compose.material3.Text(text)
     }
 }
