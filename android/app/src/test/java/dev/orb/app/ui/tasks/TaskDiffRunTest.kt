@@ -164,6 +164,60 @@ class TaskDiffRunTest {
         }
     }
 
+    @Test fun aTaskJoinedByHandCanBeAcceptedWithItsOwnRunButNeverUndone() = runTest(dispatcher) {
+        val b = backend("run2", TaskDiff(false, emptyList(), 0, reason = "joinedbyhand"))
+        val vm = vm(b)
+        val s = vm.state.value
+        assertTrue(s.canAccept && !s.canUndo && !s.notReady)
+        vm.accept()
+        vm.askUndo()
+        vm.undo()
+        runCurrent()
+        assertEquals(listOf<String?>("run2"), b.acceptCheckpoints)
+        assertEquals(emptyList<String?>(), b.undoCheckpoints)
+    }
+
+    @Test fun aTaskWithoutFinalPhotoCanBeUndoneAfterTheDialogButNeverAccepted() = runTest(dispatcher) {
+        val b = backend("run2", TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
+        val vm = vm(b)
+        val s = vm.state.value
+        assertTrue(!s.canAccept && s.canUndo && !s.notReady)
+        vm.accept()
+        vm.askUndo()
+        vm.undo()
+        runCurrent()
+        assertEquals(emptyList<String?>(), b.acceptCheckpoints)
+        assertEquals(listOf<String?>("run2"), b.undoCheckpoints)
+    }
+
+    @Test fun aReasonThisAppDoesNotKnowOffersNoButtons() = runTest(dispatcher) {
+        val b = backend("run2", TaskDiff(false, emptyList(), 0, reason = "somethingnew"))
+        val vm = vm(b)
+        assertFalse(vm.state.value.canAccept || vm.state.value.canUndo)
+        vm.accept(); vm.askUndo(); vm.undo()
+        runCurrent()
+        assertEquals(emptyList<String>(), b.calls)
+    }
+
+    @Test fun thePcsRefusalsOfTheNewCasesAreShownWordForWord() = runTest(dispatcher) {
+        for (words in listOf(
+            "esta tarea se unió a mano en el PC; deshazla desde el PC",
+            "no se puede comprobar a qué ejecución pertenece este punto de vuelta; deshazla desde el PC",
+            "los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento",
+        )) {
+            val b = backend("run2", diff("run2"))
+            val vm = vm(b)
+            val said = ArrayList<String>()
+            backgroundScope.launch { vm.messages.collect { said += it } }
+            b.actionResult = Result.failure(LinkException(LinkError.Refused(409, words)))
+            vm.askUndo()
+            vm.undo()
+            runCurrent()
+            assertEquals(listOf(words), said)
+            assertEquals(listOf("diff", "get", "diff", "get"), b.reads)
+        }
+    }
+
     @Test fun theTaskChangingBetweenTheDiffAndTheTaskIsNotAcceptedUnseen() = runTest(dispatcher) {
         val b = backend("run1", diff("run1"))
         val vm = vm(b)

@@ -106,6 +106,8 @@ class TaskDiffShotsTest {
         "-no-listo", TaskDiff(true, mockupFiles(), 0, checkpointId = "run1", runKnown = true), checkpoint = "run2",
     )
     @Test fun noPhoto() = shoot("-sin-punto-de-vuelta", TaskDiff(false, emptyList(), 0, reason = "nophoto"))
+    @Test fun joinedByHand() = shoot("-unida-a-mano", TaskDiff(false, emptyList(), 0, reason = "joinedbyhand"), checkpoint = "run1")
+    @Test fun noFinalPhoto() = shoot("-sin-foto-final", TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
     @Test fun noGit() = shoot("-sin-git", TaskDiff(false, emptyList(), 0, reason = "nogit"))
     @Test fun hiddenFiles() = shoot("-ocultos", TaskDiff(true, mockupFiles(), 0, hidden = 2))
 }

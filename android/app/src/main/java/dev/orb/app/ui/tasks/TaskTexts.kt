@@ -310,6 +310,10 @@ object TaskTexts {
     const val NO_GIT_HINT = "El PC no puede enseñar los cambios línea a línea de una carpeta sin git."
     const val REPO_GONE = "El repositorio ya no existe"
     const val REPO_GONE_HINT = "La carpeta del proyecto ya no está en el PC, así que no hay cambios que enseñar."
+    const val JOINED_BY_HAND = "Cambios unidos a mano en el PC"
+    const val JOINED_BY_HAND_HINT = "Los cambios de esta tarea se unieron a mano en el PC. Aquí no se pueden ver ni deshacer."
+    const val NO_PHOTO_AFTER = "No hay cambios que enseñar"
+    const val NO_PHOTO_AFTER_HINT = "El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Deshacerla la devuelve a como estaba antes."
     const val NO_CHANGED_FILES = "La tarea no cambió ningún archivo."
     fun hiddenFiles(n: Int) =
         if (n == 1) "1 archivo no se enseña porque parece contener secretos." else "$n archivos no se enseñan porque parecen contener secretos."

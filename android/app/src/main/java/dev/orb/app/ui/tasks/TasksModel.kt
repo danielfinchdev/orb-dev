@@ -111,7 +111,7 @@ data class TaskDetail(
 data class DiffFile(val status: String, val path: String, val added: Int, val removed: Int, val binary: Boolean, val patch: String, val cut: Boolean)
 
 /**
- * What `tasks.diff` says. [reason] is why there is no diff (`nophoto`, `nogit`, `notdone`, `gone`) and [hidden] how many files
+ * What `tasks.diff` says. [reason] is why there is no diff (`nophoto`, `nogit`, `notdone`, `gone`, `joinedbyhand`, `nophotoafter`) and [hidden] how many files
  * were left out because they look like secrets. [checkpointId] is the run the diff belongs to; [runKnown] tells a PC that does
  * not send the field at all (an older one) from one that sends it empty because it cannot tell.
  */
@@ -128,6 +128,21 @@ data class TaskDiff(
      * diff that is not there, cannot disagree; a PC that says it must say the same run, or nothing here may be decided from it.
      */
     fun isOfRun(taskRun: String?): Boolean = !available || !runKnown || (checkpointId != null && taskRun != null && checkpointId == taskRun)
+
+    /** Whether the PC gave a reason for having no diff that this app does not know: nothing is offered from it. */
+    val unknownReason get() = !available && reason != null && reason !in KNOWN_REASONS
+
+    /** The task's work was joined by hand on the PC: the stored diff no longer describes the folder, the PC allows no undo. */
+    val joinedByHand get() = !available && reason == JOINED_BY_HAND
+
+    /** The PC could not take the final photo: there is nothing to see or accept, going back to before the task is still possible. */
+    val noFinalPhoto get() = !available && reason == NO_PHOTO_AFTER
+
+    companion object {
+        const val JOINED_BY_HAND = "joinedbyhand"
+        const val NO_PHOTO_AFTER = "nophotoafter"
+        val KNOWN_REASONS = setOf("nophoto", "nogit", "notdone", "gone", JOINED_BY_HAND, NO_PHOTO_AFTER)
+    }
 }
 
 /** An agent `tasks.reassign` accepts, with the account and model the PC would use for it, as it describes them. */

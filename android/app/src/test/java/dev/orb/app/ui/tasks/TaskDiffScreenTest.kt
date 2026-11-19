@@ -244,6 +244,54 @@ class TaskDiffScreenTest {
         rule.onNodeWithText("La carpeta del proyecto ya no está en el PC, así que no hay cambios que enseñar.").assertIsDisplayed()
     }
 
+    @Test fun aTaskJoinedByHandIsToldAndOnlyOffersAcceptWithItsOwnRun() {
+        val b = backend(
+            TaskDiff(false, emptyList(), 0, reason = "joinedbyhand"),
+            detail(task(4, status = "done"), hasCheckpoint = true, checkpointId = "run7"),
+        )
+        show(b)
+        rule.onNodeWithText("Los cambios de esta tarea se unieron a mano en el PC. Aquí no se pueden ver ni deshacer.").assertIsDisplayed()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf<String?>("run7"), b.acceptCheckpoints)
+    }
+
+    @Test fun aTaskWithoutFinalPhotoIsToldOffersUndoAfterAskingAndNoAccept() {
+        val b = backend(TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
+        show(b)
+        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Deshacerla la devuelve a como estaba antes.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("¿Deshacer esta tarea?").assertIsDisplayed()
+        // No file is counted: nobody knows them.
+        rule.onNodeWithText("Se restauran los archivos modificados por esta tarea. Los cambios posteriores se conservan.").assertIsDisplayed()
+        assertEquals(emptyList<String>(), b.calls)
+        rule.onAllNodesWithText("Deshacer").onLast().performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("undo 4"), b.calls)
+    }
+
+    @Test fun aReasonThisAppDoesNotKnowKeepsTheGenericSentenceAndNoButtons() {
+        show(backend(TaskDiff(false, emptyList(), 0, reason = "somethingnew")))
+        rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun thePcsRefusalToUndoWorkJoinedByHandIsShownAsItIs() {
+        val b = backend(TaskDiff(true, files, 0))
+        show(b)
+        val words = "esta tarea se unió a mano en el PC; deshazla desde el PC"
+        b.actionResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Refused(409, words)))
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        rule.onAllNodesWithText("Deshacer").onLast().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(words).assertIsDisplayed()
+    }
+
     @Test fun aPcThatGivesNoReasonKeepsTheGenericSentence() {
         show(backend(TaskDiff(false, emptyList(), 0)))
         rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()

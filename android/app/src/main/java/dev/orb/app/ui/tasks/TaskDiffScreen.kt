@@ -197,6 +197,8 @@ private fun NoDiff(diff: TaskDiff) {
         "nogit" -> Message(TaskTexts.NO_GIT, TaskTexts.NO_GIT_HINT, icon = OrbIcons.GitBranch)
         "notdone" -> Message(TaskTexts.NOT_READY, TaskTexts.NOT_READY_HINT, icon = OrbIcons.Clock)
         "gone" -> Message(TaskTexts.REPO_GONE, TaskTexts.REPO_GONE_HINT, icon = OrbIcons.FolderGit2)
+        TaskDiff.JOINED_BY_HAND -> Message(TaskTexts.JOINED_BY_HAND, TaskTexts.JOINED_BY_HAND_HINT, icon = OrbIcons.GitCompare)
+        TaskDiff.NO_PHOTO_AFTER -> Message(TaskTexts.NO_PHOTO_AFTER, TaskTexts.NO_PHOTO_AFTER_HINT, icon = OrbIcons.History)
         else -> Message(TaskTexts.NO_CHANGES, TaskTexts.NO_CHANGES_HINT, icon = OrbIcons.GitCompare)
     }
 }

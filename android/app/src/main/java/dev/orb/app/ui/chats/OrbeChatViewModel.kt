@@ -544,7 +544,16 @@ class OrbeChatViewModel(
         // moment on it would let the person decide on work nobody has seen.
         val statRead = if (TaskAction.SeeChanges in d.actions) backend.taskStat(task) else null
         val st = statRead?.getOrNull()
-        val settled = if (st == null || st.isOfRun(d.checkpointId)) d else d.copy(actions = d.actions - TaskAction.AcceptHeld - TaskAction.UndoHeld)
+        // Without a count that can be trusted the card decides nothing: only «Cambios» is left, where the PC's own diff is read.
+        val settled = when {
+            statRead != null && statRead.isFailure -> d.copy(actions = d.actions - TaskAction.AcceptHeld - TaskAction.UndoHeld)
+            st == null -> d
+            !st.isOfRun(d.checkpointId) -> d.copy(actions = d.actions - TaskAction.AcceptHeld - TaskAction.UndoHeld)
+            // The PC allows no undo of work joined by hand, and nothing is accepted that cannot be seen.
+            st.joinedByHand -> d.copy(actions = d.actions - TaskAction.UndoHeld)
+            st.noFinalPhoto -> d.copy(actions = d.actions - TaskAction.AcceptHeld)
+            else -> d
+        }
         // A newer read of the task may have been asked while the counts were on their way.
         if (!isLatest(task, read)) return settled
         d.status?.let { s -> taskStatus.update { it + (task to s) } }
@@ -552,9 +561,9 @@ class OrbeChatViewModel(
         taskStat.update { m ->
             when {
                 statRead == null -> m - task
-                // A failed read keeps what was known.
-                statRead.isFailure -> m
-                st != null && !st.notReady -> m + (task to st)
+                // A failed read keeps the count only if it is still of the run the task is at now.
+                statRead.isFailure -> m[task]?.takeIf { it.isOfRun(d.checkpointId) }?.let { m } ?: (m - task)
+                st != null && st.hasCounts && st.isOfRun(d.checkpointId) -> m + (task to st)
                 else -> m - task
             }
         }
@@ -702,7 +711,7 @@ class OrbeChatViewModel(
     fun askUndo(task: Long) {
         val info = taskInfo.value[task] ?: return
         if (TaskAction.UndoHeld !in info.actions) return
-        undoAsk.value = UndoAsk(task, info.title, taskStat.value[task]?.files, info.checkpointId)
+        undoAsk.value = UndoAsk(task, info.title, taskStat.value[task]?.takeIf { it.hasCounts && it.isOfRun(info.checkpointId) }?.files, info.checkpointId)
     }
 
     fun dismissUndo() { undoAsk.value = null }

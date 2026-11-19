@@ -94,8 +94,12 @@ class TaskDiffViewModel(
         return TaskDiffState(
             id = id, title = d?.row?.title, project = d?.row?.project?.takeIf { it.isNotBlank() }, diff = diff, loading = u.loading, error = u.error,
             online = c is ConnectionState.Online, busy = u.busy, accepted = d?.accepted == true,
-            canAccept = fresh && d != null && !d.accepted && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_ACCEPT),
-            canUndo = fresh && d != null && d.hasCheckpoint && !d.row.undone && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_UNDO),
+            // A reason this app does not know offers nothing; with no final photo there is nothing seen to accept; a task joined by
+            // hand on the PC is accepted from here (that touches no files) but only the PC can undo it.
+            canAccept = fresh && d != null && !d.accepted && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_ACCEPT) &&
+                diff?.unknownReason != true && diff?.noFinalPhoto != true,
+            canUndo = fresh && d != null && d.hasCheckpoint && !d.row.undone && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_UNDO) &&
+                diff?.unknownReason != true && diff?.joinedByHand != true,
             notReady = notReady, reloading = u.pending || u.loading,
             canReview = d != null && d.row.status == "done" && backend.available(ApiMethods.TASKS_REVIEW),
             canSecurity = d?.row?.project?.isNotBlank() == true && backend.available(ApiMethods.PROJECTS_SECURITY_REVIEW),

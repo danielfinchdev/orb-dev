@@ -85,13 +85,17 @@ data class OrbeQueued(val id: String, val text: String, val at: Long)
 /**
  * What a finished task changed, counts only (`tasks.diff {stat:true}`). The line counts are null when the PC cut the list.
  * [checkpointId] is the run those counts belong to ([runKnown]: the PC said so at all) and [notReady] that the PC has no diff
- * of the last run yet.
+ * of the last run yet. [joinedByHand] and [noFinalPhoto] carry no counts: they only say which decision the PC does not allow.
  */
 @Immutable
 data class TaskStat(
     val files: Int, val added: Int?, val removed: Int?,
     val checkpointId: String? = null, val runKnown: Boolean = false, val notReady: Boolean = false,
+    val joinedByHand: Boolean = false, val noFinalPhoto: Boolean = false,
 ) {
+    /** Whether this is a count of changed files and may be shown as one. */
+    val hasCounts get() = !notReady && !joinedByHand && !noFinalPhoto
+
     /** Whether the counts are of the run [taskRun] the task is at now; a PC that does not name the run cannot disagree. */
     fun isOfRun(taskRun: String?): Boolean = !notReady && (!runKnown || (checkpointId != null && taskRun != null && checkpointId == taskRun))
 }
@@ -265,7 +269,12 @@ object OrbeParser {
     fun taskStat(el: kotlinx.serialization.json.JsonElement?): TaskStat? {
         val d = dev.orb.app.ui.tasks.TasksParser.diff(el ?: return null)
         // The PC has no diff of the last run yet: no counts, but the card must not offer a decision on it.
-        if (!d.available) return if (d.reason == "notdone") TaskStat(0, null, null, notReady = true) else null
+        if (!d.available) return when {
+            d.reason == "notdone" -> TaskStat(0, null, null, notReady = true)
+            d.joinedByHand -> TaskStat(0, null, null, joinedByHand = true)
+            d.noFinalPhoto -> TaskStat(0, null, null, noFinalPhoto = true)
+            else -> null
+        }
         if (d.files.any { it.patch.isNotEmpty() }) return null
         val n = d.files.size + d.more
         if (n == 0) return null

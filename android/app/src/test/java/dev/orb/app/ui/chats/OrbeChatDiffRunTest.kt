@@ -126,6 +126,42 @@ class OrbeChatDiffRunTest {
         assertNull(vm.state.value.taskStat[42])
     }
 
+    @Test fun aFailedCountReadTakesAcceptAndUndoOffTheCardAndKeepsOnlyChanges() = runTest(dispatcher) {
+        val b = backend(null)
+        b.statResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Timeout))
+        val actions = actionsOf(b)
+        assertTrue(TaskAction.SeeChanges in actions)
+        assertFalse(TaskAction.AcceptHeld in actions || TaskAction.UndoHeld in actions)
+    }
+
+    @Test fun theOldCountIsDroppedWhenTheRunChangedAndTheReadFails() = runTest(dispatcher) {
+        val b = backend(TaskStat(3, 10, 2, checkpointId = "run2", runKnown = true))
+        val vm = vm(b)
+        vm.watchTask(42)
+        runCurrent()
+        assertEquals(3, vm.state.value.taskStat[42]?.files)
+        // The task ran again (another point of return) and the count cannot be read now.
+        b.taskDetail = b.taskDetail.copy(checkpointId = "run3")
+        b.statResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Timeout))
+        b.events.tryEmit(dev.orb.app.link.net.LinkEvent("approval:changed", Json.parseToJsonElement("{}")))
+        runCurrent()
+        assertNull(vm.state.value.taskStat[42])
+        vm.askUndo(42)
+        assertNull(vm.state.value.undoAsk)
+    }
+
+    @Test fun aTaskJoinedByHandLosesUndoFromTheCardButKeepsAccept() = runTest(dispatcher) {
+        val actions = actionsOf(backend(TaskStat(0, null, null, joinedByHand = true)))
+        assertTrue(TaskAction.AcceptHeld in actions && TaskAction.SeeChanges in actions)
+        assertFalse(TaskAction.UndoHeld in actions)
+    }
+
+    @Test fun aTaskWithoutFinalPhotoLosesAcceptFromTheCardButKeepsUndo() = runTest(dispatcher) {
+        val actions = actionsOf(backend(TaskStat(0, null, null, noFinalPhoto = true)))
+        assertTrue(TaskAction.UndoHeld in actions && TaskAction.SeeChanges in actions)
+        assertFalse(TaskAction.AcceptHeld in actions)
+    }
+
     @Test fun parsesTheRunAndTheNotReadyReasonOfTheDiff() {
         val parse = { s: String -> OrbeParser.taskStat(Json.parseToJsonElement(s)) }
         val ok = parse("""{"available":true,"files":[{"path":"a","added":1,"removed":0}],"more":0,"checkpointId":"cp9"}""")!!
@@ -137,5 +173,7 @@ class OrbeChatDiffRunTest {
         val notDone = parse("""{"available":false,"reason":"notdone","files":[],"more":0}""")!!
         assertTrue(notDone.notReady && !notDone.isOfRun("cp8"))
         assertNull(parse("""{"available":false,"reason":"nophoto","files":[],"more":0}"""))
+        assertTrue(parse("""{"available":false,"reason":"joinedbyhand","files":[],"more":0}""")!!.joinedByHand)
+        assertTrue(parse("""{"available":false,"reason":"nophotoafter","files":[],"more":0}""")!!.noFinalPhoto)
     }
 }
