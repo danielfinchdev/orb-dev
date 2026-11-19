@@ -615,7 +615,7 @@ private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: 
  * the fields the PC's fingerprint covers; [preview] false (the dialog) shows the whole description however long.
  */
 @Composable
-private fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
+internal fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
     if (d.reasons.isNotEmpty()) Text(ChatTexts.asksBecause(d.reasons), color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
     if (!d.description.isNullOrBlank()) Text(if (preview) d.descriptionPreview() else d.description.trim(), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
     // The phone shortens the paths of Orb's own folder in the text it gets, so what is read here is not letter for letter what the OK covers.

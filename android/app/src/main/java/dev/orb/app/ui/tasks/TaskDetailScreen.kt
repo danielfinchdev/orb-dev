@@ -92,9 +92,10 @@ fun TaskDetailScreen(
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                     Header(d, nowMs())
                     if (!state.online && state.actions.isNotEmpty()) NeedsPcNote(Modifier.padding(top = 8.dp))
-                    Decisions(d, state.actions, enabled, vm, onAskUndo = { ask = Ask.Undo }, onAskReject = { ask = Ask.Reject })
+                    Decisions(d, state.actions, enabled, vm, onAskUndo = { vm.askUndo(); ask = Ask.Undo }, onAskReject = { ask = Ask.Reject })
                     WhyWaits(d, state.actions, enabled) { ask = Ask.LaunchAnyway }
-                    if (d.description.isNotBlank()) {
+                    // While an OK is asked, the card above shows the description with the rest of what the OK covers.
+                    if (d.description.isNotBlank() && TaskAction.Approve !in state.actions) {
                         SectionLabel(TaskTexts.WHAT_TO_DO)
                         Text(d.description, style = MaterialTheme.typography.bodyMedium)
                     }
@@ -196,6 +197,10 @@ private fun Decisions(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean,
     if (TaskAction.Approve in actions) {
         Card(OrbTheme.colors.warnSoft) {
             Text(TaskTexts.status("awaiting_approval"), style = MaterialTheme.typography.titleSmall)
+            // The same facts as the chat's card and dialog, all of them: what the OK covers is what is read here.
+            d.facts?.let { dev.orb.app.ui.chats.ApprovalFacts(it, preview = false) }
+            // A PC that sent no facts still shows the brief it is asked to approve.
+            ?: Text(d.description, style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { vm.approve(true) }, enabled = enabled) { Text(TaskTexts.APPROVE) }
                 OutlinedButton(onClick = onAskReject, enabled = enabled) { Text(TaskTexts.REJECT) }
