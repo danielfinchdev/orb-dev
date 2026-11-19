@@ -149,7 +149,7 @@ class WelcomeViewModel(
         _state.update { it.copy(busy = true, error = null) }
         viewModelScope.launch(dispatcher) {
             try {
-                val r = linker.resolve(payload).getOrElse { return@launch rejected(it) }
+                val r = linker.resolve(payload).getOrElse { return@launch rejected(it, linking = false) }
                 resolved = r
                 _state.update {
                     it.copy(
@@ -175,7 +175,7 @@ class WelcomeViewModel(
         _state.update { it.copy(checking = true, error = null, passwordError = null, password = "", showPassword = false) }
         viewModelScope.launch(dispatcher) {
             val ok = try {
-                linker.link(r, password, deviceName).getOrElse { return@launch rejected(it) }
+                linker.link(r, password, deviceName).getOrElse { return@launch rejected(it, linking = true) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -216,20 +216,23 @@ class WelcomeViewModel(
     /** The permission changed (the activity came back from Android's dialog or settings). */
     fun noticesChanged(on: Boolean) = _state.update { it.copy(noticesOn = on, noticesLater = it.noticesLater && !on) }
 
-    private fun rejected(e: Throwable) {
+    private fun rejected(e: Throwable, linking: Boolean) {
         val refused = (e as? PairingException)?.error as? PairError.Refused
         when {
             // A wrong password with tries left stays on the fingerprint; with none left the code is dead.
             refused?.reason == "password" && refused.left != 0 -> _state.update { it.copy(checking = false, passwordError = errorOf(e)) }
-            refused != null && isSpent(refused) -> backToEntry(
+            refused != null && linking && isSpent(refused) -> backToEntry(
                 if (refused.reason == "password") pairErrorText(refused.copy(reason = "newCode")) else errorOf(e), WelcomeErrorKind.CodeSpent,
             )
             else -> fail(errorOf(e))
         }
     }
 
+    // The PC answers 401 without a reason for a code that expired, was used, was replaced or was voided by too many
+    // tries, and "newCode" when the last password try failed. "tries" is the master password's general lock (the code
+    // is still good), and 404/410 mean the address is not an Orb: none of those spend the code.
     private fun isSpent(r: PairError.Refused) =
-        r.reason == "password" && r.left == 0 || r.reason in SPENT_REASONS || r.status == 410 || r.status == 404
+        r.reason == "password" && r.left == 0 || r.reason == "newCode" || r.reason == null && r.status == 401
 
     /** Forgets what the PC answered and shows the first page again with [message]; the spent code is not kept. */
     private fun backToEntry(message: String, kind: WelcomeErrorKind = WelcomeErrorKind.CodeSpent) {
@@ -247,10 +250,6 @@ class WelcomeViewModel(
     /** A [kind] leaves the sheet: the banner on the entry page carries the way out. */
     private fun fail(message: String, kind: WelcomeErrorKind? = null) =
         _state.update { it.copy(busy = false, checking = false, error = message, errorKind = kind, sheet = it.sheet && kind == null) }
-
-    private companion object {
-        val SPENT_REASONS = setOf("expired", "newCode", "tries")
-    }
 
     override fun onCleared() {
         resolved = null

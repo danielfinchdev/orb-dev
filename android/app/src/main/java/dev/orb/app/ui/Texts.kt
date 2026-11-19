@@ -19,7 +19,9 @@ fun pairErrorText(e: PairError): String = when (e) {
         e.reason == "wait" -> "Espera un momento antes de volver a probar."
         e.reason == "noMaster" || e.reason == "noVerifier" -> "El PC no tiene contraseña maestra para enlazar. Créala en Orb y vuelve a probar."
         e.reason == "tries" -> "Demasiados intentos. Espera un rato o desbloquea el PC."
-        e.reason == "expired" || e.status == 410 || e.status == 404 -> "El código ha caducado. Genera uno nuevo en el PC."
+        e.reason == null && e.status == 401 -> "Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC."
+        e.reason == null && e.status == 429 -> "Demasiados intentos desde este móvil. Espera unos minutos."
+        e.reason == null && (e.status == 404 || e.status == 410) -> "Esa dirección no responde como un Orb. Revisa la dirección del PC."
         else -> e.error
     }
     PairError.KdfTooHeavy -> "El PC pide más memoria de la que tiene este móvil para comprobar la contraseña."

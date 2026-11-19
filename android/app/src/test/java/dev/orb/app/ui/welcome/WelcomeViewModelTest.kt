@@ -73,7 +73,7 @@ class WelcomeViewModelTest {
         setAddress("http://192.168.1.20:3131")
     }
 
-    private fun refused(reason: String?, left: Int? = null) = Result.failure<PairOk>(PairingException(PairError.Refused(403, "x", reason, left, null)))
+    private fun refused(reason: String?, left: Int? = null, status: Int = 403) = Result.failure<PairOk>(PairingException(PairError.Refused(status, "x", reason, left, null)))
 
     @Test fun aScannedLinkTakesTheRoadOfAPastedOneAndAsksThePcOnce() {
         val linker = FakeLinker(Result.success(ok()))
@@ -229,7 +229,7 @@ class WelcomeViewModelTest {
     }
 
     @Test fun aCodeThatCannotWorkAgainSendsThePersonBackToTheStartWithABanner() {
-        val cases = listOf(refused("expired"), refused("newCode"), refused("tries"), refused("password", 0), Result.failure<PairOk>(PairingException(PairError.Refused(410, "x", null, null, null))))
+        val cases = listOf(refused(null, status = 401), refused("newCode"), refused("password", 0))
         for (case in cases) {
             val vm = vm(FakeLinker(case))
             vm.fillCode(); vm.resolve(); vm.setPassword("secreto"); vm.confirm()
@@ -247,15 +247,39 @@ class WelcomeViewModelTest {
         }
     }
 
-    @Test fun anExpiredCodeFoundWhileAskingThePcClosesTheSheetAndShowsTheBanner() {
-        val vm = vm(FakeLinker(Result.success(ok()), { Result.failure(PairingException(PairError.Refused(410, "x", "expired", null, null))) }))
-        vm.openSheet()
-        vm.fillCode()
-        vm.resolve()
+    @Test fun theMasterPasswordLockKeepsThePersonOnTheFingerprintWithTheCode() {
+        val vm = vm(FakeLinker(refused("tries", status = 503)))
+        vm.fillCode(); vm.resolve(); vm.setPassword("secreto"); vm.confirm()
         val s = vm.state.value
-        assertEquals(WelcomeErrorKind.CodeSpent, s.errorKind)
-        assertFalse(s.sheet)
-        assertEquals(WelcomeStage.Entry, s.stage)
+        assertEquals(WelcomeStage.Fingerprint, s.stage)
+        assertNull(s.errorKind)
+        assertTrue(s.error!!.contains("Espera un rato"))
+        assertEquals("ABCDEF", s.code)
+        assertNotNull(s.pc)
+    }
+
+    @Test fun generalAnswersAreNeverShownAsAnExpiredCode() {
+        val cases = listOf(
+            refused(null, status = 404), refused(null, status = 410), refused(null, status = 429), refused("wait", status = 429),
+            refused("noMaster"), refused(null, status = 426),
+        )
+        for (case in cases) {
+            val vm = vm(FakeLinker(case))
+            vm.fillCode(); vm.resolve(); vm.setPassword("secreto"); vm.confirm()
+            val s = vm.state.value
+            assertEquals(WelcomeStage.Fingerprint, s.stage)
+            assertNull(s.errorKind)
+            assertFalse(s.error!!.contains("caducado"))
+        }
+    }
+
+    @Test fun anAddressThatIsNotAnOrbWhileAskingStaysInTheSheet() {
+        val vm = vm(FakeLinker(Result.success(ok()), { Result.failure(PairingException(PairError.Refused(404, "x", null, null, null))) }))
+        vm.openSheet(); vm.fillCode(); vm.resolve()
+        val s = vm.state.value
+        assertNull(s.errorKind)
+        assertTrue(s.sheet)
+        assertFalse(s.error!!.contains("caducado"))
     }
 
     @Test fun otherResolveErrorsStayInTheSheetAsPlainText() {
@@ -280,6 +304,23 @@ class WelcomeViewModelTest {
         assertEquals(WelcomeStage.Fingerprint, vm.state.value.stage)
     }
 
+
+    @Test fun aLinkScannedTwiceWhileThePcIsBeingAskedAsksOnce() {
+        val linker = FakeLinker(Result.success(ok())).also { it.holdResolve = kotlinx.coroutines.CompletableDeferred() }
+        val vm = vm(linker)
+        val text = "http://192.168.1.20:3131/#vincular=ABCDEF&pc=" + "A".repeat(43) + "&v=4"
+        vm.scanned(text)
+        vm.scanned(text)
+        linker.holdResolve!!.complete(Unit)
+        assertEquals(1, linker.resolveCalls)
+    }
+
+    @Test fun protocolAnswersAreWordedForWhatTheyReallyMean() {
+        assertTrue(pairErrorText(PairError.Refused(401, "x", null, null, null)).contains("ya no vale"))
+        assertTrue(pairErrorText(PairError.Refused(503, "x", "tries", null, null)).contains("Espera un rato"))
+        assertTrue(pairErrorText(PairError.Refused(429, "x", null, null, null)).contains("Demasiados intentos"))
+        assertFalse(pairErrorText(PairError.Refused(404, "x", null, null, null)).contains("caducado"))
+    }
 
     @Test fun lastAttemptIsSingular() {
         assertEquals(

@@ -25,12 +25,12 @@ import org.robolectric.annotation.Config
 class WelcomeScreenTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private class Pc(val failWith: dev.orb.app.link.net.PairError? = null) : Linker {
+    private class Pc(val failWith: dev.orb.app.link.net.PairError? = null, val linkFailWith: dev.orb.app.link.net.PairError? = null) : Linker {
         override suspend fun resolve(payload: LinkPayload): Result<ResolvedLink> =
             if (failWith != null) Result.failure(dev.orb.app.link.net.PairingException(failWith)) else Result.success(ResolvedLink(payload.urls, payload.code, "pc", ByteArray(32), "8f3a-c21d-77e0", "DanLaptop", payload.via))
 
         override suspend fun link(link: ResolvedLink, password: String, deviceName: String) =
-            Result.success(PairOk(LinkSession("id", ByteArray(32), ByteArray(32), listOf("http://192.168.1.20:3131")), null, 0))
+            if (linkFailWith != null) Result.failure(dev.orb.app.link.net.PairingException(linkFailWith)) else Result.success(PairOk(LinkSession("id", ByteArray(32), ByteArray(32), listOf("http://192.168.1.20:3131")), null, 0))
     }
 
     private class Notices(var requests: Int = 0) : NoticeGate {
@@ -54,16 +54,16 @@ class WelcomeScreenTest {
         rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, false) { WelcomeContent(state, actions) } }
 
     @Test fun anExpiredCodeIsABannerWhoseButtonScansAnotherAndClearsIt() {
-        val vm = WelcomeViewModel(Pc(dev.orb.app.link.net.PairError.Refused(410, "x", "expired", null, null)), "Test", {}, Dispatchers.Unconfined)
+        val vm = WelcomeViewModel(Pc(linkFailWith = dev.orb.app.link.net.PairError.Refused(401, "x", null, null, null)), "Test", {}, Dispatchers.Unconfined)
         var scans = 0
         rule.setContent {
             OrbTheme(OrbPaletteChoice.Grafito, false) {
                 WelcomeScreen(vm, onDone = {}, onOpenThisPhone = {}, onScan = { scans++ })
             }
         }
-        vm.openSheet(); vm.setCode("ABCDEF"); vm.setAddress("http://192.168.1.20:3131"); vm.resolve()
+        vm.openSheet(); vm.setCode("ABCDEF"); vm.setAddress("http://192.168.1.20:3131"); vm.resolve(); vm.setPassword("secreto"); vm.confirm()
         rule.waitForIdle()
-        rule.onNodeWithText("El código ha caducado. Genera uno nuevo en el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC.").assertIsDisplayed()
         rule.onNodeWithText("Escanear otro QR").performClick()
         rule.waitForIdle()
         assertEquals(1, scans)
