@@ -153,6 +153,9 @@ export const snapshotAfterTurn = (cwd, sid, alive) => serial(sid, () => take(cwd
 export async function listTurns(cwd, sid) {
   if (!cwd || !(await isGitRepoAsync(cwd))) return { available: false, turns: [] };
   const repo = await repoRootAsync(cwd);
+  // A read that arrives while a photo is being taken (the engine marks the chat idle before it ends) waits for it, so the
+  // turn that just finished is listed. The stored link never rejects, so this cannot hang or throw.
+  await chains.get(sid);
   const refs = await listRefs(repo, sid);
   return { available: refs.length > 1, turns: refs.filter((t) => t.n > 0).map((t) => ({ n: t.n, at: t.at })) };
 }
