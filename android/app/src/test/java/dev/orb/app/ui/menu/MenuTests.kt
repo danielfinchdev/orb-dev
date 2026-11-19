@@ -12,6 +12,7 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.link.net.PcVersions
+import dev.orb.app.ui.tasks.TaskFilter
 import dev.orb.app.ui.theme.OrbTheme
 import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
@@ -225,6 +226,51 @@ class MenuScreensTest {
         showMenu(MenuState("PC", inbox = InboxMenu(priority = false, canDigest = false)), MenuActions())
         rule.onNodeWithText("Desactivado").performScrollTo().assertIsDisplayed()
         for (t in listOf(dev.orb.app.ui.chats.InboxTexts.current().reorder, "Resumen del día")) rule.onNodeWithText(t).assertDoesNotExist()
+    }
+
+    private fun showTasksMenu(tasks: TasksMenu, got: ArrayList<String> = ArrayList()) {
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                MenuContent(
+                    MenuState("PC", tasks = tasks),
+                    MenuActions(
+                        onTasksSearch = { got += "search" }, onTasksNew = { got += "new" }, onTasksPause = { got += "pause" },
+                        onTasksView = { got += "view ${it.name}" },
+                    ),
+                    close = { got += "closed" },
+                )
+            }
+        }
+        rule.waitForIdle()
+    }
+
+    @Test fun moreOptionsOfferTheBoardsSearchNewTaskPauseAndTheOtherViews() {
+        val got = ArrayList<String>()
+        showTasksMenu(TasksMenu(TaskFilter.Active, canCreate = true, canPause = true), got)
+        for (t in listOf("Más opciones", "Buscar tareas", "Nueva tarea", "Pausar la cola", "Ver tareas completadas", "Ver todas las tareas")) {
+            rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+        }
+        rule.onNodeWithText("Ver tareas activas").assertDoesNotExist()
+        for (t in listOf("Buscar tareas", "Nueva tarea", "Pausar la cola", "Ver tareas completadas", "Ver todas las tareas")) rule.onNodeWithText(t).performScrollTo().performClick()
+        // each entry closes the menu first, then does its own thing
+        assertEquals(
+            listOf("closed", "search", "closed", "new", "closed", "pause", "closed", "view Done", "closed", "view All"),
+            got,
+        )
+    }
+
+    @Test fun theBoardsEntriesThePcCannotServeAreLeftOut() {
+        showTasksMenu(TasksMenu(TaskFilter.Active, canCreate = false, canPause = false))
+        rule.onNodeWithText("Buscar tareas").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Nueva tarea").assertDoesNotExist()
+        rule.onNodeWithText("Pausar la cola").assertDoesNotExist()
+    }
+
+    @Test fun fromTheFinishedViewTheMenuOffersTheOtherTwo() {
+        showTasksMenu(TasksMenu(TaskFilter.Done, canCreate = true, canPause = true))
+        rule.onNodeWithText("Ver tareas activas").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Ver todas las tareas").performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Ver tareas completadas").assertDoesNotExist()
     }
 
     @Test fun withoutTheListThereIsNoMoreOptions() {

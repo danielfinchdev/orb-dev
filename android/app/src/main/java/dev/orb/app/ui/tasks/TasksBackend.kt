@@ -66,6 +66,12 @@ interface TasksBackend {
     suspend fun cancel(id: Long): Result<Unit>
     suspend fun review(id: Long): Result<Unit>
 
+    /** `projects.securityReview`: asks for a read-only security review of the project; the id of the task it creates, when the PC says it. */
+    suspend fun securityReview(project: String): Result<Long?>
+
+    /** `projects.branch`: the branch the project is on now; null when the folder is not a repository. */
+    suspend fun branch(project: String): Result<String?>
+
     /** [checkpoint]: the run the person saw; the PC refuses to accept a task that ran again since. */
     suspend fun accept(id: Long, checkpoint: String? = null): Result<Unit>
 
@@ -153,6 +159,10 @@ class RuntimeTasksBackend(private val container: AppContainer, private val runti
     override suspend fun retry(id: Long) = api.tasks.retry(idOf(id)).unit()
     override suspend fun cancel(id: Long) = api.tasks.cancel(idOf(id)).unit()
     override suspend fun review(id: Long) = api.tasks.review(idOf(id)).unit()
+    override suspend fun securityReview(project: String): Result<Long?> =
+        api.projects.securityReview(buildJsonObject { put("name", project) }).map { (it as? JsonObject)?.long("id") }
+    override suspend fun branch(project: String): Result<String?> =
+        api.projects.branch(buildJsonObject { put("name", project) }).map { (it as? JsonObject)?.str("branch")?.takeIf { b -> b.isNotBlank() } }
     override suspend fun accept(id: Long, checkpoint: String?) =
         api.tasks.accept(TaskParams.accept(id, null, checkpoint, api.knowsSafetyGuards)).unit()
     override suspend fun undo(id: Long, checkpoint: String?) =

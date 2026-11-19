@@ -2,7 +2,10 @@ package dev.orb.app.ui.tasks
 
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotSelected
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -52,9 +55,12 @@ class TasksScreenTest {
         task(21, "Subir la versión", status = "done", accepted = true),
     )
 
+    private lateinit var vm: TasksViewModel
+
     private fun show(b: FakeTasksBackend, menu: ChatsMenu = ChatsMenu(onMenu = {}, unreadNotices = 2, onNotices = {}), onOpen: (Long) -> Unit = {}) {
         b.detailFor(rows)
-        val vm = TasksViewModel(b, reloadDebounceMs = 0, searchDebounceMs = 0)
+        vm = TasksViewModel(b, reloadDebounceMs = 0, searchDebounceMs = 0)
+        val vm = vm
         rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { TasksScreen(vm, menu, onOpen) } }
         rule.waitForIdle()
     }
@@ -63,8 +69,6 @@ class TasksScreenTest {
         for (t in all) details[t.id] = Result.success(detail(t, previewHash = "h${t.id}"))
     }
 
-    private fun more() = rule.onNodeWithContentDescription("Más opciones").performClick().also { rule.waitForIdle() }
-
     // Header
 
     @Test fun headerHasTheMenuTheQueueLineTheBellWithItsNumberAndTheMoreMenu() {
@@ -72,7 +76,8 @@ class TasksScreenTest {
         rule.onNodeWithContentDescription("Menú").assertExists()
         rule.onNodeWithText("Cola en pausa · 3 esperando").assertIsDisplayed()
         rule.onNodeWithContentDescription("Notificaciones, 2 sin leer").assertExists()
-        rule.onNodeWithContentDescription("Más opciones").assertExists()
+        // The mockup draws no «⋯» here: what it held is under «Más opciones» of the ☰ menu.
+        rule.onNodeWithContentDescription("Más opciones").assertDoesNotExist()
         rule.onNodeWithContentDescription("Buscar tareas").assertDoesNotExist()
     }
 
@@ -90,7 +95,8 @@ class TasksScreenTest {
 
     @Test fun theBoardIsFourSectionsAndTheFinishedOnesAreNotInThem() {
         show(FakeTasksBackend(rows))
-        for (s in listOf("Por aprobar", "En curso", "En cola", "Incidencias")) rule.onNodeWithText(s).assertIsDisplayed()
+        // each name is a chip and a heading
+        for (s in listOf("Por aprobar", "En curso", "En cola", "Incidencias")) rule.onAllNodesWithText(s).assertCountEquals(2)
         val headings = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).fetchSemanticsNodes().size
         // the title of the bar plus the four sections
         assertEquals(5, headings)
@@ -102,7 +108,9 @@ class TasksScreenTest {
         rule.onNodeWithText("#43 · app-movil · Codex").assertIsDisplayed()
         rule.onNodeWithText("Espera tu OK: borra 214 archivos").assertIsDisplayed()
         rule.onNodeWithText("Espera tu OK").assertIsDisplayed()
-        rule.onNodeWithText("#42 · app-movil · Cursor").assertIsDisplayed()
+        // A running task says «proyecto · agente», without its number.
+        rule.onNodeWithText("app-movil · Cursor").assertIsDisplayed()
+        rule.onNodeWithText("#42 · app-movil · Cursor").assertDoesNotExist()
         rule.onNodeWithText("Espera a la #43: #43 está detenida").assertIsDisplayed()
         rule.onNodeWithText("Revisar login").assertIsDisplayed()
         rule.onNodeWithText("Fallida").assertIsDisplayed()
@@ -182,35 +190,54 @@ class TasksScreenTest {
         rule.onNodeWithText("Ver y aprobar").assertIsDisplayed()
     }
 
-    // The «⋯» menu
+    // What the ☰ menu drives
 
-    @Test fun theMoreMenuHoldsSearchNewTaskThePauseAndTheViews() {
+    @Test fun theChipsCountTheSectionsAndNoneIsChosenAtFirst() {
         show(FakeTasksBackend(rows))
-        more()
-        for (item in listOf("Buscar tareas", "Nueva tarea", "Pausar la cola", "Activas", "Todas", "Completadas")) rule.onNodeWithText(item).assertIsDisplayed()
+        val chips = rule.onNodeWithContentDescription("Secciones del tablero")
+        chips.assertIsDisplayed()
+        for ((name, n) in listOf("En cola" to "3", "Por aprobar" to "2", "En curso" to "1", "Incidencias" to "1")) {
+            rule.onNode(hasText(name) and hasText(n) and isSelectable()).assertIsDisplayed().assertIsNotSelected()
+        }
+        // every section is drawn
+        for (s in listOf("Por aprobar", "En curso", "En cola", "Incidencias")) rule.onAllNodesWithText(s).assertCountEquals(2)
     }
 
-    @Test fun whatThePcCannotDoIsNotInTheMenu() {
-        val b = FakeTasksBackend(rows)
-        b.unavailable = setOf(ApiMethods.TASKS_CREATE.name, ApiMethods.CONTROL_PAUSE.name)
-        show(b)
-        more()
-        rule.onNodeWithText("Nueva tarea").assertDoesNotExist()
-        rule.onNodeWithText("Pausar la cola").assertDoesNotExist()
-        rule.onNodeWithText("Buscar tareas").assertIsDisplayed()
+    @Test fun aChipShowsItsSectionAloneAndTheSameChipShowsThemAllAgain() {
+        show(FakeTasksBackend(rows))
+        rule.onNode(hasText("En curso") and isSelectable()).performClick()
+        rule.waitForIdle()
+        rule.onNode(hasText("En curso") and isSelectable()).assertIsSelected()
+        rule.onNodeWithText("Ajustar estilos").assertIsDisplayed()
+        rule.onNodeWithText("Probar push en el emulador").assertDoesNotExist()
+        rule.onNodeWithText("Borrar build y reinstalar").assertDoesNotExist()
+        rule.onNode(hasText("En curso") and isSelectable()).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Probar push en el emulador").assertIsDisplayed()
+        rule.onNode(hasText("En curso") and isSelectable()).assertIsNotSelected()
     }
 
+    @Test fun aChosenSectionThatIsEmptyStillSaysSoWithItsHeading() {
+        show(FakeTasksBackend(rows.filter { it.status != "failed" }))
+        rule.onNode(hasText("Incidencias") and isSelectable()).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Todo al día").assertDoesNotExist()
+        rule.onNodeWithText("0").assertIsDisplayed()
+    }
+
+    @Test fun aRowThatAsksForTheOkSaysWhyInWords() {
+        show(FakeTasksBackend(listOf(task(46, "Migrar la base", status = "awaiting_approval", reasons = listOf("destructive", "financial")))))
+        rule.onNodeWithText("Espera tu OK: elimina datos, pagos").assertIsDisplayed()
+    }
     @Test fun theViewsAddTheFinishedTasks() {
         show(FakeTasksBackend(rows))
-        more()
-        rule.onNodeWithText("Todas").performClick()
+        vm.setFilter(TaskFilter.All)
         rule.waitForIdle()
         rule.onNodeWithText("Ajustar el menú").assertIsDisplayed()
         rule.onNodeWithText("Completada").assertIsDisplayed()
         rule.onNodeWithText("Aceptada").assertIsDisplayed()
         rule.onNodeWithText("Ajustar estilos").assertIsDisplayed()
-        more()
-        rule.onNode(isSelectable() and hasText("Completadas", substring = true)).performClick()
+        vm.setFilter(TaskFilter.Done)
         rule.waitForIdle()
         rule.onNodeWithText("Ajustar el menú").assertIsDisplayed()
         rule.onNodeWithText("Ajustar estilos").assertDoesNotExist()
@@ -220,8 +247,7 @@ class TasksScreenTest {
         val b = FakeTasksBackend(rows)
         b.searchResult = Result.success(listOf(dev.orb.app.ui.chats.SearchTask(40, "Pasarela sandbox", "done", "api-pagos", "…token…")))
         show(b)
-        more()
-        rule.onNodeWithText("Buscar tareas").performClick()
+        vm.openSearch()
         rule.waitForIdle()
         rule.onNodeWithText("Buscar en el título y el resultado").assertExists()
         rule.onNodeWithContentDescription("Buscar en el título y el resultado").performTextInput("pasar")
@@ -233,8 +259,7 @@ class TasksScreenTest {
     @Test fun newTaskFormCreatesThroughThePc() {
         val b = FakeTasksBackend(rows)
         show(b)
-        more()
-        rule.onNodeWithText("Nueva tarea").performClick()
+        vm.openNewTask()
         rule.waitForIdle()
         rule.onNodeWithContentDescription("Título").performTextInput("Probar")
         rule.onNodeWithContentDescription("Qué tiene que hacer").performTextInput("Arrancar la app")
@@ -261,20 +286,13 @@ class TasksScreenTest {
     @Test fun pausingFromTheMenuAlsoOffersToGoBack() {
         val b = FakeTasksBackend(rows)
         show(b)
-        more()
-        rule.onNodeWithText("Pausar la cola").performClick()
+        vm.setPaused(true)
         rule.waitForIdle()
         assertEquals(listOf("paused true"), b.calls)
         rule.onNodeWithText("Deshacer").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").performClick()
         rule.waitForIdle()
         assertEquals(listOf("paused true", "paused false"), b.calls)
-    }
-
-    @Test fun theMenuOffersToResumeWhilePaused() {
-        show(FakeTasksBackend(rows, paused = true))
-        more()
-        rule.onNodeWithText("Reanudar la cola").assertIsDisplayed()
     }
 
     @Test fun theCardIsHiddenWhenThePcCannotPause() {

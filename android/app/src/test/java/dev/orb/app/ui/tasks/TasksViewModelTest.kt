@@ -104,6 +104,31 @@ class TasksViewModelTest {
         assertEquals(listOf(TaskSection.Done), vm.state.value.groups.map { it.section })
     }
 
+    @Test fun aChipChoosesASectionAndTheSameChipGoesBackToAll() = runTest(dispatcher) {
+        val vm = vm(FakeTasksBackend(mixed))
+        assertEquals(null, vm.state.value.section)
+        vm.toggleSection(TaskSection.Running)
+        runCurrent()
+        assertEquals(listOf(TaskSection.Running), vm.state.value.groups.map { it.section })
+        assertEquals(TaskSection.Running, vm.state.value.section)
+        vm.toggleSection(TaskSection.Queued)
+        runCurrent()
+        assertEquals(listOf(TaskSection.Queued), vm.state.value.groups.map { it.section })
+        vm.toggleSection(TaskSection.Queued)
+        runCurrent()
+        assertEquals(4, vm.state.value.groups.size)
+        assertEquals(null, vm.state.value.section)
+    }
+
+    @Test fun changingTheViewForgetsTheChosenChip() = runTest(dispatcher) {
+        val vm = vm(FakeTasksBackend(mixed))
+        vm.toggleSection(TaskSection.Running)
+        vm.setFilter(TaskFilter.All)
+        runCurrent()
+        assertEquals(null, vm.state.value.section)
+        assertEquals(5, vm.state.value.groups.size)
+    }
+
     @Test fun anEmptySectionIsStillDrawnWithZeroAndFinishedOnesOnlyWhenThereAre() = runTest(dispatcher) {
         val vm = vm(FakeTasksBackend(listOf(task(1, status = "queued"))))
         assertEquals(listOf(0, 0, 1, 0), vm.state.value.groups.map { it.rows.size })

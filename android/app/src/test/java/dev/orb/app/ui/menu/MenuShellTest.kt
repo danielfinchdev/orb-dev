@@ -51,6 +51,60 @@ class MenuShellTest {
         rule.waitForIdle()
     }
 
+    private fun showWithTasks(tasks: dev.orb.app.ui.tasks.FakeTasksBackend) {
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                MainShell(FakeChatsBackend(), ShellActions({}, {}, {}, {}, {}, {}), Dispatchers.Unconfined, tasks = tasks)
+            }
+        }
+        rule.waitForIdle()
+    }
+
+    private fun boardRows() = listOf(dev.orb.app.ui.tasks.task(1, "Ajustar estilos", status = "running"), dev.orb.app.ui.tasks.task(2, "Hecha", status = "done"))
+
+    @Test fun theMenuTakesYouToTheBoardAndOpensItsSearch() {
+        showWithTasks(dev.orb.app.ui.tasks.FakeTasksBackend(boardRows()))
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Buscar tareas").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Buscar en el título y el resultado").assertIsDisplayed()
+    }
+
+    @Test fun theMenuTakesYouToTheBoardAndShowsTheFinishedTasks() {
+        showWithTasks(dev.orb.app.ui.tasks.FakeTasksBackend(boardRows()))
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Ver tareas completadas").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Hecha").assertIsDisplayed()
+        // the menu now offers the way back
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Ver tareas activas").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun theMenuPausesTheQueueOnlyWhileItRunsAndThePcCanDoIt() {
+        val b = dev.orb.app.ui.tasks.FakeTasksBackend(boardRows())
+        showWithTasks(b)
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Pausar la cola").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("paused true"), b.calls)
+        // paused now: the entry is gone (the board's card has «Reanudar»)
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Pausar la cola").assertDoesNotExist()
+    }
+
+    @Test fun withoutATaskBoardTheMenuHasNoBoardEntries() {
+        show(null, ShellActions({}, {}, {}, {}, {}, {}))
+        rule.onNodeWithContentDescription("Menú").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Buscar tareas").assertDoesNotExist()
+    }
+
     @Test fun theMenuButtonOpensTheSheetAndAnEntryNavigates() {
         var went = ""
         show(null, ShellActions({}, {}, {}, {}, {}, {}, onSchedules = { went = "schedules" }))

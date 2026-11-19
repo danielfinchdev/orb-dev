@@ -6,7 +6,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
@@ -14,8 +13,6 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -47,6 +44,7 @@ import dev.orb.app.ui.chats.ChatsMenu
 import dev.orb.app.ui.menu.MenuActions
 import dev.orb.app.ui.menu.InboxMenu
 import dev.orb.app.ui.menu.MenuSheet
+import dev.orb.app.ui.menu.TasksMenu
 import dev.orb.app.ui.chats.ChatOrder
 import dev.orb.app.ui.menu.MenuState
 import dev.orb.app.ui.notes.NotesBackend
@@ -55,12 +53,15 @@ import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBottomBar
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
 import dev.orb.app.ui.kit.OrbTab
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 import dev.orb.app.ui.projects.ProjectsBackend
 import dev.orb.app.ui.projects.ProjectsScreen
 import dev.orb.app.ui.projects.ProjectsViewModel
+import dev.orb.app.ui.tasks.TaskFilter
 import dev.orb.app.ui.tasks.TasksBackend
 import dev.orb.app.ui.tasks.TasksScreen
 import dev.orb.app.ui.tasks.TasksViewModel
@@ -126,18 +127,30 @@ fun MainShell(
     val nav = rememberNavController()
     val current by nav.currentBackStackEntryAsState()
     val fade = OrbMotion.Short
+    // The board's view model lives here too: its search, new task, pause and view are choices of the ☰ menu.
+    val tasksVm = tasks?.let { viewModel<TasksViewModel>(factory = viewModelFactory { initializer { TasksViewModel(it) } }) }
+    val tasksState = tasksVm?.state?.collectAsStateWithLifecycle()?.value
+    // An entry of the menu that belongs to the board takes the person to it first.
+    fun openTasks() = nav.navigate(TasksTab) {
+        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
 
     if (menuOpen) {
         MenuSheet(
             MenuState(
                 connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage, actions.menu.whiteboard,
                 inbox = InboxMenu(chatsState.order == ChatOrder.Priority, chatsState.canDigest),
+                tasks = tasksState?.let { TasksMenu(it.filter, it.canCreate, it.canPause && !it.paused && it.online) },
             ),
             MenuActions(
                 onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onWhiteboard = actions.onWhiteboard, onGames = actions.onGames, onTutorials = actions.onTutorials,
                 onThisPhone = actions.onThisPhone, onAppearance = actions.onAppearance, onLinkTest = actions.onLinkTest, onUnlink = actions.onUnlink,
                 onPriority = { chatsVm.setOrder(if (chatsState.order == ChatOrder.Priority) ChatOrder.Recent else ChatOrder.Priority) },
                 onReorder = chatsVm::reorder, onDigest = chatsVm::showDigest,
+                onTasksSearch = { openTasks(); tasksVm?.openSearch() }, onTasksNew = { openTasks(); tasksVm?.openNewTask() },
+                onTasksPause = { openTasks(); tasksVm?.setPaused(true) }, onTasksView = { f: TaskFilter -> openTasks(); tasksVm?.setFilter(f) },
             ),
             onDismiss = { menuOpen = false },
         )
@@ -171,10 +184,9 @@ fun MainShell(
                 )
             }
             composable<TasksTab> {
-                if (tasks == null) Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) else {
-                    val vm = viewModel<TasksViewModel>(factory = viewModelFactory { initializer { TasksViewModel(tasks) } })
+                if (tasksVm == null) Message(ChatTexts.SOON_TASKS, ChatTexts.SOON_HINT) else {
                     TasksScreen(
-                        vm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
+                        tasksVm, ChatsMenu(onMenu = { menuOpen = true }, unreadNotices = unreadNotices, onNotices = actions.onNotices.takeIf { notes != null }),
                         onOpenTask = actions.onOpenTask,
                     )
                 }
@@ -203,11 +215,8 @@ private fun OrbNavigationBar(selected: (Tab) -> Boolean, unread: Int, toApprove:
 
 @Composable
 fun UnlinkDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(ChatTexts.UNLINK_TITLE) },
-        text = { Text(ChatTexts.UNLINK_BODY) },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(ChatTexts.UNLINK_CONFIRM) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(ChatTexts.CANCEL) } },
+    OrbDialog(
+        onDismiss, ChatTexts.UNLINK_TITLE, OrbDialogAction(ChatTexts.UNLINK_CONFIRM, onConfirm, danger = true),
+        text = ChatTexts.UNLINK_BODY, dismiss = OrbDialogAction(ChatTexts.CANCEL, onDismiss),
     )
 }

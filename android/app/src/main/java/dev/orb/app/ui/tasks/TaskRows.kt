@@ -87,7 +87,7 @@ internal fun TaskRowItem(
         lead = { SectionMark(section, t.agent) },
         subtitle = {
             Column {
-                Text(TaskLines.identity(t), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(if (section == TaskSection.Running) TaskLines.workers(t) else TaskLines.identity(t), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 // A running task without a percentage has no bar to draw: its activity (or a quiet spinner) says it is alive.
                 if (section == TaskSection.Running && percent == null && line == null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {

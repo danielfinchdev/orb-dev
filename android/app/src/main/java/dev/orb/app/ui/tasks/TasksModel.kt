@@ -30,6 +30,10 @@ data class TaskWait(
     val percent: Int? = null,
 )
 
+/** The cross review of a finished task (`tasks.get.review`): which task did it, who, what it concluded and when. */
+@Immutable
+data class TaskReview(val task: Long?, val verdict: String?, val agent: String?, val at: String?)
+
 /** What a task did that needs a look before the work stays. */
 @Immutable
 data class TaskHeld(val reasons: String, val folder: String?)
@@ -54,6 +58,10 @@ data class TaskRow(
     val accepted: Boolean = false,
     /** When a task stopped by a usage limit continues by itself (ISO). */
     val limitedUntil: String? = null,
+    /** The PC's own tags for why the task asks for an OK first (`sensitivity`), not yet turned into words. */
+    val reasons: List<String> = emptyList(),
+    /** The schedule that created the task, when one did. */
+    val scheduleId: Long? = null,
 ) {
     val needsApproval get() = status == "awaiting_approval" || held != null
     val problem get() = held == null && (status == "failed" || status == "blocked" || status == "limited")
@@ -94,6 +102,7 @@ data class TaskDetail(
     val facts: dev.orb.app.ui.chats.TaskDetail? = null,
     /** The task's point of return as the PC names it now; null without a point or on a PC that does not say. */
     val checkpointId: String? = null,
+    val review: TaskReview? = null,
 ) {
     val id get() = row.id
 }
@@ -101,14 +110,29 @@ data class TaskDetail(
 @Immutable
 data class DiffFile(val status: String, val path: String, val added: Int, val removed: Int, val binary: Boolean, val patch: String, val cut: Boolean)
 
+/**
+ * What `tasks.diff` says. [reason] is why there is no diff (`nophoto`, `nogit`, `notdone`, `gone`) and [hidden] how many files
+ * were left out because they look like secrets. [checkpointId] is the run the diff belongs to; [runKnown] tells a PC that does
+ * not send the field at all (an older one) from one that sends it empty because it cannot tell.
+ */
 @Immutable
-data class TaskDiff(val available: Boolean, val files: List<DiffFile>, val more: Int) {
+data class TaskDiff(
+    val available: Boolean, val files: List<DiffFile>, val more: Int,
+    val reason: String? = null, val hidden: Int = 0, val checkpointId: String? = null, val runKnown: Boolean = false,
+) {
     val added get() = files.sumOf { it.added }
     val removed get() = files.sumOf { it.removed }
+
+    /**
+     * Whether this diff is of the run [taskRun] the task is at now. A PC that says nothing about the run (an older one), or a
+     * diff that is not there, cannot disagree; a PC that says it must say the same run, or nothing here may be decided from it.
+     */
+    fun isOfRun(taskRun: String?): Boolean = !available || !runKnown || (checkpointId != null && taskRun != null && checkpointId == taskRun)
 }
 
+/** An agent `tasks.reassign` accepts, with the account and model the PC would use for it, as it describes them. */
 @Immutable
-data class AgentChoice(val id: String, val label: String)
+data class AgentChoice(val id: String, val label: String, val detail: String? = null)
 
 object TasksParser {
     private fun int(o: JsonObject, k: String): Int? = (o[k] as? JsonPrimitive)?.intOrNull
@@ -143,6 +167,8 @@ object TasksParser {
             // A list entry says `undone: true`; the detail carries the PC's own record of it.
             undone = o["undone"].let { it != null && it !is JsonNull && (it !is JsonPrimitive || it.content != "false") },
             result = o.str("result"), accepted = o.bool("accepted"), limitedUntil = o.str("limited_until")?.takeIf { it.isNotBlank() },
+            reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.takeUnless { p -> p is JsonNull }?.content?.takeIf { c -> c.isNotBlank() } },
+            scheduleId = o.long("schedule_id"),
         )
     }
 
@@ -178,6 +204,7 @@ object TasksParser {
                 TaskEvent(e.str("actor"), e.str("kind"), e.str("detail").orEmpty(), e.str("at"))
             },
             facts = dev.orb.app.ui.chats.OrbeParser.approvalFacts(o, row.id), checkpointId = o.str("checkpointId")?.takeIf { it.isNotBlank() },
+            review = (o["review"] as? JsonObject)?.let { r -> TaskReview(r.long("task"), r.str("verdict"), r.str("agent"), r.str("at")) },
         )
     }
 
@@ -191,37 +218,53 @@ object TasksParser {
                 binary = f.bool("binary"), patch = f.str("patch").orEmpty(), cut = f.bool("cut"),
             )
         }
-        return TaskDiff(o.bool("available"), files, int(o, "more") ?: 0)
+        return TaskDiff(
+            o.bool("available"), files, int(o, "more") ?: 0, reason = o.str("reason")?.takeIf { it.isNotBlank() }, hidden = int(o, "hidden") ?: 0,
+            checkpointId = o.str("checkpointId")?.takeIf { it.isNotBlank() }, runKnown = o.containsKey("checkpointId"),
+        )
     }
 
     fun agents(catalog: JsonElement?): List<AgentChoice> = (catalog as? JsonArray).orEmpty().mapNotNull { x ->
         val o = x as? JsonObject ?: return@mapNotNull null
         val id = o.str("id") ?: return@mapNotNull null
-        AgentChoice(id, o.str("label") ?: agentName(id) ?: id)
+        val label = o.str("label") ?: agentName(id) ?: id
+        // The model the PC would use by default and the account it would run on, when that account has a name of its own.
+        val default = o.str("defaultModel")?.takeIf { it.isNotBlank() }
+        val model = (o["models"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.firstOrNull { it.str("id") == default }?.str("label")?.takeIf { it.isNotBlank() } ?: default
+        val account = ((o["accounts"] as? JsonArray).orEmpty().firstOrNull() as? JsonObject)?.str("label")?.takeIf { it.isNotBlank() && it != label }
+        AgentChoice(id, label, listOfNotNull(account, model).joinToString(" · ").ifBlank { null })
     }
 }
 
 enum class DiffLineKind { Add, Del, Hunk, Context, Note }
 
 @Immutable
-data class DiffLine(val kind: DiffLineKind, val text: String)
+data class DiffLine(val kind: DiffLineKind, val text: String, val no: Int? = null)
 
 object DiffParser {
+    private val HUNK = Regex("""^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@""")
+
     /** The body of one file's patch: its header lines (`diff --git`, `index`, `---`, `+++`) are dropped. */
     fun lines(patch: String): List<DiffLine> {
         if (patch.isEmpty()) return emptyList()
         val out = ArrayList<DiffLine>()
         var body = false
+        // The line numbers of the hunk being read: a removed line carries its old number, the others the new one.
+        var old = 0
+        var new = 0
         for (line in patch.split('\n')) {
             if (!body) {
                 if (line.startsWith("@@")) body = true else continue
             }
             out += when {
-                line.startsWith("@@") -> DiffLine(DiffLineKind.Hunk, line)
-                line.startsWith("+") -> DiffLine(DiffLineKind.Add, line.substring(1))
-                line.startsWith("-") -> DiffLine(DiffLineKind.Del, line.substring(1))
+                line.startsWith("@@") -> {
+                    HUNK.find(line)?.let { m -> old = m.groupValues[1].toInt(); new = m.groupValues[2].toInt() }
+                    DiffLine(DiffLineKind.Hunk, line)
+                }
+                line.startsWith("+") -> DiffLine(DiffLineKind.Add, line.substring(1), new++)
+                line.startsWith("-") -> DiffLine(DiffLineKind.Del, line.substring(1), old++)
                 line.startsWith("\\") -> DiffLine(DiffLineKind.Note, line.removePrefix("\\ ").trim())
-                else -> DiffLine(DiffLineKind.Context, line.removePrefix(" "))
+                else -> DiffLine(DiffLineKind.Context, line.removePrefix(" "), new.also { old++; new++ })
             }
         }
         // A patch ends with a newline: the empty tail is not a line.

@@ -1,6 +1,7 @@
 package dev.orb.app.ui.tasks
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
@@ -29,6 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,6 +47,7 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbButton
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbCard
+import dev.orb.app.ui.kit.OrbChip
 import dev.orb.app.ui.kit.OrbDialog
 import dev.orb.app.ui.kit.OrbDialogAction
 import dev.orb.app.ui.kit.OrbGroupHeader
@@ -51,10 +56,6 @@ import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbRow
 import dev.orb.app.ui.kit.OrbSearchField
 import dev.orb.app.ui.kit.OrbSettingRow
-import dev.orb.app.ui.kit.OrbSheet
-import dev.orb.app.ui.kit.OrbSheetDivider
-import dev.orb.app.ui.kit.OrbSheetItem
-import dev.orb.app.ui.kit.OrbSheetLabel
 import dev.orb.app.ui.kit.OrbSnackbarHost
 import dev.orb.app.ui.kit.OrbSpinner
 import dev.orb.app.ui.kit.OrbTopBar
@@ -65,9 +66,9 @@ import dev.orb.app.ui.offline.OfflineTexts
 import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
- * The task board (screen 17): the queue's state under the title, the ☰ menu and the bell like the other main screens, and
- * the tasks in four numbered sections. What the mockup does not draw (search, new task, pausing the queue and what
- * the board shows) lives in the «⋯» menu.
+ * The task board (screen 17): the queue's state under the title, the ☰ menu and the bell like the other main screens, a row
+ * of section chips and the tasks in four numbered sections. What the mockup does not draw (search, new task, pausing the
+ * queue and what the board shows) lives under «Más opciones» of the ☰ menu, which drives this screen's view model.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,26 +87,27 @@ fun TasksScreen(vm: TasksViewModel, menu: ChatsMenu, onOpenTask: (Long) -> Unit,
     }
     // Back from a task, from another app or from the lock screen: the board is read again.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
-    var more by rememberSaveable { mutableStateOf(false) }
     var rejectFor by rememberSaveable { mutableStateOf<Long?>(null) }
     BackHandler(enabled = state.searching) { vm.closeSearch() }
 
     Column(modifier.fillMaxSize()) {
-        if (state.searching) SearchBar(state.query, vm::setQuery, vm::closeSearch) else TasksBar(state, menu) { more = true }
+        if (state.searching) SearchBar(state.query, vm::setQuery, vm::closeSearch) else TasksBar(state, menu)
         if (!state.online && state.loaded) OfflineStrip()
         Box(Modifier.weight(1f).fillMaxWidth()) {
             if (state.searching) {
                 SearchBody(state, onOpenTask)
             } else {
                 PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.fillMaxSize()) {
-                    Body(state, onOpenTask, onRetry = vm::refresh, onResume = { vm.setPaused(false) }, onShowAll = { vm.setFilter(TaskFilter.All) }, onReject = { rejectFor = it.id })
+                    Body(
+                        state, onOpenTask, onRetry = vm::refresh, onResume = { vm.setPaused(false) }, onShowAll = { vm.setFilter(TaskFilter.All) },
+                        onReject = { rejectFor = it.id }, onSection = vm::toggleSection,
+                    )
                 }
             }
             OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
         }
     }
 
-    if (more) MoreSheet(state, vm, onDismiss = { more = false })
     state.newTask?.let { NewTaskDialog(it, onCreate = vm::createTask, onDismiss = vm::closeNewTask) }
 
     val doomed = rejectFor
@@ -119,7 +121,7 @@ fun TasksScreen(vm: TasksViewModel, menu: ChatsMenu, onOpenTask: (Long) -> Unit,
 }
 
 @Composable
-private fun TasksBar(state: TasksState, menu: ChatsMenu, onMore: () -> Unit) {
+private fun TasksBar(state: TasksState, menu: ChatsMenu) {
     val sub = if (state.loaded) TaskTexts.queueLine(state.paused, state.running, state.queued) else ChatTexts.linkLine(state.connection)
     OrbTopBar(
         title = TaskTexts.TITLE, sub = sub,
@@ -132,29 +134,8 @@ private fun TasksBar(state: TasksState, menu: ChatsMenu, onMore: () -> Unit) {
                     badge = n.takeIf { it > 0 }?.let { if (it > 99) "99+" else it.toString() },
                 )
             }
-            OrbIconButton(OrbIcons.MoreVertical, TaskTexts.MORE, onMore)
         },
     )
-}
-
-/** Everything the board offers that the mockup does not draw, in one sheet. */
-@Composable
-private fun MoreSheet(state: TasksState, vm: TasksViewModel, onDismiss: () -> Unit) {
-    OrbSheet(onDismiss) {
-        OrbSheetItem(TaskTexts.SEARCH, { onDismiss(); vm.openSearch() }, icon = OrbIcons.Search)
-        if (state.canCreate) OrbSheetItem(TaskTexts.NEW_TASK, { onDismiss(); vm.openNewTask() }, icon = OrbIcons.Plus)
-        if (state.canPause) {
-            OrbSheetItem(
-                if (state.paused) TaskTexts.RESUME_QUEUE else TaskTexts.PAUSE, { onDismiss(); vm.setPaused(!state.paused) },
-                icon = if (state.paused) OrbIcons.Play else OrbIcons.Pause, enabled = state.online && !state.queueBusy,
-            )
-        }
-        OrbSheetDivider()
-        OrbSheetLabel(TaskTexts.VIEW_LABEL)
-        OrbSheetItem(TaskTexts.VIEW_ACTIVE, { onDismiss(); vm.setFilter(TaskFilter.Active) }, checked = state.filter == TaskFilter.Active)
-        OrbSheetItem(TaskTexts.VIEW_ALL, { onDismiss(); vm.setFilter(TaskFilter.All) }, checked = state.filter == TaskFilter.All)
-        OrbSheetItem(TaskTexts.VIEW_DONE, { onDismiss(); vm.setFilter(TaskFilter.Done) }, checked = state.filter == TaskFilter.Done, meta = state.done.takeIf { it > 0 }?.toString())
-    }
 }
 
 @Composable
@@ -201,6 +182,7 @@ private fun SearchRow(r: SearchTask, onOpen: (Long) -> Unit) {
 @Composable
 private fun Body(
     state: TasksState, onOpen: (Long) -> Unit, onRetry: () -> Unit, onResume: () -> Unit, onShowAll: () -> Unit, onReject: (TaskRow) -> Unit,
+    onSection: (TaskSection) -> Unit,
 ) {
     val live = state.groups.sumOf { g -> if (g.section == TaskSection.Done) 0 else g.rows.size }
     when {
@@ -210,11 +192,12 @@ private fun Body(
         }
         state.total == 0 -> Message(TaskTexts.EMPTY, TaskTexts.EMPTY_HINT, icon = OrbIcons.Tasks)
         state.filter == TaskFilter.Done && state.done == 0 -> Message(TaskTexts.EMPTY_DONE, icon = OrbIcons.Tasks)
-        state.filter == TaskFilter.Active && live == 0 -> Message(TaskTexts.ALL_CLEAR, TaskTexts.ALL_CLEAR_HINT, action = TaskTexts.SHOW_ALL, onAction = onShowAll, icon = OrbIcons.CircleCheck)
+        state.filter == TaskFilter.Active && state.section == null && live == 0 -> Message(TaskTexts.ALL_CLEAR, TaskTexts.ALL_CLEAR_HINT, action = TaskTexts.SHOW_ALL, onAction = onShowAll, icon = OrbIcons.CircleCheck)
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {
             if (state.paused && state.canPause) item(key = "paused", contentType = "paused") {
                 PausedCard(state.queued, state.queueBusy || !state.online, onResume, Modifier.animateItem())
             }
+            if (state.filter != TaskFilter.Done) item(key = "chips", contentType = "chips") { SectionChips(state, onSection, Modifier.animateItem()) }
             for (g in state.groups) {
                 item(key = "h-${g.section.name}", contentType = "header") { OrbGroupHeader(g.section.title(), Modifier.animateItem(), count = g.rows.size) }
                 items(g.rows, key = { it.id }, contentType = { "task" }) { t ->
@@ -225,6 +208,21 @@ private fun Body(
                 }
             }
         }
+    }
+}
+
+/** The four sections as chips (`.chips`): the chosen one alone is drawn, the same chip again draws them all. Nothing is chosen at first. */
+@Composable
+private fun SectionChips(state: TasksState, onSection: (TaskSection) -> Unit, modifier: Modifier = Modifier) {
+    val chips = listOf(
+        TaskSection.Queued to state.queued, TaskSection.Approve to state.approve, TaskSection.Running to state.running, TaskSection.Problems to state.problems,
+    )
+    Row(
+        modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 2.dp).padding(top = 6.dp)
+            .semantics { contentDescription = TaskTexts.SECTIONS },
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        for ((section, n) in chips) OrbChip(section.title(), selected = state.section == section, onClick = { onSection(section) }, count = n.takeIf { it > 0 })
     }
 }
 

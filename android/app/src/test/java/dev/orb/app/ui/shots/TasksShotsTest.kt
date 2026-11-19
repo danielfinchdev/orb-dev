@@ -88,13 +88,16 @@ class TasksShotsTest {
         Shots.save(rule.activity, "$name-${palette.key}-oscuro$suffix")
     }
 
+    private lateinit var vm: TasksViewModel
+
     private fun board(
         palette: OrbPaletteChoice, suffix: String = "", rows: List<dev.orb.app.ui.tasks.TaskRow> = mockupRows(), paused: Boolean = true,
         setup: (FakeTasksBackend) -> Unit = {}, after: () -> Unit = {},
     ) {
         Shots.assumeEnabled()
         val b = backend(rows, paused).also(setup)
-        val vm = TasksViewModel(b, reloadDebounceMs = 0, searchDebounceMs = 0)
+        vm = TasksViewModel(b, reloadDebounceMs = 0, searchDebounceMs = 0)
+        val vm = vm
         twoModes("17-tareas", palette, suffix, after) {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -125,13 +128,21 @@ class TasksShotsTest {
         b.listResult = Result.failure(LinkException(LinkError.Offline))
     })
     @Test fun heldForReview() = board(OrbPaletteChoice.Grafito, "-retenida", rows = mockupRows().drop(1) + held)
-    @Test fun moreMenu() = board(OrbPaletteChoice.Grafito, "-menu", after = { rule.onNodeWithContentDescription("Más opciones").performClick() })
+    @Test fun chosenChip() = board(OrbPaletteChoice.Grafito, "-chip-en-curso", after = { vm.toggleSection(dev.orb.app.ui.tasks.TaskSection.Running) })
+    @Test fun menuWithTheBoardsEntries() {
+        Shots.assumeEnabled()
+        twoModes("17-tareas", OrbPaletteChoice.Grafito, "-menu") {
+            dev.orb.app.ui.menu.MenuSheet(
+                dev.orb.app.ui.menu.MenuState(
+                    "Conectado a PC de Dani", unreadNotices = 2, inbox = dev.orb.app.ui.menu.InboxMenu(priority = false, canDigest = true),
+                    tasks = dev.orb.app.ui.menu.TasksMenu(dev.orb.app.ui.tasks.TaskFilter.Active, canCreate = true, canPause = true),
+                ),
+                dev.orb.app.ui.menu.MenuActions(), onDismiss = {},
+            )
+        }
+    }
     @Test fun rejectDialog() = board(OrbPaletteChoice.Grafito, "-rechazar", after = {
         rule.onNodeWithText("Rechazar").performClick()
     })
-    @Test fun newTask() = board(OrbPaletteChoice.Grafito, "-nueva", after = {
-        rule.onNodeWithContentDescription("Más opciones").performClick()
-        rule.waitForIdle()
-        rule.onNodeWithText("Nueva tarea").performClick()
-    })
+    @Test fun newTask() = board(OrbPaletteChoice.Grafito, "-nueva", after = { vm.openNewTask() })
 }

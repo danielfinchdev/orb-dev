@@ -79,6 +79,39 @@ class TaskBoardTest {
         assertEquals("Espera tu OK", line(task(44, status = "awaiting_approval"))!!.text)
     }
 
+    @Test fun aRunningTaskSaysProjectAndAgentWithoutItsNumber() {
+        assertEquals("app-movil · Cursor", TaskLines.workers(task(42, project = "app-movil", agent = "cursor")))
+        assertEquals("app-movil", TaskLines.workers(task(42, project = "app-movil", agent = null)))
+    }
+
+    @Test fun aRowThatAsksForTheOkPutsTheTagsOfThePcIntoWords() {
+        val row = task(46, status = "awaiting_approval", reasons = listOf("destructive", "financial", "algo_nuevo"))
+        assertEquals("Espera tu OK: elimina datos, pagos, algo_nuevo", line(row)!!.text)
+        // The PC's own words for a held task win over the tags.
+        val held = task(43, status = "blocked", reasons = listOf("publish"), held = TaskHeld("borra 214 archivos", null))
+        assertEquals("Espera tu OK: borra 214 archivos", line(held)!!.text)
+    }
+
+    @Test fun aChosenSectionAloneIsDrawnEvenWhenEmpty() {
+        val rows = listOf(task(1, status = "queued"), task(2, status = "running"), task(3, status = "done"))
+        assertEquals(listOf(TaskSection.Running), TaskBoard.groups(rows, TaskFilter.Active, TaskSection.Running).map { it.section })
+        assertEquals(listOf(2L), TaskBoard.groups(rows, TaskFilter.Active, TaskSection.Running).single().rows.map { it.id })
+        assertEquals(emptyList<TaskRow>(), TaskBoard.groups(rows, TaskFilter.Active, TaskSection.Problems).single().rows)
+        // The finished view ignores the chips.
+        assertEquals(listOf(TaskSection.Done), TaskBoard.groups(rows, TaskFilter.Done, TaskSection.Running).map { it.section })
+    }
+
+    @Test fun whenATaskWasMadeIsToldAsAnAgeAndThenAsADay() {
+        val at = "2026-11-11T09:00:00.000Z"
+        val t = dev.orb.app.ui.chats.ChatTime.parse(at)!!
+        assertEquals("hace un momento", TaskLines.ago(at, t + 20_000))
+        assertEquals("hace 12 min", TaskLines.ago(at, t + 12 * 60_000L))
+        assertEquals("hace 3 h", TaskLines.ago(at, t + 3 * 3_600_000L + 5 * 60_000L))
+        // from a day on it is a day, whatever the time zone says it is called
+        assertTrue(TaskLines.ago(at, t + 40 * 3_600_000L)!!.startsWith("el ") || TaskLines.ago(at, t + 40 * 3_600_000L) == "ayer")
+        assertNull(TaskLines.ago(null, t))
+    }
+
     @Test fun waitingForOneOrSeveralTasks() {
         val one = task(41, waiting = TaskWait("deps", null, listOf(WaitDep(43, "queued", false))))
         assertEquals("Espera a la #43", line(one)!!.text)

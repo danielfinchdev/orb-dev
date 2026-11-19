@@ -36,6 +36,8 @@ data class TasksState(
     /** What the board draws: the sections of the chosen view, each with its rows. */
     val groups: List<TaskGroup> = emptyList(),
     val filter: TaskFilter = TaskFilter.Active,
+    /** The chip chosen under the header: only that section is drawn; null draws them all. */
+    val section: TaskSection? = null,
     val queued: Int = 0,
     val approve: Int = 0,
     val running: Int = 0,
@@ -76,6 +78,7 @@ class TasksViewModel(
 ) : ViewModel() {
     private data class Ui(
         val filter: TaskFilter = TaskFilter.Active,
+        val section: TaskSection? = null,
         val rejecting: Set<Long> = emptySet(),
         val refreshing: Boolean = false,
         val failed: Boolean = false,
@@ -103,7 +106,7 @@ class TasksViewModel(
     val state: StateFlow<TasksState> = combine(data, ui, backend.connection) { d, u, c ->
         val all = d.tasks
         TasksState(
-            groups = TaskBoard.groups(all, u.filter), filter = u.filter,
+            groups = TaskBoard.groups(all, u.filter, u.section), filter = u.filter, section = u.section,
             queued = all.count { TaskBoard.sectionOf(it) == TaskSection.Queued }, approve = all.count { it.needsApproval },
             running = all.count { it.running }, problems = all.count { TaskBoard.sectionOf(it) == TaskSection.Problems },
             done = all.count { TaskBoard.sectionOf(it) == TaskSection.Done }, total = all.size,
@@ -150,7 +153,10 @@ class TasksViewModel(
         viewModelScope.launch { reload() }
     }
 
-    fun setFilter(f: TaskFilter) = ui.update { it.copy(filter = f) }
+    fun setFilter(f: TaskFilter) = ui.update { it.copy(filter = f, section = null) }
+
+    /** A chip under the header: the same chip again goes back to every section. */
+    fun toggleSection(s: TaskSection) = ui.update { it.copy(section = if (it.section == s) null else s) }
 
     fun openSearch() = ui.update { it.copy(searching = true) }
 
