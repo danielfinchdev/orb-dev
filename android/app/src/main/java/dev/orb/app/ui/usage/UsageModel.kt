@@ -27,6 +27,8 @@ data class UsageAccount(
     val max: Int?,
     val cooldownUntil: Long?,
     val cooldownReason: String?,
+    /** The length of the PC's own task window, when it says it (the «Tareas N de M» count lives in it). */
+    val windowHours: Int? = null,
 )
 
 @Immutable
@@ -77,6 +79,7 @@ object UsageParser {
                 UsageWindow(wo.str("window") ?: return@mapNotNull null, (wo.dbl("utilization") ?: return@mapNotNull null).coerceIn(0.0, 1.0), wo.long("resetAt"))
             },
             used = o.int("used"), max = o.int("max"), cooldownUntil = o.long("cooldownUntil"), cooldownReason = o.str("cooldownReason"),
+            windowHours = o.int("windowHours")?.takeIf { it > 0 },
         )
     }
 

@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
@@ -214,15 +215,20 @@ fun OrbSettingRow(
     }
 }
 
-/** `.progress`: a 6 dp bar; [fraction] is 0..1. */
+/**
+ * `.progress`: a 6 dp bar; [fraction] is 0..1. [warn] paints the fill in the warning ink (an account nearly spent);
+ * [description] is what a screen reader says along with the value.
+ */
 @Composable
-fun OrbProgress(fraction: Float, modifier: Modifier = Modifier) {
+fun OrbProgress(fraction: Float, modifier: Modifier = Modifier, warn: Boolean = false, description: String? = null) {
     val f = fraction.coerceIn(0f, 1f)
     Box(
-        modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(OrbKit.muted)
-            .semantics { progressBarRangeInfo = ProgressBarRangeInfo(f, 0f..1f) },
+        modifier.fillMaxWidth().height(6.dp).clip(CircleShape).background(OrbKit.muted).semantics {
+            progressBarRangeInfo = ProgressBarRangeInfo(f, 0f..1f)
+            if (description != null) contentDescription = description
+        },
     ) {
-        Box(Modifier.fillMaxWidth(f).height(6.dp).clip(CircleShape).background(OrbKit.primaryText))
+        Box(Modifier.fillMaxWidth(f).height(6.dp).clip(CircleShape).background(if (warn) OrbKit.warningInk else OrbKit.primaryText))
     }
 }
 

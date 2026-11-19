@@ -49,7 +49,8 @@ class FakeUsageBackend : UsageBackend {
     override fun saved() = savedUsage.filterNotNull()
     var accountsGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
     override suspend fun accounts(): Result<List<UsageAccount>> { calls += "accounts"; accountsGate?.await(); return accountList }
-    override suspend fun refresh(): Result<Unit> { calls += "refresh"; return refreshResult }
+    var refreshGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    override suspend fun refresh(): Result<Unit> { calls += "refresh"; refreshGate?.await(); return refreshResult }
     override suspend fun history(days: Int): Result<UsageHistory> { calls += "history $days"; historyGates[days]?.await(); return historyResult(days) }
     override suspend fun agents() = agentList
     override suspend fun guide() = guideList
