@@ -7,14 +7,14 @@ import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.ui.chats.ChatErrors
 import dev.orb.app.ui.linkErrorText
-import kotlinx.coroutines.async
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
@@ -40,13 +40,21 @@ data class TaskDiffState(
  * What a task changed, file by file. The patches arrive with the list; only the file on screen is turned into lines.
  * «Aceptar» and «Deshacer» are requests to the PC; a second tap while one is on its way does nothing.
  */
-class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewModel() {
+@OptIn(FlowPreview::class)
+class TaskDiffViewModel(
+    private val backend: TasksBackend,
+    val id: Long,
+    private val reloadDebounceMs: Long = 300,
+) : ViewModel() {
+    /** [stale]: the last read failed, so what is on screen may be older than the PC's word: nothing can be decided from it. */
     private data class Ui(
         val detail: TaskDetail? = null, val diff: TaskDiff? = null, val loading: Boolean = true,
-        val error: String? = null, val busy: Boolean = false,
+        val error: String? = null, val busy: Boolean = false, val stale: Boolean = false,
     )
 
     private val ui = MutableStateFlow(Ui())
+    private val reloads = Channel<Unit>(Channel.CONFLATED)
+    private var loadSeq = 0
     private val _messages = Channel<String>(Channel.BUFFERED)
 
     val messages = _messages.receiveAsFlow()
@@ -54,11 +62,14 @@ class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewM
     private fun build(u: Ui, c: ConnectionState): TaskDiffState {
         val d = u.detail
         val held = d?.row?.held != null
+        // Accepting or undoing is only offered on a diff that is up to date: while it is read again, or after a failed read,
+        // the person could be deciding on a run nobody has seen.
+        val fresh = !u.loading && !u.stale
         return TaskDiffState(
             id = id, title = d?.row?.title, diff = u.diff, loading = u.loading, error = u.error, online = c is ConnectionState.Online,
             busy = u.busy, accepted = d?.accepted == true,
-            canAccept = d != null && !d.accepted && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_ACCEPT),
-            canUndo = d != null && d.hasCheckpoint && !d.row.undone && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_UNDO),
+            canAccept = fresh && d != null && !d.accepted && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_ACCEPT),
+            canUndo = fresh && d != null && d.hasCheckpoint && !d.row.undone && (held || d.row.status == "done") && backend.available(ApiMethods.TASKS_UNDO),
         )
     }
 
@@ -66,22 +77,26 @@ class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewM
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TaskDiffState(id))
 
     init {
+        viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { load() } }
+        viewModelScope.launch { backend.events.collect { if (it.name in RELOAD_EVENTS) reloads.trySend(Unit) } }
         viewModelScope.launch {
             backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { load() }
         }
     }
 
     private suspend fun load() {
-        // The flags come from the task itself; a diff the PC cannot make still leaves them usable.
-        val (detail, diff) = coroutineScope {
-            val d = async { backend.get(id) }
-            val f = async { backend.diff(id) }
-            d.await() to f.await()
-        }
+        val seq = ++loadSeq
+        ui.update { it.copy(loading = true) }
+        // The task is read after its diff: its point of return (checkpointId) is then the one of the run that diff belongs to.
+        val diff = backend.diff(id)
+        val detail = backend.get(id)
+        // A newer read was started meanwhile: only the last one is drawn.
+        if (seq != loadSeq) return
         ui.update { u ->
             val failure = (diff.exceptionOrNull() ?: if (u.detail == null) detail.exceptionOrNull() else null)
             u.copy(
                 detail = detail.getOrNull() ?: u.detail, diff = diff.getOrNull() ?: u.diff, loading = false,
+                stale = diff.isFailure || detail.isFailure,
                 error = if (diff.isFailure && u.diff == null) failure?.let(::linkErrorText) else null,
             )
         }
@@ -114,7 +129,9 @@ class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewM
 
     fun accept() {
         if (!build(ui.value, backend.connection.value).canAccept) return
-        act(TaskTexts.ACCEPTED) { backend.accept(id) }
+        // The run whose diff is on screen goes with the OK: the PC refuses it if the task ran again since.
+        val checkpoint = ui.value.detail?.checkpointId
+        act(TaskTexts.ACCEPTED) { backend.accept(id, checkpoint) }
     }
 
     private var undoAsked = false
@@ -132,5 +149,9 @@ class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewM
         val checkpoint = if (undoAsked) undoCheckpoint else ui.value.detail?.checkpointId
         undoAsked = false
         act(TaskTexts.UNDO_DONE) { backend.undo(id, checkpoint) }
+    }
+
+    companion object {
+        val RELOAD_EVENTS = setOf("board:changed", "approval:changed")
     }
 }

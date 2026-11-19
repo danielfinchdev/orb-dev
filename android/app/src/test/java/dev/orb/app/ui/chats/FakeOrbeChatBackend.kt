@@ -47,7 +47,7 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     var actionResult: Result<Unit> = Result.success(Unit)
     var modeOnPc: String? = "preguntar"
     var chatOnPc: JsonObject? = null
-    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", folderNow = "C:/tienda", actions = setOf(TaskAction.Approve), description = "Guarda el carrito en IndexedDB al cambiar.")
+    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", folderNow = "C:/tienda", folderMoved = false, actions = setOf(TaskAction.Approve), description = "Guarda el carrito en IndexedDB al cambiar.")
     /** What `tasks.get` answers per task; a task not listed answers [taskDetail]. */
     val detailsOnPc = HashMap<Long, TaskDetail>()
     var statOnPc: TaskStat? = null
@@ -131,8 +131,8 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
         statGate?.let { g -> statGate = null; g.await() }
         return answer
     }
-    override suspend fun acceptTask(id: Long, unheld: Boolean): Result<Unit> {
-        calls += "taskaccept $id"; acceptUnheld += unheld; onAction("taskaccept $id"); return acceptResult ?: actionResult
+    override suspend fun acceptTask(id: Long, unheld: Boolean, checkpoint: String?): Result<Unit> {
+        calls += "taskaccept $id"; acceptUnheld += unheld; acceptCheckpoints += checkpoint; onAction("taskaccept $id"); return acceptResult ?: actionResult
     }
     override suspend fun undoTask(id: Long, checkpoint: String?): Result<Unit> {
         calls += "undo $id"; undoCheckpoints += checkpoint; onAction("undo $id"); return undoResult ?: actionResult
@@ -141,6 +141,7 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     var acceptResult: Result<Unit>? = null
     /** The `unheld` / `checkpoint` / `expect` of each call, in order. */
     val acceptUnheld = ArrayList<Boolean>()
+    val acceptCheckpoints = ArrayList<String?>()
     val undoCheckpoints = ArrayList<String?>()
     val editExpects = ArrayList<String?>()
     var undoResult: Result<Unit>? = null

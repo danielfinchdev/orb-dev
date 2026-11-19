@@ -157,6 +157,30 @@ class TaskGuardsViewModelTest {
         assertEquals(listOf("accept 5"), b.calls)
     }
 
+    @Test fun theDetailSendsThePointOfReturnWithAcceptAndTheShownHashWithApprove() = runTest(dispatcher) {
+        val b = FakeTasksBackend().also { it.details[5] = Result.success(heldTask(5, "cp1")) }
+        val vm = vm(b, 5)
+        vm.accept()
+        runCurrent()
+        assertEquals(listOf<String?>("cp1"), b.acceptCheckpoints)
+        // The fingerprint the screen painted goes, not the one of the state at the moment of the tap.
+        val w = FakeTasksBackend().also { it.details[9] = Result.success(GuardsFixture.parsed()) }
+        val wv = vm(w, 9)
+        wv.approve(true, "painted")
+        runCurrent()
+        assertEquals(listOf("decide 9 true painted"), w.calls)
+        // A rejection goes with the fingerprint of the moment its dialog was opened.
+        val r = FakeTasksBackend().also { it.details[9] = Result.success(GuardsFixture.parsed()) }
+        val rv = vm(r, 9)
+        rv.askReject()
+        r.details[9] = Result.success(GuardsFixture.parsed(GuardsFixture.FULL.replace("\"hh\"", "\"h2\"")))
+        rv.refresh()
+        runCurrent()
+        rv.approve(false)
+        runCurrent()
+        assertEquals(listOf("decide 9 false hh"), r.calls)
+    }
+
     @Test fun diffUndoSendsThePointOfReturnToo() = runTest(dispatcher) {
         val b = FakeTasksBackend().also {
             it.details[4] = Result.success(detail(task(4, status = "done"), hasCheckpoint = true, checkpointId = "cpA"))

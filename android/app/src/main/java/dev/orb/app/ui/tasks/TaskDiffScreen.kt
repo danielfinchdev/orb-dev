@@ -44,6 +44,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
@@ -56,6 +58,8 @@ import kotlinx.coroutines.launch
 fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
+    // Coming back from another screen the PC may have run the task again: the diff is read afresh.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     var confirmUndo by rememberSaveable { mutableStateOf(false) }
     val diff = state.diff

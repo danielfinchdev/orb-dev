@@ -41,6 +41,7 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var unavailable: Set<String> = emptySet()
     val calls = ArrayList<String>()
     val undoCheckpoints = ArrayList<String?>()
+    val acceptCheckpoints = ArrayList<String?>()
     var actionResult: Result<Unit> = Result.success(Unit)
     var launchResult: Result<Boolean> = Result.success(false)
     var searchResult: Result<List<SearchTask>> = Result.success(emptyList())
@@ -50,6 +51,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var details = HashMap<Long, Result<TaskDetail>>()
     var diffs = HashMap<Long, Result<TaskDiff>>()
     var gate: CompletableDeferred<Unit>? = null
+    var diffGate: CompletableDeferred<Unit>? = null
+    val reads = ArrayList<String>()
 
     override fun available(m: ApiMethod) = m.name !in unavailable
 
@@ -73,8 +76,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
 
     override suspend fun projects() = projectList
     override suspend fun create(project: String, title: String, description: String) = act("create $project|$title|$description")
-    override suspend fun get(id: Long): Result<TaskDetail> = details[id] ?: Result.failure(LinkException(LinkError.Offline))
-    override suspend fun diff(id: Long): Result<TaskDiff> = diffs[id] ?: Result.failure(LinkException(LinkError.Offline))
+    override suspend fun get(id: Long): Result<TaskDetail> { reads += "get"; return details[id] ?: Result.failure(LinkException(LinkError.Offline)) }
+    override suspend fun diff(id: Long): Result<TaskDiff> { reads += "diff"; diffGate?.await(); return diffs[id] ?: Result.failure(LinkException(LinkError.Offline)) }
     override suspend fun agents() = agentList
     override suspend fun launchAnyway(id: Long): Result<Boolean> { calls += "launch $id"; gate?.await(); return launchResult }
     override suspend fun reassign(id: Long, agent: String, reasoning: String) = act("reassign $id $agent $reasoning")
@@ -82,7 +85,7 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     override suspend fun retry(id: Long) = act("retry $id")
     override suspend fun cancel(id: Long) = act("cancel $id")
     override suspend fun review(id: Long) = act("review $id")
-    override suspend fun accept(id: Long) = act("accept $id")
+    override suspend fun accept(id: Long, checkpoint: String?) = act("accept $id").also { acceptCheckpoints += checkpoint }
     override suspend fun undo(id: Long, checkpoint: String?) = act("undo $id").also { undoCheckpoints += checkpoint }
     override suspend fun decide(id: Long, approve: Boolean, hash: String) = act("decide $id $approve $hash")
 }

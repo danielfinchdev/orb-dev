@@ -131,10 +131,22 @@ class TaskDetailViewModel(
 
     private fun allowed(a: TaskAction) = ui.value.detail?.let { a in TaskActions.of(it, backend::available) } == true
 
-    fun approve(approve: Boolean) {
-        val hash = ui.value.detail?.previewHash ?: return
+    /**
+     * [shownHash] is the fingerprint of what the screen painted when the person tapped: the PC refuses the OK if the task
+     * changed since. Without it, the one captured by [askReject] for a rejection, and last the current one.
+     */
+    fun approve(approve: Boolean, shownHash: String? = null) {
+        val hash = shownHash ?: rejectHash?.takeIf { !approve } ?: ui.value.detail?.previewHash ?: return
+        rejectHash = null
         if (!allowed(TaskAction.Approve)) return
         act(if (approve) TaskTexts.APPROVED else TaskTexts.REJECTED) { backend.decide(id, approve, hash) }
+    }
+
+    private var rejectHash: String? = null
+
+    /** The reject dialog opens on the fingerprint shown now; that one goes back with the yes. */
+    fun askReject() {
+        rejectHash = ui.value.detail?.previewHash
     }
 
     /**
@@ -149,7 +161,7 @@ class TaskDetailViewModel(
                 onSuccess = { fresh ->
                     val same = fresh.row.status == shown.row.status && fresh.row.held == shown.row.held && fresh.checkpointId == shown.checkpointId
                     if (!same || TaskAction.AcceptHeld !in TaskActions.of(fresh, backend::available)) Result.failure(Stale(TaskTexts.ACCEPT_CHANGED))
-                    else backend.accept(id)
+                    else backend.accept(id, shown.checkpointId)
                 },
                 onFailure = { Result.failure(it) },
             )

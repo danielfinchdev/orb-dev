@@ -92,7 +92,7 @@ data class TaskDetail(
         !description.isNullOrBlank() && folderKnown && userAsked.isEmpty() && folderMoved != true && !folderOutside
 
     /** A card approves directly only when it shows the whole text the fingerprint covers. */
-    val approvableFromCard: Boolean get() = approvable && fitsCard && !descriptionCut
+    val approvableFromCard: Boolean get() = approvable && fitsCard && !descriptionCut && folderMoved != null
 
     /** The whole description fits the card; longer ones are cut there, so the card cannot approve them. */
     val fitsCard: Boolean get() = description.orEmpty().let { it.length <= CARD_DESCRIPTION_CHARS && it.count { c -> c == '\n' } < CARD_DESCRIPTION_LINES }
@@ -165,8 +165,11 @@ interface OrbeChatBackend {
     suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit>
 
     /** `tasks.accept` / `tasks.undo` of one task. */
-    /** [unheld]: the PC refuses, changing nothing, a task that Orb holds or that is no longer finished. */
-    suspend fun acceptTask(id: Long, unheld: Boolean = false): Result<Unit>
+    /**
+     * [unheld]: the PC refuses, changing nothing, a task that Orb holds or that is no longer finished. [checkpoint]: the run the
+     * person saw; the PC refuses a task that ran again since.
+     */
+    suspend fun acceptTask(id: Long, unheld: Boolean = false, checkpoint: String? = null): Result<Unit>
 
     /** [checkpoint]: the point of return the person saw; the PC refuses to undo if the task has another one now. */
     suspend fun undoTask(id: Long, checkpoint: String? = null): Result<Unit>
@@ -272,8 +275,8 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
         if (!api.available(ApiMethods.TASKS_DIFF)) Result.success(null)
         else api.tasks.diff(buildJsonObject { put("id", id); put("stat", true) }).map { OrbeParser.taskStat(it) }
 
-    override suspend fun acceptTask(id: Long, unheld: Boolean) =
-        api.tasks.accept(buildJsonObject { put("id", id); if (unheld && api.knowsSafetyGuards) put("unheld", true) }).map { }
+    override suspend fun acceptTask(id: Long, unheld: Boolean, checkpoint: String?) =
+        api.tasks.accept(dev.orb.app.ui.tasks.TaskParams.accept(id, unheld, checkpoint, api.knowsSafetyGuards)).map { }
 
     override suspend fun undoTask(id: Long, checkpoint: String?) =
         api.tasks.undo(buildJsonObject { put("id", id); if (checkpoint != null) put("checkpoint", checkpoint) }).map { }

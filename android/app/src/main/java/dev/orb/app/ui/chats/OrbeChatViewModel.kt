@@ -665,6 +665,9 @@ class OrbeChatViewModel(
     fun acceptTask(task: Long) {
         val key = taskKey(task)
         if (key in busyCards.value || TaskAction.AcceptHeld !in taskInfo.value[task]?.actions.orEmpty()) return
+        // The run the card was painted for: a task that ran again and finished without being held reads as accepted-able, but
+        // nobody has seen its result.
+        val painted = taskInfo.value[task]?.checkpointId
         busyCards.update { it + key }
         viewModelScope.launch {
             val read = issueRead(task)
@@ -672,7 +675,8 @@ class OrbeChatViewModel(
                 onSuccess = { fresh ->
                     applyRead(task, read, fresh)
                     if (fresh.status != "done" || fresh.held || TaskAction.AcceptHeld !in fresh.actions) _messages.trySend(ChatTexts.ACCEPT_UNAVAILABLE)
-                    else backend.acceptTask(task, unheld = true).fold(
+                    else if (fresh.checkpointId != painted) _messages.trySend(ChatTexts.ACCEPT_CHANGED)
+                    else backend.acceptTask(task, unheld = true, checkpoint = painted).fold(
                         onSuccess = { _messages.trySend(ChatTexts.TASK_ACCEPTED); refreshTask(task) },
                         onFailure = { sayPc(it); refreshTask(task) },
                     )

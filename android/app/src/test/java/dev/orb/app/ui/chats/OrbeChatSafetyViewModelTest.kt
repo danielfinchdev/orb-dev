@@ -141,7 +141,7 @@ class OrbeChatSafetyViewModelTest {
 
     @Test fun aHeldTaskNeverOffersAcceptOrUndoToTheCard() {
         val held = json(
-            """{"id":45,"title":"Limpiar","status":"blocked","agent":"codex","project_path":"C:/app-movil","sensitivity":[],"previewHash":"h",
+            """{"id":45,"title":"Limpiar","status":"blocked","agent":"codex","project_path":"C:/app-movil","sensitivity":[],"previewHash":"h","folderMoved":false,
             "held":{"reasons":"ha eliminado 2714 archivos","folder":"C:/app-movil"},"hasCheckpoint":true,"accepted":false,"events":[]}""",
         )
         val d = OrbeParser.taskDetail(held, 45, { true })!!
@@ -155,7 +155,7 @@ class OrbeChatSafetyViewModelTest {
     @Test fun theHashCoversTheAgentNotWhoRunsIt() {
         val src = json(
             """{"id":42,"title":"T","status":"awaiting_approval","agent":"any","assigned_to":"claude","project_path":"C:/p","folderNow":"C:/p","sensitivity":[],
-            "previewHash":"h","description":"hace algo","user_asked":["push"],"readonly":1,"fast":0,"mode":"carpeta","reasoning":"high","events":[]}""",
+            "previewHash":"h","folderMoved":false,"description":"hace algo","user_asked":["push"],"readonly":1,"fast":0,"mode":"carpeta","reasoning":"high","events":[]}""",
         )
         val d = OrbeParser.taskDetail(src, 42, { true })!!
         assertEquals("any", d.agent)

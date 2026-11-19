@@ -92,7 +92,7 @@ fun TaskDetailScreen(
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
                     Header(d, nowMs())
                     if (!state.online && state.actions.isNotEmpty()) NeedsPcNote(Modifier.padding(top = 8.dp))
-                    Decisions(d, state.actions, enabled, vm, onAskUndo = { vm.askUndo(); ask = Ask.Undo }, onAskReject = { ask = Ask.Reject })
+                    Decisions(d, state.actions, enabled, vm, onAskUndo = { vm.askUndo(); ask = Ask.Undo }, onAskReject = { vm.askReject(); ask = Ask.Reject })
                     WhyWaits(d, state.actions, enabled) { ask = Ask.LaunchAnyway }
                     // While an OK is asked, the card above shows the description with the rest of what the OK covers.
                     if (d.description.isNotBlank() && TaskAction.Approve !in state.actions) {
@@ -202,7 +202,7 @@ private fun Decisions(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean,
             // A PC that sent no facts still shows the brief it is asked to approve.
             ?: Text(d.description, style = MaterialTheme.typography.bodyMedium)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { vm.approve(true) }, enabled = enabled) { Text(TaskTexts.APPROVE) }
+                Button(onClick = { vm.approve(true, d.previewHash) }, enabled = enabled) { Text(TaskTexts.APPROVE) }
                 OutlinedButton(onClick = onAskReject, enabled = enabled) { Text(TaskTexts.REJECT) }
             }
         }

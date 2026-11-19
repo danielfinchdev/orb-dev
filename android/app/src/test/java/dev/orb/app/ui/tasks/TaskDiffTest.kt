@@ -148,3 +148,133 @@ class TaskDiffViewModelTest {
         assertEquals(2, vm.state.value.diff?.files?.size)
     }
 }
+
+/** The changes screen decides only on a diff that is up to date, and what it accepts is the run whose diff it shows. */
+@OptIn(ExperimentalCoroutinesApi::class)
+class TaskDiffFreshnessTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before fun setUp() = kotlinx.coroutines.Dispatchers.setMain(dispatcher)
+    @After fun tearDown() = kotlinx.coroutines.Dispatchers.resetMain()
+
+    private fun run1() = detail(task(4, "Push", status = "done"), hasCheckpoint = true, checkpointId = "run1")
+    private val oneFile = listOf(DiffFile("M", "a.ts", 1, 0, false, "@@ -1 +1 @@\n-a\n+b\n", false))
+    private val otherFile = listOf(DiffFile("M", "borrado.ts", 0, 9, false, "@@ -1 +0,0 @@\n-x\n", false))
+
+    private fun backend() = FakeTasksBackend().also {
+        it.details[4] = Result.success(run1())
+        it.diffs[4] = Result.success(TaskDiff(true, oneFile, 0))
+    }
+
+    private fun TestScope.vm(b: FakeTasksBackend): TaskDiffViewModel {
+        val vm = TaskDiffViewModel(b, 4, reloadDebounceMs = 0)
+        backgroundScope.launch { vm.state.collect { } }
+        runCurrent()
+        return vm
+    }
+
+    private fun FakeTasksBackend.runsAgain() {
+        details[4] = Result.success(detail(task(4, "Push", status = "done"), hasCheckpoint = true, checkpointId = "run2"))
+        diffs[4] = Result.success(TaskDiff(true, otherFile, 0))
+    }
+
+    private fun event(name: String) = dev.orb.app.link.net.LinkEvent(name, kotlinx.serialization.json.JsonNull)
+
+    @Test fun anEventOfThePcReadsTheDiffAndTheTaskAgain() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        assertEquals("a.ts", vm.state.value.diff!!.files.single().path)
+        b.runsAgain()
+        b.events.tryEmit(event("board:changed"))
+        runCurrent()
+        assertEquals("borrado.ts", vm.state.value.diff!!.files.single().path)
+        vm.accept()
+        runCurrent()
+        assertEquals(listOf<String?>("run2"), b.acceptCheckpoints)
+    }
+
+    @Test fun anEventThatIsNotAboutTasksReadsNothing() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        b.runsAgain()
+        b.events.tryEmit(event("chat:new"))
+        runCurrent()
+        assertEquals("a.ts", vm.state.value.diff!!.files.single().path)
+    }
+
+    @Test fun comingBackToTheScreenReadsAgain() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        b.runsAgain()
+        vm.refresh()
+        runCurrent()
+        assertEquals("borrado.ts", vm.state.value.diff!!.files.single().path)
+    }
+
+    @Test fun acceptAndUndoSendThePointOfReturnOfTheDiffShown() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        vm.accept()
+        runCurrent()
+        vm.askUndo()
+        vm.undo()
+        runCurrent()
+        assertEquals(listOf<String?>("run1"), b.acceptCheckpoints)
+        assertEquals(listOf<String?>("run1"), b.undoCheckpoints)
+    }
+
+    @Test fun thePcRefusingAStaleAcceptChangesNothingShowsItsWordsAndReads() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        val said = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { said += it } }
+        // It ran again after the screen read it and no event arrived.
+        b.runsAgain()
+        val reason = "la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla"
+        b.actionResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Refused(400, reason)))
+        vm.accept()
+        runCurrent()
+        assertEquals(listOf(reason), said)
+        assertFalse(vm.state.value.accepted)
+        // The screen shows the new run now, and its own checkpoint goes with the next try.
+        assertEquals("borrado.ts", vm.state.value.diff!!.files.single().path)
+        b.actionResult = Result.success(Unit)
+        vm.accept()
+        runCurrent()
+        assertEquals(listOf<String?>("run1", "run2"), b.acceptCheckpoints)
+    }
+
+    @Test fun theButtonsAreOffAfterAFailedReadAndOnAgainAfterAGoodOne() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        assertTrue(vm.state.value.canAccept && vm.state.value.canUndo)
+        // The last read failed: what is on screen may be old, so nothing can be decided from it.
+        b.diffs.remove(4)
+        vm.refresh()
+        runCurrent()
+        assertFalse(vm.state.value.canAccept || vm.state.value.canUndo)
+        b.diffs[4] = Result.success(TaskDiff(true, oneFile, 0))
+        vm.refresh()
+        runCurrent()
+        assertTrue(vm.state.value.canAccept && vm.state.value.canUndo)
+    }
+
+    @Test fun theButtonsAreOffWhileTheDiffIsBeingRead() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        b.diffGate = CompletableDeferred()
+        vm.refresh()
+        runCurrent()
+        assertTrue(vm.state.value.loading)
+        assertFalse(vm.state.value.canAccept || vm.state.value.canUndo)
+        b.diffGate!!.complete(Unit)
+        runCurrent()
+        assertTrue(vm.state.value.canAccept && vm.state.value.canUndo)
+    }
+
+    @Test fun theTaskIsReadAfterTheDiff() = runTest(dispatcher) {
+        val b = backend()
+        vm(b)
+        assertEquals(listOf("diff", "get"), b.reads)
+    }
+}

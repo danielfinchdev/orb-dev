@@ -95,7 +95,28 @@ class OrbeChatGuardsViewModelTest {
         runCurrent()
         assertEquals(1, b.calls.count { it == "taskaccept 42" })
         assertEquals(listOf(true), b.acceptUnheld)
+        assertEquals(listOf<String?>("cp1"), b.acceptCheckpoints)
         assertEquals(listOf(ChatTexts.TASK_ACCEPTED), said)
+    }
+
+    @Test fun aTaskThatRanAgainAndFinishedWithoutAHoldIsNotAcceptedAtTheFirstTap() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention(5, 42))
+        b.done()
+        val vm = vm(b)
+        val said = said(vm)
+        vm.watchTask(42)
+        runCurrent()
+        // A follow-up made it run again and it finished clean: another run, with a result the card never showed.
+        b.detailsOnPc[42] = b.taskDetail.copy(checkpointId = "cp2")
+        vm.acceptTask(42)
+        runCurrent()
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("taskaccept") })
+        assertEquals(listOf(ChatTexts.ACCEPT_CHANGED), said)
+        // The card is drawn again from the new run, and a second tap accepts that one.
+        assertEquals("cp2", vm.state.value.taskInfo[42]!!.checkpointId)
+        vm.acceptTask(42)
+        runCurrent()
+        assertEquals(listOf<String?>("cp2"), b.acceptCheckpoints)
     }
 
     @Test fun thePcsRefusalToAcceptIsShownWordForWordAndTheCardIsRead() = runTest(dispatcher) {
@@ -272,7 +293,16 @@ class OrbeChatGuardsViewModelTest {
         val old = waiting("").copy(project = "D:/otros/tienda", folderNow = "C:/orb/tienda")
         assertNull(old.folderMoved)
         assertTrue(old.folderChanged)
-        assertTrue(old.approvableFromCard)
+        assertTrue(old.approvable)
+        // Without the PC saying whether the folder moved, the card does not approve directly: the dialog or the task's screen does.
+        assertFalse(old.approvableFromCard)
+    }
+
+    @Test fun theGuardParametersOfAcceptOnlyGoToAPcThatChecksThem() {
+        val json = { u: Boolean?, c: String?, pc: Boolean -> dev.orb.app.ui.tasks.TaskParams.accept(42, u, c, pc).toString() }
+        assertEquals("""{"id":42,"unheld":true,"checkpoint":"cp1"}""", json(true, "cp1", true))
+        assertEquals("""{"id":42}""", json(true, "cp1", false))
+        assertEquals("""{"id":42}""", json(null, null, true))
     }
 
     @Test fun aFolderOutsideOrbsOwnIsNeverApprovedFromACard() {
@@ -309,6 +339,7 @@ class OrbeChatGuardsViewModelTest {
         assertNull(d.folderMoved)
         assertFalse(d.folderOutside || d.descriptionCut)
         assertNull(d.checkpointId)
-        assertTrue(d.approvableFromCard)
+        assertTrue(d.approvable)
+        assertFalse(d.approvableFromCard)
     }
 }

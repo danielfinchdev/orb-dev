@@ -67,7 +67,7 @@ class OrbeChatSafetyScreenTest {
     private val ended = raw(4, "system", "La tarea #42 terminó", """{"kind":"task-end","task":42,"status":"done","result":"Listo"}""")
 
     private fun waiting(extra: TaskDetail.() -> TaskDetail = { this }) = TaskDetail(
-        42, "Borrar build/ y reinstalar", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h1", model = "gpt", folderNow = "C:/app-movil",
+        42, "Borrar build/ y reinstalar", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h1", model = "gpt", folderNow = "C:/app-movil", folderMoved = false,
         actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias.",
     ).extra()
 
@@ -172,16 +172,18 @@ class OrbeChatSafetyScreenTest {
         assertTrue(b.calls.none { it.startsWith("task ") })
     }
 
-    @Test fun aMovedProjectShowsTheCurrentFolderWithTheWarningAndSendsTheHashOfIt() {
+    @Test fun aPcThatDoesNotSayIfTheFolderMovedOnlyOpensTheTask() {
         val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(project = "C:/viejo/app-movil", folderNow = "C:/nuevo/app-movil") }
+        b.taskDetail = waiting { copy(project = "C:/viejo/app-movil", folderNow = "C:/nuevo/app-movil", folderMoved = null) }
         screen(b)
         rule.onNodeWithText("C:/nuevo/app-movil").assertIsDisplayed()
-        rule.onNodeWithText("La carpeta del proyecto ha cambiado desde que se creó la tarea.").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("C:/viejo/app-movil").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Aprobar").performClick()
+        // Without the PC's word on it the card does not approve directly.
+        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Ver y aprobar").performClick()
         rule.waitForIdle()
-        assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
     @Test fun aFolderThePcSaysMovedShowsTheWarningAndOnlyOpensTheTask() {

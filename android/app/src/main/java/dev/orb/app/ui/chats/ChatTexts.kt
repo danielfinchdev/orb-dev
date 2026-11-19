@@ -411,6 +411,7 @@ object ChatTexts {
     const val FOLDER_OUTSIDE_NOTE = "Fuera de la carpeta de Orb: el móvil solo ve el último nombre de la carpeta."
     const val DESCRIPTION_CUT_NOTE = "Este texto nombra carpetas de tu PC que el móvil abrevia."
     const val USER_ASKED_LABEL = "Lo que pidió tu mensaje:"
+    const val ACCEPT_CHANGED = "La tarea ha cambiado; revísala antes de aceptar."
     const val ACCEPT_UNAVAILABLE = "Esa tarea ha cambiado en el PC y ya no se puede aceptar desde aquí: no se ha tocado nada."
     const val UNDO_CHANGED = "Esa tarea se ha vuelto a ejecutar: ábrela de nuevo para revisarla. No se ha deshecho nada."
     const val QUEUE_CHANGED_REMOVE = "Ese mensaje ha cambiado en el PC: no se ha quitado. Revísalo y quítalo de nuevo si quieres."

@@ -65,13 +65,24 @@ interface TasksBackend {
     suspend fun retry(id: Long): Result<Unit>
     suspend fun cancel(id: Long): Result<Unit>
     suspend fun review(id: Long): Result<Unit>
-    suspend fun accept(id: Long): Result<Unit>
+
+    /** [checkpoint]: the run the person saw; the PC refuses to accept a task that ran again since. */
+    suspend fun accept(id: Long, checkpoint: String? = null): Result<Unit>
 
     /** [checkpoint]: the point of return the person saw; the PC refuses to undo a task that has another one now. */
     suspend fun undo(id: Long, checkpoint: String? = null): Result<Unit>
 
     /** [hash] is the fingerprint the person saw: a task that changed meanwhile is refused instead of approved blind. */
     suspend fun decide(id: Long, approve: Boolean, hash: String): Result<Unit>
+}
+
+/** The parameters of `tasks.accept`: the guards go only to a PC that checks them (an older one would accept without them). */
+object TaskParams {
+    fun accept(id: Long, unheld: Boolean?, checkpoint: String?, pcChecks: Boolean) = buildJsonObject {
+        put("id", id)
+        if (unheld == true && pcChecks) put("unheld", true)
+        if (checkpoint != null && pcChecks) put("checkpoint", checkpoint)
+    }
 }
 
 class RuntimeTasksBackend(private val container: AppContainer, private val runtime: LinkRuntime) : TasksBackend {
@@ -142,7 +153,8 @@ class RuntimeTasksBackend(private val container: AppContainer, private val runti
     override suspend fun retry(id: Long) = api.tasks.retry(idOf(id)).unit()
     override suspend fun cancel(id: Long) = api.tasks.cancel(idOf(id)).unit()
     override suspend fun review(id: Long) = api.tasks.review(idOf(id)).unit()
-    override suspend fun accept(id: Long) = api.tasks.accept(idOf(id)).unit()
+    override suspend fun accept(id: Long, checkpoint: String?) =
+        api.tasks.accept(TaskParams.accept(id, null, checkpoint, api.knowsSafetyGuards)).unit()
     override suspend fun undo(id: Long, checkpoint: String?) =
         api.tasks.undo(buildJsonObject { put("id", id); if (checkpoint != null) put("checkpoint", checkpoint) }).unit()
 
