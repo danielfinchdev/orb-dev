@@ -18,6 +18,16 @@ object NoteIntents {
     const val REPLY_KEY = "orb-reply"
 }
 
+/**
+ * Flags of the notice buttons' PendingIntents. A reply is filled in by Android (the typed text), so it must stay mutable: from
+ * Android 12 that is said with FLAG_MUTABLE, and before it a PendingIntent is mutable simply by not being marked immutable.
+ */
+internal fun pendingFlags(mutable: Boolean, sdk: Int): Int = PendingIntent.FLAG_UPDATE_CURRENT or when {
+    !mutable -> PendingIntent.FLAG_IMMUTABLE
+    sdk >= 31 -> PendingIntent.FLAG_MUTABLE
+    else -> 0
+}
+
 object NotifyChannels {
     const val STATUS_ID = 19_001
 
@@ -50,8 +60,7 @@ class AndroidNotePoster(
     // True while the Orb lock is on: the result notice then carries no chat title.
     private val hideTitles: () -> Boolean = { false },
 ) : NotePoster {
-    private fun flags(mutable: Boolean) =
-        PendingIntent.FLAG_UPDATE_CURRENT or (if (mutable && Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE)
+    private fun flags(mutable: Boolean) = pendingFlags(mutable, Build.VERSION.SDK_INT)
 
     private fun openApp(id: Int, slot: Int, job: NoteJob): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
