@@ -36,6 +36,14 @@ data class SessionInfo(
     val canCompact get() = agent == "claude" || agent == "codex"
 }
 
+/** What the PC says about copying the chat up to one of its lines (`sessions.rewindInfo`): whether it can, and why not. */
+@Immutable
+data class ForkInfo(val can: Boolean, val why: String)
+
+/** «Bifurcar desde aquí» on one line: [can] null while the PC is asked, then its answer and the reason when it is no. */
+@Immutable
+data class ForkAsk(val item: Long, val can: Boolean?, val why: String?)
+
 /** A message written while the agent works, waiting in the PC's queue. */
 @Immutable
 data class QueuedMsg(val id: Long, val text: String, val images: Int)
@@ -141,6 +149,16 @@ object DirectParser {
             status = o.str("status"), permission = o.str("permission"), settled = o.bool("settled"), archived = o.bool("archived"),
             contextUsed = ctx?.long("used"), contextSize = ctx?.long("size"),
         )
+    }
+
+    /**
+     * `sessions.rewindInfo` → whether the chat can be copied up to that line. A PC that answers without `canFork` predates
+     * copying from a line, so it cannot, and the reason says to update it.
+     */
+    fun forkInfo(el: JsonElement?): ForkInfo? {
+        val o = el as? JsonObject ?: return null
+        if (o["canFork"] == null) return ForkInfo(false, DirectTexts.FORK_FROM_OLD_PC)
+        return ForkInfo(o.bool("canFork"), o.str("forkWhy").orEmpty())
     }
 
     fun queue(el: JsonElement?): List<QueuedMsg> = (el as? JsonArray).orEmpty().mapNotNull { e ->

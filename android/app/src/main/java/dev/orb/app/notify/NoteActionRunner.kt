@@ -12,6 +12,8 @@ import kotlinx.serialization.json.put
 
 /** How a notification button ended; [text] is what the notification says afterwards. */
 sealed class NoteOutcome(val text: String, val done: Boolean = false) {
+    /** «Marcar leído» was used: nothing was sent anywhere. */
+    class Read : NoteOutcome(NotifyTexts.READ, done = true)
     class Sent : NoteOutcome(NotifyTexts.SENT, done = true)
     class Allowed : NoteOutcome(NotifyTexts.ALLOWED, done = true)
     class Denied : NoteOutcome(NotifyTexts.DENIED, done = true)
@@ -40,6 +42,10 @@ class NoteActionRunner(
     suspend fun run(token: String, typed: String?): Pair<NoteJob, NoteOutcome>? {
         val job = jobs.peek(token) ?: run { jobs.take(token); return null }
         if (!job.acts) return null
+        if (job.local) {
+            jobs.take(token) ?: return null
+            return job to NoteOutcome.Read()
+        }
         // Before Android 12 a button does not ask to unlock; the buttons stay for a tap after unlocking.
         if (isLocked()) return job to NoteOutcome.Locked()
         val text = job.textParam?.let { typed?.trim().orEmpty().ifEmpty { return job to NoteOutcome.NothingTyped() } }

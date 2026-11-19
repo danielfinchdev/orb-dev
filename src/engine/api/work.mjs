@@ -1,5 +1,7 @@
 // Window actions of models, tasks, direct sessions and schedules.
 import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
@@ -19,8 +21,35 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
+import { abandonSettled, joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
+// Folders compared as the engine writes them: either separator, any case, no trailing separator.
+const folderKey = (p) => path.resolve(String(p)).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+const sameFolder = (a, b) => folderKey(a) === folderKey(b);
+// true when the folder is outside the assistant's folder: there a phone sees only its last name, so two folders look alike.
+function outsideHome(folder) {
+  if (!folder || !ctx.home) return false;
+  const rel = path.relative(folderKey(ctx.home), folderKey(folder)).replace(/\\/g, '/');
+  return rel === '..' || rel.startsWith('../') || path.isAbsolute(rel);
+}
+// Which run a task has now, so a stale «Deshacer»/«Aceptar» can be refused (run-id.mjs). It changes exactly once per run
+// and never when held files are rechecked.
+function checkpointIdOf(board, taskId) {
+  return runIdentifier(board.settingJson(`checkpoint:${taskId}`)?.before, lastLaunchId(board, taskId));
+}
+// A phone that sends the checkpointId is refused while the stored end photo still belongs to an earlier run (a task
+// re-run in an isolated copy keeps the previous undo point until its work is joined). A point whose run cannot be known
+// (an old one) only blocks what touches files: accepting just marks the task, so it passes with { files: false }.
+const JOIN_UNFINISHED = 'la unión de esta tarea quedó sin terminar; resuélvela en el PC';
+function assertPointCurrent(board, taskId, { files = true } = {}) {
+  const cp = board.settingJson(`checkpoint:${taskId}`);
+  const run = cp?.after?.run;
+  const current = lastLaunchId(board, taskId);
+  if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail('los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento'); return; }
+  if (!cp?.after || !current || !files) return;
+  if (runOfAfter(board, taskId, cp, current) == null) fail('no se puede comprobar a qué ejecución pertenece este punto de vuelta; deshazla desde el PC');
+}
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
     if (name === 'plan') return planTurn(sessions, s.id, args);
@@ -69,8 +98,11 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
       // «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
       // account that ran it by the name the user gave it («Codex Pro»).
+      // folderNow: the folder previewHash covers; it differs from project_path when the project moved after the task was created.
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
-      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      const now = board.projectPathNow(d) ?? null;
+      const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -89,7 +121,23 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
-    'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
+    // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
+    'tasks.undo': ({ id, checkpoint }, principal) => {
+      const tid = int(id, 'tarea');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
+      // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
+      // a browser sends none. Only an explicit desktop principal skips them: a call without principal is not known to be the
+      // window, so it is guarded like a remote one.
+      if (checkpoint != null || principal?.channel !== 'desktop') {
+        if (joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
+        if (joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
+        // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too.
+        const cp = board.settingJson(`checkpoint:${tid}`);
+        if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail('el PC no guardó el estado final de esta tarea; deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después. Hazlo desde el PC si de verdad quieres eso');
+        assertPointCurrent(board, tid);
+      }
+      return scheduler.undo(tid);
+    },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
     // stat: true → only the line counts per file, no patch, and nothing else is done (read only, no recheck of held files).
@@ -102,15 +150,30 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // view is read only and was already rechecked when the tab opened, so it does not repeat it.
       if (stat !== true && file == null && board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
+      // the reasons only a phone is told (the PC's window keeps what it always got): the stored diff no longer describes the
+      // folder (joined by hand), or a finished task whose end photo failed (the undo still works from the point before)
+      const phone = Boolean(principal) && principal.channel !== 'desktop';
+      if (phone && cp?.before && joinedByHand(board, task.id)) return { available: false, reason: 'joinedbyhand', files: [], more: 0 };
+      if (phone && cp?.before && joinAbandoned(board, task.id)) return { available: false, reason: 'resolveonpc', files: [], more: 0 };
+      // the checkpointId of the run this diff belongs to (null when that cannot be known): the phone compares it with tasks.get's
+      const diffId = () => {
+        const current = lastLaunchId(board, task.id);
+        const run = runOfAfter(board, task.id, cp, current);
+        return run == null ? null : runIdentifier(cp?.before, run);
+      };
       // reason (why there is no diff): nophoto (no checkpoint), nogit (a copy checkpoint, no git), notdone (no photo after
-      // the work yet), gone (the repository is not there any more).
+      // the work yet), nophotoafter (phone only: finished without one), joinedbyhand, resolveonpc, unknownrun (phone only), gone (the repository is not there any more).
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) {
-        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? 'nogit' : !cp.after?.commit ? 'notdone' : 'gone';
+        const finished = !['queued', 'awaiting_approval', 'waiting', 'running'].includes(task.status);
+        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? (phone && finished && !cp.after ? 'nophotoafter' : 'nogit') : !cp.after?.commit ? (phone && finished && !cp.after ? 'nophotoafter' : 'notdone') : 'gone';
         return { available: false, reason, files: [], more: 0 };
       }
-      if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file) };
-      if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)) };
-      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
+      // a diff of an unknown run is not shown to the phone: it could not tell which run it belongs to (a task never launched has no runs to tell apart)
+      const checkpointId = diffId();
+      if (phone && checkpointId == null && lastLaunchId(board, task.id)) return { available: false, reason: 'unknownrun', files: [], more: 0 };
+      if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file), checkpointId };
+      if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)), checkpointId };
+      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit), checkpointId };
     },
     // «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
     // one: scheduler.tick). One that waits for other tasks cannot: the answer says which. → { paused }
@@ -124,8 +187,19 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     },
     // a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
     // to its report does.
-    'tasks.accept': ({ id }) => {
+    // unheld: true (the phone, which may hold stale data) refuses a task the guard holds or that is no longer awaiting
+    // acceptance, so a re-run that Orb held meanwhile is never accepted blind. Without it the PC's window accepts after showing the diff.
+    // checkpoint (optional): the checkpointId the phone saw; if the task ran again since, nothing is accepted.
+    'tasks.accept': ({ id, unheld, checkpoint }) => {
       const tid = int(id, 'tarea');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla');
+      if (checkpoint != null && joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
+      if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
+      if (unheld === true) {
+        const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
+        if (board.heldInfo(t)) fail('la tarea está retenida por la guardia; revisa sus cambios en el PC antes de aceptarla');
+        if (t.status !== 'done') fail('la tarea ya no se puede aceptar: su estado ha cambiado; ábrela de nuevo');
+      }
       if (board.heldInfo(board.task(tid))) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       return accept([tid]);
     },
@@ -145,7 +219,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const currentBranch = (dir) => { const live = liveBranch(dir); return live === undefined ? cachedBranch(dir) : live; };
       const list = sessions.list({ archived: Boolean(archived) });
       let trees = null;
-      return list.map((s) => {
+      // `activity`: the short line of what a running chat does now (file names only); absent when it is not working and for «Acceso total» chats, which the phone may not read.
+      const withLine = (s) => { const activity = s.kind === 'chat' && s.permission !== 'total' ? sessions.liveLine?.(s.id) : null; return activity ? { ...s, activity } : s; };
+      return list.map((s0) => {
+        const s = withLine(s0);
         if (s.kind !== 'chat' || !s.project) return s;
         trees ??= new Map(chatTrees.all().filter((r) => !r.removed).map((r) => [r.id, r]));
         const tree = trees.get(s.id);
@@ -219,10 +296,11 @@ ${block}` : ''}` });
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'sessions.resume': ({ id }) => { trash.assertSessionNotTrashed(sessions.must(str(id, 'conversación', 64))); return sessions.resume(str(id, 'conversación', 64)); },
     // agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
-    'sessions.fork': ({ id, title, agent }) => {
+    // from: a message of the chat; the copy is cut there (conversation only, never the files).
+    'sessions.fork': ({ id, title, agent, from }) => {
       const other = oneOf(agent, AGENT_IDS, 'agente', undefined);
       if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
-      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other });
+      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other, from: from === undefined || from === null ? undefined : int(from, 'mensaje') });
     },
     // the same chat goes on with another agent (a bounded summary travels; the chat's permission is kept, never raised).
     'sessions.handoff': ({ id, agent }) => {

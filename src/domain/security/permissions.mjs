@@ -39,12 +39,12 @@ export const METHODS = Object.freeze({
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
   'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc', 'conversations.trash': 'remote', 'conversations.restore': 'remote',
-  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
+  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.queue': 'remote', 'chat.editQueued': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
   'chat.settings': 'remote',
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',
   'projects.remove': 'pc', 'projects.rename': 'pc', 'projects.setCategory': 'pc', 'projects.layoutPlan': 'pc', 'projects.layoutApply': 'pc', 'projects.setActive': 'remote', 'projects.setIcon': 'pc', 'projects.clearIcon': 'pc',
-  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.prCounts': 'remote', 'projects.pr': 'remote', 'projects.branchPr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'projects.commit': 'pc', 'projects.commitFiles': 'pc', 'projects.commitSuggest': 'pc', 'projects.prFix': 'pc', 'ciWatch.list': 'pc', 'ciWatch.set': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc', 'projects.sync': 'pc', 'projects.syncPlan': 'pc', 'projects.prReview': 'pc', 'logs.addEntry': 'pc',
+  'projects.branch': 'remote', 'projects.info': 'remote', 'projects.prs': 'remote', 'projects.prCounts': 'remote', 'projects.pr': 'remote', 'projects.branchPr': 'remote', 'projects.mergePr': 'remote', 'projects.prComment': 'remote', 'notes.markRead': 'remote', 'notes.list': 'remote', 'projects.commit': 'pc', 'projects.commitFiles': 'pc', 'projects.commitSuggest': 'pc', 'projects.prFix': 'pc', 'ciWatch.list': 'pc', 'ciWatch.set': 'pc', 'projects.merge': 'pc', 'projects.push': 'pc', 'projects.sync': 'pc', 'projects.syncPlan': 'pc', 'projects.prReview': 'pc', 'logs.addEntry': 'pc',
   'projects.createPr': 'pc', 'projects.createRepo': 'pc', 'projects.review': 'remote', 'projects.securityReview': 'remote',
   // finishing a project (its folder stays) also from the phone; deleting it (its folder too) only here.
   'projects.finish': 'remote', 'projects.finished': 'remote', 'projects.reopen': 'remote', 'projects.deleteCheck': 'pc', 'projects.delete': 'pc', 'projects.deleteAbort': 'pc',

@@ -75,7 +75,10 @@ export class Board {
   // approvalKey: HMAC key that signs approvals (only the app's user actions sign; the scheduler verifies).
   // noKey: processes that must never hold the secret (the MCP server): approvals cannot be verified there, so sensitive
   // tasks count as not approved and nothing is re-checked.
-  constructor(db = openDb(), { approvalKey, noKey = false } = {}) { this.db = db; this._key = approvalKey ?? null; this.noKey = noKey; this.listeners = new Set(); }
+  constructor(db = openDb(), { approvalKey, noKey = false } = {}) { this.db = db; this._key = approvalKey ?? null; this.noKey = noKey; this.listeners = new Set();
+    // why a queued task waits, kept by the scheduler in memory (never on disk) and recomputed on every tick: the task
+    // that holds its folder, and the structured side of its usage-limit notice.
+    this.folderWaits = new Map(); this.noticeInfo = new Map(); }
   get key() { if (this.noKey) return null; return this._key ??= defaultApprovalKey(); }
 
   // The engine listens to push changes to the window; MCP processes have no listeners (the engine polls the database).
@@ -453,7 +456,10 @@ export class Board {
   // why a queued task has not started, for the user (every list of tasks, PC and phone) and the coordinator.
   // → { kind: 'paused' } (the whole queue is paused) | { kind: 'manual' } (Ajustes: tasks do not start by themselves)
   //   | { kind: 'deps', on: [{ id, status, held }] } (it waits for those)
-  //   | { kind: 'notice', text } (what the scheduler said: usage limit, no agent…) | null (its turn comes)
+  //   | { kind: 'folder', by } (another task writes in its folder: `by` is that task's id)
+  //   | { kind: 'notice', text, account?, until?, percent? } (what the scheduler said: usage limit, no agent…; for a
+  //     usage limit also the account's label, when it comes back (ISO) and the usage percent, each null when unknown)
+  //   | null (its turn comes)
   // A dependency that needs the user (held, failed, blocked) is said first: resuming the queue alone would not start it.
   waitReason(task, paused = this.setting('paused') === '1') {
     if (task?.status !== 'queued') return null;
@@ -464,8 +470,12 @@ export class Board {
     if (paused) return { kind: 'paused' };
     if (ctx.config?.autoRun === false && task.launch === 'auto') return { kind: 'manual' };
     if (deps.length) return on(deps);
+    const by = this.folderWaits.get(task.id);
+    if (by != null && this.task(by)?.status === 'running') return { kind: 'folder', by };
     const notice = this.setting(`wait_notice:${task.id}`);
-    return notice ? { kind: 'notice', text: notice } : null;
+    if (!notice) return null;
+    const info = this.noticeInfo.get(task.id);
+    return { kind: 'notice', text: notice, ...(info?.text === notice ? { account: info.account, until: info.until, percent: info.percent } : {}) };
   }
   // a task Orb stopped after it ran, for the user to review (a mass deletion, a changed remote, a read-only task
   // that wrote): blocked, with a «task.held» since its last launch. → { reasons, folder } or null. The reasons are the
@@ -545,7 +555,7 @@ export class Board {
   explainForAgents(t) {
     const w = this.waitReason(t); const h = this.heldInfo(t);
     const dep = (d) => `#${d.id} (${d.held ? `retenida: ${userName()} la tiene que aceptar o deshacer` : d.status})`;
-    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.text } : {}),
+    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.kind === 'folder' ? `espera a que la tarea #${w.by} termine de escribir en la misma carpeta` : w.text } : {}),
       ...(h ? { held: `retenida para que ${userName()} la revise: ${h.reasons} en ${h.folder}` } : {}) };
   }
   summary(agent, conversation = null) {

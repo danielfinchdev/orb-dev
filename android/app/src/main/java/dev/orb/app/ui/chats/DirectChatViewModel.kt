@@ -55,6 +55,10 @@ data class DirectChatState(
     val queue: List<QueuedMsg> = emptyList(),
     /** Item ids of requests with an answer on its way to the PC. */
     val busyCards: Set<Long> = emptySet(),
+    /** The PC can copy the chat up to one of its lines (`sessions.rewindInfo` with `canFork`); an older one only copies it whole. */
+    val canForkFrom: Boolean = false,
+    /** The last line the person wrote: its correction mark says it reaches the agent that is working. */
+    val lastUserId: Long? = null,
 ) {
     val agentName get() = agentName(agent)
 }
@@ -106,6 +110,10 @@ class DirectChatViewModel(
     private val loadingOlder = MutableStateFlow(false)
     private val ghosts = MutableStateFlow<Map<String, Ghost>>(emptyMap())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
+    private val forkAsk = MutableStateFlow<ForkAsk?>(null)
+
+    /** The line a «Bifurcar desde aquí» was asked on, with what the PC answered. */
+    val fork: StateFlow<ForkAsk?> = forkAsk
 
     /** Ids the last reload returned: the events held for them are dropped once the cache shows them. */
     private val trimIds = MutableStateFlow<Set<Long>>(emptySet())
@@ -191,7 +199,7 @@ class DirectChatViewModel(
         items.addAll(shown)
         for (g in ghost.values) {
             val echoed = shown.any { it is DItem.User && it.id > g.baseId && it.text == g.pending.text }
-            if (!echoed) items += DItem.Waiting(g.pending.copy(state = PendingState.Sending))
+            if (!echoed) items += DItem.Waiting(g.pending.copy(state = PendingState.Arrived))
         }
         queued.mapTo(items) { DItem.Waiting(it) }
         val i = st.info
@@ -206,7 +214,8 @@ class DirectChatViewModel(
             activity = if (busy) last?.steps?.lastOrNull()?.takeIf { it.running }?.now else null,
             stalled = i?.stalled == true && !busy, limited = i?.limited == true, settled = i?.settled == true,
             canSteer = i?.canSteer ?: (agent == "claude" || agent == "codex"), canCompact = i?.canCompact ?: (agent == "claude" || agent == "codex"),
-            queue = st.queue, busyCards = st.busy,
+            queue = st.queue, busyCards = st.busy, canForkFrom = backend.available(ApiMethods.SESSIONS_REWIND_INFO),
+            lastUserId = shown.lastOrNull { it is DItem.User }?.let { (it as DItem.User).id },
         )
     }
 
@@ -403,6 +412,29 @@ class DirectChatViewModel(
     fun fork() {
         viewModelScope.launch {
             backend.fork(session).fold({ _messages.trySend(ChatTexts.FORKED); _effects.trySend(DirectEffect.Open(it)) }, { say(it) })
+        }
+    }
+
+    /** Asks the PC whether the chat can be copied up to [item]; the answer (or the reason for no) lands in [fork]. */
+    fun askFork(item: Long) {
+        if (!_state.value.canForkFrom) return
+        forkAsk.value = ForkAsk(item, null, null)
+        viewModelScope.launch {
+            backend.rewindInfo(session, item).fold(
+                onSuccess = { info -> forkAsk.update { a -> if (a?.item == item) a.copy(can = info.can, why = info.why.ifBlank { null }) else a } },
+                onFailure = { forkAsk.value = null; say(it) },
+            )
+        }
+    }
+
+    fun dismissFork() { forkAsk.value = null }
+
+    /** Copies the chat up to the line asked on; the new chat starts from a summary of what came before, not from the agent's memory. */
+    fun forkFromAsked() {
+        val ask = forkAsk.value?.takeIf { it.can == true } ?: return
+        forkAsk.value = null
+        viewModelScope.launch {
+            backend.fork(session, ask.item).fold({ _messages.trySend(DirectTexts.FORKED_FROM); _effects.trySend(DirectEffect.Open(it)) }, { say(it) })
         }
     }
 

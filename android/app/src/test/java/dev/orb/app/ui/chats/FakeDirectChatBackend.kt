@@ -69,7 +69,9 @@ class FakeDirectChatBackend(initial: List<String> = emptyList()) : DirectChatBac
     override suspend fun markRead(session: String): Result<Unit> { calls += "read"; return Result.success(Unit) }
     var restoreAvailable = true
     var restoreResult: Result<Unit> = Result.success(Unit)
-    override fun available(m: dev.orb.app.link.api.ApiMethod) = restoreAvailable
+    /** A PC that has `sessions.rewindInfo` (3.8.8); an older one only copies the whole chat. */
+    var rewindAvailable = true
+    override fun available(m: dev.orb.app.link.api.ApiMethod) = if (m == dev.orb.app.link.api.ApiMethods.SESSIONS_REWIND_INFO) rewindAvailable else restoreAvailable
     override suspend fun restore(session: String): Result<Unit> { calls += "restore"; return restoreResult }
 
     var sendCount = 0
@@ -91,7 +93,9 @@ class FakeDirectChatBackend(initial: List<String> = emptyList()) : DirectChatBac
     override suspend fun stop(session: String): Result<Unit> { calls += "stop"; return actionResult }
     override suspend fun compact(session: String): Result<Unit> { calls += "compact"; return actionResult }
     override suspend fun resume(session: String): Result<Unit> { calls += "resume"; return actionResult }
-    override suspend fun fork(session: String): Result<String> { calls += "fork"; return Result.success(forkId) }
+    override suspend fun fork(session: String, from: Long?): Result<String> { calls += if (from == null) "fork" else "fork from $from"; return Result.success(forkId) }
+    var forkInfoOnPc: Result<ForkInfo> = Result.success(ForkInfo(true, ""))
+    override suspend fun rewindInfo(session: String, item: Long): Result<ForkInfo> { calls += "rewindInfo $item"; return forkInfoOnPc }
     override suspend fun settle(session: String): Result<Unit> { calls += "settle"; return actionResult }
     override suspend fun archive(session: String): Result<Unit> { calls += "archive"; return actionResult }
     override suspend fun rename(session: String, title: String): Result<Unit> { calls += "rename $title"; return actionResult }

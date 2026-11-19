@@ -1,6 +1,7 @@
 package dev.orb.app.ui.chats
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -174,5 +175,27 @@ class PriorityAndDigestTest {
         advanceUntilIdle()
         assertNull(vm.state.value.digest)
         assertEquals(0, b.digestSeenCalls)
+    }
+
+    @Test fun theMenuAsksForTheSummaryEvenIfTheMorningCardWasShown() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(rest))
+        b.digestResult = Result.success(Json.parseToJsonElement("""{"day":"2026-11-15","due":false,"empty":false,"done":{"count":3,"items":[]}}"""))
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertNull(vm.state.value.digest)
+        vm.showDigest()
+        advanceUntilIdle()
+        assertEquals("2026-11-15", vm.state.value.digest?.day)
+        assertTrue(vm.state.value.canDigest)
+    }
+
+    @Test fun anEmptySummaryFromTheMenuSaysSoInsteadOfDrawingACard() = runTest(dispatcher) {
+        val b = FakeChatsBackend(listOf(rest))
+        b.digestResult = Result.success(Json.parseToJsonElement("""{"day":"2026-11-15","due":true,"empty":true}"""))
+        val vm = vm(b)
+        vm.showDigest()
+        advanceUntilIdle()
+        assertNull(vm.state.value.digest)
+        assertEquals(ChatTexts.NO_DIGEST, vm.messages.first())
     }
 }

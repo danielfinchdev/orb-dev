@@ -20,12 +20,14 @@ val sampleOptions = NewChatOptions(
 class FakeNewChatBackend : NewChatBackend {
     val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Online("http://pc", "PC", PcVersions(1, 1, "3.8.4")))
     override val connection get() = connectionState
-    override fun available(m: ApiMethod) = true
+    /** Methods this PC does not have (an old PC), by name. */
+    val missing = HashSet<String>()
+    override fun available(m: ApiMethod) = m.name !in missing
 
     var optionsResult: Result<NewChatOptions> = Result.success(sampleOptions)
     var orbeResult: Result<Long> = Result.success(41L)
     var agentResult: Result<String> = Result.success("s9")
-    var sendResult: Result<Unit> = Result.success(Unit)
+    var projectResult: Result<Unit> = Result.success(Unit)
 
     /** Holds the next create call until completed, to try a second tap while one is on its way. */
     var gate: CompletableDeferred<Unit>? = null
@@ -47,10 +49,10 @@ class FakeNewChatBackend : NewChatBackend {
         return agentResult
     }
 
-    override suspend fun sendFirst(session: String, text: String, clientId: String): Result<Unit> {
-        calls += "send $session $text"
-        clientIds += clientId
-        return sendResult
+    override suspend fun createProject(name: String): Result<Unit> {
+        calls += "project $name"
+        if (projectResult.isSuccess) optionsResult = optionsResult.map { o -> o.copy(projects = o.projects + ProjectOption(name, false)) }
+        return projectResult
     }
 }
 

@@ -6,8 +6,11 @@ object ProjectTexts {
     const val FILTER_ACTIVE = "Activos"
     const val FILTER_FINISHED = "Terminados"
 
-    const val EMPTY = "No hay proyectos"
-    const val EMPTY_HINT = "Crea uno con «Nuevo»."
+    const val EMPTY = "Aún no hay proyectos"
+    const val EMPTY_HINT = "Crea uno para agrupar sus chats y tareas."
+    const val EMPTY_NEW = "Nuevo proyecto"
+    const val LOADING = "Cargando proyectos"
+    fun activeLine(n: Int) = if (n == 1) "1 activo" else "$n activos"
     const val EMPTY_FINISHED = "No hay proyectos terminados"
     const val LOAD_ERROR = "No se pudieron cargar los proyectos desde el PC."
     const val RETRY = "Reintentar"
@@ -16,14 +19,24 @@ object ProjectTexts {
 
     const val NEW = "Nuevo"
     const val NEW_TITLE = "Nuevo proyecto"
-    const val NEW_NAME = "Nombre"
+    const val NEW_NAME = "Nombre del proyecto"
     const val NEW_NOTES = "Notas (opcional)"
     const val NEW_CATEGORY = "Categoría"
-    const val NEW_CREATE = "Crear proyecto"
+    const val NO_CATEGORY = "Sin categoría"
+    const val NEW_ICON = "Icono"
+    const val NEW_ICON_NOTE = "El punto sale del nombre del proyecto; no se guarda nada más."
+    const val NEW_MORE = "Más opciones"
+    const val EXPANDED = "Desplegado"
+    const val COLLAPSED = "Plegado"
+    const val NEW_PC_NOTE = "Clonar, importar, renombrar y eliminar proyectos: en el PC."
+    const val NEW_CREATE = "Crear"
+    fun iconOf(name: String) = if (name.isBlank()) "Icono: aún sin nombre" else "Icono de $name"
     const val CREATED = "Proyecto creado"
 
-    const val ACTIVE_BADGE = "Activo"
     const val CALM = "Tranquilo"
+    const val ACTIVE_STATE = "Proyecto activo"
+    const val ACTIVE_NOTE = "Es el proyecto activo del PC."
+    const val DETACHED_HEAD = "HEAD suelto"
     const val MAKE_ACTIVE = "Hacer activo"
     const val CLEAR_ACTIVE = "Quitar de activo"
     const val ACTIVE_SET = "Proyecto activo"
@@ -34,9 +47,23 @@ object ProjectTexts {
     const val CANCEL = "Cancelar"
 
     fun open(n: Int) = if (n == 1) "1 tarea" else "$n tareas"
+    fun toApprove(n: Int) = "$n por aprobar"
+
+    /** «dev · 2 archivos sin confirmar», «main · al día»; null when git said nothing about the project, so the card has no such line. */
+    fun gitLine(g: ProjectGit?): String? {
+        val changes = g?.changes ?: return null
+        val where = g.branch ?: DETACHED_HEAD
+        return "$where · " + if (changes == 0) "al día" else uncommitted(changes)
+    }
     fun finishedOn(at: String?) = if (at.isNullOrBlank()) "Terminado" else "Terminado el ${at.take(10)}"
 
     const val BACK = "Volver"
+    const val MORE = "Más"
+    const val TASK = "Tarea"
+    const val NEW_CHAT = "Nuevo chat"
+    const val NEW_TASK_FIXED = "Nueva tarea"
+    const val TASK_CREATED = "Tarea creada"
+    const val CHATS_COUNT = "Chats"
     const val SECTION_CHATS = "Chats"
     const val SECTION_TASKS = "Tareas"
     const val SECTION_MORE = "Más del proyecto"
@@ -44,8 +71,38 @@ object ProjectTexts {
     const val NO_TASKS = "Este proyecto no tiene tareas"
     const val DETAIL_ERROR = "No se pudo cargar el proyecto desde el PC."
     const val BRANCH = "Rama y cambios"
+    const val BRANCH_NAME = "Rama"
+    const val BRANCH_CHANGES = "Cambios"
+    const val BRANCH_TASKS = "Tareas"
+    const val BRANCH_AHEAD = "Por subir"
+    fun ahead(n: Int) = if (n == 1) "1 commit sin subir" else "$n commits sin subir"
     const val NO_GIT = "Sin git"
-    const val REVIEW = "Revisión"
+    const val CROSS_REVIEW = "Revisión cruzada"
+    const val SEE_CHANGES = "Ver cambios"
+    const val NO_TASK_CHANGES = "No hay cambios de tareas sin aceptar"
+    const val PICK_CHANGES = "Cambios sin aceptar"
+    const val TASKS_ROW = "Tareas del proyecto"
+    const val SEE_IN_PC = "Los cambios sin confirmar de todo el proyecto solo se ven en el PC."
+
+    /** What git says: files changed in the folder and not committed yet. */
+    fun uncommitted(n: Int) = if (n == 1) "1 archivo sin confirmar" else "$n archivos sin confirmar"
+
+    /** What the tasks say: finished work whose changes the person has not accepted or undone yet. */
+    fun unaccepted(n: Int) = when (n) { 0 -> "Ninguna tarea con cambios sin aceptar"; 1 -> "1 tarea con cambios sin aceptar"; else -> "$n tareas con cambios sin aceptar" }
+
+    fun branchMeta(g: ProjectGit?): String? {
+        if (g == null) return null
+        val changes = g.changes?.takeIf { it > 0 }
+        return listOfNotNull(g.branch ?: DETACHED_HEAD, changes?.let { "$it sin confirmar" }).joinToString(" · ")
+    }
+
+    fun headerLine(open: Int) = if (open == 0) "Sin tareas en curso" else if (open == 1) "1 tarea en curso" else "$open tareas en curso"
+    fun barLine(category: String?, g: ProjectGit?) = listOfNotNull(category, g?.let { "rama " + (it.branch ?: DETACHED_HEAD) }).joinToString(" · ").ifEmpty { null }
+
+    const val FINISHED_TITLE = "Proyecto terminado"
+    const val FINISHED_HINT = "Está en «Terminados»"
+    const val WHITEBOARD_META = "Se abre en el móvil"
+    fun finishAsk(name: String) = "¿Terminar «$name»?"
     const val REVIEW_ASK = "¿Pedir la revisión del proyecto?"
     const val SECURITY_ASK = "¿Pedir la revisión de seguridad?"
     const val REVIEW_BODY = "Un agente revisará el proyecto y gastará parte de tu plan."
@@ -55,22 +112,11 @@ object ProjectTexts {
     const val LOG_EMPTY = "La bitácora está vacía"
     const val CLOSE = "Cerrar"
     const val FINISH = "Terminar proyecto"
-    const val FINISH_ASK = "¿Terminar este proyecto?"
     const val FINISH_BODY = "Sale de la lista y pasa a «Terminados»; sus tareas pendientes se cancelan y sus programadas se pausan. Podrás reabrirlo."
     const val FINISH_CONFIRM = "Terminar"
     const val FINISHED = "Proyecto terminado"
     const val WHITEBOARD = "Pizarra"
     const val PRS = "Pull requests"
-
-    fun branchValue(g: ProjectGit?): String {
-        if (g == null) return NO_GIT
-        val parts = listOfNotNull(
-            g.branch,
-            g.changes?.takeIf { it > 0 }?.let { if (it == 1) "1 cambio" else "$it cambios" },
-            g.ahead?.takeIf { it > 0 }?.let { "$it por subir" },
-        )
-        return if (parts.isEmpty()) "al día" else parts.joinToString(" · ")
-    }
 
     fun reviewStarted(id: Long?) = if (id == null) "Revisión pedida" else "Revisión pedida (tarea #$id)"
     fun securityStarted(id: Long?) = if (id == null) "Revisión de seguridad pedida" else "Revisión de seguridad pedida (tarea #$id)"

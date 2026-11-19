@@ -1,6 +1,14 @@
 package dev.orb.app.ui.chats
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.layout.positionInRoot
+import org.junit.Assert.assertFalse
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -12,7 +20,7 @@ import androidx.compose.ui.test.performTextInput
 import dev.orb.app.data.json
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -35,10 +43,10 @@ class DirectChatScreenTest {
         sitem(5, "system", "approval", approvalBody()),
     )
 
-    private fun screen(b: FakeDirectChatBackend): DirectChatViewModel {
+    private fun screen(b: FakeDirectChatBackend, mentions: MentionSource? = null): DirectChatViewModel {
         val vm = DirectChatViewModel(b, "s1", dispatcher = Dispatchers.Unconfined)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { DirectChatScreen(vm, onBack = {}, onOpenChat = {}) }
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) { DirectChatScreen(vm, onBack = {}, onOpenChat = {}, mentions = mentions) }
         }
         rule.waitForIdle()
         return vm
@@ -46,10 +54,10 @@ class DirectChatScreenTest {
     @Test fun paintsTheHeaderAndTheItems() {
         screen(FakeDirectChatBackend(thread.take(4)))
         rule.onNodeWithText("Límite de reintentos").assertIsDisplayed()
-        rule.onNodeWithText("api-pagos en el PC · Editar archivos").assertIsDisplayed()
+        rule.onNodeWithText("Codex · api-pagos · Editar archivos").assertIsDisplayed()
         rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").assertIsDisplayed()
         rule.onNodeWithText("Ejecutó en el PC npm test").assertIsDisplayed()
-        rule.onNodeWithText("Mensaje para Codex").assertIsDisplayed()
+        rule.onNodeWithText("Escribe a Codex…").assertIsDisplayed()
     }
 
     @Test fun theRequestCardShowsWhatTheAgentWantsAndTheThreeButtons() {
@@ -59,7 +67,16 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Cambia la base de datos de desarrollo.").assertIsDisplayed()
         rule.onNodeWithText("Denegar").assertIsDisplayed()
         rule.onNodeWithText("Permitir").assertIsDisplayed()
-        rule.onNodeWithText("Permitir siempre aquí").assertIsDisplayed()
+        rule.onNodeWithText("Siempre").assertIsDisplayed()
+        // «Siempre» is one tap from the main button: the card says how far it reaches, and a screen reader hears it too
+        rule.onNodeWithText("«Siempre» lo permite aquí, en este chat; no vale para otros.").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Permitir siempre aquí").assertIsDisplayed()
+    }
+
+    @Test fun theButtonsAreInTheOrderOfTheMockup() {
+        screen(FakeDirectChatBackend(listOf(thread[0], thread[4])))
+        val xs = listOf("Denegar", "Siempre", "Permitir").map { rule.onNodeWithText(it).fetchSemanticsNode().positionInRoot.x }
+        assertEquals(xs.sorted(), xs)
     }
     @Test fun tappingPermitirAsksThePcAndClosesTheCard() {
         val b = FakeDirectChatBackend(thread)
@@ -68,13 +85,13 @@ class DirectChatScreenTest {
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("decide s1 r1 allow"))
         rule.onNodeWithText("Permitido").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Permitir siempre aquí").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Siempre").fetchSemanticsNodes().size)
     }
 
     @Test fun denyAndAlwaysUseTheirOwnButtons() {
         val b = FakeDirectChatBackend(thread)
         screen(b)
-        rule.onNodeWithText("Permitir siempre aquí").performClick()
+        rule.onNodeWithText("Siempre").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("decide s1 r1 always"))
         rule.onNodeWithText("Permitido siempre").assertIsDisplayed()
@@ -88,22 +105,181 @@ class DirectChatScreenTest {
         rule.onNodeWithText("32 pasaron").assertIsDisplayed()
     }
 
-    @Test fun theQueueTrayFoldsAndUnfolds() {
+    @Test fun theQueueIsACardInTheThreadWhoseRowsOpenASheetWithEditRemoveAndMoves() {
         val b = FakeDirectChatBackend(thread.take(4))
         val vm = screen(b)
         b.infoOnPc = sessionInfo(status = "running")
         b.events.tryEmit(queueEvent("Documenta el cambio", "Sube la versión"))
         rule.waitForIdle()
-        rule.onNodeWithText("En cola (2)").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Documenta el cambio").fetchSemanticsNodes().size)
-        rule.onNodeWithText("En cola (2)").performClick()
-        rule.waitForIdle()
+        rule.onNodeWithText("En cola · 2").assertIsDisplayed()
         rule.onNodeWithText("Documenta el cambio").assertIsDisplayed()
         rule.onNodeWithText("Sube la versión").assertIsDisplayed()
         b.queueOnPc = vm.state.value.queue
-        rule.onAllNodesWithContentDescription("Quitar")[0].performClick()
+        // No buttons on the rows: not even a «⋮».
+        assertEquals(0, rule.onAllNodesWithContentDescription("Más opciones del mensaje en cola").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithContentDescription("Quitar de la cola").fetchSemanticsNodes().size)
+        // A tap opens the sheet: «Subir» and «Bajar» sit with «Editar» and «Quitar».
+        rule.onNodeWithText("Sube la versión").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").assertIsDisplayed()
+        rule.onNodeWithText("Bajar").assertIsNotEnabled()
+        rule.onNodeWithText("Subir").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("edit 2 - false up"))
+        // A long press opens the same sheet.
+        rule.onNodeWithText("Documenta el cambio").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Quitar de la cola").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("edit 1 - true -"))
+    }
+
+    @Test fun editingAQueuedMessageHappensInTheBoxAndSavesOrCancels() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        val vm = screen(b)
+        b.infoOnPc = sessionInfo(status = "running")
+        b.events.tryEmit(queueEvent("Documenta el cambio", "Sube la versión"))
+        rule.waitForIdle()
+        b.queueOnPc = vm.state.value.queue
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editando un mensaje de la cola").assertIsDisplayed()
+        rule.onNodeWithText("Editando este mensaje de la cola").assertIsDisplayed()
+        rule.onNode(hasSetTextAction()).assertTextContains("Documenta el cambio")
+        rule.onNode(hasSetTextAction()).performTextReplacement("Documenta y sube")
+        rule.onNodeWithText("Guardar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("edit 1 Documenta y sube false -"))
+        assertEquals(0, rule.onAllNodesWithText("Editando un mensaje de la cola").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithText("Editando un mensaje de la cola").fetchSemanticsNodes().size)
+        assertEquals(1, b.calls.count { it.startsWith("edit") })
+    }
+
+    @Test fun theContextBarShowsThePercentAndForks() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNodeWithText("Contexto 58 %").assertIsDisplayed()
+        rule.onNodeWithText("Bifurcar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("fork"))
+    }
+
+    @Test fun whileWorkingTheContextBarOffersCompactingButNotYet() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.infoOnPc = sessionInfo(status = "running", agent = "claude")
+        screen(b)
+        rule.onNodeWithText("Compactar").assertIsDisplayed().assertIsNotEnabled()
+    }
+
+    @Test fun theSheetHasEverythingAndMoreOptionsHoldsTheRest() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNodeWithContentDescription("Más acciones del chat").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Chat con Codex").assertIsDisplayed()
+        for (t in listOf("Bifurcar desde aquí", "Compactar contexto", "Reanudar sesión", "Dar por terminado", "Parar")) rule.onNodeWithText(t).assertIsDisplayed()
+        rule.onNodeWithText("58 %").assertIsDisplayed()
+        rule.onNodeWithText("Acceso total, Usar mi móvil, secretos y terminal integrado: solo en el PC.").assertIsDisplayed()
+        // nothing to resume and nothing running: those two are drawn but off, and say why
+        rule.onNodeWithText("Reanudar sesión").assertIsNotEnabled()
+        rule.onNodeWithText("Parar").assertIsNotEnabled()
+        assertEquals(0, rule.onAllNodesWithText("Renombrar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Más opciones").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Renombrar").assertExists()
+        rule.onNodeWithText("GPT-5.5").assertExists()
+        rule.onNodeWithText("Archivar").performScrollTo().performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("archive"))
+    }
+
+    @Test fun compactingAsksFirst() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNodeWithContentDescription("Más acciones del chat").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Compactar contexto").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("¿Compactar el contexto?").assertIsDisplayed()
+        assertFalse(b.calls.contains("compact"))
+        rule.onNodeWithText("Compactar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("compact"))
+    }
+
+    @Test fun aStoppedSessionHasItsCardWithResume() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.infoOnPc = sessionInfo(status = "interrupted")
+        screen(b)
+        rule.onNodeWithText("Sesión parada").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Escribe para reanudar…").assertExists()
+        rule.onNodeWithText("Bifurcar desde aquí").assertIsDisplayed()
+        rule.onNodeWithText("Reanudar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("resume"))
+    }
+
+    @Test fun aLongPressOnAMessageOffersForkingFromThere() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("Este mensaje").assertIsDisplayed()
+        rule.onNodeWithText("Bifurcar desde aquí").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.containsAll(listOf("rewindInfo 1", "fork from 1")))
+    }
+
+    @Test fun whenThePcCannotForkThereItSaysWhy() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.forkInfoOnPc = Result.success(ForkInfo(false, "El chat está trabajando"))
+        screen(b)
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").performTouchInput { longClick() }
+        rule.waitForIdle()
+        rule.onNodeWithText("El chat está trabajando").assertIsDisplayed()
+        rule.onNodeWithText("Bifurcar desde aquí").assertIsNotEnabled()
+        assertFalse(b.calls.any { it.startsWith("fork") })
+    }
+
+    @Test fun anOlderPcHasNoForkFromAMessage() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.rewindAvailable = false
+        screen(b)
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").performTouchInput { longClick() }
+        rule.waitForIdle()
+        assertEquals(0, rule.onAllNodesWithText("Este mensaje").fetchSemanticsNodes().size)
+    }
+
+    @Test fun aMessageFromThePcHasTwoTicksAndTheOneJustSentOne() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        val vm = screen(b)
+        rule.onAllNodesWithContentDescription("Guardado en el PC", substring = true)[0].assertExists()
+        vm.send("Hazlo"); rule.waitForIdle()
+        b.loadError = dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Timeout)
+        b.outbox.value = emptyList(); rule.waitForIdle()
+        rule.onNodeWithContentDescription("Enviado", substring = true).assertExists()
+    }
+
+    @Test fun withoutALinkTheBandCountsDownAndTheThreadStaysReadable() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        b.goOffline()
+        screen(b)
+        rule.onNodeWithText("Sin conexión con tu PC", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Pon un límite de 3 intentos al cobro y pasa los tests.").assertIsDisplayed()
+    }
+
+    @Test fun theBoxShowsThePermissionAndADisabledMicrophone() {
+        screen(FakeDirectChatBackend(thread.take(4)))
+        rule.onNodeWithContentDescription("Permisos del agente: Editar archivos").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsNotEnabled()
     }
 
     @Test fun whileWorkingTheComposerOffersStopThenCorrectOrQueue() {
@@ -140,6 +316,45 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Voy a migrar").assertIsDisplayed()
         b.events.tryEmit(LinkEvent("session:removed", json("""{"id":"s1"}""")))
         rule.waitForIdle()
-        rule.onNodeWithText("Este chat se borró en el PC").assertIsDisplayed()
+        rule.onNodeWithText("Este chat ya no existe").assertIsDisplayed()
+    }
+
+    @Test fun slashCompactAsksTheSameQuestionAsTheMenuBeforeCompacting() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        screen(b)
+        rule.onNode(hasSetTextAction()).performTextInput("/")
+        rule.onNodeWithText("/compact").assertIsDisplayed()
+        rule.onNodeWithText("/compact").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("¿Compactar el contexto?").assertIsDisplayed()
+        assertFalse(b.calls.contains("compact"))
+        rule.onNodeWithText("Compactar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("compact"))
+    }
+
+    @Test fun whatWasWrittenSurvivesEditingAQueuedMessage() {
+        val b = FakeDirectChatBackend(thread.take(4))
+        val vm = screen(b)
+        b.infoOnPc = sessionInfo(status = "running")
+        b.events.tryEmit(queueEvent("Documenta el cambio", "Sube la versión"))
+        rule.waitForIdle()
+        b.queueOnPc = vm.state.value.queue
+        rule.onNode(hasSetTextAction()).performTextInput("borrador a medias")
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction()).assertTextContains("Documenta el cambio")
+        rule.onNodeWithText("Cancelar").performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction()).assertTextContains("borrador a medias")
+        rule.onNodeWithText("Documenta el cambio").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Editar").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Guardar").performClick()
+        rule.waitForIdle()
+        rule.onNode(hasSetTextAction()).assertTextContains("borrador a medias")
     }
 }

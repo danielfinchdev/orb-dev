@@ -12,8 +12,8 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 
-fun project(name: String, category: String? = "web", active: Boolean = false, open: Int = 0, icon: String? = null) =
-    ProjectItem(name, category, active, open, icon)
+fun project(name: String, category: String? = "web", active: Boolean = false, open: Int = 0, approve: Int = 0, git: ProjectGit? = null) =
+    ProjectItem(name, category, active, open, approve, git)
 
 class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: List<FinishedProject> = emptyList()) : ProjectsBackend {
     val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Online("http://pc", "PC", PcVersions(1, 1, "3.8.4")))
@@ -30,9 +30,26 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     val savedFlow = MutableStateFlow(ProjectsData.Empty)
     override fun saved() = savedFlow
 
+    /** What `projects.list({withGit:true})` answers, by project name; an older PC does not read git at all. */
+    var gitReadable = true
+    var gitResult: Result<Map<String, ProjectGit>> = Result.success(emptyMap())
+    var gitGate: CompletableDeferred<Unit>? = null
+    var gitCount = 0
+    override val readsGit get() = gitReadable
+
+    override suspend fun gitLines(): Result<Map<String, ProjectGit>> {
+        gitCount++
+        gitGate?.await()
+        return gitResult
+    }
+
     override fun available(m: ApiMethod) = m.name !in unavailable
 
-    override suspend fun list(): Result<ProjectsData> { listCount++; return listResult ?: Result.success(data) }
+    /** Holds the list back, to look at the loading state. */
+    var listGate: CompletableDeferred<Unit>? = null
+    var detailGate: CompletableDeferred<Unit>? = null
+
+    override suspend fun list(): Result<ProjectsData> { listCount++; listGate?.await(); return listResult ?: Result.success(data) }
 
     private suspend fun act(name: String): Result<Unit> {
         calls += name
@@ -43,11 +60,12 @@ class FakeProjectsBackend(initial: List<ProjectItem> = emptyList(), finished: Li
     override suspend fun create(name: String, category: String?, notes: String) = act("create $name|$category|$notes")
     override suspend fun setActive(name: String?) = act("active $name")
     override suspend fun reopen(key: String) = act("reopen $key")
+    override suspend fun createTask(project: String, title: String, description: String) = act("task $project|$title|$description")
 
     var detailResult: Result<ProjectDetailData> = Result.success(ProjectDetailData(emptyList(), emptyList(), null))
     var logResult: Result<String> = Result.success("")
 
-    override suspend fun detail(name: String) = detailResult
+    override suspend fun detail(name: String): Result<ProjectDetailData> { detailGate?.await(); return detailResult }
     override suspend fun review(name: String): Result<Long?> = act("review $name").map { 41L }
     override suspend fun securityReview(name: String): Result<Long?> = act("security $name").map { null }
     override suspend fun finish(name: String) = act("finish $name")

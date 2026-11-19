@@ -7,19 +7,23 @@ import dev.orb.app.link.net.UpdateSide
 import dev.orb.app.link.payload.LinkErrors
 
 /** Plain Spanish for what linking can fail with. The PC's own words are shown only when nothing better is known. */
-fun pairErrorText(e: PairError): String = when (e) {
+/** [via] tells a mistyped short code (the PC cannot tell it from a spent one) from a QR or link that really expired. */
+fun pairErrorText(e: PairError, via: dev.orb.app.link.payload.LinkVia? = null): String = when (e) {
     is PairError.Offline ->
         if (e.overLan) "No se pudo llegar al PC. Comprueba que está encendido, que Orb está abierto y que el cortafuegos permite la conexión."
         else "No se pudo llegar al PC. Comprueba que está encendido y que Orb está abierto."
     PairError.BadAnswer -> "La respuesta no es la del PC de este código. No se ha enlazado."
     is PairError.Refused -> when {
         e.update != null || e.status == 426 -> "Hay que actualizar la app para enlazar con este PC."
-        e.reason == "password" -> e.left?.let { "Contraseña incorrecta. Te quedan $it ${if (it == 1) "intento" else "intentos"}." } ?: "Contraseña incorrecta."
+        e.reason == "password" -> e.left?.let { "No es la contraseña. Te quedan $it ${if (it == 1) "intento" else "intentos"} con este código." } ?: "No es la contraseña."
         e.reason == "newCode" -> "Demasiados intentos: el código ya no vale. Genera uno nuevo en el PC."
         e.reason == "wait" -> "Espera un momento antes de volver a probar."
         e.reason == "noMaster" || e.reason == "noVerifier" -> "El PC no tiene contraseña maestra para enlazar. Créala en Orb y vuelve a probar."
         e.reason == "tries" -> "Demasiados intentos. Espera un rato o desbloquea el PC."
-        e.reason == "expired" || e.status == 410 || e.status == 404 -> "El código ha caducado. Genera uno nuevo en el PC."
+        e.reason == null && e.status == 401 && via == dev.orb.app.link.payload.LinkVia.CODE -> "El código no coincide o ya no vale. Compruébalo o genera uno nuevo en el PC."
+        e.reason == null && e.status == 401 -> "Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC."
+        e.reason == null && e.status == 429 -> "Demasiados intentos desde este móvil. Espera unos minutos."
+        e.reason == null && (e.status == 404 || e.status == 410) -> "Esa dirección no responde como un Orb. Revisa la dirección del PC."
         else -> e.error
     }
     PairError.KdfTooHeavy -> "El PC pide más memoria de la que tiene este móvil para comprobar la contraseña."
@@ -32,7 +36,7 @@ fun payloadErrorText(key: String): String = when (key) {
     LinkErrors.BAD_ADDRESS -> "La dirección no es válida."
     LinkErrors.BAD_QR -> "El enlace no es válido."
     LinkErrors.OLD_QR -> "El código es demasiado antiguo. Genera uno nuevo en el PC."
-    LinkErrors.INSECURE -> "Solo se permite http con direcciones de tu red local o de Tailscale."
+    LinkErrors.INSECURE -> "Esa dirección no es privada: usa el Wi-Fi de casa o Tailscale."
     LinkErrors.NO_CODE -> "Escribe el código de enlace (6 caracteres o más) o pega el enlace."
     else -> "Revisa los datos del enlace."
 }
@@ -63,16 +67,10 @@ fun connectionText(s: ConnectionState): String = when (s) {
 object AppearanceTexts {
     const val TITLE = "Apariencia"
     const val BUTTON = "Apariencia"
-    const val FOLLOW_PC = "Igual que el PC"
-    const val ORBITA = "Órbita"
-    const val CRISTAL = "Órbita – Cristal"
-    const val GRAFITO = "Grafito"
-    const val DYNAMIC = "Colores del fondo"
-    const val DYNAMIC_HINT = "Usa los colores de tu fondo de pantalla"
-    const val DYNAMIC_UNAVAILABLE = "Necesita Android 12 o más reciente"
+    const val MODE_GROUP = "Modo"
+    const val PALETTE_GROUP = "Paleta"
+    const val SYSTEM = "Según el sistema"
     const val LIGHT = "Claro"
     const val DARK = "Oscuro"
-    const val SYSTEM = "Sistema"
-    const val THEME_GROUP = "Tema"
-    const val MODE_GROUP = "Modo"
+    fun paletteDescription(name: String) = "Paleta $name"
 }

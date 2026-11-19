@@ -25,6 +25,8 @@ data class NotesState(
     val online: Boolean = false,
     val refreshing: Boolean = false,
     val markingAll: Boolean = false,
+    /** The PC keeps the list of what it sent: an empty list then really means nothing happened. */
+    val pcKeepsList: Boolean = false,
 )
 
 class NotesViewModel(private val backend: NotesBackend) : ViewModel() {
@@ -33,9 +35,13 @@ class NotesViewModel(private val backend: NotesBackend) : ViewModel() {
     private val ui = MutableStateFlow(Ui())
     private val _messages = Channel<String>(Channel.BUFFERED)
     val messages = _messages.receiveAsFlow()
+    private val _dismissed = Channel<String>(Channel.BUFFERED)
+
+    /** A notice was swiped away: the screen offers «Deshacer» with its id. */
+    val dismissOffers = _dismissed.receiveAsFlow()
 
     val state: StateFlow<NotesState> = combine(backend.notices, ui, backend.connection) { rows, u, c ->
-        NotesState(rows, rows.count { it.unread }, c is ConnectionState.Online, u.refreshing, u.markingAll)
+        NotesState(rows, rows.count { it.unread }, c is ConnectionState.Online, u.refreshing, u.markingAll, backend.pcKeepsList)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), NotesState())
 
     init {
@@ -55,6 +61,15 @@ class NotesViewModel(private val backend: NotesBackend) : ViewModel() {
 
     /** Tapping a notice reads it on the phone; the PC's bell is only told by «Marcar todo leído». */
     fun open(n: Notice) = backend.markReadLocal(n.id)
+
+    /** Swiping a notice away (or its accessibility action): it leaves the list on this phone and can be brought back. */
+    fun dismiss(n: Notice): Boolean {
+        if (!backend.dismiss(n.id)) return false
+        _dismissed.trySend(n.id)
+        return true
+    }
+
+    fun undoDismiss(id: String) = backend.undoDismiss(id)
 
     fun markAllRead() {
         if (ui.value.markingAll || state.value.unread == 0) return

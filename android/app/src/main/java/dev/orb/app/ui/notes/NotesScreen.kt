@@ -1,30 +1,20 @@
 package dev.orb.app.ui.notes
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,91 +22,137 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.chats.ChatTime
-import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
-import dev.orb.app.ui.shell.ScreenBar
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbEmpty
+import dev.orb.app.ui.kit.OrbGroupHeader
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbNote
+import dev.orb.app.ui.kit.OrbRow
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSubtitle
+import dev.orb.app.ui.kit.OrbSwipeAction
+import dev.orb.app.ui.kit.OrbSwipeRow
+import dev.orb.app.ui.kit.OrbTopBar
+import dev.orb.app.ui.kit.OrbUnread
 import dev.orb.app.ui.offline.OfflineStrip
-import dev.orb.app.ui.theme.OrbTheme
+import java.util.TimeZone
 
-/** The bell of a top bar: it shows how many notices are unread and opens the center. */
-@Composable
-fun NotesBell(unread: Int, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    IconButton(onClick = onClick, modifier = modifier.semantics { contentDescription = NotesTexts.unreadDescription(unread).takeIf { unread > 0 } ?: NotesTexts.BELL }) {
-        if (unread > 0) {
-            BadgedBox(badge = { Badge { Text(if (unread > 99) "99+" else unread.toString()) } }) { Icon(OrbIcons.Bell, null, tint = OrbTheme.colors.text2) }
-        } else Icon(OrbIcons.Bell, null, tint = OrbTheme.colors.text2)
+/** One line of the list: a heading of a day or a notice. */
+private sealed interface Line {
+    data class Heading(val day: NoticeDay) : Line
+    data class Item(val row: NoticeRow) : Line
+}
+
+private fun lines(rows: List<NoticeRow>, now: Long, tz: TimeZone): List<Line> {
+    val out = ArrayList<Line>()
+    var last: NoticeDay? = null
+    for (r in rows) {
+        val day = NoticeDays.of(r.notice.at, now, tz)
+        if (day != last) { out += Line.Heading(day); last = day }
+        out += Line.Item(r)
     }
+    return out
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NotesScreen(
     vm: NotesViewModel, onBack: () -> Unit, onOpen: (NoticeTarget) -> Unit, modifier: Modifier = Modifier,
-    nowMs: () -> Long = System::currentTimeMillis,
+    nowMs: () -> Long = System::currentTimeMillis, zone: TimeZone = TimeZone.getDefault(),
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    LaunchedEffect(vm) {
+        vm.dismissOffers.collect { id ->
+            if (snackbar.showSnackbar(NotesTexts.DISMISSED, actionLabel = NotesTexts.UNDO, duration = SnackbarDuration.Long) == SnackbarResult.ActionPerformed) vm.undoDismiss(id)
+        }
+    }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
+    val now = remember(state.rows) { nowMs() }
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            ScreenBar(NotesTexts.TITLE, onBack, NotesTexts.BACK) {
-                TextButton(onClick = vm::markAllRead, enabled = state.unread > 0 && !state.markingAll) { Text(NotesTexts.MARK_ALL) }
-            }
-            if (!state.online) {
-                OfflineStrip()
-            }
+            OrbTopBar(
+                NotesTexts.TITLE, sub = NotesTexts.unreadLine(state.unread).takeIf { state.unread > 0 },
+                leading = { OrbIconButton(OrbIcons.ArrowLeft, NotesTexts.BACK, onBack) },
+                actions = {
+                    OrbButton(
+                        NotesTexts.MARK_ALL, vm::markAllRead, kind = OrbButtonKind.Ghost, small = true,
+                        enabled = state.unread > 0 && !state.markingAll,
+                    )
+                },
+            )
+            if (!state.online) OfflineStrip(asBanner = true)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
-                if (state.rows.isEmpty()) Message(NotesTexts.EMPTY, NotesTexts.EMPTY_HINT) else LazyColumn(
-                    Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    items(state.rows, key = { it.notice.id }) { row ->
-                        NoticeItem(row, nowMs()) {
-                            vm.open(row.notice)
-                            row.notice.target?.let(onOpen)
+                if (state.rows.isEmpty()) {
+                    // Under the header, as the mockup draws it, not in the middle of the screen.
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.CenterHorizontally) {
+                        if (state.pcKeepsList) OrbEmpty(NotesTexts.EMPTY_CLEAR, text = NotesTexts.EMPTY_CLEAR_HINT, icon = OrbIcons.Bell)
+                        else OrbEmpty(NotesTexts.EMPTY, text = NotesTexts.EMPTY_HINT, icon = OrbIcons.Bell)
+                    }
+                } else {
+                    val all = remember(state.rows, now) { lines(state.rows, now, zone) }
+                    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+                        items(all, key = { if (it is Line.Heading) "day:${it.day}" else (it as Line.Item).row.notice.id }) { line ->
+                            when (line) {
+                                is Line.Heading -> OrbGroupHeader(NotesTexts.day(line.day))
+                                is Line.Item -> NoticeItem(line.row, now, onDismiss = { vm.dismiss(line.row.notice) }) {
+                                    vm.open(line.row.notice)
+                                    line.row.notice.target?.let(onOpen)
+                                }
+                            }
                         }
+                        item(key = "hint") { OrbNote(NotesTexts.FOOTNOTE, Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                     }
                 }
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 }
 
+/** The mark of a row: a small line icon by what the notice is about. */
+private fun iconOf(kind: String): ImageVector = when (kind) {
+    NoticeKinds.TASK -> OrbIcons.Hand
+    NoticeKinds.APPROVAL -> OrbIcons.ShieldCheck
+    NoticeKinds.DONE -> OrbIcons.CircleCheck
+    NoticeKinds.HELD -> OrbIcons.ShieldAlert
+    NoticeKinds.UPDATE -> OrbIcons.Download
+    NoticeKinds.LIMIT -> OrbIcons.Gauge
+    else -> OrbIcons.Bot
+}
+
 @Composable
-private fun NoticeItem(row: NoticeRow, now: Long, onClick: () -> Unit) {
+private fun NoticeItem(row: NoticeRow, now: Long, onDismiss: () -> Unit, onClick: () -> Unit) {
     val n = row.notice
-    Surface(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick),
-        shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow,
-    ) {
-        Row(Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-            // The dot of an unread notice; a read one keeps the space so the titles line up.
-            Box(Modifier.padding(top = 6.dp).size(8.dp)) {
-                if (row.unread) Surface(Modifier.size(8.dp), shape = CircleShape, color = MaterialTheme.colorScheme.primary) {}
-            }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        n.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall,
-                        fontWeight = if (row.unread) FontWeight.Bold else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    )
-                    Text(ChatTime.short(ChatTime.iso(n.at), now), style = MaterialTheme.typography.labelSmall, color = OrbTheme.colors.text3)
-                }
-                if (n.body.isNotBlank()) Text(n.body, style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2, maxLines = 3, overflow = TextOverflow.Ellipsis)
-                Text(NotesTexts.kind(n.kind), style = MaterialTheme.typography.labelSmall, color = OrbTheme.colors.text3)
-            }
-        }
+    val (title, sub) = NotesTexts.lines(n)
+    val item: @Composable () -> Unit = {
+        OrbRow(
+            title, Modifier.semantics(mergeDescendants = true) { if (row.unread) stateDescription = NotesTexts.UNREAD },
+            lead = { Icon(iconOf(n.kind), null, Modifier.size(16.dp), tint = OrbKit.mutedForeground) },
+            subtitle = sub?.let { s -> { OrbSubtitle(s) } },
+            time = ChatTime.short(ChatTime.iso(n.at), now),
+            badge = if (row.unread) ({ OrbUnread(1, soft = true) }) else null,
+            unread = row.unread, onClick = onClick, centerBadge = true,
+        )
     }
+    // A permission request that still waits is the PC's own state: it leaves when it is answered, never by a swipe.
+    if (n.kind == NoticeKinds.APPROVAL) item() else OrbSwipeRow(
+        end = OrbSwipeAction(
+            NotesTexts.DISMISS, OrbIcons.BellOff, onTrigger = { onDismiss(); true }, leaves = true,
+            container = { OrbKit.muted }, content = { OrbKit.foreground },
+        ),
+    ) { item() }
 }

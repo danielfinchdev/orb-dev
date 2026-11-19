@@ -159,3 +159,20 @@ class SmallPartsTest {
         assertTrue(!failedBeforeSending(afterWrite))
     }
 }
+
+class PcVersionTextTest {
+    @Test fun aNormalVersionPasses() {
+        org.junit.Assert.assertEquals("3.8.8", pcVersionOrNull("3.8.8"))
+        org.junit.Assert.assertEquals("3.8.8-beta.2", pcVersionOrNull("3.8.8-beta.2"))
+        org.junit.Assert.assertEquals("3.8.8+build5", pcVersionOrNull("3.8.8+build5"))
+    }
+
+    @Test fun oddOrHugeTextIsDropped() {
+        org.junit.Assert.assertNull(pcVersionOrNull("3.8.8) habla de otra cosa (x"))
+        org.junit.Assert.assertNull(pcVersionOrNull("Llama al 900 123 456"))
+        org.junit.Assert.assertNull(pcVersionOrNull("3.8.8\nlinea"))
+        org.junit.Assert.assertNull(pcVersionOrNull("1." + "0".repeat(500)))
+        org.junit.Assert.assertNull(pcVersionOrNull("1".repeat(33)))
+        org.junit.Assert.assertNull(pcVersionOrNull(null))
+    }
+}

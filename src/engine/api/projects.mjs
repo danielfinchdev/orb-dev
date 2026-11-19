@@ -9,6 +9,7 @@ import { oneLine } from '../../shared/text.mjs';
 import { adbStatus, ensureAdb } from '../host/android.mjs';
 import { projectIcon, setProjectIcon, clearProjectIcon, renameProjectIcon } from '../project-icons.mjs';
 import { git } from '../../platform/git.mjs';
+import { projectStatuses } from '../host/project-status.mjs';
 import { fail, str, oneOf } from './common.mjs';
 import { lazy } from './common.mjs';
 
@@ -39,12 +40,17 @@ export function projectMethods({ emit, realHome, insideHome, project, holding, c
     || board.one("SELECT COUNT(*) AS n FROM tasks WHERE status IN ('queued', 'awaiting_approval', 'running')").n > 0
     || board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running'").n > 0;
   const methods = {
-    'projects.list': () => {
+    // withGit: true adds each project's `branch` (string, or null when detached) and `changes` (files git reports as modified,
+    // staged or untracked, a number only) from one bounded git call per project; projects without a repository or a folder, or
+    // whose read timed out, come without them. Without it the list is read from the board alone, as always.
+    'projects.list': ({ withGit } = {}) => {
       syncSoon();
       const active = board.activeName();
       // the open tasks of every project in one query (not one per project).
       const open = new Map(board.all("SELECT project, COUNT(*) AS n FROM tasks WHERE status IN ('queued', 'awaiting_approval', 'running') GROUP BY project").map((r) => [r.project, r.n]));
-      return board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name, open: open.get(p.name) ?? 0 }));
+      const rows = board.projects().map((p) => ({ ...p, inHome: insideHome(p.path), category: categoryOf(realHome, p.path), active: active === p.name, open: open.get(p.name) ?? 0 }));
+      if (withGit !== true) return rows;
+      return projectStatuses(rows).then((st) => rows.map((p) => (st.has(p.name) ? { ...p, ...st.get(p.name) } : p)));
     },
     // category multi (or several platforms) = one multiplatform project with a folder per platform.
     // template: false = only the empty folder (no git repository, no first files); without it, as always.

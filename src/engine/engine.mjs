@@ -377,7 +377,7 @@ async function run(board, { home, version, restored, repair }) {
     autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
   };
   const orchestrator = new Orchestrator(board, { emit, log, title });
-  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
+  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit, announce: (fact) => remote?.announce(fact) });
   const { createRemote } = await import('./transport/remote.mjs');
   const remoteRef = { current: null };
   // Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
@@ -423,6 +423,9 @@ async function run(board, { home, version, restored, repair }) {
   syncProjects(board);
   // the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
+  // an account that leaves its usage limit tells the phones once (src/engine/transport/notes-center.mjs)
+  const { createLimitWatch } = await import('./transport/notes-center.mjs');
+  const limitWatch = createLimitWatch({ board, announce: (fact) => remote?.announce(fact) });
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;
@@ -430,6 +433,7 @@ async function run(board, { home, version, restored, repair }) {
       // Folders created or deleted by hand in the assistant's folder show up in the app within a few seconds.
       if (Date.now() - lastSync > 5000) {
         lastSync = Date.now();
+        limitWatch.tick(); // two reads per account: the pace of the folder sync, not of the 1.5 s loop
         // core (or its settings or database) gone while Orb runs: everything stops and the engine ends; the app
         // starts it again and the start puts back what is missing from the newest backup (or shows why it cannot).
         if (!coreHealth(home).ok) { coreLost(home, board); return; }

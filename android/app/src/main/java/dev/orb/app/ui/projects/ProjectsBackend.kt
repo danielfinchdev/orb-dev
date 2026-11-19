@@ -36,8 +36,14 @@ interface ProjectsBackend {
     /** The list as last saved on the phone; shown first and while the PC cannot be reached. */
     fun saved(): kotlinx.coroutines.flow.Flow<ProjectsData> = kotlinx.coroutines.flow.emptyFlow()
 
-    /** The listed projects with their icons, and the finished ones when the PC can list them. */
+    /** The listed projects (with the tasks waiting for an OK, when the task list can be read) and the finished ones when the PC can list them. */
     suspend fun list(): Result<ProjectsData>
+
+    /** Whether the PC answers `projects.list({withGit:true})`; an older one would only repeat the plain list. */
+    val readsGit: Boolean get() = false
+
+    /** Each git project's branch and changed files, by name; asked for after the plain list so the cards never wait for git. */
+    suspend fun gitLines(): Result<Map<String, ProjectGit>> = Result.success(emptyMap())
 
     /** [category] and [notes] are optional; the PC picks the folder when there is no category. */
     suspend fun create(name: String, category: String?, notes: String): Result<Unit>
@@ -52,6 +58,9 @@ interface ProjectsBackend {
     /** `projects.review` / `projects.securityReview`: both create a read-only task and answer its id when the PC says it. */
     suspend fun review(name: String): Result<Long?>
     suspend fun securityReview(name: String): Result<Long?>
+
+    /** `tasks.create` with the project fixed; the PC decides who runs it. */
+    suspend fun createTask(project: String, title: String, description: String): Result<Unit>
 
     /** `projects.finish`: the project leaves the list and moves to «Terminados». */
     suspend fun finish(name: String): Result<Unit>
@@ -82,7 +91,6 @@ class RuntimeProjectsBackend(
 
     private companion object {
         const val SNAP_LIST = "projects.list"
-        const val SNAP_ICONS = "projects.icons"
         const val SNAP_FINISHED = "projects.finished"
     }
 
@@ -90,29 +98,33 @@ class RuntimeProjectsBackend(
         // The database opens in the background; until then there is nothing to show.
         val dao = container?.cacheDao() ?: return@flow
         emitAll(
-            kotlinx.coroutines.flow.combine(dao.observeSnapshot(SNAP_LIST), dao.observeSnapshot(SNAP_ICONS), dao.observeSnapshot(SNAP_FINISHED)) { list, icons, finished ->
+            kotlinx.coroutines.flow.combine(dao.observeSnapshot(SNAP_LIST), dao.observeSnapshot(SNAP_FINISHED)) { list, finished ->
                 fun parse(json: String?) = json?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it) }.getOrNull() }
                 val rows = parse(list?.json) as? JsonArray ?: return@combine ProjectsData.Empty
-                ProjectsData(ProjectsParser.list(rows, parse(icons?.json)), ProjectsParser.finished(parse(finished?.json)))
+                ProjectsData(ProjectsParser.list(rows), ProjectsParser.finished(parse(finished?.json)))
             },
         )
     }
 
     override suspend fun list(): Result<ProjectsData> = coroutineScope {
         val list = async { api.projects.list() }
-        val icons = async { if (api.available(ApiMethods.PROJECTS_ICONS)) api.projects.icons().getOrNull() else null }
+        // The task list only tells which projects wait for an OK; without it the cards still say how many tasks are open.
+        val tasks = async { api.tasks.list().getOrNull()?.let { el -> if (el is JsonArray) TasksParser.list(el) else null } }
         val finished = async { if (api.available(ApiMethods.PROJECTS_FINISHED)) api.projects.finished().getOrNull() else null }
         val answer = list.await().getOrElse { return@coroutineScope Result.failure(it) }
         if (answer !is JsonArray) return@coroutineScope Result.failure(LinkException(LinkError.BadAnswer))
-        val iconsAnswer = icons.await()
         val finishedAnswer = finished.await()
         container?.cacheSync()?.let { sync ->
             sync.applySnapshot(SNAP_LIST, answer)
-            if (iconsAnswer != null) sync.applySnapshot(SNAP_ICONS, iconsAnswer)
             if (finishedAnswer != null) sync.applySnapshot(SNAP_FINISHED, finishedAnswer)
         }
-        Result.success(ProjectsData(ProjectsParser.list(answer, iconsAnswer), ProjectsParser.finished(finishedAnswer)))
+        Result.success(ProjectsData(ProjectsParser.list(answer, tasks.await()?.let(ProjectsParser::approvals).orEmpty()), ProjectsParser.finished(finishedAnswer)))
     }
+
+    override val readsGit get() = api.knowsSafetyGuards
+
+    override suspend fun gitLines(): Result<Map<String, ProjectGit>> =
+        api.projects.list(buildJsonObject { put("withGit", true) }).map { ProjectsParser.git(it) }
 
     override suspend fun create(name: String, category: String?, notes: String) = api.projects.create(
         buildJsonObject {
@@ -125,8 +137,13 @@ class RuntimeProjectsBackend(
     override suspend fun setActive(name: String?) = api.projects.setActive(buildJsonObject { put("name", name ?: "") }).unit()
     override suspend fun reopen(key: String) = api.projects.reopen(buildJsonObject { put("key", key) }).unit()
 
+    override suspend fun createTask(project: String, title: String, description: String) =
+        api.tasksCreate(buildJsonObject { put("project", project); put("title", title); put("description", description) }).unit()
+
     override suspend fun detail(name: String): Result<ProjectDetailData> = coroutineScope {
         val tasks = async { api.tasks.list() }
+        val listed = async { api.projects.list().getOrNull() }
+        val finished = async { if (api.available(ApiMethods.PROJECTS_FINISHED)) api.projects.finished().getOrNull() else null }
         val info = async { if (api.available(ApiMethods.PROJECTS_INFO)) api.projects.info(byName(name)).getOrNull() else null }
         val branch = async { if (api.available(ApiMethods.PROJECTS_BRANCH)) api.projects.branch(byName(name)).getOrNull() else null }
         val rows = tasks.await().getOrElse { return@coroutineScope Result.failure(it) }
@@ -134,7 +151,10 @@ class RuntimeProjectsBackend(
         val mine = TasksParser.list(rows).filter { it.project.equals(name, ignoreCase = true) }
         val inbox = chats?.inbox()?.firstOrNull()?.rows.orEmpty().filter { it.project.equals(name, ignoreCase = true) }
         val git = ProjectInfoParser.info(info.await()) ?: ProjectInfoParser.branch(branch.await())
-        Result.success(ProjectDetailData(inbox, mine, git))
+        val active = ProjectsParser.list(listed.await()).firstOrNull { it.name.equals(name, ignoreCase = true) }
+        // A project that is not in the list but is among the finished ones is shown as finished, with the key that reopens it.
+        val gone = if (active == null) ProjectsParser.finished(finished.await()).firstOrNull { it.name.equals(name, ignoreCase = true) } else null
+        Result.success(ProjectDetailData(inbox, mine, git, active?.category ?: gone?.category, gone?.key, gone?.at))
     }
 
     private fun byName(name: String) = buildJsonObject { put("name", name) }

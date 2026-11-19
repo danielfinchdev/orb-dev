@@ -24,8 +24,10 @@ export function itemOfConversation(board, conversation) {
 export const conversationOf = (board, kind, id) => (kind === 'conversation' ? board.one('SELECT id FROM conversations WHERE id = ? AND bot_id IS NULL AND group_id IS NULL', Number(id))?.id ?? null : null);
 
 // ---- the marks (a chat without a row: not pinned, no section, not muted, nothing read but the starting point)
-const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, lastRead: 0, snoozedUntil: null, markedUnread: false };
-const view = (r) => (r ? { pinned: Boolean(r.pinned), pinOrder: r.pin_order ?? null, section: r.section_id ?? null, muted: Boolean(r.muted), lastRead: Number(r.last_read) || 0, snoozedUntil: r.snoozed_until ?? null, markedUnread: Boolean(r.marked_unread) } : { ...DEFAULT });
+const DEFAULT = { pinned: false, pinOrder: null, section: null, muted: false, mutedUntil: null, lastRead: 0, snoozedUntil: null, markedUnread: false };
+// A mute with a date stops counting once it has passed: nothing has to clear it, every reader asks this.
+const muteActive = (r, now = Date.now()) => Boolean(r.muted) && (r.muted_until == null || Date.parse(r.muted_until) > now);
+const view = (r) => (r ? { pinned: Boolean(r.pinned), pinOrder: r.pin_order ?? null, section: r.section_id ?? null, muted: muteActive(r), mutedUntil: muteActive(r) ? r.muted_until ?? null : null, lastRead: Number(r.last_read) || 0, snoozedUntil: r.snoozed_until ?? null, markedUnread: Boolean(r.marked_unread) } : { ...DEFAULT });
 export function marks(board) {
   const out = new Map();
   if (!has(board, 'inbox_items')) return out;
@@ -35,7 +37,7 @@ export function marks(board) {
 // No row: the marks of a chat nobody marked.
 export const noMark = () => ({ ...DEFAULT });
 export const mark = (board, kind, id) => view(board.one('SELECT * FROM inbox_items WHERE person_id = ? AND kind = ? AND item_id = ?', ME, kind, String(id)));
-const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', lastRead: 'last_read', snoozedUntil: 'snoozed_until', markedUnread: 'marked_unread' };
+const COLS = { pinned: 'pinned', pinOrder: 'pin_order', section: 'section_id', muted: 'muted', mutedUntil: 'muted_until', lastRead: 'last_read', snoozedUntil: 'snoozed_until', markedUnread: 'marked_unread' };
 export function setMark(board, kind, id, fields) {
   const keys = Object.keys(fields).filter((k) => COLS[k]);
   const val = (k) => (typeof fields[k] === 'boolean' ? Number(fields[k]) : fields[k] ?? null);
@@ -58,6 +60,16 @@ export function wakeSnoozed(board, now = new Date()) {
   const due = board.all('SELECT kind, item_id FROM inbox_items WHERE person_id = ? AND snoozed_until IS NOT NULL AND snoozed_until <= ?', ME, now.toISOString());
   if (due.length) board.run('UPDATE inbox_items SET snoozed_until = NULL WHERE person_id = ? AND snoozed_until IS NOT NULL AND snoozed_until <= ?', ME, now.toISOString());
   return due.map((r) => ({ kind: r.kind, id: r.item_id }));
+}
+
+// A mute whose end has passed is cleared in the table too, so no old date stays for an older version. Readers
+// still check the date themselves (muteActive). Returns how many marks were cleared.
+export function clearExpiredMutes(board, now = new Date()) {
+  if (!has(board, 'inbox_items')) return 0;
+  const iso = now.toISOString();
+  const n = board.one('SELECT COUNT(*) AS n FROM inbox_items WHERE muted_until IS NOT NULL AND muted_until <= ?', iso)?.n ?? 0;
+  if (n) board.run('UPDATE inbox_items SET muted = 0, muted_until = NULL WHERE muted_until IS NOT NULL AND muted_until <= ?', iso);
+  return n;
 }
 
 // ---- read state. Where the counting starts: the last line when the lists were first used (old chats are not all
@@ -96,7 +108,8 @@ export const withMarkedUnread = (count, m) => (m?.markedUnread ? Math.max(1, Num
 export function isMuted(board, conversation) {
   if (!has(board, 'inbox_items')) return false;
   const it = itemOfConversation(board, conversation);
-  return Boolean(it && board.one('SELECT muted FROM inbox_items WHERE person_id = ? AND kind = ? AND item_id = ?', ME, it.kind, it.id)?.muted);
+  const row = it && board.one('SELECT muted, muted_until FROM inbox_items WHERE person_id = ? AND kind = ? AND item_id = ?', ME, it.kind, it.id);
+  return Boolean(row && muteActive(row));
 }
 
 // ---- sections

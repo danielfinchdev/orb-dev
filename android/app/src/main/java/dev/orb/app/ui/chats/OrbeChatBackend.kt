@@ -5,6 +5,7 @@ import dev.orb.app.LinkRuntime
 import dev.orb.app.data.OutboxState
 import dev.orb.app.data.ThreadId
 import dev.orb.app.link.api.ApiMethod
+import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
@@ -26,8 +27,68 @@ import kotlinx.serialization.json.put
 /** What `app.state` says that matters to one chat. */
 data class PcSnapshot(val mode: String?, val chat: JsonObject?)
 
-/** The task behind an approval card, as the PC describes it, to show before the person agrees. */
-data class TaskDetail(val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>, val hash: String?, val model: String? = null)
+/**
+ * The task behind a card, as the PC describes it in one `tasks.get`: what the person sees before agreeing and the [hash] of
+ * exactly that, which goes back with the OK. The PC's fingerprint (`approval.mjs › contentHash`) covers the description, the
+ * `agent`, the model, the folder, the sensitivity tags, the reasoning, the fast flag, the mode, read-only and the Preguntar
+ * level; every one of those is a field here so the card can show what the hash covers and nothing less.
+ * [actions] are the ones the PC allows for it now (the same rule as the task's own screen).
+ */
+data class TaskDetail(
+    val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>,
+    val hash: String?, val model: String? = null,
+    /** `auto` / `preguntar`: how the task was created; with [approvalRequired] it tells whether Auto let it through. */
+    val autonomy: String? = null,
+    val approvalRequired: Boolean? = null,
+    val held: Boolean = false,
+    val accepted: Boolean = false,
+    val undone: Boolean = false,
+    val actions: Set<dev.orb.app.ui.tasks.TaskAction> = emptySet(),
+    /** The agent that reviewed the task (`tasks.get.review`), when one did. */
+    val reviewAgent: String? = null,
+    /** What the person last decided on the PC for this task: `approved` or `rejected` (from its history), else null. */
+    val decision: String? = null,
+    /** What the task will really do: the brief the agent gets. The hash covers it, the title is not covered. */
+    val description: String? = null,
+    val readonly: Boolean = false,
+    /** `carpeta` or `aislada`. */
+    val mode: String? = null,
+    val reasoning: String? = null,
+    val fast: Boolean = false,
+    /** What the person's own message asked for (`user_asked`): covered by the hash, and the card has no room to word it. */
+    val userAsked: List<String> = emptyList(),
+    /** The agent that runs it now (`assigned_to`), which may differ from the [agent] the OK is about. */
+    val runner: String? = null,
+    /** Why Orb stopped it, and the folder the PC has for it now, when the task is held for review. */
+    val heldReasons: String = "",
+    val heldFolder: String? = null,
+    /** `tasks.get.folderNow`: the folder the PC fingerprints (its current one); absent on a PC that does not say it. */
+    val folderNow: String? = null,
+    /** The folder now is not the one stored when the task was created (`folderMoved`); null on a PC that does not say. */
+    val folderMoved: Boolean? = null,
+    /** The folder is outside Orb's own folder, so the phone only gets its last name (`folderOutside`). */
+    val folderOutside: Boolean = false,
+    /** The description the phone got is not exactly the one the fingerprint covers (`descriptionCut`): paths of Orb's folder are shortened. */
+    val descriptionCut: Boolean = false,
+    /** The task's point of return as the PC names it now; it changes when the task runs again. Null: no point, or a PC that does not say. */
+    val checkpointId: String? = null,
+) {
+    /** The folder the OK is about: the one the hash covers when the PC says it, else the stored one. */
+    val folderShown: String? get() = folderNow?.takeIf { it.isNotBlank() } ?: project
+
+    /** The project moved since the task was created: [project] is the stored folder, [folderNow] the one that will be used. */
+    val folderChanged: Boolean get() = folderMoved ?: (!folderNow.isNullOrBlank() && !project.isNullOrBlank() && folderNow != project)
+
+    /** The hash covers the folder the PC has now, so a card can only vouch for it when the PC says which one that is. */
+    val folderKnown: Boolean get() = !folderNow.isNullOrBlank() && "ruta_cambiada" !in reasons
+
+    /**
+     * Whether the answer carries everything the OK is about. Anything the hash covers that it does not (the current folder of a
+     * task whose folder moved, what the person's message asked for) cannot be read whole from here.
+     */
+    val approvable: Boolean get() = title.isNotBlank() && !agent.isNullOrBlank() && !hash.isNullOrBlank() && status == "awaiting_approval" &&
+        !description.isNullOrBlank() && folderKnown && userAsked.isEmpty() && folderMoved != true && !folderOutside
+}
 
 /**
  * What one Orbe chat needs from the PC and the cache. Every action is a request to the PC; the phone only keeps the
@@ -69,8 +130,34 @@ interface OrbeChatBackend {
     suspend fun snapshot(conversation: Long): Result<PcSnapshot>
     suspend fun setMode(mode: String): Result<Unit>
 
+    /** The brain of this conversation (`chat.settings`, read only); null when the PC does not offer it or says nothing usable. */
+    suspend fun brain(conversation: Long): Result<BrainInfo?>
+
+    /** The tasks running on the PC now (`tasks.live`); empty when the PC does not offer it. */
+    suspend fun liveTasks(): Result<List<LiveTask>>
+
     suspend fun taskDetail(id: Long): Result<TaskDetail>
+
+    /** What a finished task changed, as counts only (`tasks.diff {stat}`); null when the PC says nothing usable. */
+    suspend fun taskStat(id: Long): Result<TaskStat?>
     suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit>
+
+    /** `tasks.accept` / `tasks.undo` of one task. */
+    /**
+     * [unheld]: the PC refuses, changing nothing, a task that Orb holds or that is no longer finished. [checkpoint]: the run the
+     * person saw; the PC refuses a task that ran again since.
+     */
+    suspend fun acceptTask(id: Long, unheld: Boolean = false, checkpoint: String? = null): Result<Unit>
+
+    /** [checkpoint]: the point of return the person saw; the PC refuses to undo if the task has another one now. */
+    suspend fun undoTask(id: Long, checkpoint: String? = null): Result<Unit>
+
+    /** The messages waiting in the PC's queue behind the running turn (`chat.queue`). */
+    suspend fun queue(conversation: Long): Result<List<OrbeQueued>>
+
+    /** Changes ([text]) or removes ([remove]) one queued message; → the queue that is left. */
+    /** [expect]: the text the person saw; the PC refuses to change a message that has another text now. */
+    suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean, expect: String? = null): Result<List<OrbeQueued>>
     suspend fun decideRequest(session: String, request: String, decision: String): Result<Unit>
 }
 
@@ -152,15 +239,39 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 
     override suspend fun setMode(mode: String) = api.permissions.setMode(buildJsonObject { put("mode", mode) }).map { }
 
-    override suspend fun taskDetail(id: Long): Result<TaskDetail> = api.tasks.get(buildJsonObject { put("id", id) }).mapCatching { el ->
-        val o = el as? JsonObject ?: throw LinkException(LinkError.BadAnswer)
-        TaskDetail(
-            id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"), agent = o.str("agent"),
-            project = o.str("project_path") ?: o.str("project"),
-            reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
-            hash = o.str("previewHash"), model = o.str("model"),
-        )
-    }
+    override suspend fun brain(conversation: Long): Result<BrainInfo?> =
+        if (!api.available(ApiMethods.CHAT_SETTINGS)) Result.success(null)
+        else api.chat.settings(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.brain(it) }
+
+    override suspend fun liveTasks(): Result<List<LiveTask>> =
+        if (!api.available(ApiMethods.TASKS_LIVE)) Result.success(emptyList()) else api.tasks.live().map { OrbeParser.liveTasks(it) }
+
+    override suspend fun taskDetail(id: Long): Result<TaskDetail> =
+        api.tasks.get(buildJsonObject { put("id", id) }).mapCatching { el -> OrbeParser.taskDetail(el, id, api::available) ?: throw LinkException(LinkError.BadAnswer) }
+
+    override suspend fun taskStat(id: Long): Result<TaskStat?> =
+        if (!api.available(ApiMethods.TASKS_DIFF)) Result.success(null)
+        else api.tasks.diff(buildJsonObject { put("id", id); put("stat", true) }).map { OrbeParser.taskStat(it) }
+
+    override suspend fun acceptTask(id: Long, unheld: Boolean, checkpoint: String?) =
+        api.tasks.accept(dev.orb.app.ui.tasks.TaskParams.accept(id, unheld, checkpoint, api.knowsSafetyGuards)).map { }
+
+    override suspend fun undoTask(id: Long, checkpoint: String?) =
+        api.tasks.undo(buildJsonObject { put("id", id); if (checkpoint != null) put("checkpoint", checkpoint) }).map { }
+
+    override suspend fun queue(conversation: Long): Result<List<OrbeQueued>> =
+        if (!api.available(ApiMethods.CHAT_QUEUE)) Result.success(emptyList())
+        else api.chat.queue(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.queue(it) }
+
+    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean, expect: String?): Result<List<OrbeQueued>> =
+        api.chat.editQueued(
+            buildJsonObject {
+                put("conversation", conversation)
+                put("queueId", queueId)
+                if (expect != null) put("expect", expect)
+                if (remove) put("remove", true) else put("text", text.orEmpty())
+            },
+        ).map { OrbeParser.queue(it) }
 
     override suspend fun decideTask(id: Long, approve: Boolean, hash: String?) = api.tasks.approve(
         buildJsonObject {
@@ -177,6 +288,15 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 
 /** Reads the PC's refusals by their text: the engine sends them without a code. */
 object ChatErrors {
+    /** What the PC itself said when it refused, word for word; null when the failure was not a refusal. */
+    fun pcText(e: Throwable): String? = refusal(e)?.takeIf { it.isNotBlank() }
+    /** The PC refused because the queued message has another text now than the one the person saw. */
+    fun queuedChanged(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("ha cambiado desde que lo viste", ignoreCase = true) } == true
+
+    fun queuedGone(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("ya no está en la cola", ignoreCase = true) || it.contains("no longer in the queue", ignoreCase = true) } == true
+
     fun deleted(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ya no existe", ignoreCase = true) || it.contains("en la papelera", ignoreCase = true) } == true
     fun questionGone(e: Throwable): Boolean =

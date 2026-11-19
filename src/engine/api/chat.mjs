@@ -15,6 +15,7 @@ import { assistantName } from '../../domain/tasks/board.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
+import { phoneText } from '../transport/remote-calls.mjs';
 import { fail, str, int, oneOf, images } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
@@ -47,6 +48,23 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
       return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj, attachments });
+    },
+    // The messages written while the assistant works, waiting for their turn: → [{ id, text, at }] (id: a text; at: ms).
+    // Only a message that has not started can be changed: text edits it, remove drops it (→ the queue left).
+    'chat.queue': ({ conversation }) => orchestrator.queueOf(conversationId(conversation)),
+    'chat.editQueued': ({ conversation, queueId, text, remove, expect }) => {
+      const id = conversationId(conversation);
+      trash.assertNotTrashed(id);
+      const qid = str(queueId, 'mensaje', 64);
+      // expect (optional): the text the phone showed; if the queued message changed meanwhile nothing is edited or removed.
+      if (expect != null) {
+        const now = orchestrator.queueOf(id).find((m) => String(m.id) === qid);
+        // a phone gets the queue with the assistant folder cut out of each text (shapeResult), so it may send either form.
+        if (now && now.text !== expect && phoneText(now.text) !== expect) fail('el mensaje en cola ha cambiado desde que lo viste; ábrelo de nuevo');
+      }
+      if (remove) return orchestrator.editQueued(id, qid, { remove: true });
+      const t = str(text, 'mensaje', 20000);
+      return orchestrator.editQueued(id, qid, { text: t, mentions: expandMentions(board, sessions, t) });
     },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
     // «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and

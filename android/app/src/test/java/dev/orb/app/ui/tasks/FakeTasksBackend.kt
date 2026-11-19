@@ -15,18 +15,23 @@ import kotlinx.coroutines.flow.MutableStateFlow
 fun task(
     id: Long, title: String = "Tarea $id", status: String = "queued", project: String? = "api-pagos", agent: String? = "claude",
     waiting: TaskWait? = null, held: TaskHeld? = null, result: String? = null, undone: Boolean = false,
+    accepted: Boolean = false, limitedUntil: String? = null, percent: Int? = null, note: String? = null,
+    reasons: List<String> = emptyList(), scheduleId: Long? = null,
 ) = TaskRow(
     id = id, title = title, project = project, status = status, agent = agent, model = null, readonly = false,
     createdAt = "2026-11-11T09:00:00.000Z", waiting = waiting, held = held, undone = undone, result = result,
+    percent = percent, note = note, accepted = accepted, limitedUntil = limitedUntil, reasons = reasons, scheduleId = scheduleId,
 )
 
 fun detail(
     row: TaskRow, description: String = "Hace algo", accepted: Boolean = false, hasCheckpoint: Boolean = false, previewHash: String? = null,
     events: List<TaskEvent> = emptyList(), dependencies: List<TaskLink> = emptyList(), children: List<TaskLink> = emptyList(),
+    facts: dev.orb.app.ui.chats.TaskDetail? = null, checkpointId: String? = null, review: TaskReview? = null,
+    createdBy: String? = "orbe", reasoning: String? = "medium", mode: String? = "carpeta",
 ) = TaskDetail(
-    row = row, description = description, reasoning = "medium", mode = "carpeta", branch = null, folder = "C:/p", createdBy = "orbe",
+    row = row, description = description, reasoning = reasoning, mode = mode, branch = null, folder = "C:/p", createdBy = createdBy,
     modelLabel = null, accountLabel = null, accepted = accepted, hasCheckpoint = hasCheckpoint, previewHash = previewHash,
-    dependencies = dependencies, children = children, events = events,
+    dependencies = dependencies, children = children, events = events, facts = facts, checkpointId = checkpointId, review = review,
 )
 
 class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = false) : TasksBackend {
@@ -39,6 +44,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var listCount = 0
     var unavailable: Set<String> = emptySet()
     val calls = ArrayList<String>()
+    val undoCheckpoints = ArrayList<String?>()
+    val acceptCheckpoints = ArrayList<String?>()
     var actionResult: Result<Unit> = Result.success(Unit)
     var launchResult: Result<Boolean> = Result.success(false)
     var searchResult: Result<List<SearchTask>> = Result.success(emptyList())
@@ -48,13 +55,19 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var details = HashMap<Long, Result<TaskDetail>>()
     var diffs = HashMap<Long, Result<TaskDiff>>()
     var gate: CompletableDeferred<Unit>? = null
+    var diffGate: CompletableDeferred<Unit>? = null
+    /** Holds the board read until completed: the first read is then still under way. */
+    var listGate: CompletableDeferred<Unit>? = null
+    val reads = ArrayList<String>()
+    var securityResult: Result<Long?> = Result.success(77L)
+    var branchResult: Result<String?> = Result.success("main")
 
     override fun available(m: ApiMethod) = m.name !in unavailable
 
     val savedFlow = MutableStateFlow<TasksData?>(null)
     override fun saved() = kotlinx.coroutines.flow.flow { savedFlow.collect { if (it != null) emit(it) } }
 
-    override suspend fun list(): Result<TasksData> { listCount++; return listResult ?: Result.success(data) }
+    override suspend fun list(): Result<TasksData> { listCount++; listGate?.await(); return listResult ?: Result.success(data) }
     override suspend fun search(q: String): Result<List<SearchTask>> { searches += q; return searchResult }
 
     private suspend fun act(name: String): Result<Unit> {
@@ -71,8 +84,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
 
     override suspend fun projects() = projectList
     override suspend fun create(project: String, title: String, description: String) = act("create $project|$title|$description")
-    override suspend fun get(id: Long): Result<TaskDetail> = details[id] ?: Result.failure(LinkException(LinkError.Offline))
-    override suspend fun diff(id: Long): Result<TaskDiff> = diffs[id] ?: Result.failure(LinkException(LinkError.Offline))
+    override suspend fun get(id: Long): Result<TaskDetail> { reads += "get"; return details[id] ?: Result.failure(LinkException(LinkError.Offline)) }
+    override suspend fun diff(id: Long): Result<TaskDiff> { reads += "diff"; diffGate?.await(); return diffs[id] ?: Result.failure(LinkException(LinkError.Offline)) }
     override suspend fun agents() = agentList
     override suspend fun launchAnyway(id: Long): Result<Boolean> { calls += "launch $id"; gate?.await(); return launchResult }
     override suspend fun reassign(id: Long, agent: String, reasoning: String) = act("reassign $id $agent $reasoning")
@@ -80,7 +93,9 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     override suspend fun retry(id: Long) = act("retry $id")
     override suspend fun cancel(id: Long) = act("cancel $id")
     override suspend fun review(id: Long) = act("review $id")
-    override suspend fun accept(id: Long) = act("accept $id")
-    override suspend fun undo(id: Long) = act("undo $id")
+    override suspend fun securityReview(project: String): Result<Long?> { calls += "security $project"; gate?.await(); return securityResult }
+    override suspend fun branch(project: String): Result<String?> { calls += "branch $project"; return branchResult }
+    override suspend fun accept(id: Long, checkpoint: String?) = act("accept $id").also { acceptCheckpoints += checkpoint }
+    override suspend fun undo(id: Long, checkpoint: String?) = act("undo $id").also { undoCheckpoints += checkpoint }
     override suspend fun decide(id: Long, approve: Boolean, hash: String) = act("decide $id $approve $hash")
 }

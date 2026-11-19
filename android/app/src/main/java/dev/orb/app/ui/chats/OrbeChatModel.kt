@@ -45,17 +45,74 @@ data class ChatMessage(
     val at: String?,
     val card: MsgCard,
     val clientId: String?,
+    /** The task the PC says this line is about (`meta.task`), whatever kind of line it is. */
+    val task: Long? = null,
 )
 
 /** A message written on the phone that the PC has not confirmed yet. */
 @Immutable
 data class PendingMessage(val clientId: String, val text: String, val state: PendingState, val error: String?, val at: Long)
 
-enum class PendingState { Waiting, Sending, Failed }
+/** [Arrived]: the PC took the message (`chat.send` answered) but its own line has not come back yet. */
+enum class PendingState { Waiting, Sending, Arrived, Failed }
 
 /** What the assistant is doing now (`chat:state`), without the streamed text, which lives apart so it can change fast. */
 @Immutable
 data class LiveInfo(val busy: Boolean, val waiting: Boolean, val queued: Int, val since: Long?, val activity: String?, val hasText: Boolean)
+
+/** The brain a conversation thinks with, as the PC names it (`chat.settings`). Nothing here is guessed. */
+@Immutable
+data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reasoning: String?) {
+    /** «Opus · alto»: the model (or the agent when the PC names no model) and the reasoning level. */
+    val label: String?
+        get() = listOfNotNull((modelLabel ?: agentLabel)?.takeIf { it.isNotBlank() }, reasoning?.let(::reasoningWord)).joinToString(" · ").ifEmpty { null }
+
+    companion object {
+        fun reasoningWord(level: String): String = when (level) {
+            "low" -> "bajo"
+            "medium" -> "medio"
+            "high" -> "alto"
+            "xhigh" -> "extra"
+            else -> level
+        }
+    }
+}
+
+/** A message that waits in the PC's queue behind the running turn (`chat.queue`); [id] is the PC's own. */
+@Immutable
+data class OrbeQueued(val id: String, val text: String, val at: Long)
+
+/**
+ * What a finished task changed, counts only (`tasks.diff {stat:true}`). The line counts are null when the PC cut the list.
+ * [checkpointId] is the run those counts belong to ([runKnown]: the PC said so at all) and [notReady] that the PC has no diff
+ * of the last run yet. [reason] is why the PC has no diff to count (carries no counts: it only says which decision may be offered
+ * on the card) and [unreadable] that the answer cannot be trusted at all, so the card decides nothing.
+ */
+@Immutable
+data class TaskStat(
+    val files: Int, val added: Int?, val removed: Int?,
+    val checkpointId: String? = null, val runKnown: Boolean = false, val notReady: Boolean = false,
+    val reason: String? = null, val unreadable: Boolean = false,
+) {
+    /** Whether this is a count of changed files and may be shown as one. */
+    val hasCounts get() = !notReady && reason == null && !unreadable
+
+    /** The PC's no-diff answer as the changes screen reads it, so a card and that screen decide the same way. */
+    private val asDiff get() = dev.orb.app.ui.tasks.TaskDiff(false, emptyList(), 0, reason = reason)
+
+    /** Whether «Aceptar» may be on the card: with counts it is; without a diff only where the changes screen offers it too. */
+    fun allowsAccept(undone: Boolean): Boolean = !unreadable && !notReady && (reason == null || asDiff.allowsAccept(undone))
+
+    /** Whether «Deshacer» may be on the card: with counts, or on a folder without git (restored from the PC's copy). */
+    val allowsUndo: Boolean get() = !unreadable && !notReady && (reason == null || asDiff.allowsUndo)
+
+    /** Whether the counts are of the run [taskRun] the task is at now; a PC that does not name the run cannot disagree. */
+    fun isOfRun(taskRun: String?): Boolean = !notReady && (!runKnown || (checkpointId != null && taskRun != null && checkpointId == taskRun))
+}
+
+/** A task that is running now (`tasks.live`): what it is doing, said by the PC. */
+@Immutable
+data class LiveTask(val id: Long, val title: String, val agent: String?, val doing: String?, val percent: Int?, val waiting: Boolean)
 
 object OrbeParser {
     private val json = Json { ignoreUnknownKeys = true }
@@ -72,7 +129,7 @@ object OrbeParser {
         val meta = o["meta"] as? JsonObject
         return ChatMessage(
             id = id, role = role, body = o.str("body").orEmpty(), at = o.str("at"), card = card(role, meta),
-            clientId = o.str("clientId") ?: meta?.str("clientId"),
+            clientId = o.str("clientId") ?: meta?.str("clientId"), task = meta?.long("task"),
         )
     }
 
@@ -98,7 +155,8 @@ object OrbeParser {
                 status = meta.str("status") ?: if (meta.str("kind") == "task-approval") "pending" else "expired",
             )
             "attention" -> meta.long("task")?.let { MsgCard.TaskAttention(it) } ?: MsgCard.None
-            "task-end" -> meta.str("result")?.let { MsgCard.TaskEnd(it) } ?: MsgCard.None
+            // A task that ended without a written result still ends: its card is drawn from the task itself.
+            "task-end" -> if (meta.long("task") != null || meta.str("result") != null) MsgCard.TaskEnd(meta.str("result").orEmpty()) else MsgCard.None
             else -> MsgCard.None
         }
     }
@@ -131,7 +189,113 @@ object OrbeParser {
     /** The final line a finished turn carries, if the PC sent it along. */
     fun answer(state: JsonObject): ChatMessage? = (state["answer"] as? JsonObject)?.let(::message)
 
+    /** `chat.settings` → the brain; null when the PC says nothing usable. */
+    fun brain(el: kotlinx.serialization.json.JsonElement?): BrainInfo? {
+        val o = el as? JsonObject ?: return null
+        val info = BrainInfo(o.str("agentLabel"), o.str("modelLabel"), o.str("reasoning"))
+        return info.takeIf { it.label != null }
+    }
+
+    /** `tasks.live` → the running tasks. */
+    fun liveTasks(el: kotlinx.serialization.json.JsonElement?): List<LiveTask> = (el as? JsonArray).orEmpty().mapNotNull { x ->
+        val o = x as? JsonObject ?: return@mapNotNull null
+        val id = o.long("id") ?: return@mapNotNull null
+        val waiting = (o["waiting"] as? JsonPrimitive)?.let { it.longOrNull?.let { n -> n > 0 } ?: (it.contentOrNull == "true") } ?: false
+        LiveTask(
+            id, o.str("title").orEmpty(), o.str("agent"), (o.str("last") ?: o.str("note"))?.lineSequence()?.firstOrNull()?.take(160)?.ifBlank { null },
+            o.long("percent")?.toInt(), waiting,
+        )
+    }
+
     fun conversationOf(payload: JsonObject): Long? = payload.long("conversation")
+
+    private val DECISIONS = setOf("task.approved", "task.rejected", "approval.required")
+
+    /**
+     * `tasks.get` → what a card shows and the fingerprint of it. Everything comes from this one answer, so the [TaskDetail.hash]
+     * always belongs to the text beside it. [can] says which methods the PC has, as the task's own screen asks it.
+     */
+    fun taskDetail(el: kotlinx.serialization.json.JsonElement?, id: Long, can: (dev.orb.app.link.api.ApiMethod) -> Boolean): TaskDetail? {
+        val o = el as? JsonObject ?: return null
+        val parsed = dev.orb.app.ui.tasks.TasksParser.detail(o)
+        val review = o["review"] as? JsonObject
+        val held = parsed?.row?.held
+        return approvalFacts(o, id).copy(
+            held = held != null, heldReasons = held?.reasons.orEmpty(), heldFolder = held?.folder,
+            accepted = parsed?.accepted == true, undone = parsed?.row?.undone == true,
+            actions = parsed?.let { cardActions(it, can) }.orEmpty(),
+            reviewAgent = review?.str("agent"),
+            decision = parsed?.events?.lastOrNull { it.kind in DECISIONS }?.kind?.let { if (it == "task.approved") "approved" else if (it == "task.rejected") "rejected" else null },
+        )
+    }
+
+    /**
+     * The fields of `tasks.get` that the approval fingerprint covers, as one value: the chat's card and dialog and the task's own
+     * screen all draw an OK from this, so none of them can show less than another.
+     */
+    fun approvalFacts(o: JsonObject, id: Long): TaskDetail = TaskDetail(
+        id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"),
+        // `agent` is what the fingerprint covers; `assigned_to` is who runs it now.
+        agent = o.str("agent"), runner = o.str("assigned_to"),
+        project = o.str("project_path"), folderNow = o.str("folderNow"),
+        reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
+        hash = o.str("previewHash"), model = o.str("model"),
+        autonomy = o.str("autonomy"),
+        approvalRequired = (o["approval"] as? JsonObject)?.takeIf { it["required"] != null }?.bool("required"),
+        description = o.str("description"), readonly = o.bool("readonly"), mode = o.str("mode"), reasoning = o.str("reasoning"),
+        fast = o.bool("fast"), userAsked = stringList(o["user_asked"]),
+        folderMoved = o["folderMoved"]?.takeIf { it is JsonPrimitive && it !is kotlinx.serialization.json.JsonNull }?.let { o.bool("folderMoved") },
+        folderOutside = o.bool("folderOutside"), descriptionCut = o.bool("descriptionCut"), checkpointId = o.str("checkpointId")?.takeIf { it.isNotBlank() },
+    )
+
+    // `user_asked` arrives as a list (the PC parses it) but an old row may still hold the JSON text of one.
+    private fun stringList(el: kotlinx.serialization.json.JsonElement?): List<String> = when (el) {
+        is JsonArray -> el.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        is JsonPrimitive -> runCatching { (Json.parseToJsonElement(el.content) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull } }.getOrDefault(emptyList())
+        else -> emptyList()
+    }
+
+    /**
+     * What a card may offer: the task screen's own rule ([dev.orb.app.ui.tasks.TaskActions]) plus «Aceptar» and «Deshacer» for
+     * finished work, with the conditions of the changes screen (done or held, a checkpoint, not undone, not accepted) and
+     * only where the PC has the method. Nothing else is offered from a card.
+     */
+    internal fun cardActions(d: dev.orb.app.ui.tasks.TaskDetail, can: (dev.orb.app.link.api.ApiMethod) -> Boolean): Set<dev.orb.app.ui.tasks.TaskAction> {
+        val held = d.row.held != null
+        val finished = held || d.row.status == "done"
+        val out = LinkedHashSet(dev.orb.app.ui.tasks.TaskActions.of(d, can))
+        // A task Orb stopped is reviewed on the task's changes screen, which shows what the PC rechecks before «Aceptar» and
+        // asks before «Deshacer»; a card never offers either one, so accepting never skips why it was held.
+        if (held) { out -= dev.orb.app.ui.tasks.TaskAction.AcceptHeld; out -= dev.orb.app.ui.tasks.TaskAction.UndoHeld; return out }
+        if (!d.accepted && !d.row.undone && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_ACCEPT)) out += dev.orb.app.ui.tasks.TaskAction.AcceptHeld
+        if (d.hasCheckpoint && !d.row.undone && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_UNDO)) out += dev.orb.app.ui.tasks.TaskAction.UndoHeld
+        return out
+    }
+
+    /**
+     * `tasks.diff {stat:true}` → file and line counts, or null when there is nothing to count. A PC that does not know `stat`
+     * answers with whole patches (and may have cut them): its numbers are not trusted, so the card shows none.
+     */
+    fun taskStat(el: kotlinx.serialization.json.JsonElement?): TaskStat? {
+        val d = dev.orb.app.ui.tasks.TasksParser.diff(el ?: return null)
+        // The PC has no diff of the last run yet: no counts, but the card must not offer a decision on it. A reason this app does not
+        // know, or no reason at all, is an answer that cannot be trusted: the card then decides nothing.
+        if (!d.available) return when {
+            d.reason == "notdone" -> TaskStat(0, null, null, notReady = true)
+            d.reason != null && d.reason in dev.orb.app.ui.tasks.TaskDiff.KNOWN_REASONS -> TaskStat(0, null, null, reason = d.reason)
+            else -> TaskStat(0, null, null, unreadable = true)
+        }
+        if (d.files.any { it.patch.isNotEmpty() }) return TaskStat(0, null, null, unreadable = true)
+        val n = d.files.size + d.more
+        if (n == 0) return null
+        return TaskStat(n, d.added.takeIf { d.more == 0 }, d.removed.takeIf { d.more == 0 }, checkpointId = d.checkpointId, runKnown = d.runKnown)
+    }
+
+    /** `chat.queue` / `chat.editQueued` → the queue in the PC's order; an entry without an id is dropped. */
+    fun queue(el: kotlinx.serialization.json.JsonElement?): List<OrbeQueued> = (el as? JsonArray).orEmpty().mapNotNull { x ->
+        val o = x as? JsonObject ?: return@mapNotNull null
+        OrbeQueued(o.str("id") ?: return@mapNotNull null, o.str("text").orEmpty(), o.long("at") ?: 0L)
+    }
 }
 
 /** What a tool does, in words: the same table as the PC's own chat, so the phone says the same thing. */

@@ -41,7 +41,7 @@ class NotePlannerTest {
         assertEquals(NoteChannel.Messages, p.channel)
         assertEquals("Revisar pasarela", p.title)
         assertEquals(27091, p.id)
-        val reply = p.actions.single()
+        val reply = p.actions.first()
         assertTrue(reply.input)
         assertEquals("Responder", reply.label)
         assertEquals("chat.send", reply.job.method)
@@ -52,7 +52,7 @@ class NotePlannerTest {
 
     @Test fun aReplyToTheMainChatNamesNoConversation() {
         val p = plan("""{"key":"orb","route":{"view":"chat"},"actions":[{"id":"reply","title":"Responder","input":true}]}""")
-        assertTrue(p.actions.single().job.params!!.isEmpty())
+        assertTrue(p.actions.first().job.params!!.isEmpty())
         assertEquals(JobTarget("chats"), p.tap.target)
     }
 
@@ -85,17 +85,22 @@ class NotePlannerTest {
 
     @Test fun lockScreenContentIsPrivateUnlessAskedOtherwise() {
         val p = plan(MESSAGE)
-        assertFalse(p.lockScreenPublic)
+        assertEquals(LockScreenNotice.Generic, p.lockScreen)
         assertEquals("Tienes un mensaje nuevo", p.publicText)
         assertEquals("Orb necesita tu respuesta", plan(APPROVAL).publicText)
-        assertTrue(plan(MESSAGE, NotifySettings(lockScreenPublic = true)).lockScreenPublic)
+        assertEquals(LockScreenNotice.Full, plan(MESSAGE, NotifySettings(lockScreen = LockScreenNotice.Full)).lockScreen)
+        assertEquals(LockScreenNotice.Hidden, plan(MESSAGE, NotifySettings(lockScreen = LockScreenNotice.Hidden)).lockScreen)
+    }
+
+    @Test fun nothingOnTheLockScreenStaysNothingEvenWithTheAppLockOn() {
+        assertEquals(LockScreenNotice.Hidden, plan(APPROVAL, NotifySettings(lockScreen = LockScreenNotice.Hidden, appLock = true)).lockScreen)
     }
 
     @Test fun withTheAppLockOnNoticesCarryNoContentNorButtons() {
-        val p = plan(APPROVAL, NotifySettings(lockScreenPublic = true, appLock = true))
+        val p = plan(APPROVAL, NotifySettings(lockScreen = LockScreenNotice.Full, appLock = true))
         assertEquals("Orb", p.title)
         assertEquals("Orb necesita tu respuesta", p.text)
-        assertFalse(p.lockScreenPublic)
+        assertEquals(LockScreenNotice.Generic, p.lockScreen)
         assertTrue(p.actions.isEmpty())
         assertFalse(p.tap.acts)
         assertEquals("Orb", p.tap.title)
@@ -107,7 +112,7 @@ class NotePlannerTest {
     @Test fun nothingWithoutAKeyAndAtMostThreeButtons() {
         assertNull(PcNotes.parse(json("""{"title":"x"}""")))
         assertNull(PcNotes.parse(JsonPrimitive("x")))
-        val many = plan("""{"key":"k","actions":[{"id":"a"},{"id":"b"},{"id":"c"},{"id":"d"}]}""")
+        val many = plan("""{"key":"k","kind":"approval","card":{"method":"sessions.approve","id":"s","request":"r"},"actions":[{"id":"allow"},{"id":"deny"},{"id":"allow"},{"id":"deny"}]}""")
         assertEquals(3, many.actions.size)
     }
 }
@@ -170,6 +175,8 @@ private class FakePoster : NotePoster {
     var cleared = 0
     override fun show(plan: NotificationPlan) { shown += plan }
     override fun say(job: NoteJob, text: String, goneAfterMs: Long?) { said += text }
+    val cancelled = mutableListOf<Int>()
+    override fun cancel(id: Int) { cancelled += id }
     override fun clearNotes() { cleared++ }
 }
 

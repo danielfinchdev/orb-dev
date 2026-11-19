@@ -29,7 +29,11 @@ data class ProjectOption(val name: String, val active: Boolean)
 
 /** What the PC offers for a new chat: the agents it can run now, its projects and the one it has active. */
 @Immutable
-data class NewChatOptions(val agents: List<AgentOption>, val projects: List<ProjectOption>, val activeProject: String?) {
+data class NewChatOptions(
+    val agents: List<AgentOption>, val projects: List<ProjectOption>, val activeProject: String?,
+    /** The brain the PC starts new Orbe chats with, as it names it; null when it does not say. */
+    val pcBrain: BrainInfo? = null,
+) {
     companion object {
         val Empty = NewChatOptions(emptyList(), emptyList(), null)
     }
@@ -39,7 +43,7 @@ data class NewChatOptions(val agents: List<AgentOption>, val projects: List<Proj
 @Immutable
 data class Brain(val agent: String, val model: String?, val reasoning: String?)
 
-/** What the new-chat screen needs from the PC. Both chats are created there; the phone only asks. */
+/** What the new-chat sheet and the Orbe draft need from the PC. Chats are created there; the phone only asks. */
 interface NewChatBackend {
     val connection: StateFlow<ConnectionState>
     fun available(m: ApiMethod): Boolean
@@ -55,8 +59,8 @@ interface NewChatBackend {
     /** `sessions.create` → the session id. Without a project the PC only allows the read-only permission. */
     suspend fun createAgent(agent: String, project: String?, model: String?, reasoning: String?): Result<String>
 
-    /** `sessions.send` for the first line of a direct chat. */
-    suspend fun sendFirst(session: String, text: String, clientId: String): Result<Unit>
+    /** `projects.create`: a project with only a name; the PC makes its folder. */
+    suspend fun createProject(name: String): Result<Unit>
 }
 
 class RuntimeNewChatBackend(private val runtime: LinkRuntime) : NewChatBackend {
@@ -79,8 +83,7 @@ class RuntimeNewChatBackend(private val runtime: LinkRuntime) : NewChatBackend {
     override suspend fun createAgent(agent: String, project: String?, model: String?, reasoning: String?): Result<String> =
         api.sessions.create(NewChatParams.session(agent, project, model, reasoning)).mapCatching { r -> (r as? JsonObject)?.str("id") ?: throw LinkException(LinkError.BadAnswer) }
 
-    override suspend fun sendFirst(session: String, text: String, clientId: String): Result<Unit> =
-        api.sessionsSend(buildJsonObject { put("id", session); put("text", text) }, clientId).map { }
+    override suspend fun createProject(name: String): Result<Unit> = api.projects.create(buildJsonObject { put("name", name) }).map { }
 }
 
 /** The bodies of the two requests that start a chat; apart from the transport so the rules can be tested. */
@@ -134,6 +137,18 @@ object NewChatParser {
             val name = o.str("name") ?: return@mapNotNull null
             ProjectOption(name, o.str("active") == "true" || (o["active"] as? JsonPrimitive)?.booleanOrNull == true || name == active)
         }
-        return NewChatOptions(agents, list, active ?: list.firstOrNull { it.active }?.name)
+        return NewChatOptions(agents, list, active ?: list.firstOrNull { it.active }?.name, pcBrain(appState, agents))
+    }
+
+    /** `app.state` → `config.orchestrator`, named with the catalog's labels. Nothing is invented: no data, no label. */
+    fun pcBrain(appState: JsonElement?, agents: List<AgentOption>): BrainInfo? {
+        val o = ((appState as? JsonObject)?.get("config") as? JsonObject)?.get("orchestrator") as? JsonObject ?: return null
+        val agent = agents.firstOrNull { it.id == (o.str("agent") ?: "claude") }
+        val modelId = o.str("model")?.takeIf { it.isNotBlank() }
+        val modelLabel = modelId?.let { id ->
+            (o["models"] as? JsonArray).orEmpty().firstNotNullOfOrNull { m -> (m as? JsonObject)?.takeIf { it.str("id") == id }?.str("label") }
+                ?: agent?.models?.firstOrNull { it.id == id }?.label
+        }
+        return BrainInfo(agent?.label, modelLabel, o.str("reasoning")).takeIf { it.label != null }
     }
 }

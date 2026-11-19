@@ -9,6 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -45,6 +46,59 @@ class TaskDetailViewModelTest {
             setOf(TaskAction.LaunchAnyway, TaskAction.Reassign, TaskAction.Followup, TaskAction.Cancel),
             vm.state.value.actions,
         )
+    }
+
+    // An event of the PC: the decisions go off at once, not after the wait
+
+    private fun TestScope.slowVm(b: FakeTasksBackend): TaskDetailViewModel {
+        val vm = TaskDetailViewModel(b, 7, reloadDebounceMs = 300)
+        backgroundScope.launch { vm.state.collect { } }
+        runCurrent()
+        return vm
+    }
+
+    private val held7 = detail(task(7, status = "blocked", held = TaskHeld("x", null)), hasCheckpoint = true, checkpointId = "cp1")
+    private fun event(name: String) = dev.orb.app.link.net.LinkEvent(name, kotlinx.serialization.json.JsonNull)
+
+    @Test fun anEventMarksTheTaskAsBeingReadAgainBeforeTheWaitAndTheDecisionsWait() = runTest(dispatcher) {
+        val b = backend(held7)
+        val vm = slowVm(b)
+        assertFalse(vm.state.value.reloading)
+        b.events.tryEmit(event("board:changed"))
+        runCurrent()
+        assertTrue(vm.state.value.reloading)
+        vm.accept(); vm.askUndo(); vm.undo()
+        runCurrent()
+        assertEquals(emptyList<String>(), b.calls)
+        advanceTimeBy(301)
+        runCurrent()
+        assertFalse(vm.state.value.reloading)
+        vm.accept()
+        runCurrent()
+        assertEquals(listOf("accept 7"), b.calls)
+    }
+
+    @Test fun anApprovalWaitsForTheReadAnEventAskedFor() = runTest(dispatcher) {
+        val b = backend(detail(task(7, status = "awaiting_approval"), previewHash = "h1"))
+        val vm = slowVm(b)
+        b.events.tryEmit(event("approval:changed"))
+        runCurrent()
+        vm.approve(true, "h1")
+        runCurrent()
+        assertEquals(emptyList<String>(), b.calls)
+        advanceTimeBy(301)
+        runCurrent()
+        vm.approve(true, "h1")
+        runCurrent()
+        assertEquals(listOf("decide 7 true h1"), b.calls)
+    }
+
+    @Test fun anEventThatIsNotAboutTasksDoesNotHoldTheDecisions() = runTest(dispatcher) {
+        val b = backend(held7)
+        val vm = slowVm(b)
+        b.events.tryEmit(event("chat:new"))
+        runCurrent()
+        assertFalse(vm.state.value.reloading)
     }
 
     @Test fun aTaskWaitingForOthersCannotBeLaunchedAnyway() = runTest(dispatcher) {

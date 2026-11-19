@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -22,7 +25,7 @@ import dev.orb.app.attach.UploadPolicy
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.Composer
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +49,7 @@ class AttachViewsTest {
     private val noLaunch = AttachLaunchers({}, {}, {})
 
     private fun sheet(policy: UploadPolicy, launchers: AttachLaunchers = noLaunch) {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { AttachSheet(policy, launchers, onDismiss = {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { AttachSheet(policy, launchers, onDismiss = {}) } }
         rule.waitForIdle()
     }
 
@@ -74,25 +77,46 @@ class AttachViewsTest {
     }
 
     private fun strip(items: List<Attachment>, notice: String? = null, onRemove: (Long) -> Unit = {}, onRetry: (Long) -> Unit = {}) {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { AttachStrip(items, notice, onRemove, onRetry) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { AttachStrip(items, notice, onRemove, onRetry) } }
         rule.waitForIdle()
     }
 
     private fun item(id: Long, state: AttachState, error: String? = null, retry: Boolean = false) =
         Attachment(id, "captura-$id.png", AttachType.Png, state, error = error, canRetry = retry)
 
-    @Test fun theStripShowsProgressAndTheErrorWithRetry() {
+    @Test fun theStripShowsProgressAndAFailedCardOffersRetryAndRemoveInASheet() {
         var retried = -1L
         var removed = -1L
         strip(
             listOf(item(1, AttachState.Uploading), item(2, AttachState.Failed, AttachTexts.UPLOAD_FAILED, retry = true)),
             onRemove = { removed = it }, onRetry = { retried = it },
         )
-        rule.onNodeWithText(AttachTexts.UPLOADING).assertIsDisplayed()
+        rule.onNodeWithContentDescription(AttachTexts.UPLOADING).assertIsDisplayed()
+        // Loose cards with the whole name and no button on them.
+        rule.onNodeWithText("captura-1.png").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithContentDescription(AttachTexts.REMOVE).fetchSemanticsNodes().size)
         rule.onNodeWithText("${AttachTexts.UPLOAD_FAILED}. ${AttachTexts.RETRY}").performClick()
+        rule.onNodeWithText(AttachTexts.RETRY).performClick()
         assertEquals(2L, retried)
-        rule.onAllNodesWithContentDescription(AttachTexts.REMOVE)[0].performClick()
+        rule.onAllNodesWithText("captura-1.png")[0].performClick()
+        rule.onNodeWithText(AttachTexts.REMOVE_ONE).performClick()
         assertEquals(1L, removed)
+    }
+
+    @Test fun aLongPressOpensTheSameSheetAndAGoodCardHasNoRetry() {
+        var removed = -1L
+        strip(listOf(item(1, AttachState.Ready)), onRemove = { removed = it })
+        rule.onNodeWithText("captura-1.png").performTouchInput { longClick() }
+        rule.onNodeWithText(AttachTexts.RETRY).assertDoesNotExist()
+        rule.onNodeWithText(AttachTexts.REMOVE_ONE).performClick()
+        assertEquals(1L, removed)
+    }
+
+    @Test fun aScreenReaderGetsRemoveAndRetryAsActionsOfTheCard() {
+        strip(listOf(item(1, AttachState.Failed, AttachTexts.UPLOAD_FAILED, retry = true)))
+        val node = rule.onNodeWithText("${AttachTexts.UPLOAD_FAILED}. ${AttachTexts.RETRY}", useUnmergedTree = false).fetchSemanticsNode()
+        val labels = node.config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].map { it.label }
+        assertEquals(listOf(AttachTexts.RETRY, AttachTexts.REMOVE_ONE), labels)
     }
 
     @Test fun aNoticeShowsWithoutChips() {
@@ -120,7 +144,7 @@ class AttachViewsTest {
         val c = AttachController(scope, io, up, { UploadPolicy(1000, setOf("png", "pdf")) }, File(tmp.newFolder(), "w"), Dispatchers.Unconfined)
         val sent = ArrayList<String>()
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = { sent += it }, onStop = {}, onMode = {}, attach = c)
             }
         }
@@ -143,10 +167,39 @@ class AttachViewsTest {
 
     @Test fun withoutAnAttachControllerThereIsNoPlus() {
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = {}, onStop = {}, onMode = {})
             }
         }
         rule.onNodeWithContentDescription(AttachTexts.ADD).assertDoesNotExist()
+    }
+
+    @Test fun thePlusTurnsIntoACloseWhileTheTrayIsOpenAndBack() {
+        val c = AttachController(
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), object : AttachIo {
+                override fun info(uri: Uri) = SourceInfo("a.pdf", "application/pdf")
+                override fun read(uri: Uri, maxBytes: Long) = ByteArray(10)
+            },
+            AttachUploader { _, _, _ -> Result.success("x") }, { UploadPolicy(1000, setOf("png", "pdf")) }, File(tmp.newFolder(), "w"), Dispatchers.Unconfined,
+        )
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = {}, onStop = {}, onMode = {}, attach = c)
+            }
+        }
+        rule.onNodeWithContentDescription(AttachTexts.ADD).assertIsDisplayed()
+        rule.onNodeWithContentDescription(ChatTexts.ATTACH_CLOSE).assertDoesNotExist()
+        rule.onNodeWithContentDescription(AttachTexts.ADD).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(ChatTexts.ATTACH_CLOSE).assertExists()
+        rule.onNodeWithText(AttachTexts.CAMERA_META).assertIsDisplayed()
+        rule.onNodeWithText(AttachTexts.GALLERY_META).assertIsDisplayed()
+        c.close()
+    }
+
+    @Test fun aFailedCardKeepsItsRetryAndAWorkingOneHasNoExtraText() {
+        strip(listOf(item(1, AttachState.Preparing)))
+        rule.onNodeWithContentDescription(AttachTexts.PREPARING).assertIsDisplayed()
+        rule.onNodeWithText("captura-1.png").assertIsDisplayed()
     }
 }

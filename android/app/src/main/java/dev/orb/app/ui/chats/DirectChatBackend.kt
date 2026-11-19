@@ -63,7 +63,11 @@ interface DirectChatBackend {
     suspend fun stop(session: String): Result<Unit>
     suspend fun compact(session: String): Result<Unit>
     suspend fun resume(session: String): Result<Unit>
-    suspend fun fork(session: String): Result<String>
+    /** A copy of the chat; with [from] (the id of one of its text lines) only up to and including that line. → the new chat's id. */
+    suspend fun fork(session: String, from: Long? = null): Result<String>
+
+    /** Whether the chat can be copied up to the line [item] (`sessions.rewindInfo`), and why not when it cannot. */
+    suspend fun rewindInfo(session: String, item: Long): Result<ForkInfo>
     suspend fun settle(session: String): Result<Unit>
     suspend fun archive(session: String): Result<Unit>
     suspend fun rename(session: String, title: String): Result<Unit>
@@ -167,7 +171,13 @@ class RuntimeDirectChatBackend(private val container: AppContainer, private val 
     override suspend fun rename(session: String, title: String) =
         api.sessions.update(buildJsonObject { put("id", session); put("title", title) }).map { }
 
-    override suspend fun fork(session: String): Result<String> = api.sessions.fork(buildJsonObject { put("id", session) }).mapCatching {
-        (it as? JsonObject)?.str("id") ?: throw LinkException(LinkError.BadAnswer)
-    }
+    override suspend fun fork(session: String, from: Long?): Result<String> =
+        api.sessions.fork(buildJsonObject { put("id", session); if (from != null) put("from", from) }).mapCatching {
+            (it as? JsonObject)?.str("id") ?: throw LinkException(LinkError.BadAnswer)
+        }
+
+    override suspend fun rewindInfo(session: String, item: Long): Result<ForkInfo> =
+        api.sessions.rewindInfo(buildJsonObject { put("id", session); put("item", item) }).mapCatching {
+            DirectParser.forkInfo(it) ?: throw LinkException(LinkError.BadAnswer)
+        }
 }

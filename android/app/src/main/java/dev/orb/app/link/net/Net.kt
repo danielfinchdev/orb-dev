@@ -66,6 +66,38 @@ class LinkException(val error: LinkError) : Exception(error.toString())
 /** The two protocols and the Orb's version the PC reported in `me`. */
 data class PcVersions(val v: Int?, val min: Int?, val version: String?)
 
+private val PC_VERSION = Regex("^\\d+(\\.\\d+){0,3}([-+][0-9A-Za-z.]{1,16})?$")
+
+/** The PC's own version text only when it looks like one: it is shown to the person, so nothing else is let through. */
+fun pcVersionOrNull(raw: String?): String? = raw?.takeIf { it.length <= 32 && PC_VERSION.matches(it) }
+
+private const val PC_NAME_MAX = 60
+
+/** The PC's own name as one short line: it is shown on several screens, so the PC cannot make it long or multi-line. */
+fun pcNameOrNull(raw: String?): String? {
+    if (raw == null) return null
+    val sb = StringBuilder()
+    var gap = false
+    for (ch in raw) {
+        val type = Character.getType(ch)
+        val breaks = Character.isISOControl(ch) || type == Character.LINE_SEPARATOR.toInt() || type == Character.PARAGRAPH_SEPARATOR.toInt()
+        // Format characters (right-to-left override, zero-width) draw nothing or reorder the line, so they are dropped, not turned into a gap.
+        if (type == Character.FORMAT.toInt()) continue
+        if (breaks) gap = true else { if (gap && sb.isNotEmpty()) sb.append(' '); gap = false; sb.append(ch) }
+    }
+    var line = sb.toString().trim()
+    if (line.length > PC_NAME_MAX) {
+        var end = PC_NAME_MAX
+        if (Character.isHighSurrogate(line[end - 1])) end--
+        line = line.substring(0, end).trimEnd()
+    }
+    return line.ifEmpty { null }
+}
+
+/** The PC's name for a screen, from one place: the live answer first, then the saved session name (an older version may have stored it unbounded). */
+fun LinkClient.pcDisplayName(state: ConnectionState = connection.value): String? =
+    (state as? ConnectionState.Online)?.pcName ?: pcInfo.value?.name ?: pcNameOrNull(currentSession.name)
+
 sealed class ConnectionState {
     data object Connecting : ConnectionState()
     data class Online(val base: String, val pcName: String?, val versions: PcVersions) : ConnectionState()

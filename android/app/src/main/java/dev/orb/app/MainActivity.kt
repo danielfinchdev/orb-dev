@@ -8,9 +8,7 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
 import dev.orb.app.ui.OrbApp
 import dev.orb.app.lock.AndroidAuthenticator
 import kotlinx.coroutines.flow.map
@@ -20,8 +18,8 @@ class MainActivity : FragmentActivity() {
     private lateinit var container: AppContainer
     private var mine: AndroidAuthenticator? = null
 
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        container.notificationAccess.refresh()
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        container.notificationAccess.dialogResult(granted)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -41,14 +39,6 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) {
             container.openFromNotification(intent)
             container.receiveShare(intent)
-        }
-        // Once a PC is linked, Android is asked once to allow notices; after that it is the person's choice in «Este móvil».
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                container.runtime.collect { rt ->
-                    if (rt != null && android.os.Build.VERSION.SDK_INT >= 33 && !container.notifyPrefs.permissionAsked) container.notificationAccess.request()
-                }
-            }
         }
         setContent { OrbApp(container) }
     }

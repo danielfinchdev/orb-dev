@@ -7,7 +7,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBanner
+import dev.orb.app.ui.kit.OrbBannerKind
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -27,6 +31,10 @@ class OfflineInfo(
     val lastContact: StateFlow<Long?>,
     val retryNow: () -> Unit,
     val clock: () -> Long = System::currentTimeMillis,
+    /** The linked PC's name, for the screens that talk about it; null when it is not known. */
+    val pcName: () -> String? = { null },
+    /** What the PC said about the versions in its last answer, if it ever did. */
+    val pcVersions: () -> dev.orb.app.link.net.PcVersions? = { null },
 )
 
 val LocalOffline = compositionLocalOf<OfflineInfo?> { null }
@@ -36,8 +44,12 @@ val LocalOffline = compositionLocalOf<OfflineInfo?> { null }
  * attempt and «Reintentar ahora». Screens show it only while they are offline.
  */
 @Composable
-fun OfflineStrip(modifier: Modifier = Modifier) {
+fun OfflineStrip(modifier: Modifier = Modifier, asBanner: Boolean = false) {
     val info = LocalOffline.current
+    if (info == null && asBanner) {
+        OrbBanner(OfflineTexts.FALLBACK, OrbIcons.WifiOff, modifier.padding(horizontal = 16.dp, vertical = 4.dp), kind = OrbBannerKind.Warning)
+        return
+    }
     if (info == null) {
         Text(
             OfflineTexts.FALLBACK, modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
@@ -55,6 +67,16 @@ fun OfflineStrip(modifier: Modifier = Modifier) {
         ConnectionState.Connecting -> OfflineTexts.CONNECTING
         else -> null
     }
+    if (asBanner) {
+        Row(modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            OrbBanner(
+                (if (status != null) "${OfflineTexts.TITLE} · $status. " else "${OfflineTexts.TITLE}. ") + OfflineTexts.savedNote(seen, now),
+                OrbIcons.WifiOff, Modifier.weight(1f), kind = OrbBannerKind.Warning,
+            )
+            OrbButton(OfflineTexts.RETRY_NOW, info.retryNow, kind = OrbButtonKind.Ghost, small = true)
+        }
+        return
+    }
     Row(modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(Modifier.weight(1f)) {
             Text(
@@ -63,7 +85,7 @@ fun OfflineStrip(modifier: Modifier = Modifier) {
             )
             Text(OfflineTexts.savedNote(seen, now), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
         }
-        TextButton(onClick = info.retryNow) { Text(OfflineTexts.RETRY_NOW) }
+        OrbButton(OfflineTexts.RETRY_NOW, info.retryNow, kind = OrbButtonKind.Ghost)
     }
 }
 

@@ -3,99 +3,139 @@ package dev.orb.app.ui.theme
 import androidx.compose.ui.graphics.Color
 
 /**
- * The Órbita and Órbita – Cristal tokens, converted from OKLCH to sRGB once (clipped to the sRGB gamut) so nothing is
- * converted at run time. Source of truth: the design mockups (orb.css, th-cristal.css); [OklchConversionTest] re-checks
- * the conversion. The glass-only fields stay transparent in the two Órbita palettes.
+ * The tokens of one palette in one mode, converted from OKLCH to sRGB once (clipped to the sRGB gamut) so nothing is
+ * converted at run time. Source of truth: the design mockups (orb-ui.css for Grafito, temas.css for the others);
+ * ThemeTokensTest re-checks the conversion.
  */
-class OrbPalette(
+data class OrbPalette(
     val bg: Color, val surface: Color, val scLow: Color, val sc: Color, val scHigh: Color, val scHighest: Color,
     val line: Color, val outline: Color,
     val text: Color, val text2: Color, val text3: Color,
     val primary: Color, val onPrimary: Color, val primarySoft: Color, val primaryText: Color,
     val ok: Color, val okSoft: Color, val warn: Color, val warnSoft: Color, val err: Color, val errSoft: Color,
     val scrim: Color,
-    // Cristal only: the colour field behind everything, and the glass fills of bars, chips and their light rim.
-    val field1: Color = Color.Transparent, val field2: Color = Color.Transparent,
-    val field3: Color = Color.Transparent, val field4: Color = Color.Transparent,
-    val barTop: Color = Color.Transparent, val barBottom: Color = Color.Transparent,
-    val chipFill: Color = Color.Transparent, val rimTop: Color = Color.Transparent, val rimEdge: Color = Color.Transparent,
+    /** `--info`: links and the Orbe mark; it has no Material slot. */
+    val info: Color,
+    /**
+     * The tokens no palette changes: `--popover` (sheets, dialogs), `--secondary`, `--muted` and `--accent` (fields,
+     * tracks, pressed rows) stay neutral grey in every palette, so a surface made with them never takes the palette's tint.
+     */
+    val popover: Color, val secondary: Color, val muted: Color, val accent: Color,
+    /** `--warning-ink`: the text of a warning, darker than [warn] by day. */
+    val warnInk: Color,
+    /** `--bubble`: the person's own message. Each palette tints it, so it is not the Material surface slot it once shared. */
+    val bubble: Color = scHigh,
 )
 
-val OrbitaLightPalette = OrbPalette(
-    bg = Color(0xFFF8F9FC), surface = Color(0xFFFFFFFF), scLow = Color(0xFFF4F6F9),
-    sc = Color(0xFFEFF1F6), scHigh = Color(0xFFE8EBF1), scHighest = Color(0xFFE0E3EA),
-    line = Color(0xFFDFE2E7), outline = Color(0xFF818693), text = Color(0xFF171A24),
-    text2 = Color(0xFF4E525E), text3 = Color(0xFF646975), primary = Color(0xFF3061D8),
-    onPrimary = Color(0xFFFFFFFF), primarySoft = Color(0xFFE6F0FF), primaryText = Color(0xFF214DBA),
-    ok = Color(0xFF007840), okSoft = Color(0xFFDFF8E6), warn = Color(0xFF975800),
-    warnSoft = Color(0xFFFFF1D1), err = Color(0xFFC2272D), errSoft = Color(0xFFFFEBE8),
-    scrim = Color(0x6612161F),
-)
+/** The six palettes of the single theme; [key] is what is saved, [label] what the user reads. */
+enum class OrbPaletteChoice(val key: String, val label: String) {
+    Grafito("grafito", "Grafito"), Oceano("oceano", "Océano"), Bosque("bosque", "Bosque"),
+    Uva("uva", "Uva"), Rubi("rubi", "Rubí"), Arena("arena", "Arena");
 
-val OrbitaDarkPalette = OrbPalette(
-    bg = Color(0xFF0C0E13), surface = Color(0xFF121419), scLow = Color(0xFF0F1015),
-    sc = Color(0xFF191C22), scHigh = Color(0xFF21242C), scHighest = Color(0xFF2A2E36),
-    line = Color(0xFF25282E), outline = Color(0xFF6A6F7B), text = Color(0xFFEFF0F4),
-    text2 = Color(0xFFBABEC6), text3 = Color(0xFF9A9EA8), primary = Color(0xFF77A2FC),
-    onPrimary = Color(0xFF081431), primarySoft = Color(0xFF1C2A49), primaryText = Color(0xFFA3C4FF),
-    ok = Color(0xFF63D18F), okSoft = Color(0xFF143320), warn = Color(0xFFF7C15F),
-    warnSoft = Color(0xFF432A08), err = Color(0xFFFF7D7C), errSoft = Color(0xFF4B1D1D),
-    scrim = Color(0x8C000000),
-)
-
-val CristalLightPalette = OrbPalette(
-    bg = Color(0xFFD5E4FB), surface = Color(0xFFFFFFFF), scLow = Color(0x5CF7FAFE),
-    sc = Color(0xB8EDF0F6), scHigh = Color(0xE6E4E8EF), scHighest = Color(0xFFD6DBE3),
-    line = Color(0x1F282E38), outline = Color(0xFF6B727E), text = Color(0xFF14161B),
-    text2 = Color(0xFF333840), text3 = Color(0xFF454B54), primary = Color(0xFF005ED5),
-    onPrimary = Color(0xFFFFFFFF), primarySoft = Color(0xEBD3E8FF), primaryText = Color(0xFF004FBF),
-    ok = Color(0xFF006E30), okSoft = Color(0xFFD8F9DD), warn = Color(0xFF904C00),
-    warnSoft = Color(0xFFFFF1D2), err = Color(0xFFC21725), errSoft = Color(0xFFFFEAE9),
-    scrim = Color(0x6612161F), field1 = Color(0xFF5AACFF), field2 = Color(0xFFF293D0),
-    field3 = Color(0xFF46D6D1), field4 = Color(0xFFFFC88C), barTop = Color(0xC7FFFFFF),
-    barBottom = Color(0x99FFFFFF), chipFill = Color(0x99FFFFFF), rimTop = Color(0xF2FFFFFF),
-    rimEdge = Color(0x1A262E3D),
-)
-
-val CristalDarkPalette = OrbPalette(
-    bg = Color(0xFF0A0F1D), surface = Color(0xFF1C1E22), scLow = Color(0x9912161E),
-    sc = Color(0xB82B2E34), scHigh = Color(0xE035383E), scHighest = Color(0xFF44484E),
-    line = Color(0x1AFFFFFF), outline = Color(0xFF828690), text = Color(0xFFF4F5F6),
-    text2 = Color(0xFFCBCED3), text3 = Color(0xFFB4B7BE), primary = Color(0xFF0062D8),
-    onPrimary = Color(0xFFFFFFFF), primarySoft = Color(0xE6153765), primaryText = Color(0xFF95CDFF),
-    ok = Color(0xFF6ED889), okSoft = Color(0xFF17391F), warn = Color(0xFFFAC463),
-    warnSoft = Color(0xFF462D0B), err = Color(0xFFFF8A88), errSoft = Color(0xFF541F20),
-    scrim = Color(0x8C000000), field1 = Color(0xFF0B3A7A), field2 = Color(0xFF4D1951),
-    field3 = Color(0xFF004747), field4 = Color(0xFF472400), barTop = Color(0xC72F333B),
-    barBottom = Color(0xB823262E), chipFill = Color(0x14FFFFFF), rimTop = Color(0x38FFFFFF),
-    rimEdge = Color(0x14FFFFFF),
-)
-
+    companion object {
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key }
+    }
+}
 
 /**
- * Grafito: neutral greys with a single orange accent, from annex A of synara-vs-orb.md (OKLCH converted to sRGB once, like
- * the others). The text tokens were checked for WCAG AA against the field and the soft fills; the control outline
- * (`--input`) for 3:1. Primary is neutral (near-black by day, near-white at night): the orange is only for text on
- * [OrbPalette.primarySoft]. No glass fields.
+ * The sample dot of each palette in «Apariencia» (the mockup's `data-pc` colours). They are the same in light and dark,
+ * so a palette is always recognised by the same colour; the only colours written by hand outside the palettes.
+ */
+val SampleGrafito = Color(0xFFD44F13)
+val SampleOceano = Color(0xFF1881E1)
+val SampleBosque = Color(0xFF2C965D)
+val SampleUva = Color(0xFF9260DA)
+val SampleRubi = Color(0xFFD93F5A)
+val SampleArena = Color(0xFFB7752B)
+
+val OrbPaletteChoice.sample: Color
+    get() = when (this) {
+        OrbPaletteChoice.Grafito -> SampleGrafito
+        OrbPaletteChoice.Oceano -> SampleOceano
+        OrbPaletteChoice.Bosque -> SampleBosque
+        OrbPaletteChoice.Uva -> SampleUva
+        OrbPaletteChoice.Rubi -> SampleRubi
+        OrbPaletteChoice.Arena -> SampleArena
+    }
+
+/**
+ * Grafito: neutral greys with a single orange accent (orb-ui.css, light and dark blocks). The text tokens were checked
+ * for WCAG AA against the field and the soft fills; the control outline (`--input`) for 3:1. Primary is neutral
+ * (near-black by day, near-white at night): the accent is only for text on [OrbPalette.primarySoft].
  */
 val GrafitoLightPalette = OrbPalette(
     bg = Color(0xFFFCFCFC), surface = Color(0xFFFFFFFF), scLow = Color(0xFFF8F8F8),
-    sc = Color(0xFFF4F4F4), scHigh = Color(0xFFF1F1F1), scHighest = Color(0xFFE8E8E8),
-    line = Color(0xFFEEEEEE), outline = Color(0xFF868686), text = Color(0xFF262626),
+    sc = Color(0xFFF1F1F1), scHigh = Color(0xFFF1F1F1), scHighest = Color(0xFFE8E8E8),
+    line = Color(0xFFE8E8E8), outline = Color(0xFF868686), text = Color(0xFF262626),
     text2 = Color(0xFF636363), text3 = Color(0xFF747474), primary = Color(0xFF171717),
     onPrimary = Color(0xFFFAFAFA), primarySoft = Color(0xFFFFEDE6), primaryText = Color(0xFFB53900),
     ok = Color(0xFF007948), okSoft = Color(0xFFE2F9EC), warn = Color(0xFF945A00),
     warnSoft = Color(0xFFFFF3D6), err = Color(0xFFD01D21), errSoft = Color(0xFFFFEFED),
-    scrim = Color(0x6612161F),
+    scrim = Color(0x6612161F), info = oklch(0.53, 0.17, 254.0),
+    popover = oklch(1.0, 0.0, 0.0), secondary = oklch(0.967, 0.0, 0.0), muted = oklch(0.962, 0.0, 0.0), accent = oklch(0.958, 0.0, 0.0),
+    warnInk = oklch(0.46, 0.11, 65.0),
 )
 
 val GrafitoDarkPalette = OrbPalette(
-    bg = Color(0xFF0E0E0E), surface = Color(0xFF111111), scLow = Color(0xFF131313),
-    sc = Color(0xFF171717), scHigh = Color(0xFF1C1C1C), scHighest = Color(0xFF262626),
-    line = Color(0xFF191919), outline = Color(0xFF636363), text = Color(0xFFF5F5F5),
+    bg = Color(0xFF0E0E0E), surface = Color(0xFF111111), scLow = Color(0xFF0A0A0A),
+    sc = Color(0xFF1C1C1C), scHigh = Color(0xFF1C1C1C), scHighest = Color(0xFF262626),
+    line = Color(0xFF1E1E1E), outline = Color(0xFF636363), text = Color(0xFFF5F5F5),
     text2 = Color(0xFFA4A4A4), text3 = Color(0xFF8C8C8C), primary = Color(0xFFF5F5F5),
     onPrimary = Color(0xFF171717), primarySoft = Color(0xFF3B1D13), primaryText = Color(0xFFF78955),
     ok = Color(0xFF4EC983), okSoft = Color(0xFF13271A), warn = Color(0xFFF0BA59),
     warnSoft = Color(0xFF30200D), err = Color(0xFFFF645F), errSoft = Color(0xFF391919),
-    scrim = Color(0x8C000000),
+    scrim = Color(0x8C000000), info = oklch(0.68, 0.17, 250.0),
+    popover = oklch(0.2, 0.0, 0.0), secondary = oklch(0.205, 0.0, 0.0), muted = oklch(0.205, 0.0, 0.0), accent = oklch(0.225, 0.0, 0.0),
+    warnInk = oklch(0.82, 0.13, 80.0),
 )
+
+// Every other palette is Grafito plus what its line of temas.css overrides: accent, field, sidebar, bubble, card, border.
+private val OceanoLight = GrafitoLightPalette.copy(
+    primarySoft = Color(0xFFE0F3FF), primaryText = Color(0xFF0063BA), bg = Color(0xFFFAFCFE), bubble = oklch(0.955, 0.008, 250.0),
+    scLow = Color(0xFFF4F7FB), sc = Color(0xFFECF1F5),
+)
+private val OceanoDark = GrafitoDarkPalette.copy(
+    primarySoft = Color(0xFF142A41), primaryText = Color(0xFF68B5F5), bg = Color(0xFF0C0F12), bubble = oklch(0.225, 0.012, 255.0),
+    scLow = Color(0xFF080A0E), sc = Color(0xFF181C21), surface = Color(0xFF0F1215),
+)
+private val BosqueLight = GrafitoLightPalette.copy(
+    primarySoft = Color(0xFFE2F8E8), primaryText = Color(0xFF0B7643), bg = Color(0xFFFAFCFB), bubble = oklch(0.955, 0.008, 150.0),
+    scLow = Color(0xFFF4F8F5), sc = Color(0xFFEDF2ED),
+)
+private val BosqueDark = GrafitoDarkPalette.copy(
+    primarySoft = Color(0xFF152C1E), primaryText = Color(0xFF6CD092), bg = Color(0xFF0B0F0D), bubble = oklch(0.225, 0.012, 160.0),
+    scLow = Color(0xFF070B09), sc = Color(0xFF171E1A), surface = Color(0xFF0F1310),
+)
+private val UvaLight = GrafitoLightPalette.copy(
+    primarySoft = Color(0xFFF4EDFF), primaryText = Color(0xFF7B47BF), bg = Color(0xFFFCFBFD), bubble = oklch(0.955, 0.009, 300.0),
+    scLow = Color(0xFFF7F6FB), sc = Color(0xFFF1EFF5),
+)
+private val UvaDark = GrafitoDarkPalette.copy(
+    primarySoft = Color(0xFF2E2142), primaryText = Color(0xFFBE9DF7), bg = Color(0xFF0F0D12), bubble = oklch(0.225, 0.014, 300.0),
+    scLow = Color(0xFF0B090E), sc = Color(0xFF1D1A21), surface = Color(0xFF121115),
+)
+private val RubiLight = GrafitoLightPalette.copy(
+    primarySoft = Color(0xFFFFEBED), primaryText = Color(0xFFC02447), bg = Color(0xFFFEFBFB), bubble = oklch(0.955, 0.008, 10.0),
+    scLow = Color(0xFFFBF5F6), sc = Color(0xFFF5EEEF),
+)
+private val RubiDark = GrafitoDarkPalette.copy(
+    primarySoft = Color(0xFF421B1F), primaryText = Color(0xFFFC8999), bg = Color(0xFF120D0D), bubble = oklch(0.225, 0.012, 15.0),
+    scLow = Color(0xFF0E0909), sc = Color(0xFF211A1A), surface = Color(0xFF151010),
+)
+private val ArenaLight = GrafitoLightPalette.copy(
+    primarySoft = Color(0xFFFDEFDC), primaryText = Color(0xFF905211), bg = Color(0xFFFDFBF7), bubble = oklch(0.95, 0.014, 85.0),
+    scLow = Color(0xFFF9F5EC), sc = Color(0xFFF3EEE4), line = Color(0xFFE8E4DD),
+)
+private val ArenaDark = GrafitoDarkPalette.copy(
+    primarySoft = Color(0xFF362512), primaryText = Color(0xFFE7B369), bg = Color(0xFF120F0C), bubble = oklch(0.23, 0.012, 70.0),
+    scLow = Color(0xFF0E0A07), sc = Color(0xFF211C17), surface = Color(0xFF15120F),
+)
+
+fun paletteFor(choice: OrbPaletteChoice, dark: Boolean): OrbPalette = when (choice) {
+    OrbPaletteChoice.Grafito -> if (dark) GrafitoDarkPalette else GrafitoLightPalette
+    OrbPaletteChoice.Oceano -> if (dark) OceanoDark else OceanoLight
+    OrbPaletteChoice.Bosque -> if (dark) BosqueDark else BosqueLight
+    OrbPaletteChoice.Uva -> if (dark) UvaDark else UvaLight
+    OrbPaletteChoice.Rubi -> if (dark) RubiDark else RubiLight
+    OrbPaletteChoice.Arena -> if (dark) ArenaDark else ArenaLight
+}

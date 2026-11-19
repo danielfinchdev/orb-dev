@@ -62,6 +62,7 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
                         BiometricPrompt.ERROR_USER_CANCELED, BiometricPrompt.ERROR_NEGATIVE_BUTTON, BiometricPrompt.ERROR_CANCELED -> AuthResult.Cancelled
                         BiometricPrompt.ERROR_LOCKOUT, BiometricPrompt.ERROR_LOCKOUT_PERMANENT -> AuthResult.Blocked
                         BiometricPrompt.ERROR_NO_BIOMETRICS, BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL, BiometricPrompt.ERROR_HW_NOT_PRESENT -> AuthResult.NothingSet
+                        BiometricPrompt.ERROR_UNABLE_TO_PROCESS, BiometricPrompt.ERROR_TIMEOUT -> AuthResult.NotRecognized
                         else -> AuthResult.Failed
                     },
                 )

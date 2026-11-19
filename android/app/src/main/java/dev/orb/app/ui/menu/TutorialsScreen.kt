@@ -6,16 +6,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,16 +22,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbCard
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbSearchField
 import dev.orb.app.ui.shell.ScreenBar
-import dev.orb.app.ui.theme.OrbTheme
 import java.text.Normalizer
 
 /** Which tutorials and questions a search keeps. Accents and case do not matter: «bitacora» finds «Bitácoras». */
@@ -65,12 +65,9 @@ fun TutorialsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
     Column(modifier.fillMaxSize()) {
         ScreenBar(MenuTexts.TUTORIALS, onBack, MenuTexts.BACK)
-        OutlinedTextField(
-            query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), singleLine = true,
-            placeholder = { Text(MenuTexts.TUT_SEARCH) }, leadingIcon = { Icon(OrbIcons.Search, null) },
-            trailingIcon = if (searching) {
-                { IconButton({ query = "" }) { Icon(OrbIcons.Close, MenuTexts.TUT_CLEAR) } }
-            } else null,
+        OrbSearchField(
+            query, { query = it }, MenuTexts.TUT_SEARCH, Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+            onClear = { query = "" }, clearLabel = MenuTexts.TUT_CLEAR,
         )
         if (tutorials.isEmpty() && faqs.isEmpty()) {
             Message(MenuTexts.tutNoResults(query.trim()))
@@ -83,7 +80,7 @@ fun TutorialsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     val t = tutorials[i]
                     val key = "t:${t.id}"
                     Fold(TutorialTexts.named(t.title), searching || key in open, { toggle(key) }) {
-                        t.lines.forEach { Text("•  ${TutorialTexts.named(it)}", style = MaterialTheme.typography.bodyMedium) }
+                        t.lines.forEach { Body("•  ${TutorialTexts.named(it)}") }
                     }
                 }
             }
@@ -93,7 +90,7 @@ fun TutorialsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                     val f = faqs[i]
                     val key = "f:${f.question}"
                     Fold(TutorialTexts.named(f.question), searching || key in open, { toggle(key) }) {
-                        Text(TutorialTexts.named(f.answer), style = MaterialTheme.typography.bodyMedium)
+                        Body(TutorialTexts.named(f.answer))
                     }
                 }
             }
@@ -103,23 +100,24 @@ fun TutorialsScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
 
 @Composable
 private fun Heading(text: String) =
-    Text(text, Modifier.padding(top = 8.dp, bottom = 2.dp), style = MaterialTheme.typography.labelLarge, color = OrbTheme.colors.text3)
+    Text(text, Modifier.padding(top = 8.dp, bottom = 2.dp).semantics { heading() }, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
+
+@Composable
+private fun Body(text: String) = Text(text, color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
 
 @Composable
 private fun Fold(title: String, expanded: Boolean, onToggle: () -> Unit, body: @Composable () -> Unit) {
-    Surface(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)), shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column {
-            Row(
-                Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onToggle).padding(14.dp)
-                    .semantics { contentDescription = "$title, ${if (expanded) MenuTexts.TUT_COLLAPSE else MenuTexts.TUT_EXPAND}" },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                Icon(if (expanded) OrbIcons.ChevronUp else OrbIcons.ChevronDown, null, tint = OrbTheme.colors.text2)
-            }
-            AnimatedVisibility(expanded) {
-                Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() }
-            }
+    OrbCard {
+        Row(
+            Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).clickable(role = Role.Button, onClick = onToggle).padding(14.dp)
+                .semantics { contentDescription = "$title, ${if (expanded) MenuTexts.TUT_COLLAPSE else MenuTexts.TUT_EXPAND}" },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
+            Icon(if (expanded) OrbIcons.ChevronUp else OrbIcons.ChevronDown, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+        }
+        AnimatedVisibility(expanded) {
+            Column(Modifier.padding(start = 14.dp, end = 14.dp, bottom = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { body() }
         }
     }
 }

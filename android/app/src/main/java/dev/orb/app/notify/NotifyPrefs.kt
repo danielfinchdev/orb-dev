@@ -5,11 +5,26 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** What a notice shows while the phone is locked. */
+enum class LockScreenNotice(val key: String) {
+    /** The chat's name and the text. */
+    Full("full"),
+
+    /** The notice is there, with only «Orb» and a generic line. */
+    Generic("generic"),
+
+    /** The notice does not appear on the lock screen at all. */
+    Hidden("hidden");
+
+    companion object {
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key }
+    }
+}
+
 data class NotifySettings(
     /** Keeps the link to the PC open with the app closed (the «Mantener conectado» service). On after linking. */
     val keepConnected: Boolean = true,
-    /** Shows the text of a notice on the lock screen; off hides it behind a generic line. */
-    val lockScreenPublic: Boolean = false,
+    val lockScreen: LockScreenNotice = LockScreenNotice.Generic,
     /** The app lock is on: notices never carry their content, because they can sit in the shade after the app locks. */
     val appLock: Boolean = false,
 )
@@ -17,7 +32,11 @@ data class NotifySettings(
 /** What the phone remembers about its notices. Not secrets, so plain preferences. */
 class NotifyPrefs(private val store: KeyValueStore) {
     private val _settings = MutableStateFlow(
-        NotifySettings(store.getBoolean(KEEP, true), store.getBoolean(PUBLIC, false)),
+        // The first versions kept a yes/no («show the text»); whoever said yes keeps the full notice, the rest the generic one.
+        NotifySettings(
+            store.getBoolean(KEEP, true),
+            LockScreenNotice.fromKey(store.getString(SCREEN)) ?: if (store.getBoolean(PUBLIC, false)) LockScreenNotice.Full else LockScreenNotice.Generic,
+        ),
     )
     val settings: StateFlow<NotifySettings> = _settings.asStateFlow()
 
@@ -26,9 +45,9 @@ class NotifyPrefs(private val store: KeyValueStore) {
         _settings.value = _settings.value.copy(keepConnected = on)
     }
 
-    fun setLockScreenPublic(on: Boolean) {
-        store.edit { putBoolean(PUBLIC, on) }
-        _settings.value = _settings.value.copy(lockScreenPublic = on)
+    fun setLockScreen(mode: LockScreenNotice) {
+        store.edit { putString(SCREEN, mode.key) }
+        _settings.value = _settings.value.copy(lockScreen = mode)
     }
 
     /** Whether a PC is linked, mirrored here so the boot receiver can decide without opening the Keystore. */
@@ -44,6 +63,7 @@ class NotifyPrefs(private val store: KeyValueStore) {
     private companion object {
         const val KEEP = "keep.connected"
         const val PUBLIC = "lock.public"
+        const val SCREEN = "lock.screen"
         const val LINKED = "linked"
         const val ASKED = "permission.asked"
     }
