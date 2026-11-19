@@ -126,8 +126,9 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
       // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
-      // a browser sends none. A call without principal is internal and behaves as the window.
-      if (checkpoint != null || (principal && principal.channel !== 'desktop')) {
+      // a browser sends none. Only an explicit desktop principal skips them: a call without principal is not known to be the
+      // window, so it is guarded like a remote one.
+      if (checkpoint != null || principal?.channel !== 'desktop') {
         if (joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
         if (joinAbandoned(board, tid)) fail(JOIN_UNFINISHED);
         // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too.
