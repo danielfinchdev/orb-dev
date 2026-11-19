@@ -1,6 +1,11 @@
 package dev.orb.app.ui.attach
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -12,19 +17,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -33,108 +35,120 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.orb.app.attach.AttachState
 import dev.orb.app.attach.AttachTexts
 import dev.orb.app.attach.Attachment
 import dev.orb.app.attach.UploadPolicy
 import dev.orb.app.ui.icons.OrbIcons
-import dev.orb.app.ui.theme.OrbTheme
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetDivider
+import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.reducedMotion
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-/** «Cámara», «Galería» and, when the PC reads them, «Archivo». */
-@OptIn(ExperimentalMaterial3Api::class)
+/** «Adjuntar»: «Cámara», «Galería» and, when the PC reads them, «Archivo». */
 @Composable
 fun AttachSheet(policy: UploadPolicy, launchers: AttachLaunchers, onDismiss: () -> Unit) {
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
-        Column(Modifier.padding(bottom = 16.dp)) {
-            Text(AttachTexts.SHEET_TITLE, Modifier.padding(horizontal = 24.dp, vertical = 8.dp), style = MaterialTheme.typography.titleMedium)
-            SheetRow(OrbIcons.Camera, AttachTexts.CAMERA) { onDismiss(); launchers.camera() }
-            SheetRow(OrbIcons.Image, AttachTexts.GALLERY) { onDismiss(); launchers.gallery() }
-            // A PC from before 3.8.4 takes pictures only, so there is nothing else to pick.
-            if (policy.allowsFiles) SheetRow(OrbIcons.File, AttachTexts.FILE) { onDismiss(); launchers.file() }
-            Text(
-                AttachTexts.ENCRYPT_HINT, Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2,
-            )
-        }
+    OrbSheet(onDismiss = onDismiss, title = AttachTexts.SHEET_TITLE) {
+        // Both open a screen of the system, not of the app; the note says so.
+        OrbSheetItem(AttachTexts.CAMERA, { onDismiss(); launchers.camera() }, icon = OrbIcons.Camera, meta = AttachTexts.CAMERA_META)
+        OrbSheetItem(AttachTexts.GALLERY, { onDismiss(); launchers.gallery() }, icon = OrbIcons.Image, meta = AttachTexts.GALLERY_META)
+        // A PC from before 3.8.4 takes pictures only, so there is nothing else to pick.
+        if (policy.allowsFiles) OrbSheetItem(AttachTexts.FILE, { onDismiss(); launchers.file() }, icon = OrbIcons.File)
+        OrbSheetDivider()
+        Text(
+            AttachTexts.ENCRYPT_HINT, Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+            color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp,
+        )
     }
 }
 
-@Composable
-private fun SheetRow(icon: ImageVector, label: String, onClick: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurface)
-        Text(label, style = MaterialTheme.typography.bodyLarge)
-    }
-}
-
-/** The previews above the field: a thumbnail, progress or the error, and a close button to take each off. */
+/** The previews above the field: a card per file (thumbnail, name, progress or the error) and a button to take each off. */
 @Composable
 fun AttachStrip(items: List<Attachment>, notice: String?, onRemove: (Long) -> Unit, onRetry: (Long) -> Unit, modifier: Modifier = Modifier) {
     if (items.isEmpty() && notice == null) return
     Column(modifier.fillMaxWidth()) {
         if (items.isNotEmpty()) {
-            Row(Modifier.horizontalScroll(rememberScrollState()).padding(bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // The top and end padding make room for the remove button, which sits half outside its card.
+            Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 12.dp, end = 12.dp, bottom = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (item in items) Chip(item, onRemove, onRetry)
             }
         }
-        if (notice != null) Text(notice, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(bottom = 4.dp))
+        if (notice != null) Text(notice, Modifier.padding(bottom = 4.dp), color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp)
     }
 }
 
+/** `.lcard` of 72 dp: the mark or thumbnail, the name (12 sp) and, while it works, a bar. A failed one is wider to say why. */
 @Composable
 private fun Chip(item: Attachment, onRemove: (Long) -> Unit, onRetry: (Long) -> Unit) {
-    val scheme = MaterialTheme.colorScheme
-    val shape = RoundedCornerShape(14.dp)
     val working = item.state == AttachState.Preparing || item.state == AttachState.Uploading
-    Row(
-        Modifier.widthIn(max = 240.dp).clip(shape).background(scheme.surfaceContainerHighest).border(BorderStroke(1.dp, scheme.outlineVariant), shape)
-            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 2.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Box(Modifier.size(44.dp).clip(RoundedCornerShape(10.dp)).background(scheme.surfaceContainer), contentAlignment = Alignment.Center) {
+    val failed = item.state == AttachState.Failed
+    val shape = RoundedCornerShape(12.dp)
+    Box {
+        Column(
+            Modifier.width(if (failed) 132.dp else 72.dp).clip(shape).background(OrbKit.card).border(BorderStroke(1.dp, OrbKit.border), shape).padding(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
             val thumb = if (item.type.image) thumbnail(item.file) else null
-            if (thumb != null) Image(thumb, null, Modifier.size(44.dp), contentScale = ContentScale.Crop)
-            else Icon(if (item.type.image) OrbIcons.Image else OrbIcons.File, null, Modifier.size(22.dp), tint = OrbTheme.colors.text2)
-            if (working) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-        }
-        Column(Modifier.widthIn(max = 150.dp)) {
-            Text(item.name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelLarge)
-            when (item.state) {
-                AttachState.Preparing -> Status(AttachTexts.PREPARING, false)
-                AttachState.Uploading -> Status(AttachTexts.UPLOADING, false)
-                AttachState.Ready -> Unit
-                AttachState.Failed -> {
-                    if (item.canRetry) {
-                        Text(
-                            "${item.error}. ${AttachTexts.RETRY}", color = scheme.error, style = MaterialTheme.typography.bodySmall, maxLines = 2,
-                            modifier = Modifier.clickable(role = Role.Button) { onRetry(item.id) },
-                        )
-                    } else Status(item.error.orEmpty(), true)
-                }
+            if (thumb != null) Image(thumb, null, Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)), contentScale = ContentScale.Crop)
+            else Icon(if (item.type.image) OrbIcons.Image else OrbIcons.FileText, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+            Text(item.name, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (working) {
+                val say = if (item.state == AttachState.Preparing) AttachTexts.PREPARING else AttachTexts.UPLOADING
+                BusyBar(Modifier.width(52.dp).semantics { contentDescription = say })
+            }
+            if (failed) {
+                val text = if (item.canRetry) "${item.error}. ${AttachTexts.RETRY}" else item.error.orEmpty()
+                Text(
+                    text, Modifier.then(if (item.canRetry) Modifier.clickable(role = Role.Button) { onRetry(item.id) } else Modifier),
+                    color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                )
             }
         }
-        IconButton(onClick = { onRemove(item.id) }, Modifier.size(32.dp).semantics { contentDescription = AttachTexts.REMOVE }) {
-            Icon(OrbIcons.Close, null, Modifier.size(16.dp), tint = OrbTheme.colors.text2)
+        RemoveDot({ onRemove(item.id) }, Modifier.align(Alignment.TopEnd).offset(x = 12.dp, y = (-12).dp))
+    }
+}
+
+/** A 48 dp touch zone with a small «×» in a disc, over the corner of a card. */
+@Composable
+private fun RemoveDot(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(48.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onClick).semantics { contentDescription = AttachTexts.REMOVE },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(20.dp).clip(CircleShape).background(OrbKit.secondary).border(1.dp, OrbKit.border, CircleShape), contentAlignment = Alignment.Center) {
+            Icon(OrbIcons.Close, null, Modifier.size(12.dp), tint = OrbKit.mutedForeground)
         }
     }
 }
 
+/**
+ * `.progress` with no known fraction (the upload does not report one): a segment that slides over the track. The slide
+ * is the translation of a layer, so it costs no layout.
+ */
 @Composable
-private fun Status(text: String, error: Boolean) {
-    Text(text, color = if (error) MaterialTheme.colorScheme.error else OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+private fun BusyBar(modifier: Modifier = Modifier) {
+    val still = reducedMotion()
+    val phase by rememberInfiniteTransition(label = "busy-bar").animateFloat(0f, 1f, infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "phase")
+    Box(modifier.height(6.dp).clip(CircleShape).background(OrbKit.muted)) {
+        Box(
+            Modifier.fillMaxWidth(0.4f).height(6.dp).graphicsLayer {
+                // From before the track to past it; with motion off the segment rests in the middle.
+                translationX = if (still) size.width * 0.75f else size.width * (-1f + phase * 3.5f)
+            }.clip(CircleShape).background(OrbKit.primaryText),
+        )
+    }
 }
 
 /** A small decode of the prepared file; null until it is ready or when it cannot be read. */

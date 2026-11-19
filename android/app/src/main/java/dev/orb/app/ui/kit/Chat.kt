@@ -293,13 +293,20 @@ fun OrbComposerLabel(
 
 /** A 36 dp icon button of the box's bottom row, with a 48 dp touch zone (`.mcomp .ib`). */
 @Composable
-fun OrbComposerIcon(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+fun OrbComposerIcon(
+    icon: ImageVector, label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    /** Degrees the glyph is turned, read in the draw layer so an animation does not recompose the box. */
+    rotation: () -> Float = { 0f },
+) {
     Box(
         modifier.size(48.dp).clip(CircleShape).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = label; if (!enabled) disabled() },
         contentAlignment = Alignment.Center,
     ) {
-        Icon(icon, null, Modifier.size(20.dp), tint = if (enabled) OrbKit.mutedForeground else OrbKit.mutedForeground.copy(alpha = 0.45f))
+        Icon(
+            icon, null, Modifier.size(20.dp).graphicsLayer { rotationZ = rotation() },
+            tint = if (enabled) OrbKit.mutedForeground else OrbKit.mutedForeground.copy(alpha = 0.45f),
+        )
     }
 }
 

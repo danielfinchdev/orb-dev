@@ -88,7 +88,7 @@ class AttachViewsTest {
             listOf(item(1, AttachState.Uploading), item(2, AttachState.Failed, AttachTexts.UPLOAD_FAILED, retry = true)),
             onRemove = { removed = it }, onRetry = { retried = it },
         )
-        rule.onNodeWithText(AttachTexts.UPLOADING).assertIsDisplayed()
+        rule.onNodeWithContentDescription(AttachTexts.UPLOADING).assertIsDisplayed()
         rule.onNodeWithText("${AttachTexts.UPLOAD_FAILED}. ${AttachTexts.RETRY}").performClick()
         assertEquals(2L, retried)
         rule.onAllNodesWithContentDescription(AttachTexts.REMOVE)[0].performClick()
@@ -148,5 +148,34 @@ class AttachViewsTest {
             }
         }
         rule.onNodeWithContentDescription(AttachTexts.ADD).assertDoesNotExist()
+    }
+
+    @Test fun thePlusTurnsIntoACloseWhileTheTrayIsOpenAndBack() {
+        val c = AttachController(
+            CoroutineScope(SupervisorJob() + Dispatchers.Unconfined), object : AttachIo {
+                override fun info(uri: Uri) = SourceInfo("a.pdf", "application/pdf")
+                override fun read(uri: Uri, maxBytes: Long) = ByteArray(10)
+            },
+            AttachUploader { _, _, _ -> Result.success("x") }, { UploadPolicy(1000, setOf("png", "pdf")) }, File(tmp.newFolder(), "w"), Dispatchers.Unconfined,
+        )
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                Composer(online = true, busy = false, mode = null, canSetMode = false, onSend = {}, onStop = {}, onMode = {}, attach = c)
+            }
+        }
+        rule.onNodeWithContentDescription(AttachTexts.ADD).assertIsDisplayed()
+        rule.onNodeWithContentDescription(ChatTexts.ATTACH_CLOSE).assertDoesNotExist()
+        rule.onNodeWithContentDescription(AttachTexts.ADD).performClick()
+        rule.waitForIdle()
+        rule.onNodeWithContentDescription(ChatTexts.ATTACH_CLOSE).assertExists()
+        rule.onNodeWithText(AttachTexts.CAMERA_META).assertIsDisplayed()
+        rule.onNodeWithText(AttachTexts.GALLERY_META).assertIsDisplayed()
+        c.close()
+    }
+
+    @Test fun aFailedCardKeepsItsRetryAndAWorkingOneHasNoExtraText() {
+        strip(listOf(item(1, AttachState.Preparing)))
+        rule.onNodeWithContentDescription(AttachTexts.PREPARING).assertIsDisplayed()
+        rule.onNodeWithText("captura-1.png").assertIsDisplayed()
     }
 }
