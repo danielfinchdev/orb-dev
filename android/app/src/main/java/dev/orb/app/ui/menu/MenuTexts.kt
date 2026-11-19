@@ -2,10 +2,9 @@ package dev.orb.app.ui.menu
 
 /** Every text of the menu and of «Memorias y actividad», in Spanish and with the words the desktop app uses. */
 object MenuTexts {
-    const val MENU = "Menú"
-    const val SECTION_WORK = "Trabajo"
-    const val SECTION_SETTINGS = "Ajustes"
-    const val NOTICES = "Notificaciones"
+    const val CHATS = "Chats"
+    const val TASKS = "Tareas"
+    const val PROJECTS = "Proyectos"
     const val SCHEDULES = "Programadas"
     const val ACTIVITY = "Memorias y actividad"
     const val USAGE = "Uso y agentes"
@@ -13,9 +12,12 @@ object MenuTexts {
     const val GAMES = "Juegos"
     const val TUTORIALS = "Tutoriales"
     const val THIS_PHONE = "Este móvil"
-    const val APPEARANCE = "Apariencia"
-    const val LINK_TEST = "Prueba de conexión"
-    const val UNLINK = "Desenlazar este móvil"
+    const val DARK_MODE = "Modo oscuro"
+    const val PHONE_VIEW = "Vista del móvil"
+    const val CONNECTED = "Conectado"
+    const val OFFLINE = "Sin conexión"
+    const val CONNECTING = "Conectando…"
+    const val OFFLINE_LINE = "apagado o fuera de alcance"
     const val CLOSE = "Cerrar"
     const val MORE_OPTIONS = "Más opciones"
 

@@ -84,17 +84,19 @@ fun OrbTopBar(
     }
 }
 
-/** The ORB·E mark: spaced letters and a dot in the theme's accent. */
+/** The ORB·E mark: spaced letters and a dot in the theme's accent; [withE] false is the short ORB· of a sheet's header. */
 @Composable
-fun OrbWordmark(modifier: Modifier = Modifier, fontSize: TextUnit = 17.sp) {
+fun OrbWordmark(modifier: Modifier = Modifier, fontSize: TextUnit = 17.sp, withE: Boolean = true) {
     val em = fontSize.value
     val dot = OrbKit.primaryText
-    Row(modifier.clearAndSetSemantics { contentDescription = "Orbe" }, verticalAlignment = Alignment.CenterVertically) {
+    Row(modifier.clearAndSetSemantics { contentDescription = if (withE) "Orbe" else "Orb" }, verticalAlignment = Alignment.CenterVertically) {
         Text("ORB", color = OrbKit.foreground, fontSize = fontSize, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, letterSpacing = (em * 0.16f).sp, lineHeight = fontSize)
         Spacer(Modifier.width((em * 0.06f).dp))
         Box(Modifier.size(5.44.dp).clip(CircleShape).background(dot))
-        Spacer(Modifier.width((em * 0.22f).dp))
-        Text("E", color = OrbKit.foreground, fontSize = fontSize, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, lineHeight = fontSize)
+        if (withE) {
+            Spacer(Modifier.width((em * 0.22f).dp))
+            Text("E", color = OrbKit.foreground, fontSize = fontSize, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, lineHeight = fontSize)
+        }
     }
 }
 

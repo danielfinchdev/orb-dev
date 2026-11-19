@@ -116,6 +116,8 @@ fun OrbSheetItem(
     chevron: Boolean = false,
     /** False draws the row dimmed and out of reach; [meta] can say why. */
     enabled: Boolean = true,
+    /** Anything at the end of the row (a count bubble, a switch), after [meta]. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val tone = if (danger) OrbKit.destructive else OrbKit.foreground
     val click = if (checked != null) Modifier.selectable(selected = checked, enabled = enabled, role = Role.RadioButton, onClick = onClick)
@@ -132,6 +134,7 @@ fun OrbSheetItem(
         if (meta != null) Text(meta, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
         if (checked == true) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.foreground)
         if (chevron) Icon(OrbIcons.ChevronRight, null, Modifier.size(20.dp), tint = OrbKit.faintForeground)
+        trailing?.invoke()
     }
 }
 

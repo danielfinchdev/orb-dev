@@ -12,7 +12,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.orb.app.ui.settings.AppearanceSheet
 import dev.orb.app.ui.theme.OrbTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -78,7 +77,6 @@ import dev.orb.app.ui.thisphone.RuntimeThisPhoneBackend
 import dev.orb.app.ui.thisphone.ThisPhoneScreen
 import dev.orb.app.ui.thisphone.ThisPhoneViewModel
 import dev.orb.app.ui.usage.UsageViewModel
-import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
 import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
@@ -173,8 +171,6 @@ private fun NewChatHost(container: AppContainer, nav: androidx.navigation.NavHos
 
 @Composable
 private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation.NavHostController) {
-    var appearance by rememberSaveable { mutableStateOf(false) }
-    if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
     OpenFromNotice(container, nav)
     OpenShare(container, nav)
     NavHost(
@@ -195,7 +191,6 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.chatsBackend() }
             val home = viewModel<HomeViewModel>(factory = viewModelFactory { initializer { HomeViewModel(container) } })
             val homeState by home.state.collectAsStateWithLifecycle()
-            var confirming by rememberSaveable { mutableStateOf(false) }
             // Each opening of the sheet gets its own view model, so a closed sheet never comes back with old choices.
             var newChatSheet by rememberSaveable { mutableStateOf(0) }
             var newChatOpen by rememberSaveable { mutableStateOf(false) }
@@ -218,9 +213,6 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                         onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
                         onSearch = { nav.navigate(Search) },
                         onNewChat = { newChatSheet++; newChatOpen = true },
-                        onAppearance = { appearance = true },
-                        onLinkTest = { nav.navigate(LinkTest) },
-                        onUnlink = { confirming = true },
                         onOpenTask = { nav.navigate(TaskRoute(it)) },
                         onOpenProject = { nav.navigate(ProjectRoute(it)) },
                         onNotices = { nav.navigate(NoticesRoute) },
@@ -236,12 +228,13 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     tasks = tasksBackend,
                     projects = projectsBackend,
                     notes = notesBackend,
+                    pcName = homeState.pcName,
+                    theme = container.themePrefs,
                 )
             }
             if (newChatOpen && backend != null) {
                 NewChatHost(container, nav, key = "newchat:$newChatSheet", fixedProject = null, onDismiss = { newChatOpen = false })
             }
-            if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
         }
         composable<Search> {
             val backend = remember { container.chatsBackend() }
@@ -393,7 +386,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { RuntimeThisPhoneBackend(container) }
             val vm = viewModel<ThisPhoneViewModel>(factory = viewModelFactory { initializer { ThisPhoneViewModel(backend) } })
             ThisPhoneScreen(
-                vm, onBack = { nav.popBackStack() }, onAppearance = { appearance = true },
+                vm, container.themePrefs, onBack = { nav.popBackStack() }, onLinkTest = { nav.navigate(LinkTest) },
                 onUnlinked = { nav.navigate(Welcome) { popUpTo(0) { inclusive = true } } },
             )
         }
@@ -423,7 +416,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
                 val vm = viewModel<LinkTestViewModel>(factory = viewModelFactory { initializer { LinkTestViewModel(backend) } })
-                LinkTestScreen(vm)
+                LinkTestScreen(vm, onBack = { nav.popBackStack() })
             }
         }
     }

@@ -1,28 +1,45 @@
 package dev.orb.app.ui.menu
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.InboxTexts
+import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBadge
+import dev.orb.app.ui.kit.OrbBadgeKind
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetDivider
 import dev.orb.app.ui.kit.OrbSheetItem
 import dev.orb.app.ui.kit.OrbSheetLabel
+import dev.orb.app.ui.kit.OrbSwitch
+import dev.orb.app.ui.kit.OrbUnread
+import dev.orb.app.ui.kit.OrbWordmark
 import dev.orb.app.ui.tasks.TaskFilter
 import dev.orb.app.ui.tasks.TaskTexts
-import dev.orb.app.ui.theme.OrbFonts
+import dev.orb.app.ui.thisphone.RouteKind
 
 /**
  * What the menu shows. An entry whose PC method is not listed is not offered at all. Juegos (a local web view) and
@@ -30,12 +47,17 @@ import dev.orb.app.ui.theme.OrbFonts
  * the PC's methods, because its drawing lives there.
  */
 class MenuState(
-    val pcLabel: String,
-    val unreadNotices: Int = 0,
+    val pcName: String?,
+    val connection: ConnectionState,
+    /** The numbers of the bottom bar, repeated beside Chats and Tareas. */
+    val unreadChats: Int = 0,
+    val tasksToApprove: Int = 0,
     val showSchedules: Boolean = true,
     val showActivity: Boolean = true,
     val showUsage: Boolean = true,
     val showWhiteboard: Boolean = true,
+    /** What the screen shows now, dark (true) or light (false), even when it follows the system; null leaves the switch out. */
+    val dark: Boolean? = null,
     /** What the chat list offers that the mockup does not draw; null when the menu is not opened from the list. */
     val inbox: InboxMenu? = null,
     /** What the task board offers that the mockup does not draw; null when the phone has no task board. */
@@ -52,7 +74,9 @@ class InboxMenu(val priority: Boolean, val canDigest: Boolean)
 class TasksMenu(val view: TaskFilter, val canCreate: Boolean, val canPause: Boolean)
 
 class MenuActions(
-    val onNotices: () -> Unit = {},
+    val onChats: () -> Unit = {},
+    val onTasks: () -> Unit = {},
+    val onProjects: () -> Unit = {},
     val onSchedules: () -> Unit = {},
     val onActivity: () -> Unit = {},
     val onUsage: () -> Unit = {},
@@ -60,9 +84,8 @@ class MenuActions(
     val onGames: () -> Unit = {},
     val onTutorials: () -> Unit = {},
     val onThisPhone: () -> Unit = {},
-    val onAppearance: () -> Unit = {},
-    val onLinkTest: () -> Unit = {},
-    val onUnlink: () -> Unit = {},
+    /** The switch «Modo oscuro»: true forces dark, false forces light. */
+    val onDark: (Boolean) -> Unit = {},
     val onPriority: () -> Unit = {},
     val onReorder: () -> Unit = {},
     val onDigest: () -> Unit = {},
@@ -72,10 +95,33 @@ class MenuActions(
     val onTasksView: (TaskFilter) -> Unit = {},
 )
 
-/** The ☰ menu of the Chats bar. Every choice closes the sheet first, then goes where it leads. */
+/** The ☰ menu: how the link stands on top, then where to go. Every choice but the switch closes the sheet first, then goes where it leads. */
 @Composable
 fun MenuSheet(state: MenuState, actions: MenuActions, onDismiss: () -> Unit) {
-    OrbSheet(onDismiss) { MenuContent(state, actions, onDismiss, scroll = false) }
+    OrbSheet(onDismiss, header = { MenuHeader(state) }) { MenuContent(state, actions, onDismiss, scroll = false) }
+}
+
+/** `.sh`: the mark on the left and the state of the link on the right. */
+@Composable
+private fun RowScope.MenuHeader(state: MenuState) {
+    OrbWordmark(withE = false)
+    Spacer(Modifier.weight(1f))
+    when (state.connection) {
+        is ConnectionState.Online -> OrbBadge(MenuTexts.CONNECTED, kind = OrbBadgeKind.Ok)
+        ConnectionState.Connecting -> OrbBadge(MenuTexts.CONNECTING)
+        else -> OrbBadge(MenuTexts.OFFLINE, kind = OrbBadgeKind.Warn)
+    }
+}
+
+/** The line under the header: the PC and the way to it («DanLaptop · Tailscale»), or why it cannot be reached. */
+fun menuStatusLine(state: MenuState): String {
+    val pc = state.pcName?.takeIf { it.isNotBlank() } ?: "PC"
+    return when (val c = state.connection) {
+        is ConnectionState.Online -> "$pc · ${RouteKind.of(c.base)?.label ?: MenuTexts.CONNECTED}"
+        is ConnectionState.Offline -> "$pc · ${MenuTexts.OFFLINE_LINE}"
+        ConnectionState.Connecting -> pc
+        else -> connectionText(c)
+    }
 }
 
 /** [scroll] is false inside [OrbSheet], which scrolls its own body. */
@@ -85,26 +131,32 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit, scrol
     Column(
         Modifier.fillMaxWidth().then(if (scroll) Modifier.verticalScroll(rememberScrollState()) else Modifier).navigationBarsPadding().padding(bottom = 16.dp),
     ) {
-        Text(
-            MenuTexts.MENU, Modifier.padding(horizontal = 20.dp, vertical = 4.dp).semantics { heading() }, color = OrbKit.foreground, fontSize = 20.sp,
-            lineHeight = 28.sp, fontFamily = OrbFonts.title,
-        )
-        Text(state.pcLabel, Modifier.padding(horizontal = 20.dp, vertical = 2.dp), color = OrbKit.mutedForeground, fontSize = 14.sp, lineHeight = 20.sp)
+        Text(menuStatusLine(state), Modifier.padding(horizontal = 20.dp), color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
 
-        OrbSheetLabel(MenuTexts.SECTION_WORK)
-        OrbSheetItem(MenuTexts.NOTICES, go(actions.onNotices), icon = OrbIcons.Bell, meta = state.unreadNotices.takeIf { it > 0 }?.let { if (it > 99) "99+" else it.toString() })
-        if (state.showSchedules) OrbSheetItem(MenuTexts.SCHEDULES, go(actions.onSchedules), icon = OrbIcons.Clock)
+        Counted(MenuTexts.CHATS, go(actions.onChats), OrbIcons.Chat, state.unreadChats)
+        Counted(MenuTexts.TASKS, go(actions.onTasks), OrbIcons.Tasks, state.tasksToApprove)
+        OrbSheetItem(MenuTexts.PROJECTS, go(actions.onProjects), icon = OrbIcons.FolderGit2)
+        OrbSheetDivider()
+        if (state.showSchedules) OrbSheetItem(MenuTexts.SCHEDULES, go(actions.onSchedules), icon = OrbIcons.CalendarClock)
+        if (state.showWhiteboard) OrbSheetItem(MenuTexts.WHITEBOARD, go(actions.onWhiteboard), icon = OrbIcons.Presentation, meta = MenuTexts.PHONE_VIEW)
         if (state.showActivity) OrbSheetItem(MenuTexts.ACTIVITY, go(actions.onActivity), icon = OrbIcons.Activity)
         if (state.showUsage) OrbSheetItem(MenuTexts.USAGE, go(actions.onUsage), icon = OrbIcons.Gauge)
-        if (state.showWhiteboard) OrbSheetItem(MenuTexts.WHITEBOARD, go(actions.onWhiteboard), icon = OrbIcons.PenTool)
-        OrbSheetItem(MenuTexts.GAMES, go(actions.onGames), icon = OrbIcons.Gamepad2)
-        OrbSheetItem(MenuTexts.TUTORIALS, go(actions.onTutorials), icon = OrbIcons.GraduationCap)
-
-        OrbSheetLabel(MenuTexts.SECTION_SETTINGS)
+        OrbSheetItem(MenuTexts.GAMES, go(actions.onGames), icon = OrbIcons.Gamepad2, meta = MenuTexts.PHONE_VIEW)
+        OrbSheetItem(MenuTexts.TUTORIALS, go(actions.onTutorials), icon = OrbIcons.GraduationCap, meta = MenuTexts.PHONE_VIEW)
+        OrbSheetDivider()
         OrbSheetItem(MenuTexts.THIS_PHONE, go(actions.onThisPhone), icon = OrbIcons.Smartphone)
-        OrbSheetItem(MenuTexts.APPEARANCE, go(actions.onAppearance), icon = OrbIcons.Palette)
-        OrbSheetItem(MenuTexts.LINK_TEST, go(actions.onLinkTest), icon = OrbIcons.Activity)
-        OrbSheetItem(MenuTexts.UNLINK, go(actions.onUnlink), icon = OrbIcons.LogOut, danger = true)
+        state.dark?.let { dark ->
+            // The whole row is the switch, announced as one; the sheet stays open so the change is seen at once.
+            Row(
+                Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).toggleable(value = dark, role = Role.Switch, onValueChange = actions.onDark)
+                    .padding(start = 20.dp, end = 8.dp),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                Icon(OrbIcons.Moon, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+                Text(MenuTexts.DARK_MODE, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp)
+                OrbSwitch(dark, null)
+            }
+        }
 
         // What the mockups do not draw but the phone keeps: it goes last, under its own label.
         if (state.inbox != null || state.tasks != null) OrbSheetLabel(MenuTexts.MORE_OPTIONS)
@@ -126,4 +178,10 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit, scrol
             if (tasks.view != TaskFilter.All) OrbSheetItem(TaskTexts.SEE_ALL_TASKS, go { actions.onTasksView(TaskFilter.All) }, icon = OrbIcons.Tasks)
         }
     }
+}
+
+/** A row of the sheet with the soft count bubble of the bottom bar at its end. */
+@Composable
+private fun Counted(text: String, onClick: () -> Unit, icon: ImageVector, count: Int) {
+    OrbSheetItem(text, onClick, icon = icon, trailing = if (count > 0) ({ OrbUnread(count, soft = true) }) else null)
 }

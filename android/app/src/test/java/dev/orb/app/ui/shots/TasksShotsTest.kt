@@ -134,7 +134,7 @@ class TasksShotsTest {
         twoModes("17-tareas", OrbPaletteChoice.Grafito, "-menu") {
             dev.orb.app.ui.menu.MenuSheet(
                 dev.orb.app.ui.menu.MenuState(
-                    "Conectado a PC de Dani", unreadNotices = 2, inbox = dev.orb.app.ui.menu.InboxMenu(priority = false, canDigest = true),
+                    "PC de Dani", dev.orb.app.link.net.ConnectionState.Connecting, unreadChats = 2, inbox = dev.orb.app.ui.menu.InboxMenu(priority = false, canDigest = true),
                     tasks = dev.orb.app.ui.menu.TasksMenu(dev.orb.app.ui.tasks.TaskFilter.Active, canCreate = true, canPause = true),
                 ),
                 dev.orb.app.ui.menu.MenuActions(), onDismiss = {},

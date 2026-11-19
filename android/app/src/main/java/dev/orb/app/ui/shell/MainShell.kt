@@ -3,6 +3,7 @@ package dev.orb.app.ui.shell
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -53,11 +54,11 @@ import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBottomBar
-import dev.orb.app.ui.kit.OrbDialog
-import dev.orb.app.ui.kit.OrbDialogAction
 import dev.orb.app.ui.kit.OrbTab
+import dev.orb.app.ui.theme.DarkMode
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
+import dev.orb.app.ui.theme.ThemePrefs
 import dev.orb.app.ui.projects.ProjectsBackend
 import dev.orb.app.ui.projects.ProjectsScreen
 import dev.orb.app.ui.projects.ProjectsViewModel
@@ -84,9 +85,6 @@ class ShellActions(
     val onOpenChat: (ChatRef) -> Unit,
     val onSearch: () -> Unit,
     val onNewChat: () -> Unit,
-    val onAppearance: () -> Unit,
-    val onLinkTest: () -> Unit,
-    val onUnlink: () -> Unit,
     val onOpenTask: (Long) -> Unit = {},
     val onOpenProject: (String) -> Unit = {},
     val onNotices: () -> Unit = {},
@@ -112,6 +110,10 @@ fun MainShell(
     tasks: TasksBackend? = null,
     projects: ProjectsBackend? = null,
     notes: NotesBackend? = null,
+    // The linked PC's name, which the menu names under its header.
+    pcName: String? = null,
+    // Where the menu's «Modo oscuro» switch writes; without it the switch is left out.
+    theme: ThemePrefs? = null,
 ) {
     val shell = viewModel<ShellViewModel>(factory = viewModelFactory { initializer { ShellViewModel(backend, tasks) } })
     val unread by shell.unreadChats.collectAsStateWithLifecycle()
@@ -137,16 +139,29 @@ fun MainShell(
         restoreState = true
     }
 
+    // A choice of the menu that is one of the three tabs goes where the bottom bar would.
+    fun openTab(route: Any) = nav.navigate(route) {
+        popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+    val look = theme?.settings?.collectAsStateWithLifecycle()?.value
+    val systemDark = isSystemInDarkTheme()
+
     if (menuOpen) {
         MenuSheet(
             MenuState(
-                connectionText(connection), unreadNotices, actions.menu.schedules, actions.menu.activity, actions.menu.usage, actions.menu.whiteboard,
+                pcName, connection, unread, toApprove, actions.menu.schedules, actions.menu.activity, actions.menu.usage, actions.menu.whiteboard,
+                dark = look?.let { when (it.dark) { DarkMode.Dark -> true; DarkMode.Light -> false; DarkMode.System -> systemDark } },
                 inbox = InboxMenu(chatsState.order == ChatOrder.Priority, chatsState.canDigest),
                 tasks = tasksState?.let { TasksMenu(it.filter, it.canCreate, it.canPause && !it.paused && it.online) },
             ),
             MenuActions(
-                onNotices = actions.onNotices, onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onWhiteboard = actions.onWhiteboard, onGames = actions.onGames, onTutorials = actions.onTutorials,
-                onThisPhone = actions.onThisPhone, onAppearance = actions.onAppearance, onLinkTest = actions.onLinkTest, onUnlink = actions.onUnlink,
+                onChats = { openTab(ChatsTab) }, onTasks = { openTab(TasksTab) }, onProjects = { openTab(ProjectsTab) },
+                onSchedules = actions.onSchedules, onActivity = actions.onActivity, onUsage = actions.onUsage, onWhiteboard = actions.onWhiteboard, onGames = actions.onGames, onTutorials = actions.onTutorials,
+                onThisPhone = actions.onThisPhone,
+                // From «según el sistema» the switch shows what is on screen and a touch forces the opposite.
+                onDark = { on -> theme?.setDark(if (on) DarkMode.Dark else DarkMode.Light) },
                 onPriority = { chatsVm.setOrder(if (chatsState.order == ChatOrder.Priority) ChatOrder.Recent else ChatOrder.Priority) },
                 onReorder = chatsVm::reorder, onDigest = chatsVm::showDigest,
                 onTasksSearch = { openTasks(); tasksVm?.openSearch() }, onTasksNew = { openTasks(); tasksVm?.openNewTask() },
@@ -214,12 +229,4 @@ private fun OrbNavigationBar(selected: (Tab) -> Boolean, unread: Int, toApprove:
     }
     val current = tabs.firstOrNull(selected)?.label
     OrbBottomBar(items, current ?: "", onSelect = { item -> tabs.first { it.label == item.key }.let(onSelect) })
-}
-
-@Composable
-fun UnlinkDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    OrbDialog(
-        onDismiss, ChatTexts.UNLINK_TITLE, OrbDialogAction(ChatTexts.UNLINK_CONFIRM, onConfirm, danger = true),
-        text = ChatTexts.UNLINK_BODY, dismiss = OrbDialogAction(ChatTexts.CANCEL, onDismiss),
-    )
 }
