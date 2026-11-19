@@ -10,6 +10,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -254,22 +255,25 @@ fun OrbTextField(
     leading: ImageVector? = null, trailing: (@Composable () -> Unit)? = null, secret: Boolean = false,
     keyboardType: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
     enabled: Boolean = true, invalid: Boolean = false,
+    /** More than one makes a growing multi-line input (a note) instead of the fixed single-line row; [maxLines] caps the growth. */
+    minLines: Int = 1, maxLines: Int = 8,
 ) {
+    val multi = minLines > 1
     val border = if (invalid) OrbKit.destructive else OrbKit.border
     Row(
-        modifier.fillMaxWidth().height(if (soft) 44.dp else 48.dp).clip(RadiusCard).background(if (soft) OrbKit.secondary else OrbKit.card)
-            .then(if (soft && !invalid) Modifier else Modifier.border(1.dp, border, RadiusCard)).padding(start = 14.dp, end = if (trailing != null) 6.dp else 14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier.fillMaxWidth().then(if (multi) Modifier.defaultMinSize(minHeight = 48.dp) else Modifier.height(if (soft) 44.dp else 48.dp)).clip(RadiusCard).background(if (soft) OrbKit.secondary else OrbKit.card)
+            .then(if (soft && !invalid) Modifier else Modifier.border(1.dp, border, RadiusCard)).padding(start = 14.dp, end = if (trailing != null) 6.dp else 14.dp).then(if (multi) Modifier.padding(vertical = 12.dp) else Modifier),
+        verticalAlignment = if (multi) Alignment.Top else Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (leading != null) Icon(leading, null, Modifier.size(18.dp), tint = OrbKit.mutedForeground)
-        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+        Box(Modifier.weight(1f), contentAlignment = if (multi) Alignment.TopStart else Alignment.CenterStart) {
             if (value.isEmpty()) Text(label, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
             BasicTextField(
                 value, onValueChange,
                 Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = label },
-                enabled = enabled, singleLine = true, textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
+                enabled = enabled, singleLine = !multi, minLines = minLines, maxLines = if (multi) maxLines else 1, textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp), cursorBrush = SolidColor(OrbKit.foreground),
                 visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Done),
+                keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = if (multi) ImeAction.Default else ImeAction.Done),
                 keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { onDone?.invoke() }),
             )
         }

@@ -26,14 +26,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -74,6 +71,7 @@ import dev.orb.app.ui.kit.OrbSheetInfo
 import dev.orb.app.ui.kit.OrbSheetItem
 import dev.orb.app.ui.kit.OrbSheetLabel
 import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSpinner
 import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.offline.ConnectionBand
 import dev.orb.app.ui.theme.OrbMotion
@@ -132,7 +130,7 @@ fun OrbeChatScreen(
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.deleted -> DeletedChatPage(onBack, if (state.canRestore) vm::restore else null)
-                    !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
                     else -> MessageList(vm, state, liveInfo, actions, draft, nowMs, stick, onStick = { stick = it })
                 }
             }
@@ -269,7 +267,7 @@ private fun MessageList(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (state.loadingOlder) item(key = "older", contentType = "older") {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { OrbSpinner(size = 20.dp) }
             }
             if (items.isEmpty() && !hasLive && state.liveTasks.isEmpty()) item(key = "empty", contentType = "empty") {
                 Text(ChatTexts.EMPTY_CHAT, Modifier.fillMaxWidth().padding(vertical = 48.dp), color = OrbTheme.colors.text2, textAlign = TextAlign.Center)

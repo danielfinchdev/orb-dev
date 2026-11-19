@@ -19,7 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
@@ -59,6 +58,7 @@ import dev.orb.app.ui.kit.OrbSheetInfo
 import dev.orb.app.ui.kit.OrbSheetItem
 import dev.orb.app.ui.kit.OrbSheetLabel
 import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSpinner
 import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.offline.ConnectionBand
 import dev.orb.app.ui.theme.OrbMotion
@@ -104,7 +104,7 @@ fun DirectChatScreen(
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.deleted -> DeletedChatPage(onBack, if (state.canRestore) vm::restore else null)
-                    !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                    !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
                     else -> DirectList(vm, state, actions, nowMs, stick, onStick = { stick = it }, editingId = editingId, onEditQueued = { editingId = it.id })
                 }
             }
@@ -306,7 +306,7 @@ private fun DirectList(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (state.loadingOlder) item(key = "older", contentType = "older") {
-                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { OrbSpinner(size = 20.dp) }
             }
             if (items.isEmpty() && !state.busy) item(key = "empty", contentType = "empty") {
                 Text(ChatTexts.emptyDirect(state.agentName), Modifier.fillMaxWidth().padding(vertical = 48.dp), color = OrbTheme.colors.text2, textAlign = TextAlign.Center)
