@@ -22,5 +22,19 @@ export function runOfAfter(board, taskId, cp, current) {
   if (!last) return null;
   // an old mark: still the current run only if nothing was launched after its photo was taken
   if (Number.isFinite(after?.at) && Date.parse(last.at) <= after.at) return current;
+  // an older one still (neither run nor time): the 'files.changed' event is written together with the photo, so one
+  // newer than the last launch means the photo was taken for that launch
+  if (after && !Number.isFinite(after.at)) {
+    const ended = board.one("SELECT id FROM events WHERE task_id = ? AND kind = 'files.changed' ORDER BY id DESC LIMIT 1", Number(taskId));
+    if (ended && ended.id > last.id) return current;
+  }
   return null;
+}
+
+// True while the work of the last run was left to a task that joins it by hand (a conflict joining its copy): the stored
+// diff then no longer describes what the folder has. It ends with a new launch or when that join is given up.
+export function joinedByHand(board, taskId) {
+  const last = lastLaunchId(board, taskId);
+  const rows = board.all("SELECT kind FROM events WHERE task_id = ? AND id > ? AND kind IN ('integrate.conflict', 'integrate.skipped') ORDER BY id DESC LIMIT 1", Number(taskId), last);
+  return rows[0]?.kind === 'integrate.conflict';
 }

@@ -21,7 +21,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 // Folders compared as the engine writes them: either separator, any case, no trailing separator.
@@ -39,10 +39,15 @@ function checkpointIdOf(board, taskId) {
   return runIdentifier(board.settingJson(`checkpoint:${taskId}`)?.before, lastLaunchId(board, taskId));
 }
 // A phone that sends the checkpointId is refused while the stored end photo still belongs to an earlier run (a task
-// re-run in an isolated copy keeps the previous undo point until its work is joined).
-function assertPointCurrent(board, taskId) {
-  const run = board.settingJson(`checkpoint:${taskId}`)?.after?.run;
-  if (Number.isInteger(run) && run !== lastLaunchId(board, taskId)) fail('los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento');
+// re-run in an isolated copy keeps the previous undo point until its work is joined). A point whose run cannot be known
+// (an old one) only blocks what touches files: accepting just marks the task, so it passes with { files: false }.
+function assertPointCurrent(board, taskId, { files = true } = {}) {
+  const cp = board.settingJson(`checkpoint:${taskId}`);
+  const run = cp?.after?.run;
+  const current = lastLaunchId(board, taskId);
+  if (Number.isInteger(run)) { if (run !== current) fail('los cambios de la última ejecución aún no están listos; vuelve a abrirla en un momento'); return; }
+  if (!cp?.after || !current || !files) return;
+  if (runOfAfter(board, taskId, cp, current) == null) fail('no se puede comprobar a qué ejecución pertenece este punto de vuelta; deshazla desde el PC');
 }
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -119,6 +124,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.undo': ({ id, checkpoint }) => {
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
+      if (checkpoint != null && joinedByHand(board, tid)) fail('esta tarea se unió a mano en el PC; deshazla desde el PC');
       if (checkpoint != null) assertPointCurrent(board, tid);
       return scheduler.undo(tid);
     },
@@ -134,6 +140,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // view is read only and was already rechecked when the tab opened, so it does not repeat it.
       if (stat !== true && file == null && board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
+      // the reasons only a phone is told (the PC's window keeps what it always got): the stored diff no longer describes the
+      // folder (joined by hand), or a finished task whose end photo failed (the undo still works from the point before)
+      const phone = Boolean(principal) && principal.channel !== 'desktop';
+      if (phone && cp?.before && joinedByHand(board, task.id)) return { available: false, reason: 'joinedbyhand', files: [], more: 0 };
       // the checkpointId of the run this diff belongs to (null when that cannot be known): the phone compares it with tasks.get's
       const diffId = () => {
         const current = lastLaunchId(board, task.id);
@@ -141,9 +151,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         return run == null ? null : runIdentifier(cp?.before, run);
       };
       // reason (why there is no diff): nophoto (no checkpoint), nogit (a copy checkpoint, no git), notdone (no photo after
-      // the work yet), gone (the repository is not there any more).
+      // the work yet), nophotoafter (phone only: finished without one), joinedbyhand (phone only), gone (the repository is not there any more).
       if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) {
-        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? 'nogit' : !cp.after?.commit ? 'notdone' : 'gone';
+        const finished = !['queued', 'awaiting_approval', 'waiting', 'running'].includes(task.status);
+        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? 'nogit' : !cp.after?.commit ? (phone && finished && !cp.after ? 'nophotoafter' : 'notdone') : 'gone';
         return { available: false, reason, files: [], more: 0 };
       }
       if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file), checkpointId: diffId() };
@@ -168,7 +179,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.accept': ({ id, unheld, checkpoint }) => {
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail('la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla');
-      if (checkpoint != null) assertPointCurrent(board, tid);
+      if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
         if (board.heldInfo(t)) fail('la tarea está retenida por la guardia; revisa sus cambios en el PC antes de aceptarla');

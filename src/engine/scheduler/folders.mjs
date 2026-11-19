@@ -70,8 +70,14 @@ export class FoldersPart {
     const run = lastLaunchId(board, task.id); // the run being joined, read before the awaits
     const repo = await repoRootAsync(project.path);
     const tip = task.branch ? (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', task.branch)).stdout.trim() : '';
-    if (!tip) { board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
-    if (tip === info.base) { this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
+    // Nothing to join: this run changed no files, so the undo point kept from an earlier run is still true for the current
+    // one. Marking it keeps a phone that sends the checkpointId from being told «not ready» for ever.
+    const keepPoint = () => {
+      const key = `checkpoint:${task.id}`; const cp = board.settingJson(key);
+      if (cp?.after && cp.after.run !== run) board.settingJson(key, { ...cp, after: { ...cp.after, run } });
+    };
+    if (!tip) { keepPoint(); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
+    if (tip === info.base) { keepPoint(); this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
     const out = await integrateIntoAsync(repo, { base: info.base, tip });
     // Read again after the awaits: a join closed meanwhile writes nothing more, unless files were already written: then
     // they are noted anyway, so «Deshacer» can give them back.
