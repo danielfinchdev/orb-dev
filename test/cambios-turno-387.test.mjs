@@ -15,7 +15,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
-import { commentsBlock, snapshotAfterTurn, snapshotBeforeTurn } from '../src/domain/conversations/turns.mjs';
+import { commentsBlock, listTurns, snapshotAfterTurn, snapshotBeforeTurn } from '../src/domain/conversations/turns.mjs';
 
 let t; let board; let api; let sessions; let repo; let sent;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -125,4 +125,15 @@ test('a photo that fails (the chat lookup throws) leaves no unhandled rejection 
     await new Promise((res) => setTimeout(res, 50));
     assert.deepEqual(seen, []);
   } finally { process.off('unhandledRejection', on); }
+});
+
+test('listing the turns while the last photo is still being taken already includes that turn', async () => {
+  await snapshotBeforeTurn(repo, 'list-wait', () => true);
+  fs.writeFileSync(path.join(repo, 'late.txt'), 'x\n');
+  const photo = snapshotAfterTurn(repo, 'list-wait', () => true); // not awaited, as the engine does
+  const listed = await listTurns(repo, 'list-wait');
+  assert.deepEqual(listed.turns.map((x) => x.n), [1]);
+  assert.equal(listed.available, true);
+  await photo;
+  assert.deepEqual((await listTurns(repo, 'never-photographed')).turns, []);
 });
