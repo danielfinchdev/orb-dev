@@ -67,7 +67,7 @@ test('3: the words promise nothing false (no «al abrir Orb», the code is not t
 
 test('4: the recovery code is made only when there is none, shown once, kept nowhere, and a failure asks the user', () => {
   assert.match(create, /call\('backup\.status'\)\.then\(\(s\) => setHasCode\(Boolean\(s\?\.recovery\)\)\)/);
-  assert.match(create, /if \(hasCode !== false\) \{ onDone\?\.\(\); return; \}/);
+  assert.match(create, /if \(hasCode === true\) \{ onDone\?\.\(\); return; \}/);
   assert.match(create, /\(await call\('master\.state'\)\)\?\.canForget\) return \{ have: true \}/);
   assert.match(create, /call\('backup\.recovery', \{ unlock \}\)/);
   assert.match(create, /const unlock = heldUnlock\(\);\s*if \(!unlock\) return \{ error: 'expired' \};/);

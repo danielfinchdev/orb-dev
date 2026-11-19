@@ -156,7 +156,7 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false, onBack =
       keepUnlock(await call('master.create', { password: v.next }));
       notifyOk(t('master.created'));
       set({ next: '', again: '' });
-      if (hasCode !== false) { onDone?.(); return; }
+      if (hasCode === true) { onDone?.(); return; }
       showIssue(await issue());
     }
     catch (error) { notifyError(error); setBusy(false); }
