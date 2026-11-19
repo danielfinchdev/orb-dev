@@ -184,6 +184,54 @@ class OrbeChatSafetyScreenTest {
         assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
     }
 
+    @Test fun aFolderThePcSaysMovedShowsTheWarningAndOnlyOpensTheTask() {
+        val b = FakeOrbeChatBackend(listOf(attention))
+        // Two folders with the same last name: the trimmed names alone would not tell them apart.
+        b.taskDetail = waiting { copy(project = "D:/otros/app-movil", folderNow = "C:/app-movil", folderMoved = true) }
+        screen(b)
+        rule.onNodeWithText(ChatTexts.FOLDER_CHANGED_NOTE).assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Ver y aprobar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
+    }
+
+    @Test fun aFolderOutsideOrbsOwnSaysSoNextToItAndOnlyOpensTheTask() {
+        val b = FakeOrbeChatBackend(listOf(attention))
+        b.taskDetail = waiting { copy(folderNow = "app-movil", folderOutside = true) }
+        screen(b)
+        rule.onNodeWithText("app-movil").assertIsDisplayed()
+        rule.onNodeWithText(ChatTexts.FOLDER_OUTSIDE_NOTE).assertIsDisplayed()
+        rule.onNodeWithText("Ver y aprobar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.none { it.startsWith("task ") })
+    }
+
+    @Test fun aCutDescriptionSaysSoAndOnlyOpensTheTaskFromTheCard() {
+        val b = FakeOrbeChatBackend(listOf(attention))
+        b.taskDetail = waiting { copy(descriptionCut = true) }
+        screen(b)
+        rule.onNodeWithText(ChatTexts.DESCRIPTION_CUT_NOTE).assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Ver y aprobar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
+    }
+
+    @Test fun theDialogSaysTheDescriptionIsAbbreviatedToo() {
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                ApprovalDialog(ApprovalAsk(waiting { copy(descriptionCut = true, folderOutside = true) }), onConfirm = {}, onDismiss = {})
+            }
+        }
+        rule.waitForIdle()
+        assertTrue(rule.onAllNodesWithText(ChatTexts.DESCRIPTION_CUT_NOTE).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(rule.onAllNodesWithText(ChatTexts.FOLDER_OUTSIDE_NOTE).fetchSemanticsNodes().isNotEmpty())
+    }
+
     @Test fun aPcThatDoesNotSayTheCurrentFolderOnlyOpensTheTask() {
         val b = FakeOrbeChatBackend(listOf(attention))
         b.taskDetail = waiting { copy(folderNow = null) }

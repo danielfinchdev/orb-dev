@@ -187,6 +187,10 @@ class ChatShotsTest {
         actions = setOf(TaskAction.Approve), reasoning = "high",
         description = (1..9).joinToString("\n") { "Paso $it: revisar el módulo $it, migrar sus consultas a Room y actualizar sus pruebas para que sigan pasando." },
     )
+    private val task47 = TaskDetail(
+        47, "Subir la web nueva", "awaiting_approval", "codex", "C:/app-movil", listOf("publish"), "h47", folderNow = "D:/otros/app-movil", folderMoved = true,
+        actions = setOf(TaskAction.Approve), description = "Sube la web nueva al servidor y avisa por correo.",
+    )
     private val task44 = TaskDetail(44, "Instalar dependencias", "running", "codex", "C:/app-movil", emptyList(), "h44", autonomy = "auto", approvalRequired = false)
 
     private fun thread14(auto: Boolean = false, question: Boolean = false): List<String> {
@@ -266,6 +270,11 @@ class ChatShotsTest {
     }
 
     @Test fun approvalsHeld() = approvalsOn(OrbPaletteChoice.Grafito, "-retenida", heldThread(), task45)
+
+    @Test fun approvalsFolderMoved() = approvalsOn(
+        OrbPaletteChoice.Grafito, "-carpeta-movida",
+        listOf(line(1, "system", "La tarea #47 espera tu OK", at(13, 57), """{"kind":"attention","task":47}""")), task47,
+    )
 
     @Test fun approvalsLongDescription() = approvalsOn(
         OrbPaletteChoice.Grafito, "-descripcion-larga",

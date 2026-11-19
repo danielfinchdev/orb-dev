@@ -50,9 +50,12 @@ sealed interface ChatItem {
 @Immutable
 data class ApprovalAsk(val detail: TaskDetail)
 
-/** «Deshacer esta tarea» waiting for the person's yes; [files] is how many files it changed, when the PC said. */
+/**
+ * «Deshacer esta tarea» waiting for the person's yes; [files] is how many files it changed, when the PC said. [checkpoint] is
+ * the point of return the dialog was opened on: it goes back with the yes, so a task that ran again meanwhile is not undone.
+ */
 @Immutable
-data class UndoAsk(val task: Long, val title: String, val files: Int?)
+data class UndoAsk(val task: Long, val title: String, val files: Int?, val checkpoint: String? = null)
 
 /** The queued message being edited; [error] is what the PC answered to the last try, word for word. */
 @Immutable
@@ -175,6 +178,9 @@ class OrbeChatViewModel(
     private var loadedOnceMore = false
 
     /** A message that left the queue (the PC took it) and waits for its own line to come back. */
+
+    /** The id of the latest line of the thread that names each task: which cards are the newest. */
+    @Volatile private var recency: Map<Long, Long> = emptyMap()
     private class Ghost(val pending: PendingMessage, val baseId: Long)
 
     private val parseCache = HashMap<String, ChatMessage?>()
@@ -242,7 +248,11 @@ class OrbeChatViewModel(
 
         // The first answer of the PC, and again whenever the link comes back.
         backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().onEach { online ->
-            if (online) { reloads.trySend(Unit); loadSnapshot(); markRead(); liveRequests.trySend(Unit); if (canEditQueue()) queueRequests.trySend(Unit) }
+            if (online) {
+                reloads.trySend(Unit); loadSnapshot(); markRead(); liveRequests.trySend(Unit); if (canEditQueue()) queueRequests.trySend(Unit)
+                // Whatever happened to the tasks while the link was down did not reach the cards.
+                viewModelScope.launch { unsettledTasks().forEach { refreshTask(it) } }
+            }
         }.launchIn(viewModelScope)
     }
 
@@ -265,6 +275,7 @@ class OrbeChatViewModel(
         val items = ArrayList<ChatItem>(real.size + lines.provisional.size + queued.size + ghost.size)
         real.mapTo(items) { ChatItem.Msg(it) }
         // A provisional line (a truncated `chat:new`) goes once its saved version is among the lines, so it does not show twice.
+        recency = HashMap<Long, Long>().also { r -> for (m in real) tasksOf(m).forEach { t -> r[t] = m.id } }
         val newReal = real.takeLast(6)
         lines.provisional.filterNot { p -> newReal.any { it.role == p.role && it.body.startsWith(p.body.trimEnd('…').take(80)) } }
             .mapTo(items) { ChatItem.Msg(it, provisional = true) }
@@ -290,21 +301,25 @@ class OrbeChatViewModel(
     /** The tasks the thread talks about: the ones its lines carry and the ones the recent lines name with «#42». */
     private fun referencedTasks(lines: List<ChatMessage>): Set<Long> {
         val ids = HashSet<Long>()
-        for (m in lines) {
-            m.task?.let(ids::add)
-            when (val c = m.card) {
-                is MsgCard.TaskAttention -> ids += c.task
-                is MsgCard.Permission -> c.task?.let(ids::add)
-                is MsgCard.Report -> ids += c.tasks
-                else -> {}
-            }
-        }
+        for (m in lines) ids += tasksOf(m)
         for (m in lines.takeLast(MENTION_WINDOW)) if (m.role != MsgRole.User) MENTION.findAll(m.body).forEach { it.groupValues[1].toLongOrNull()?.let(ids::add) }
         return ids
     }
 
     /** Asks for the running tasks again; the screen calls it while something is running. */
     fun refreshLive() { liveRequests.trySend(Unit) }
+
+    private fun tasksOf(m: ChatMessage): List<Long> {
+        val out = ArrayList<Long>(2)
+        m.task?.let(out::add)
+        when (val c = m.card) {
+            is MsgCard.TaskAttention -> out += c.task
+            is MsgCard.Permission -> c.task?.let(out::add)
+            is MsgCard.Report -> out += c.tasks
+            else -> {}
+        }
+        return out
+    }
 
     private fun onEvent(ev: LinkEvent) {
         val o = ev.payload as? JsonObject
@@ -516,21 +531,36 @@ class OrbeChatViewModel(
 
     private suspend fun refreshTask(task: Long) {
         val read = issueRead(task)
-        backend.taskDetail(task).onSuccess { d ->
-            if (!isLatest(task, read)) return@onSuccess
-            d.status?.let { s -> taskStatus.update { it + (task to s) } }
-            taskInfo.update { it + (task to d) }
-            // The counts are only worth asking for while there are changes to look at.
-            if (TaskAction.SeeChanges in d.actions) {
-                backend.taskStat(task).onSuccess { st -> taskStat.update { m -> if (st != null) m + (task to st) else m - task } }
-            } else taskStat.update { it - task }
-        }
+        backend.taskDetail(task).onSuccess { applyRead(task, read, it) }
     }
 
-    /** The tasks whose card can still change: waiting, queued, running, or done without an answer to «Aceptar». */
-    private fun unsettledTasks(): List<Long> = taskInfo.value.values.filter { d ->
-        d.status in UNSETTLED || (d.status == "done" && !d.accepted && !d.undone)
-    }.map { it.id }.take(MAX_REFRESH)
+    /** Shows what one read of the task said, unless a later read (or a decision) was asked after it. */
+    private suspend fun applyRead(task: Long, read: Long, d: TaskDetail) {
+        if (!isLatest(task, read)) return
+        d.status?.let { s -> taskStatus.update { it + (task to s) } }
+        taskInfo.update { it + (task to d) }
+        // The counts are only worth asking for while there are changes to look at.
+        if (TaskAction.SeeChanges in d.actions) {
+            backend.taskStat(task).onSuccess { st ->
+                // The counts come from a second request: a newer read of the task may have been asked while it was on its way.
+                if (isLatest(task, read)) taskStat.update { m -> if (st != null) m + (task to st) else m - task }
+            }
+        } else taskStat.update { it - task }
+    }
+
+    /**
+     * The cards that can still change, the newest of the thread first: waiting, queued, running, done without an answer to
+     * «Aceptar», or asked and never answered. Only [MAX_REFRESH] are read at a time, so the old ones are the ones left out.
+     */
+    private fun unsettledTasks(): List<Long> {
+        val info = taskInfo.value
+        val rank = recency
+        val ids = LinkedHashSet<Long>(info.keys).apply { addAll(asked) }
+        return ids.filter { t ->
+            val d = info[t]
+            d == null || d.status in UNSETTLED || (d.status == "done" && !d.accepted && !d.undone)
+        }.sortedWith(compareByDescending<Long> { rank[it] ?: 0L }.thenByDescending { it }).take(MAX_REFRESH)
+    }
 
     /**
      * The card's «Aprobar». The card showed the task as [shownHash] fingerprints it: only that is approved. If the card
@@ -544,7 +574,7 @@ class OrbeChatViewModel(
             // Nothing read yet: the PC's description is fetched and shown in the dialog (or the task's screen opens).
             info == null -> askApproval(task)
             // A description the card cut was not read whole: the task's own screen shows it.
-            shownHash.isNullOrBlank() || !info.approvable || !info.fitsCard || TaskAction.Approve !in info.actions -> _opens.trySend(task)
+            shownHash.isNullOrBlank() || !info.approvableFromCard || TaskAction.Approve !in info.actions -> _opens.trySend(task)
             // What was on screen is not the latest read: the new one is drawn first, the OK waits for a new tap.
             shownHash != info.hash -> _messages.trySend(ChatTexts.TASK_CHANGED)
             else -> {
@@ -623,15 +653,28 @@ class OrbeChatViewModel(
         )
     }
 
-    /** «Aceptar» on a finished task's card (`tasks.accept`), only where the PC allows it for that task. */
+    /**
+     * «Aceptar» on a finished task's card (`tasks.accept`), only where the PC allows it for that task. The card may be older than
+     * the last thing the PC did with the task (the link was down, the app was away, the task was not among the ones read again),
+     * and accepting a task Orb has held since would keep work nobody looked at: the PC is asked again first, and `unheld`
+     * makes it refuse, changing nothing, if the task is held or no longer finished by the time the request arrives.
+     */
     fun acceptTask(task: Long) {
         val key = taskKey(task)
         if (key in busyCards.value || TaskAction.AcceptHeld !in taskInfo.value[task]?.actions.orEmpty()) return
         busyCards.update { it + key }
         viewModelScope.launch {
-            backend.acceptTask(task).fold(
-                onSuccess = { _messages.trySend(ChatTexts.TASK_ACCEPTED); refreshTask(task) },
-                onFailure = { say(it); refreshTask(task) },
+            val read = issueRead(task)
+            backend.taskDetail(task).fold(
+                onSuccess = { fresh ->
+                    applyRead(task, read, fresh)
+                    if (fresh.status != "done" || fresh.held || TaskAction.AcceptHeld !in fresh.actions) _messages.trySend(ChatTexts.ACCEPT_UNAVAILABLE)
+                    else backend.acceptTask(task, unheld = true).fold(
+                        onSuccess = { _messages.trySend(ChatTexts.TASK_ACCEPTED); refreshTask(task) },
+                        onFailure = { sayPc(it); refreshTask(task) },
+                    )
+                },
+                onFailure = { say(it) },
             )
             busyCards.update { it - key }
         }
@@ -641,7 +684,7 @@ class OrbeChatViewModel(
     fun askUndo(task: Long) {
         val info = taskInfo.value[task] ?: return
         if (TaskAction.UndoHeld !in info.actions) return
-        undoAsk.value = UndoAsk(task, info.title, taskStat.value[task]?.files)
+        undoAsk.value = UndoAsk(task, info.title, taskStat.value[task]?.files, info.checkpointId)
     }
 
     fun dismissUndo() { undoAsk.value = null }
@@ -658,14 +701,12 @@ class OrbeChatViewModel(
             val read = issueRead(ask.task)
             backend.taskDetail(ask.task).fold(
                 onSuccess = { fresh ->
-                    if (isLatest(ask.task, read)) {
-                        fresh.status?.let { s -> taskStatus.update { it + (ask.task to s) } }
-                        taskInfo.update { it + (ask.task to fresh) }
-                    }
+                    applyRead(ask.task, read, fresh)
                     if (TaskAction.UndoHeld !in fresh.actions) _messages.trySend(ChatTexts.UNDO_UNAVAILABLE)
-                    else backend.undoTask(ask.task).fold(
+                    // The point of return is the one the dialog was opened on: the PC refuses if the task ran again since.
+                    else backend.undoTask(ask.task, ask.checkpoint).fold(
                         onSuccess = { _undone.trySend(ask.task); refreshTask(ask.task) },
-                        onFailure = { say(it); refreshTask(ask.task) },
+                        onFailure = { sayPc(it); refreshTask(ask.task) },
                     )
                 },
                 onFailure = { say(it) },
@@ -767,3 +808,9 @@ class OrbeChatViewModel(
         private val MENTION = Regex("""(?<![\w&])#(\d{1,7})\b""")
     }
 }
+    /** The PC's own words when it refused, else the link's. */
+    private fun sayPc(e: Throwable) {
+        if (ChatErrors.deleted(e)) { deleted.value = true; return }
+        _messages.trySend(ChatErrors.pcText(e) ?: linkErrorText(e))
+    }
+

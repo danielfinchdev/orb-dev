@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.chats.ChatErrors
 import dev.orb.app.ui.linkErrorText
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -120,10 +121,11 @@ class TaskDetailViewModel(
             ui.update { it.copy(busy = false) }
             if (r.isSuccess) {
                 done?.let { _messages.trySend(it) }
-                load()
             } else {
-                _messages.trySend("${TaskTexts.ACTION_FAILED}. ${linkErrorText(r.exceptionOrNull()!!)}")
+                _messages.trySend(failureText(r.exceptionOrNull()!!))
             }
+            // A refusal means the task is not what the screen showed: it is drawn again from the PC's answer.
+            load()
         }
     }
 
@@ -135,15 +137,45 @@ class TaskDetailViewModel(
         act(if (approve) TaskTexts.APPROVED else TaskTexts.REJECTED) { backend.decide(id, approve, hash) }
     }
 
+    /**
+     * «Aceptar» keeps the work of a task Orb held. What the screen shows may be older than the PC's last word on it, so the task is
+     * read again first and nothing is accepted if the hold, the point of return or the state is not what the person was looking at.
+     */
     fun accept() {
         if (!allowed(TaskAction.AcceptHeld)) return
-        act(TaskTexts.ACCEPTED) { backend.accept(id) }
+        val shown = ui.value.detail ?: return
+        act(TaskTexts.ACCEPTED) {
+            backend.get(id).fold(
+                onSuccess = { fresh ->
+                    val same = fresh.row.status == shown.row.status && fresh.row.held == shown.row.held && fresh.checkpointId == shown.checkpointId
+                    if (!same || TaskAction.AcceptHeld !in TaskActions.of(fresh, backend::available)) Result.failure(Stale(TaskTexts.ACCEPT_CHANGED))
+                    else backend.accept(id)
+                },
+                onFailure = { Result.failure(it) },
+            )
+        }
+    }
+
+    private class Stale(message: String) : Exception(message)
+
+    private fun failureText(e: Throwable): String =
+        (e as? Stale)?.message ?: ChatErrors.pcText(e) ?: "${TaskTexts.ACTION_FAILED}. ${linkErrorText(e)}"
+
+    private var undoAsked = false
+    private var undoCheckpoint: String? = null
+
+    /** The dialog opens on the point of return shown now; that one goes back with the yes. */
+    fun askUndo() {
+        undoAsked = true
+        undoCheckpoint = ui.value.detail?.checkpointId
     }
 
     /** The screen asks first; this is only called after the person accepted the dialog. */
     fun undo() {
         if (!allowed(TaskAction.UndoHeld)) return
-        act(TaskTexts.UNDO_DONE) { backend.undo(id) }
+        val checkpoint = if (undoAsked) undoCheckpoint else ui.value.detail?.checkpointId
+        undoAsked = false
+        act(TaskTexts.UNDO_DONE) { backend.undo(id, checkpoint) }
     }
 
     fun launchAnyway() {

@@ -75,6 +75,10 @@ data class TaskDetail(
     val dependencies: List<TaskLink>,
     val children: List<TaskLink>,
     val events: List<TaskEvent>,
+    /** The task as an OK sees it (what the approval fingerprint covers); the same value the chat's card is drawn from. */
+    val facts: dev.orb.app.ui.chats.TaskDetail? = null,
+    /** The task's point of return as the PC names it now; null without a point or on a PC that does not say. */
+    val checkpointId: String? = null,
 ) {
     val id get() = row.id
 }
@@ -153,6 +157,7 @@ object TasksParser {
                 val e = x as? JsonObject ?: return@mapNotNull null
                 TaskEvent(e.str("actor"), e.str("kind"), e.str("detail").orEmpty(), e.str("at"))
             },
+            facts = dev.orb.app.ui.chats.OrbeParser.approvalFacts(o, row.id), checkpointId = o.str("checkpointId")?.takeIf { it.isNotBlank() },
         )
     }
 

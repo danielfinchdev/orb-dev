@@ -157,6 +157,12 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
     /** Whether the linked PC can run [m] (always true for the methods every PC has). */
     fun available(m: ApiMethod) = m.requiresPc == null || pc.supports(m.name)
 
+    /**
+     * Whether the PC checks the guard parameters (`unheld`, `checkpoint`, `expect`) it was sent. They arrived together with
+     * `chat.editQueued`, so a PC that lists it knows them; an older one would ignore them without checking anything.
+     */
+    val knowsSafetyGuards get() = available(ApiMethods.CHAT_EDIT_QUEUED)
+
     private suspend fun run(m: ApiMethod, params: JsonObject = NONE): Result<JsonElement> =
         if (!available(m)) Result.failure(LinkException(LinkError.Unsupported(m.name))) else pc.call(m.name, params)
 

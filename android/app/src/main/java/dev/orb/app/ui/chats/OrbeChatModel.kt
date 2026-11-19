@@ -196,24 +196,33 @@ object OrbeParser {
         val parsed = dev.orb.app.ui.tasks.TasksParser.detail(o)
         val review = o["review"] as? JsonObject
         val held = parsed?.row?.held
-        return TaskDetail(
-            id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"),
-            // `agent` is what the fingerprint covers; `assigned_to` is who runs it now.
-            agent = o.str("agent"), runner = o.str("assigned_to"),
-            project = o.str("project_path"), folderNow = o.str("folderNow"),
-            reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
-            hash = o.str("previewHash"), model = o.str("model"),
-            autonomy = o.str("autonomy"),
-            approvalRequired = (o["approval"] as? JsonObject)?.takeIf { it["required"] != null }?.bool("required"),
+        return approvalFacts(o, id).copy(
             held = held != null, heldReasons = held?.reasons.orEmpty(), heldFolder = held?.folder,
             accepted = parsed?.accepted == true, undone = parsed?.row?.undone == true,
             actions = parsed?.let { cardActions(it, can) }.orEmpty(),
             reviewAgent = review?.str("agent"),
             decision = parsed?.events?.lastOrNull { it.kind in DECISIONS }?.kind?.let { if (it == "task.approved") "approved" else if (it == "task.rejected") "rejected" else null },
-            description = o.str("description"), readonly = o.bool("readonly"), mode = o.str("mode"), reasoning = o.str("reasoning"),
-            fast = o.bool("fast"), userAsked = stringList(o["user_asked"]),
         )
     }
+
+    /**
+     * The fields of `tasks.get` that the approval fingerprint covers, as one value: the chat's card and dialog and the task's own
+     * screen all draw an OK from this, so none of them can show less than another.
+     */
+    fun approvalFacts(o: JsonObject, id: Long): TaskDetail = TaskDetail(
+        id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"),
+        // `agent` is what the fingerprint covers; `assigned_to` is who runs it now.
+        agent = o.str("agent"), runner = o.str("assigned_to"),
+        project = o.str("project_path"), folderNow = o.str("folderNow"),
+        reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
+        hash = o.str("previewHash"), model = o.str("model"),
+        autonomy = o.str("autonomy"),
+        approvalRequired = (o["approval"] as? JsonObject)?.takeIf { it["required"] != null }?.bool("required"),
+        description = o.str("description"), readonly = o.bool("readonly"), mode = o.str("mode"), reasoning = o.str("reasoning"),
+        fast = o.bool("fast"), userAsked = stringList(o["user_asked"]),
+        folderMoved = o["folderMoved"]?.takeIf { it is JsonPrimitive && it !is kotlinx.serialization.json.JsonNull }?.let { o.bool("folderMoved") },
+        folderOutside = o.bool("folderOutside"), descriptionCut = o.bool("descriptionCut"), checkpointId = o.str("checkpointId")?.takeIf { it.isNotBlank() },
+    )
 
     // `user_asked` arrives as a list (the PC parses it) but an old row may still hold the JSON text of one.
     private fun stringList(el: kotlinx.serialization.json.JsonElement?): List<String> = when (el) {

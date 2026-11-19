@@ -22,6 +22,7 @@ object TaskTexts {
     const val RETRY = "Reintentar"
     const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
     const val ACTION_FAILED = "No se pudo hacer en el PC"
+    const val ACCEPT_CHANGED = "La tarea ha cambiado en el PC desde que la viste: revisa lo nuevo antes de aceptarla."
 
     const val NEW_TASK = "Nueva tarea"
     const val NEW_TASK_PROJECT = "Proyecto"

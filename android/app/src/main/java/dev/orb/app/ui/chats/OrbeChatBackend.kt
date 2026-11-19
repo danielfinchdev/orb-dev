@@ -64,12 +64,20 @@ data class TaskDetail(
     val heldFolder: String? = null,
     /** `tasks.get.folderNow`: the folder the PC fingerprints (its current one); absent on a PC that does not say it. */
     val folderNow: String? = null,
+    /** The folder now is not the one stored when the task was created (`folderMoved`); null on a PC that does not say. */
+    val folderMoved: Boolean? = null,
+    /** The folder is outside Orb's own folder, so the phone only gets its last name (`folderOutside`). */
+    val folderOutside: Boolean = false,
+    /** The description the phone got is not exactly the one the fingerprint covers (`descriptionCut`): paths of Orb's folder are shortened. */
+    val descriptionCut: Boolean = false,
+    /** The task's point of return as the PC names it now; it changes when the task runs again. Null: no point, or a PC that does not say. */
+    val checkpointId: String? = null,
 ) {
     /** The folder the OK is about: the one the hash covers when the PC says it, else the stored one. */
     val folderShown: String? get() = folderNow?.takeIf { it.isNotBlank() } ?: project
 
     /** The project moved since the task was created: [project] is the stored folder, [folderNow] the one that will be used. */
-    val folderChanged: Boolean get() = !folderNow.isNullOrBlank() && !project.isNullOrBlank() && folderNow != project
+    val folderChanged: Boolean get() = folderMoved ?: (!folderNow.isNullOrBlank() && !project.isNullOrBlank() && folderNow != project)
 
     /** The hash covers the folder the PC has now, so a card can only vouch for it when the PC says which one that is. */
     val folderKnown: Boolean get() = !folderNow.isNullOrBlank() && "ruta_cambiada" !in reasons
@@ -77,10 +85,14 @@ data class TaskDetail(
     /**
      * Whether a card or dialog can show everything the OK is about. Anything the hash covers that the answer does not carry
      * (the current folder of a task whose folder moved, what the person's message asked for) sends the person to the task's own
-     * screen instead of approving from here.
+     * screen instead of approving from here. A folder the PC says moved, or that lies outside Orb's own, is never approved from a
+     * card either: the phone cannot show it whole. A cut description can still be approved from the dialog, which says so.
      */
     val approvable: Boolean get() = title.isNotBlank() && !agent.isNullOrBlank() && !hash.isNullOrBlank() && status == "awaiting_approval" &&
-        !description.isNullOrBlank() && folderKnown && userAsked.isEmpty()
+        !description.isNullOrBlank() && folderKnown && userAsked.isEmpty() && folderMoved != true && !folderOutside
+
+    /** A card approves directly only when it shows the whole text the fingerprint covers. */
+    val approvableFromCard: Boolean get() = approvable && fitsCard && !descriptionCut
 
     /** The whole description fits the card; longer ones are cut there, so the card cannot approve them. */
     val fitsCard: Boolean get() = description.orEmpty().let { it.length <= CARD_DESCRIPTION_CHARS && it.count { c -> c == '\n' } < CARD_DESCRIPTION_LINES }
@@ -153,8 +165,11 @@ interface OrbeChatBackend {
     suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit>
 
     /** `tasks.accept` / `tasks.undo` of one task. */
-    suspend fun acceptTask(id: Long): Result<Unit>
-    suspend fun undoTask(id: Long): Result<Unit>
+    /** [unheld]: the PC refuses, changing nothing, a task that Orb holds or that is no longer finished. */
+    suspend fun acceptTask(id: Long, unheld: Boolean = false): Result<Unit>
+
+    /** [checkpoint]: the point of return the person saw; the PC refuses to undo if the task has another one now. */
+    suspend fun undoTask(id: Long, checkpoint: String? = null): Result<Unit>
 
     /** The messages waiting in the PC's queue behind the running turn (`chat.queue`). */
     suspend fun queue(conversation: Long): Result<List<OrbeQueued>>
@@ -256,8 +271,11 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
         if (!api.available(ApiMethods.TASKS_DIFF)) Result.success(null)
         else api.tasks.diff(buildJsonObject { put("id", id); put("stat", true) }).map { OrbeParser.taskStat(it) }
 
-    override suspend fun acceptTask(id: Long) = api.tasks.accept(buildJsonObject { put("id", id) }).map { }
-    override suspend fun undoTask(id: Long) = api.tasks.undo(buildJsonObject { put("id", id) }).map { }
+    override suspend fun acceptTask(id: Long, unheld: Boolean) =
+        api.tasks.accept(buildJsonObject { put("id", id); if (unheld && api.knowsSafetyGuards) put("unheld", true) }).map { }
+
+    override suspend fun undoTask(id: Long, checkpoint: String?) =
+        api.tasks.undo(buildJsonObject { put("id", id); if (checkpoint != null) put("checkpoint", checkpoint) }).map { }
 
     override suspend fun queue(conversation: Long): Result<List<OrbeQueued>> =
         if (!api.available(ApiMethods.CHAT_QUEUE)) Result.success(emptyList())

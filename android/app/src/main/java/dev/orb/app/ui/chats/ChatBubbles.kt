@@ -618,10 +618,17 @@ private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: 
 private fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
     if (d.reasons.isNotEmpty()) Text(ChatTexts.asksBecause(d.reasons), color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
     if (!d.description.isNullOrBlank()) Text(if (preview) d.descriptionPreview() else d.description.trim(), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
+    // The phone shortens the paths of Orb's own folder in the text it gets, so what is read here is not letter for letter what the OK covers.
+    if (d.descriptionCut) Text(ChatTexts.DESCRIPTION_CUT_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (d.userAsked.isNotEmpty()) {
+        Text(ChatTexts.USER_ASKED_LABEL, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+        for (u in d.userAsked) Text(u, color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
+    }
     val who = d.agent?.takeIf { it.isNotBlank() }?.let { if (it == "any") ChatTexts.AGENT_ANY else agentName(it) ?: it }
     if (who != null) Text(ChatTexts.approvalWho(who, d.model, d.reasoning, d.fast, d.mode, d.readonly, d.autonomy), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
-    if (d.folderChanged) Text(FOLDER_CHANGED_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (d.folderChanged) Text(ChatTexts.FOLDER_CHANGED_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
     if (!d.folderShown.isNullOrBlank()) Text(d.folderShown!!, color = OrbKit.mutedForeground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)
+    if (d.folderOutside) Text(ChatTexts.FOLDER_OUTSIDE_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
 }
 
 /** «Espera tu OK»: the card is the place where the person sees what they are about to approve. */
@@ -632,7 +639,7 @@ private fun WaitingCard(m: ChatMessage, task: Long, info: TaskDetail?, state: Or
     // Under Auto a task that still asks is one the PC found delicate; its reasons are on the card.
     val delicate = state.mode == "auto" && info?.reasons?.isNotEmpty() == true
     // «Aprobar» only when the card shows the whole description and every field the fingerprint covers.
-    val approvable = info != null && info.approvable && info.fitsCard && dev.orb.app.ui.tasks.TaskAction.Approve in info.actions
+    val approvable = info != null && info.approvableFromCard && dev.orb.app.ui.tasks.TaskAction.Approve in info.actions
     OrbTaskCard(
         title = if (named) ChatTexts.taskTitle(task, info?.title) else body, titleMaxLines = Int.MAX_VALUE,
         badge = if (delicate) ChatTexts.TASK_SENSITIVE else ChatTexts.taskStatus("awaiting_approval"), badgeKind = OrbBadgeKind.Warn,
@@ -755,8 +762,6 @@ fun LiveTaskCard(t: LiveTask, modifier: Modifier = Modifier) {
         line = ChatTexts.taskLiveLine(agentName(t.agent) ?: t.agent, t.doing, t.percent).ifEmpty { null },
     )
 }
-
-private const val FOLDER_CHANGED_NOTE = "La carpeta del proyecto ha cambiado desde que se creó la tarea."
 
 /** What the PC's own window shows before approving a task: why it asks, what it will do, who runs it and where; nothing is cut. */
 @Composable

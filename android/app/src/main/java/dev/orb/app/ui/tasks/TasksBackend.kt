@@ -66,7 +66,9 @@ interface TasksBackend {
     suspend fun cancel(id: Long): Result<Unit>
     suspend fun review(id: Long): Result<Unit>
     suspend fun accept(id: Long): Result<Unit>
-    suspend fun undo(id: Long): Result<Unit>
+
+    /** [checkpoint]: the point of return the person saw; the PC refuses to undo a task that has another one now. */
+    suspend fun undo(id: Long, checkpoint: String? = null): Result<Unit>
 
     /** [hash] is the fingerprint the person saw: a task that changed meanwhile is refused instead of approved blind. */
     suspend fun decide(id: Long, approve: Boolean, hash: String): Result<Unit>
@@ -141,7 +143,8 @@ class RuntimeTasksBackend(private val container: AppContainer, private val runti
     override suspend fun cancel(id: Long) = api.tasks.cancel(idOf(id)).unit()
     override suspend fun review(id: Long) = api.tasks.review(idOf(id)).unit()
     override suspend fun accept(id: Long) = api.tasks.accept(idOf(id)).unit()
-    override suspend fun undo(id: Long) = api.tasks.undo(idOf(id)).unit()
+    override suspend fun undo(id: Long, checkpoint: String?) =
+        api.tasks.undo(buildJsonObject { put("id", id); if (checkpoint != null) put("checkpoint", checkpoint) }).unit()
 
     override suspend fun decide(id: Long, approve: Boolean, hash: String) = api.tasks.approve(
         buildJsonObject {

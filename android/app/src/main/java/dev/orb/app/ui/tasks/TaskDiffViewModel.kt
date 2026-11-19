@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.chats.ChatErrors
 import dev.orb.app.ui.linkErrorText
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -102,10 +103,12 @@ class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewM
             ui.update { it.copy(busy = false) }
             if (r.isSuccess) {
                 _messages.trySend(done)
-                load()
             } else {
-                _messages.trySend("${TaskTexts.ACTION_FAILED}. ${linkErrorText(r.exceptionOrNull()!!)}")
+                val e = r.exceptionOrNull()!!
+                _messages.trySend(ChatErrors.pcText(e) ?: "${TaskTexts.ACTION_FAILED}. ${linkErrorText(e)}")
             }
+            // A refusal means the task is not what the screen showed: it is drawn again from the PC's answer.
+            load()
         }
     }
 
@@ -114,9 +117,20 @@ class TaskDiffViewModel(private val backend: TasksBackend, val id: Long) : ViewM
         act(TaskTexts.ACCEPTED) { backend.accept(id) }
     }
 
+    private var undoAsked = false
+    private var undoCheckpoint: String? = null
+
+    /** The dialog opens on the point of return shown now; that one goes back with the yes. */
+    fun askUndo() {
+        undoAsked = true
+        undoCheckpoint = ui.value.detail?.checkpointId
+    }
+
     /** The screen asks first; this is only called after the person accepted the dialog. */
     fun undo() {
         if (!build(ui.value, backend.connection.value).canUndo) return
-        act(TaskTexts.UNDO_DONE) { backend.undo(id) }
+        val checkpoint = if (undoAsked) undoCheckpoint else ui.value.detail?.checkpointId
+        undoAsked = false
+        act(TaskTexts.UNDO_DONE) { backend.undo(id, checkpoint) }
     }
 }

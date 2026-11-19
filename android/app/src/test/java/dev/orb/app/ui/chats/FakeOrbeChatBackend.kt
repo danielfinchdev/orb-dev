@@ -119,9 +119,27 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
         detailGate?.await()
         return Result.success(detailsOnPc[id] ?: taskDetail)
     }
-    override suspend fun taskStat(id: Long): Result<TaskStat?> { calls += "stat $id"; return statResult ?: Result.success(statOnPc) }
-    override suspend fun acceptTask(id: Long): Result<Unit> { calls += "taskaccept $id"; onAction("taskaccept $id"); return actionResult }
-    override suspend fun undoTask(id: Long): Result<Unit> { calls += "undo $id"; onAction("undo $id"); return actionResult }
+    /** Holds the next `tasks.diff {stat}` open after it was answered, so its (then old) answer arrives late. */
+    var statGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    override suspend fun taskStat(id: Long): Result<TaskStat?> {
+        calls += "stat $id"
+        val answer = statResult ?: Result.success(statOnPc)
+        statGate?.let { g -> statGate = null; g.await() }
+        return answer
+    }
+    override suspend fun acceptTask(id: Long, unheld: Boolean): Result<Unit> {
+        calls += "taskaccept $id"; acceptUnheld += unheld; onAction("taskaccept $id"); return acceptResult ?: actionResult
+    }
+    override suspend fun undoTask(id: Long, checkpoint: String?): Result<Unit> {
+        calls += "undo $id"; undoCheckpoints += checkpoint; onAction("undo $id"); return undoResult ?: actionResult
+    }
+    /** What `tasks.accept` / `tasks.undo` answer when it should differ from [actionResult]. */
+    var acceptResult: Result<Unit>? = null
+    /** The `unheld` / `checkpoint` / `expect` of each call, in order. */
+    val acceptUnheld = ArrayList<Boolean>()
+    val undoCheckpoints = ArrayList<String?>()
+    val editExpects = ArrayList<String?>()
+    var undoResult: Result<Unit>? = null
     override suspend fun queue(conversation: Long): Result<List<OrbeQueued>> { queueReads++; calls += "queue"; return queueResult ?: Result.success(queueOnPc) }
     override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>> {
         calls += if (remove) "queue-remove $queueId" else "queue-edit $queueId $text"

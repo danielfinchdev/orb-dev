@@ -23,10 +23,11 @@ fun task(
 fun detail(
     row: TaskRow, description: String = "Hace algo", accepted: Boolean = false, hasCheckpoint: Boolean = false, previewHash: String? = null,
     events: List<TaskEvent> = emptyList(), dependencies: List<TaskLink> = emptyList(), children: List<TaskLink> = emptyList(),
+    facts: dev.orb.app.ui.chats.TaskDetail? = null, checkpointId: String? = null,
 ) = TaskDetail(
     row = row, description = description, reasoning = "medium", mode = "carpeta", branch = null, folder = "C:/p", createdBy = "orbe",
     modelLabel = null, accountLabel = null, accepted = accepted, hasCheckpoint = hasCheckpoint, previewHash = previewHash,
-    dependencies = dependencies, children = children, events = events,
+    dependencies = dependencies, children = children, events = events, facts = facts, checkpointId = checkpointId,
 )
 
 class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = false) : TasksBackend {
@@ -39,6 +40,7 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var listCount = 0
     var unavailable: Set<String> = emptySet()
     val calls = ArrayList<String>()
+    val undoCheckpoints = ArrayList<String?>()
     var actionResult: Result<Unit> = Result.success(Unit)
     var launchResult: Result<Boolean> = Result.success(false)
     var searchResult: Result<List<SearchTask>> = Result.success(emptyList())
@@ -81,6 +83,6 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     override suspend fun cancel(id: Long) = act("cancel $id")
     override suspend fun review(id: Long) = act("review $id")
     override suspend fun accept(id: Long) = act("accept $id")
-    override suspend fun undo(id: Long) = act("undo $id")
+    override suspend fun undo(id: Long, checkpoint: String?) = act("undo $id").also { undoCheckpoints += checkpoint }
     override suspend fun decide(id: Long, approve: Boolean, hash: String) = act("decide $id $approve $hash")
 }

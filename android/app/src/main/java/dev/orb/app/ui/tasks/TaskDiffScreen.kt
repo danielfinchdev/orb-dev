@@ -84,7 +84,7 @@ fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier
                 if (!state.online) NeedsPcNote(Modifier.padding(horizontal = 16.dp))
                 Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
                     if (state.accepted) Text(TaskTexts.ALREADY_ACCEPTED, color = OrbTheme.colors.ok, style = MaterialTheme.typography.labelLarge)
-                    if (state.canUndo) OutlinedButton(onClick = { confirmUndo = true }, enabled = enabled) { Text(TaskTexts.UNDO) }
+                    if (state.canUndo) OutlinedButton(onClick = { vm.askUndo(); confirmUndo = true }, enabled = enabled) { Text(TaskTexts.UNDO) }
                     if (state.canAccept) Button(onClick = vm::accept, enabled = enabled) { Text(TaskTexts.ACCEPT) }
                 }
             }
