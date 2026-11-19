@@ -433,6 +433,7 @@ async function run(board, { home, version, restored, repair }) {
       // Folders created or deleted by hand in the assistant's folder show up in the app within a few seconds.
       if (Date.now() - lastSync > 5000) {
         lastSync = Date.now();
+        limitWatch.tick(); // two reads per account: the pace of the folder sync, not of the 1.5 s loop
         // core (or its settings or database) gone while Orb runs: everything stops and the engine ends; the app
         // starts it again and the start puts back what is missing from the newest backup (or shows why it cannot).
         if (!coreHealth(home).ok) { coreLost(home, board); return; }
@@ -441,7 +442,6 @@ async function run(board, { home, version, restored, repair }) {
       const v = board.one('PRAGMA data_version').data_version;
       if (v !== dataVersion) { dataVersion = v; changed('external'); }
       scheduler.tick();
-      limitWatch.tick();
       api.dataTick?.();
     } catch (error) { log(`tick: ${error.stack}`); } finally { ticking = false; }
   };

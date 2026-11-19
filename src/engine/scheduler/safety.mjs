@@ -9,6 +9,7 @@ import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, c
 import { oneLine } from '../../shared/text.mjs';
 import { isRailOn } from '../../domain/rules/rails.mjs';
 import { remotesOf, remotesOfAsync } from './common.mjs';
+import { phoneNoticeAllowed } from '../../domain/notes/announce.mjs';
 import { autonomyOf } from '../../domain/security/guard.mjs';
 import { logUndone } from '../../domain/journal/journal.mjs';
 
@@ -88,7 +89,7 @@ export class SafetyPart {
     if (!cp?.before || cp.before.kind !== 'git') {
       if (!reasons.length) return '';
       const why = reasons.join(tr('msg.scheduler.and'));
-      this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id });
+      this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id, ...(phoneNoticeAllowed(this.board, task) ? { quiet: true } : {}) });
       return tr('msg.scheduler.needsReview', { reasons: why });
     }
     const at = Date.now(); // a file older than this that the snapshot missed was hidden from it (missedBy)
@@ -113,7 +114,7 @@ export class SafetyPart {
     if (task.readonly && offending.length) reasons.push(tr('msg.scheduler.safetyReadonly', { n: offending.length }));
     if (!reasons.length) return '';
     const why = reasons.join(tr('msg.scheduler.and'));
-    this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id });
+    this.board.addChat('system', tr('msg.scheduler.safetyStopped', { id: task.id, title: oneLine(task.title), reasons: why, folder: this.board.projectPathNow(task) ?? task.project }), { task: task.id, ...(phoneNoticeAllowed(this.board, task) ? { quiet: true } : {}) });
     return tr('msg.scheduler.needsReview', { reasons: why });
   }
 

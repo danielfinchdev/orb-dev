@@ -18,6 +18,7 @@ const TEXTS = {
     held: 'Orb paró la #{id} · {reasons}',
     heldNoReason: 'Orb paró la #{id} · necesita tu revisión',
     update: 'Orb {version} disponible en el PC',
+    // «Tiene límite» here means the account has usage available again (the wording of the approved mock-up).
     limit: '{account} ya tiene límite otra vez'
   },
   en: {
@@ -84,7 +85,7 @@ export function createLimitWatch({ board, announce, listAccounts = accounts }) {
         const byUsage = paused && !board.setting(`cooldown_reason:${acc.id}`);
         const was = limited.get(acc.id);
         if (was === true && !paused) announce({ kind: 'limit', account: acc.id });
-        limited.set(acc.id, paused ? (byUsage || was === true) : false);
+        limited.set(acc.id, paused && byUsage);
       }
       for (const id of [...limited.keys()]) if (!seen.has(id)) limited.delete(id);
     }

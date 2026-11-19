@@ -27,7 +27,9 @@ export function pruneRecent(board, now = Date.now()) {
 }
 
 // Newest first. A chat in the trash is skipped (it shows again if the chat is restored).
-export function listRecent(board, { since = 0, limit = 50, now = Date.now() } = {}) {
+// With the preview off (preview 'none'), what was kept with detail is shown hidden, as it would be delivered today.
+export function listRecent(board, { since = 0, limit = 50, now = Date.now(), preview = 'chat', hiddenText = 'Tienes un mensaje nuevo', assistantName = 'Orb' } = {}) {
+  const hide = preview === 'none';
   const s = Number.isFinite(Number(since)) ? Math.max(0, Number(since)) : 0;
   const n = Math.min(RECENT_MAX, Math.max(1, Math.floor(Number(limit)) || 50));
   const rows = board.all(
@@ -35,7 +37,7 @@ export function listRecent(board, { since = 0, limit = 50, now = Date.now() } = 
      WHERE m.at > ? AND m.at >= ? AND (m.conversation_id IS NULL OR (c.id IS NOT NULL AND c.trashed_at IS NULL))
      ORDER BY m.at DESC, m.id DESC LIMIT ?`, s, now - RECENT_DAYS * DAY_MS, n);
   return rows.map((r) => ({
-    id: r.id, at: r.at, key: r.key, kind: r.kind, title: r.title, body: r.body, hidden: Boolean(r.hidden),
+    id: r.id, at: r.at, key: r.key, kind: r.kind, title: hide ? assistantName : r.title, body: hide ? hiddenText : r.body, hidden: hide || Boolean(r.hidden),
     route: parse(r.route), target: parse(r.target), ...(r.line != null ? { line: r.line } : {})
   }));
 }

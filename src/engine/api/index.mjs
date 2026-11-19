@@ -57,6 +57,7 @@ import { ChatWorktrees } from '../chat-worktrees.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 import { listRecent } from '../../domain/notes/recent.mjs';
+import { pushPreview } from '../transport/remote-calls.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
 
@@ -306,7 +307,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'notes.list': ({ since, limit } = {}) => {
       if (since != null && !Number.isFinite(Number(since))) fail(tr('msg.api.badList'));
       if (limit != null && !Number.isFinite(Number(limit))) fail(tr('msg.api.badList'));
-      return { notes: listRecent(board, { since, limit }) };
+      return { notes: listRecent(board, { since, limit, preview: pushPreview(ctx.config), hiddenText: tr('msg.remote.pushHidden'), assistantName: ctx.config.assistantName ?? 'Orb' }) };
     },
     // `dir` (where the logs live) is for the window only: the phone never gets this PC's folders
     'logs.list': (_params, principal) => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file), ...(principal?.channel === 'desktop' && name === 'general' ? { dir: path.dirname(file) } : {}) }; }),
