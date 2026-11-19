@@ -27,7 +27,11 @@ const fakeShot = () => {
   };
 };
 
-export function linkMethods({ emit, remoteRef, log }) {
+// "1.2.3" strictly, and newer than the running one: a malformed or stale version never reaches the phones.
+const STRICT = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/;
+const isNewer = (a, b) => { const x = a.split('.').map(Number); const y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+
+export function linkMethods({ emit, remoteRef, log, version }) {
   const run = fakeShot(); // the test hook stands in for the Windows capture, so it also skips the platform check
   const capture = createScreenshot(run ? { run, platform: 'win32' } : {});
   const shotsDir = () => path.join(ctx.paths.internal, SHOT_DIR);
@@ -48,6 +52,12 @@ export function linkMethods({ emit, remoteRef, log }) {
       return { path: name };
     },
     // ---- phone access
+    // The updater (Rust) found a new Orb: the linked phones are told once per version (announce keeps the once).
+    'app.updateFound': ({ version: found } = {}) => {
+      const v = typeof found === 'string' && found.length <= 32 && STRICT.test(found) ? found : null;
+      if (!v || !isNewer(v, version) || !remoteRef.current) return { announced: false };
+      return { announced: remoteRef.current.announce({ kind: 'update', version: v }) === true };
+    },
     'remote.status': () => remoteRef.current.status(),
     'remote.enable': async ({ enabled }) => {
       const c = saveConfig({ mobile: { enabled: Boolean(enabled) } }); emit('config:changed', c);

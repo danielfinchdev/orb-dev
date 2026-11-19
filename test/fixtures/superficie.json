@@ -47,6 +47,7 @@
   "app.openTerminal": "pc",
   "app.runAction": "pc",
   "app.state": "remote",
+  "app.updateFound": "pc",
   "approvals.list": "remote",
   "attachments.read": "pc",
   "backup.cancelKey": "pc",
