@@ -97,6 +97,11 @@ try {
   assert.deepEqual(errors, [], 'no page errors');
   console.log('pestañas: OK');
 } finally {
-  await browser.close(); child.kill();
-  fs.rmSync(t.home, { recursive: true, force: true });
+  await browser.close();
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill();
+  await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))]);
+  // The engine may still hold the folder for an instant: retry, and a cleanup failure never turns a green run red.
+  try { fs.rmSync(t.home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); }
+  catch (e) { console.warn(`aviso: no se pudo borrar ${t.home}: ${e.message}`); }
 }
