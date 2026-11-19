@@ -236,6 +236,8 @@ private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
 @Composable
 private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
     val pc = state.pc ?: return
+    // The master password is typed here: keep it out of the app switcher and screenshots even when the app lock is off.
+    dev.orb.app.ui.SecureWhileShown("master-password")
     Column(Modifier.fillMaxSize()) {
         OrbTopBar(
             "Comprueba que es tu PC", sideWidth = 56.dp,

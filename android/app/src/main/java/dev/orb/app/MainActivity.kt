@@ -3,7 +3,7 @@ package dev.orb.app
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
-import android.view.WindowManager
+import dev.orb.app.ui.SecureWindow
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -32,7 +32,7 @@ class MainActivity : FragmentActivity() {
         // With the lock on, the app switcher and screenshots must not show the content.
         lifecycleScope.launch {
             container.lock.settings.map { it.enabled }.collect { on ->
-                if (on) window.addFlags(WindowManager.LayoutParams.FLAG_SECURE) else window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+                if (on) SecureWindow.hold(window, "app-lock") else SecureWindow.release(window, "app-lock")
             }
         }
         // A tap on a notice opens the chat or task it is about.
