@@ -49,12 +49,42 @@ object SchedulesTexts {
     const val EVERY_HOURS = "Cada N horas"
     const val EVERY_HOURLY = "Cada hora"
     const val EVERY_ONCE = "Una sola vez"
+    const val EVERY_MONTHLY = "Cada mes"
+    const val EVERY_UNKNOWN = "Frecuencia definida en el PC"
+
+    /** A frequency this app does not know is said as such: calling it «once» would tell the person a falsehood. */
     fun everyLabel(every: String) = when (every) {
         "daily" -> EVERY_DAILY
         "weekly" -> EVERY_WEEKLY
+        "monthly" -> EVERY_MONTHLY
         "every_hours" -> EVERY_HOURS
         "hourly" -> EVERY_HOURLY
-        else -> EVERY_ONCE
+        "once" -> EVERY_ONCE
+        else -> EVERY_UNKNOWN
+    }
+
+    private val ZERO_HOUR = Regex("""(?<!\d)0(\d:\d{2})""")
+
+    /**
+     * What a schedule says about when it runs: the PC's own sentence (capitalised, «9:00» for «09:00»), or one built from
+     * the fields when the PC sent none, or the plain admission that the frequency is the PC's own.
+     */
+    fun whenLine(s: ScheduleItem): String {
+        if (s.every !in KNOWN_EVERY) return EVERY_UNKNOWN
+        val text = s.whenText.takeIf { it.isNotBlank() && it != s.every } ?: built(s)
+        return text.replace(ZERO_HOUR, "$1").replaceFirstChar { it.uppercase() }
+    }
+
+    private val KNOWN_EVERY = setOf("daily", "weekly", "monthly", "every_hours", "hourly", "once")
+    private val DAY_NAMES = listOf("domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado")
+
+    private fun built(s: ScheduleItem): String = when (s.every) {
+        "daily" -> "cada día a las ${s.atTime}"
+        "weekly" -> "cada ${(s.weekdays.ifEmpty { listOf(1) }).joinToString(", ") { DAY_NAMES.getOrElse(it) { "?" } }} a las ${s.atTime}"
+        "monthly" -> "el día ${s.monthDay ?: 1} de cada mes a las ${s.atTime}"
+        "every_hours" -> "cada ${s.atTime} h"
+        "hourly" -> "cada hora"
+        else -> "una vez, el ${s.atTime.substringBefore('T')} a las ${s.atTime.substringAfter('T', "")}"
     }
     val DAYS = listOf("D", "L", "M", "X", "J", "V", "S")
 

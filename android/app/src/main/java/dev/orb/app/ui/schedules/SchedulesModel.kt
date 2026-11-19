@@ -34,6 +34,10 @@ data class ScheduleItem(
     val sameChat: Boolean,
     /** The PC's own description of the frequency, already in the app language («Cada lunes a las 09:00»). */
     val whenText: String,
+    /** The IANA zone the schedule's wall time is read in; null when it follows the PC's own zone. */
+    val tz: String? = null,
+    /** The day of the month of a monthly schedule. */
+    val monthDay: Int? = null,
 )
 
 /** What the form sends to `schedules.create`. */
@@ -68,6 +72,7 @@ object SchedulesParser {
             enabled = o.bool("enabled"), approved = o.bool("approved"),
             nextRun = o.str("next_run"), lastRun = o.str("last_run"), lastTask = o.long("last_task"),
             sameChat = o.bool("same_chat"), whenText = o.str("when") ?: every,
+            tz = o.str("tz")?.takeIf { it.isNotBlank() }, monthDay = o.int("month_day"),
         )
     }
 

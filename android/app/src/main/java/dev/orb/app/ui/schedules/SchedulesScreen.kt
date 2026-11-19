@@ -154,7 +154,7 @@ private fun ScheduleCard(
                 }
             }
             Text(
-                SchedulesTexts.nextLine(s.whenText, s.project, s.nextRun.takeIf { s.enabled }),
+                SchedulesTexts.nextLine(SchedulesTexts.whenLine(s), s.project, s.nextRun.takeIf { s.enabled }),
                 style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2,
             )
             val badges = listOfNotNull(
