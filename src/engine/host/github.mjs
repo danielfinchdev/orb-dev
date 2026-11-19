@@ -475,7 +475,10 @@ export async function createRepo(project, { name, isPrivate = true }) {
   if (!(await git(project.path, 'rev-parse', '--verify', '--quiet', 'HEAD')).stdout.trim()) throw new Error(tr('msg.github.needCommit'));
   if ((await git(project.path, 'remote', 'get-url', 'origin')).status === 0) throw new Error(tr('msg.github.hasOrigin'));
   await checkUnpushed(project.path, 'HEAD');
-  const r = must(await gh(['repo', 'create', name, isPrivate ? '--private' : '--public', '--source', project.path, '--remote', 'origin', '--push'], { cwd: project.path, timeoutMs: 180_000 }), tr('msg.github.repoFailed'));
+  const r = must(await gh(['repo', 'create', name, isPrivate ? '--private' : '--public', '--source', project.path, '--remote', 'origin'], { cwd: project.path, timeoutMs: 180_000 }), tr('msg.github.repoFailed'));
+  // gh's own --push skips the safe network options and the secret check, so the push goes through push() above.
+  const branch = (await git(project.path, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim();
+  if (branch && branch !== 'HEAD') await push(project, branch);
   return { url: r.out.split(/\s+/).find((s) => /^https:\/\//.test(s)) ?? r.out };
 }
 
