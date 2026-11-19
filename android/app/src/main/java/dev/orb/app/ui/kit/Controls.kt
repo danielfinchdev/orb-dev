@@ -150,12 +150,15 @@ fun OrbChip(
 ) {
     val bg = if (selected) OrbKit.primary else OrbKit.card
     val fg = if (selected) OrbKit.primaryForeground else OrbKit.mutedForeground
+    // No ripple: it would paint the whole 48 dp touch zone as a grey rectangle behind the round chip; pressing dims the chip itself.
+    val source = remember { MutableInteractionSource() }
+    val pressed by source.collectIsPressedAsState()
     Box(
-        modifier.selectable(selected = selected, role = Role.Button, onClick = onClick).minimumInteractiveComponentSize(),
+        modifier.selectable(selected = selected, interactionSource = source, indication = null, role = Role.Button, onClick = onClick).minimumInteractiveComponentSize(),
         contentAlignment = Alignment.Center,
     ) {
         Row(
-            Modifier.height(32.dp).clip(CircleShape).background(bg)
+            Modifier.height(32.dp).graphicsLayer { alpha = if (pressed) 0.7f else 1f }.clip(CircleShape).background(bg)
                 .then(if (selected) Modifier else Modifier.border(1.dp, OrbKit.border, CircleShape)).padding(horizontal = 12.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
@@ -240,19 +243,20 @@ fun OrbSearchButton(placeholder: String, onClick: () -> Unit, modifier: Modifier
 }
 
 /**
- * `.field` with a real text input: 48 dp, a thin border, the person's text in the foreground colour. [label] is what a
- * screen reader says (the placeholder is drawn only while the field is empty).
+ * `.field` with a real text input: 48 dp, a thin border, the person's text in the foreground colour. [soft] is the sheets' `.mfield`
+ * instead: 44 dp, soft grey and no border. [label] is what a screen reader says (the placeholder is drawn only while the field is empty).
  */
 @Composable
 fun OrbTextField(
     value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier,
-    focus: FocusRequester? = null, onDone: (() -> Unit)? = null,
+    focus: FocusRequester? = null, onDone: (() -> Unit)? = null, soft: Boolean = false,
 ) {
     Box(
-        modifier.fillMaxWidth().height(48.dp).clip(RadiusCard).background(OrbKit.card).border(1.dp, OrbKit.border, RadiusCard).padding(horizontal = 14.dp),
+        modifier.fillMaxWidth().height(if (soft) 44.dp else 48.dp).clip(RadiusCard).background(if (soft) OrbKit.secondary else OrbKit.card)
+            .then(if (soft) Modifier else Modifier.border(1.dp, OrbKit.border, RadiusCard)).padding(horizontal = 14.dp),
         contentAlignment = Alignment.CenterStart,
     ) {
-        if (value.isEmpty()) Text(label, color = OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
+        if (value.isEmpty()) Text(label, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
         BasicTextField(
             value, onValueChange,
             Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = label },

@@ -133,7 +133,7 @@ fun MenuContent(state: MenuState, actions: MenuActions, close: () -> Unit, scrol
     ) {
         Text(menuStatusLine(state), Modifier.padding(horizontal = 20.dp), color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
 
-        Counted(MenuTexts.CHATS, go(actions.onChats), OrbIcons.Chat, state.unreadChats)
+        Counted(MenuTexts.CHATS, go(actions.onChats), OrbIcons.Chats, state.unreadChats)
         Counted(MenuTexts.TASKS, go(actions.onTasks), OrbIcons.Tasks, state.tasksToApprove)
         OrbSheetItem(MenuTexts.PROJECTS, go(actions.onProjects), icon = OrbIcons.FolderGit2)
         OrbSheetDivider()

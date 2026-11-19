@@ -75,7 +75,7 @@ import kotlinx.serialization.Serializable
 private class Tab(val route: Any, val label: String, val icon: ImageVector)
 
 private val tabs = listOf(
-    Tab(ChatsTab, ChatTexts.TAB_CHATS, OrbIcons.Chat),
+    Tab(ChatsTab, ChatTexts.TAB_CHATS, OrbIcons.Chats),
     Tab(TasksTab, ChatTexts.TAB_TASKS, OrbIcons.Tasks),
     Tab(ProjectsTab, ChatTexts.TAB_PROJECTS, OrbIcons.FolderGit2),
 )

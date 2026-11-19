@@ -175,7 +175,7 @@ fun ThisPhoneScreen(
     }
     if (confirming) {
         OrbDialog(
-            { confirming = false }, ThisPhoneTexts.UNLINK_TITLE, OrbDialogAction(ThisPhoneTexts.UNLINK_CONFIRM, { confirming = false; vm.unlink() }, danger = true),
+            { confirming = false }, ThisPhoneTexts.UNLINK_TITLE, OrbDialogAction(ThisPhoneTexts.UNLINK_CONFIRM, { confirming = false; vm.unlink() }),
             text = ThisPhoneTexts.unlinkBody(state.pcName), dismiss = OrbDialogAction(ThisPhoneTexts.CANCEL, { confirming = false }),
         )
     }

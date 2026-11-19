@@ -137,8 +137,7 @@ fun OrbGroupHeader(
         if (project != null || noProject) ProjectDot(if (noProject) null else project)
         Text(
             title, Modifier.weight(1f).semantics { heading() },
-            color = if (project != null || noProject) OrbKit.foreground else OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp,
-            fontWeight = if (project != null || noProject) FontWeight.Medium else FontWeight.Normal, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
         if (count != null) Text(count.toString(), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
         if (collapsed != null && chevronAtEnd) chevron()

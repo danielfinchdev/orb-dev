@@ -291,7 +291,7 @@ fun Message(
 @Composable
 internal fun DeleteChatDialog(title: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     OrbDialog(
-        onDismiss, ChatTexts.DELETE_TITLE, OrbDialogAction(ChatTexts.DELETE_CONFIRM, onConfirm, danger = true),
+        onDismiss, ChatTexts.DELETE_TITLE, OrbDialogAction(ChatTexts.DELETE_CONFIRM, onConfirm),
         text = ChatTexts.deleteBody(title), dismiss = OrbDialogAction(ChatTexts.CANCEL, onDismiss),
         content = { OrbNote(ChatTexts.DELETE_NOTE) },
     )
