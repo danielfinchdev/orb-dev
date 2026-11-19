@@ -94,10 +94,11 @@ fun NotesScreen(
                     )
                 },
             )
-            if (!state.online) OfflineStrip()
+            if (!state.online) OfflineStrip(asBanner = true)
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 if (state.rows.isEmpty()) {
-                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                    // Under the header, as the mockup draws it, not in the middle of the screen.
+                    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Top, horizontalAlignment = Alignment.CenterHorizontally) {
                         if (state.pcKeepsList) OrbEmpty(NotesTexts.EMPTY_CLEAR, text = NotesTexts.EMPTY_CLEAR_HINT, icon = OrbIcons.Bell)
                         else OrbEmpty(NotesTexts.EMPTY, text = NotesTexts.EMPTY_HINT, icon = OrbIcons.Bell)
                     }
@@ -144,7 +145,7 @@ private fun NoticeItem(row: NoticeRow, now: Long, onDismiss: () -> Unit, onClick
             subtitle = sub?.let { s -> { OrbSubtitle(s) } },
             time = ChatTime.short(ChatTime.iso(n.at), now),
             badge = if (row.unread) ({ OrbUnread(1, soft = true) }) else null,
-            unread = row.unread, onClick = onClick,
+            unread = row.unread, onClick = onClick, centerBadge = true,
         )
     }
     // A permission request that still waits is the PC's own state: it leaves when it is answered, never by a swipe.

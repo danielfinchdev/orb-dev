@@ -61,7 +61,7 @@ class UsageScreenTest {
     @Test fun showsAccountsBarsLinksAgentsAndTheFootnote() {
         show(FakeUsageBackend())
         rule.onNodeWithText("Uso por cuenta").assertIsDisplayed()
-        rule.onNodeWithText("Claude · Max").assertIsDisplayed()
+        rule.onNodeWithText("Claude Max").assertIsDisplayed()
         rule.onNodeWithText("Límite de sesión", substring = true).assertIsDisplayed()
         rule.onNodeWithText("40 %").assertExists()
         for (t in listOf("Historial de uso", "Guía de modelos", "Agentes en tu PC", "Iniciar sesión, cuentas y planes: en el PC.")) {
@@ -74,8 +74,8 @@ class UsageScreenTest {
         val b = FakeUsageBackend()
         b.accountList = Result.success(listOf(account("claude", 0.94), account("otra", 0.38).copy(label = "ChatGPT", plan = "Pro")))
         show(b)
-        rule.onNode(hasContentDescription("Claude · Max: 94 %") and hasBar(0.94f)).assertExists()
-        rule.onNode(hasContentDescription("ChatGPT · Pro: 38 %") and hasBar(0.38f)).assertExists()
+        rule.onNode(hasContentDescription("Claude Max: 94 %") and hasBar(0.94f)).assertExists()
+        rule.onNode(hasContentDescription("ChatGPT Pro: 38 %") and hasBar(0.38f)).assertExists()
     }
 
     @Test fun headerTellsTheWindowAndWhenItReturnsInThePhonesZone() {

@@ -102,7 +102,8 @@ fun UsageScreen(
                 },
             )
             if (!state.online && state.loaded) OfflineStrip()
-            PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // The first load already has its own spinner in the middle; the pull indicator would be a second one.
+            PullToRefreshBox(isRefreshing = state.refreshing && state.loaded, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.allFailed -> Centered {
                         OrbEmpty(
@@ -111,7 +112,7 @@ fun UsageScreen(
                         )
                     }
                     !state.loaded -> Centered { OrbSpinner(size = 24.dp) }
-                    state.isEmpty -> Centered { OrbEmpty(UsageTexts.EMPTY, text = UsageTexts.EMPTY_HINT, icon = OrbIcons.Gauge) }
+                    state.isEmpty -> Centered(top = true) { OrbEmpty(UsageTexts.EMPTY, text = UsageTexts.EMPTY_HINT, icon = OrbIcons.Gauge) }
                     else -> Body(state, vm::setDays, nowMs, zone) { sheet = it }
                 }
             }
@@ -127,8 +128,8 @@ fun UsageScreen(
 
 /** A column that scrolls, so pulling down still refreshes when there is nothing to list. */
 @Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) { content() }
+private fun Centered(top: Boolean = false, content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = if (top) Alignment.TopCenter else Alignment.Center) { content() }
 }
 
 @Composable
@@ -245,7 +246,7 @@ private fun UsageRow(
 /** An account's windows, each with its bar; the tasks count of the PC's own window follows when it counts them. */
 @Composable
 private fun AccountRows(a: UsageAccount, now: Long, first: Boolean, zone: TimeZone) {
-    val title = listOfNotNull(a.label, a.plan).joinToString(" · ")
+    val title = listOfNotNull(a.label, a.plan).joinToString(" ")
     val pause = a.cooldownUntil?.takeIf { it > now }?.let {
         UsageTexts.paused(DateFormat.getTimeInstance(DateFormat.SHORT).apply { timeZone = zone }.format(Date(it)), a.cooldownReason) to true
     }

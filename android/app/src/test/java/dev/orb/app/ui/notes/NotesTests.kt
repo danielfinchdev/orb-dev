@@ -221,7 +221,7 @@ class NotesScreenTest {
         val b = FakeNotesBackend()
         b.feed.add(notice("a"))
         show(b)
-        rule.onNodeWithText("Marcar todo leído").performClick()
+        rule.onNodeWithText("Marcar todo").performClick()
         rule.waitForIdle()
         assertEquals("markRead null", b.calls.last())
     }

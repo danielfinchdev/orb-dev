@@ -5,7 +5,7 @@ object NotesTexts {
     const val TITLE = "Avisos"
     const val BACK = "Volver"
     const val BELL = "Notificaciones"
-    const val MARK_ALL = "Marcar todo leído"
+    const val MARK_ALL = "Marcar todo"
     const val TODAY = "Hoy"
     const val YESTERDAY = "Ayer"
     const val EARLIER = "Antes"
