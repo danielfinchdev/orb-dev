@@ -91,3 +91,19 @@ fun OrbFab(text: String, icon: ImageVector, onClick: () -> Unit, modifier: Modif
         Text(text, color = OrbKit.primaryForeground, fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
+
+enum class OrbBannerKind { Error, Warning }
+
+/** `.banner`: a tinted block with a small icon and a sentence; [Error] is destructive, [Warning] the warning ink. */
+@Composable
+fun OrbBanner(text: String, icon: ImageVector, modifier: Modifier = Modifier, kind: OrbBannerKind = OrbBannerKind.Error) {
+    val ink = if (kind == OrbBannerKind.Error) OrbKit.destructive else OrbKit.warningInk
+    val fill = if (kind == OrbBannerKind.Error) OrbKit.destructive.copy(alpha = 0.12f) else OrbKit.warningSoft
+    Row(
+        modifier.fillMaxWidth().semantics { liveRegion = LiveRegionMode.Polite }.clip(RadiusCard).background(fill).padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Icon(icon, null, Modifier.padding(top = 3.dp).size(16.dp), tint = ink)
+        Text(text, Modifier.weight(1f), color = ink, fontSize = 14.5.sp, lineHeight = 21.sp)
+    }
+}

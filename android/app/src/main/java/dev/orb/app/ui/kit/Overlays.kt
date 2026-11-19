@@ -28,6 +28,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.SheetValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -70,15 +73,18 @@ fun OrbSheet(
     title: String? = null,
     closeLabel: String = "Cerrar",
     showClose: Boolean = false,
+    /** False keeps the sheet open against a swipe while something is in flight; the owner decides what back and the scrim do. */
+    dismissible: Boolean = true,
     header: (@Composable RowScope.() -> Unit)? = null,
     /** Stays under the scrolling body, always in view (the mockups' `.actbar`). */
     footer: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
+    val canDismiss by rememberUpdatedState(dismissible)
     ModalBottomSheet(
         onDismissRequest = onDismiss, modifier = modifier,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true, confirmValueChange = { it != SheetValue.Hidden || canDismiss }),
         shape = sheetShape, containerColor = OrbKit.popover, contentColor = OrbKit.foreground, tonalElevation = 0.dp, scrimColor = scrim,
         dragHandle = {
             Box(Modifier.padding(top = 10.dp, bottom = 4.dp).size(36.dp, 4.dp).clip(CircleShape).background(OrbKit.border))
@@ -199,6 +205,8 @@ fun OrbDialog(
     modifier: Modifier = Modifier,
     text: String? = null,
     dismiss: OrbDialogAction? = null,
+    /** Drawn above the title in the text colour, as the mockup's `.mdlg > i`. */
+    icon: ImageVector? = null,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
@@ -214,6 +222,7 @@ fun OrbDialog(
                 modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }, shape = RadiusBig, color = OrbKit.popover, contentColor = OrbKit.foreground, shadowElevation = 12.dp,
             ) {
                 Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)) {
+                    if (icon != null) Icon(icon, null, Modifier.padding(bottom = 8.dp).size(24.dp), tint = OrbKit.foreground)
                     Text(
                         title, Modifier.padding(bottom = 8.dp).semantics { heading() }, color = OrbKit.foreground, fontSize = 18.sp,
                         lineHeight = 24.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold,

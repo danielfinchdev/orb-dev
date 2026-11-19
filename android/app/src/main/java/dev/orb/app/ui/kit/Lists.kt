@@ -240,6 +240,8 @@ fun OrbEmpty(
     text: String? = null,
     icon: ImageVector? = null,
     actions: (@Composable RowScope.() -> Unit)? = null,
+    /** Quieter things below the actions, such as a secondary way out. */
+    below: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Column(
         modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 48.dp),
@@ -249,11 +251,12 @@ fun OrbEmpty(
         Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         if (text != null) Text(text, color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp, textAlign = TextAlign.Center)
         if (actions != null) Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), content = actions)
+        if (below != null) below()
     }
 }
 
 /** `.note-s`: the 12 sp quiet footnote. */
 @Composable
-fun OrbNote(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, color = OrbKit.faintForeground, style = TextStyle(fontSize = 12.sp, lineHeight = 17.sp))
+fun OrbNote(text: String, modifier: Modifier = Modifier, center: Boolean = false) {
+    Text(text, modifier, color = OrbKit.faintForeground, style = TextStyle(fontSize = 12.sp, lineHeight = 17.sp), textAlign = if (center) TextAlign.Center else null)
 }

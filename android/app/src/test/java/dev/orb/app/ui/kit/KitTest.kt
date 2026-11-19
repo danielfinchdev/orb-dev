@@ -174,6 +174,30 @@ class KitTest {
         assertTrue("middle of the dialog at $middle", middle > 380.dp && middle < 460.dp)
     }
 
+    @Test fun dialogIconSitsAboveTheTitleAndADialogWithoutOneIsUnchanged() {
+        var withIcon by mutableStateOf(false)
+        show { OrbDialog({}, "¿Avisos?", OrbDialogAction("Activar", {}), text = "Texto.", icon = if (withIcon) OrbIcons.Bell else null) }
+        val plain = rule.onNodeWithText("¿Avisos?").getUnclippedBoundsInRoot()
+        withIcon = true
+        rule.waitForIdle()
+        val iconed = rule.onNodeWithText("¿Avisos?").getUnclippedBoundsInRoot()
+        // The icon and its air add 32 dp above the title; the dialog stays centred, so the title moves down by half of that.
+        val moved = (iconed.top - plain.top).value
+        assertTrue("title moved by $moved dp", moved in 15f..17f)
+        rule.onNodeWithText("Activar").assertIsDisplayed()
+    }
+
+    @Test fun bannerShowsItsSentenceInBothKinds() {
+        show {
+            androidx.compose.foundation.layout.Column {
+                OrbBanner("No se reconoció.", OrbIcons.CircleAlert)
+                OrbBanner("Caducó.", OrbIcons.Clock, kind = OrbBannerKind.Warning)
+            }
+        }
+        rule.onNodeWithText("No se reconoció.").assertIsDisplayed()
+        rule.onNodeWithText("Caducó.").assertIsDisplayed()
+    }
+
     @Test fun dialogClosesWithTheSystemBack() {
         var open by mutableStateOf(true)
         show { if (open) OrbDialog({ open = false }, "Título", OrbDialogAction("Vale", {})) }
