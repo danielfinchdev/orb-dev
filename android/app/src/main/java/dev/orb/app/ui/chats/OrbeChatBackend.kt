@@ -62,9 +62,17 @@ data class TaskDetail(
     /** Why Orb stopped it, and the folder the PC has for it now, when the task is held for review. */
     val heldReasons: String = "",
     val heldFolder: String? = null,
+    /** `tasks.get.folderNow`: the folder the PC fingerprints (its current one); absent on a PC that does not say it. */
+    val folderNow: String? = null,
 ) {
-    /** The folder is the one the PC stored for the task; the hash covers the folder it has *now* (see [folderKnown]). */
-    val folderKnown: Boolean get() = !project.isNullOrBlank() && "ruta_cambiada" !in reasons
+    /** The folder the OK is about: the one the hash covers when the PC says it, else the stored one. */
+    val folderShown: String? get() = folderNow?.takeIf { it.isNotBlank() } ?: project
+
+    /** The project moved since the task was created: [project] is the stored folder, [folderNow] the one that will be used. */
+    val folderChanged: Boolean get() = !folderNow.isNullOrBlank() && !project.isNullOrBlank() && folderNow != project
+
+    /** The hash covers the folder the PC has now, so a card can only vouch for it when the PC says which one that is. */
+    val folderKnown: Boolean get() = !folderNow.isNullOrBlank() && "ruta_cambiada" !in reasons
 
     /**
      * Whether a card or dialog can show everything the OK is about. Anything the hash covers that the answer does not carry

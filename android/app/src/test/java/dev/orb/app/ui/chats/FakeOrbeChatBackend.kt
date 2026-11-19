@@ -47,7 +47,7 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     var actionResult: Result<Unit> = Result.success(Unit)
     var modeOnPc: String? = "preguntar"
     var chatOnPc: JsonObject? = null
-    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", actions = setOf(TaskAction.Approve), description = "Guarda el carrito en IndexedDB al cambiar.")
+    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", folderNow = "C:/tienda", actions = setOf(TaskAction.Approve), description = "Guarda el carrito en IndexedDB al cambiar.")
     /** What `tasks.get` answers per task; a task not listed answers [taskDetail]. */
     val detailsOnPc = HashMap<Long, TaskDetail>()
     var statOnPc: TaskStat? = null

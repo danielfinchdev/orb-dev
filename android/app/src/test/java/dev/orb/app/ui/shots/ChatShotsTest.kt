@@ -163,7 +163,7 @@ class ChatShotsTest {
         Shots.assumeEnabled()
         val rows = thread13() + line(3, "system", "La tarea #42 espera tu OK: toca la red", at(13, 56), """{"kind":"attention","task":42}""")
         val b = backend(rows, "Versión 2.0 de la app", "app-movil")
-        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "awaiting_approval", "codex", "C:/app-movil", listOf("red"), "h1", actions = setOf(TaskAction.Approve),
+        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "awaiting_approval", "codex", "C:/app-movil", listOf("red"), "h1", folderNow = "C:/app-movil", actions = setOf(TaskAction.Approve),
             description = "Añade el registro de notificaciones push y pruébalo en el emulador.")
         shoot("13-chat", OrbPaletteChoice.Grafito, "-aprobar", vm(b))
     }
@@ -175,7 +175,7 @@ class ChatShotsTest {
         actions = setOf(TaskAction.SeeChanges, TaskAction.UndoHeld, TaskAction.AcceptHeld),
     )
     private val task43 = TaskDetail(
-        43, "Borrar build/ y reinstalar dependencias", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h43",
+        43, "Borrar build/ y reinstalar dependencias", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h43", folderNow = "C:/app-movil",
         actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias con npm ci.",
     )
     private val task45 = TaskDetail(

@@ -143,7 +143,9 @@ object TasksParser {
         val row = row(o) ?: return null
         return TaskDetail(
             row = row, description = o.str("description").orEmpty(), reasoning = o.str("reasoning"), mode = o.str("mode"),
-            branch = o.str("branch"), folder = o.str("project_path"), createdBy = o.str("created_by"),
+            branch = o.str("branch"),
+            // the folder the approval fingerprint covers (the PC's current one); older PCs only have the stored one
+            folder = o.str("folderNow")?.takeIf { it.isNotBlank() } ?: o.str("project_path"), createdBy = o.str("created_by"),
             modelLabel = o.str("modelLabel"), accountLabel = o.str("accountLabel"), accepted = o.bool("accepted"),
             hasCheckpoint = o.bool("hasCheckpoint"), previewHash = o.str("previewHash"),
             dependencies = links(o["dependencies"]), children = links(o["children"]),

@@ -620,7 +620,8 @@ private fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
     if (!d.description.isNullOrBlank()) Text(if (preview) d.descriptionPreview() else d.description.trim(), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
     val who = d.agent?.takeIf { it.isNotBlank() }?.let { if (it == "any") ChatTexts.AGENT_ANY else agentName(it) ?: it }
     if (who != null) Text(ChatTexts.approvalWho(who, d.model, d.reasoning, d.fast, d.mode, d.readonly, d.autonomy), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
-    if (!d.project.isNullOrBlank()) Text(d.project, color = OrbKit.mutedForeground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)
+    if (d.folderChanged) Text(FOLDER_CHANGED_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
+    if (!d.folderShown.isNullOrBlank()) Text(d.folderShown!!, color = OrbKit.mutedForeground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp)
 }
 
 /** «Espera tu OK»: the card is the place where the person sees what they are about to approve. */
@@ -754,6 +755,8 @@ fun LiveTaskCard(t: LiveTask, modifier: Modifier = Modifier) {
         line = ChatTexts.taskLiveLine(agentName(t.agent) ?: t.agent, t.doing, t.percent).ifEmpty { null },
     )
 }
+
+private const val FOLDER_CHANGED_NOTE = "La carpeta del proyecto ha cambiado desde que se creó la tarea."
 
 /** What the PC's own window shows before approving a task: why it asks, what it will do, who runs it and where; nothing is cut. */
 @Composable

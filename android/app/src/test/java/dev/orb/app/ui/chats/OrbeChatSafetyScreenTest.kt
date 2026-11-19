@@ -67,7 +67,7 @@ class OrbeChatSafetyScreenTest {
     private val ended = raw(4, "system", "La tarea #42 terminó", """{"kind":"task-end","task":42,"status":"done","result":"Listo"}""")
 
     private fun waiting(extra: TaskDetail.() -> TaskDetail = { this }) = TaskDetail(
-        42, "Borrar build/ y reinstalar", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h1", model = "gpt",
+        42, "Borrar build/ y reinstalar", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h1", model = "gpt", folderNow = "C:/app-movil",
         actions = setOf(TaskAction.Approve), description = "Borra la carpeta build/ y vuelve a instalar las dependencias.",
     ).extra()
 
@@ -117,7 +117,7 @@ class OrbeChatSafetyScreenTest {
         val description = "Revisa cada consulta del módulo y actualiza las pruebas. ".repeat(10).trim()
         val codes = (1..8).map { "motivo-$it-" + "largo".repeat(28) }
         val b = FakeOrbeChatBackend(listOf(attention))
-        b.taskDetail = waiting { copy(title = title, project = path, reasons = codes, description = description, reasoning = "high") }
+        b.taskDetail = waiting { copy(title = title, project = path, folderNow = path, reasons = codes, description = description, reasoning = "high") }
         screen(b, fontScale = 2f)
         assertNoCap("#42 " + title)
         assertNoCap("Pide tu OK porque: ${codes.first()}")
@@ -165,6 +165,28 @@ class OrbeChatSafetyScreenTest {
     @Test fun aTaskWhoseFolderMovedCannotBeApprovedFromTheCard() {
         val b = FakeOrbeChatBackend(listOf(attention))
         b.taskDetail = waiting { copy(reasons = listOf("ruta_cambiada")) }
+        screen(b)
+        rule.onNodeWithText("Ver y aprobar").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf(42L), openedTasks)
+        assertTrue(b.calls.none { it.startsWith("task ") })
+    }
+
+    @Test fun aMovedProjectShowsTheCurrentFolderWithTheWarningAndSendsTheHashOfIt() {
+        val b = FakeOrbeChatBackend(listOf(attention))
+        b.taskDetail = waiting { copy(project = "C:/viejo/app-movil", folderNow = "C:/nuevo/app-movil") }
+        screen(b)
+        rule.onNodeWithText("C:/nuevo/app-movil").assertIsDisplayed()
+        rule.onNodeWithText("La carpeta del proyecto ha cambiado desde que se creó la tarea.").assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("C:/viejo/app-movil").fetchSemanticsNodes().size)
+        rule.onNodeWithText("Aprobar").performClick()
+        rule.waitForIdle()
+        assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
+    }
+
+    @Test fun aPcThatDoesNotSayTheCurrentFolderOnlyOpensTheTask() {
+        val b = FakeOrbeChatBackend(listOf(attention))
+        b.taskDetail = waiting { copy(folderNow = null) }
         screen(b)
         rule.onNodeWithText("Ver y aprobar").performClick()
         rule.waitForIdle()

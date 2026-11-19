@@ -92,7 +92,7 @@ class OrbeParsingTest {
         status: String = "done", extra: String = "", hash: String = """"previewHash":"h1",""",
         events: String = """[{"actor":"orb","kind":"task.created","detail":"queued","at":"x"}]""",
     ) = json(
-        """{"id":42,"title":"Registro","status":"$status","assigned_to":"codex","project_path":"C:/app-movil","model":"gpt","sensitivity":[],"agent":"codex","description":"Añade el registro de notificaciones.",$hash
+        """{"id":42,"title":"Registro","status":"$status","assigned_to":"codex","project_path":"C:/app-movil","folderNow":"C:/app-movil","model":"gpt","sensitivity":[],"agent":"codex","description":"Añade el registro de notificaciones.",$hash
         "autonomy":"auto","approval":{"required":false,"signed":false},"hasCheckpoint":true,"accepted":false,
         "review":{"task":43,"verdict":"ok","agent":"claude"},"events":$events$extra}""",
     )
@@ -108,6 +108,29 @@ class OrbeParsingTest {
         assertEquals(false, d.approvalRequired)
         assertEquals("claude", d.reviewAgent)
         assertNull(OrbeParser.taskDetail(json("[]"), 42, allMethods))
+    }
+
+    @Test fun theFolderTheHashCoversComesFromTheCurrentFolderThePcSays() {
+        val same = OrbeParser.taskDetail(task(status = "awaiting_approval"), 42, allMethods)!!
+        assertEquals("C:/app-movil", same.folderNow)
+        assertFalse(same.folderChanged)
+        assertTrue(same.approvable)
+        val moved = OrbeParser.taskDetail(json(task(status = "awaiting_approval").toString().replace(""""folderNow":"C:/app-movil"""", """"folderNow":"C:/otra"""")), 42, allMethods)!!
+        assertTrue(moved.folderChanged)
+        assertEquals("C:/otra", moved.folderShown)
+        assertEquals("C:/app-movil", moved.project)
+        assertTrue(moved.approvable)
+        val old = OrbeParser.taskDetail(json(task(status = "awaiting_approval").toString().replace(""""folderNow":"C:/app-movil",""", "")), 42, allMethods)!!
+        assertNull(old.folderNow)
+        assertFalse(old.folderChanged)
+        assertFalse(old.approvable)
+    }
+
+    @Test fun theTaskScreenShowsTheCurrentFolderWhenThePcSaysIt() {
+        val moved = json(task(status = "awaiting_approval").toString().replace(""""folderNow":"C:/app-movil"""", """"folderNow":"C:/otra""""))
+        assertEquals("C:/otra", dev.orb.app.ui.tasks.TasksParser.detail(moved)!!.folder)
+        val old = json(task(status = "awaiting_approval").toString().replace(""""folderNow":"C:/app-movil",""", ""))
+        assertEquals("C:/app-movil", dev.orb.app.ui.tasks.TasksParser.detail(old)!!.folder)
     }
 
     @Test fun aFinishedTaskOffersChangesUndoAndAcceptWhereThePcHasThem() {

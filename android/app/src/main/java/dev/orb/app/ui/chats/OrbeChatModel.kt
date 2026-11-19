@@ -200,7 +200,7 @@ object OrbeParser {
             id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"),
             // `agent` is what the fingerprint covers; `assigned_to` is who runs it now.
             agent = o.str("agent"), runner = o.str("assigned_to"),
-            project = o.str("project_path"),
+            project = o.str("project_path"), folderNow = o.str("folderNow"),
             reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
             hash = o.str("previewHash"), model = o.str("model"),
             autonomy = o.str("autonomy"),
