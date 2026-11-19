@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.net.PairError
 import dev.orb.app.link.net.PairOk
+import dev.orb.app.link.net.pcNameOrNull
 import dev.orb.app.link.net.PairingException
 import dev.orb.app.link.net.ResolvedLink
 import dev.orb.app.link.payload.LinkErrors
@@ -154,7 +155,7 @@ class WelcomeViewModel(
                 _state.update {
                     it.copy(
                         busy = false, sheet = false, stage = WelcomeStage.Fingerprint,
-                        pc = PcIdentity(r.name?.takeIf { n -> n.isNotBlank() } ?: "Tu PC", fingerprintGroups(r.fp), r.via == LinkVia.CODE),
+                        pc = PcIdentity(pcNameOrNull(r.name) ?: "Tu PC", fingerprintGroups(r.fp), r.via == LinkVia.CODE),
                     )
                 }
             } catch (e: CancellationException) {
@@ -222,7 +223,7 @@ class WelcomeViewModel(
             // A wrong password with tries left stays on the fingerprint; with none left the code is dead.
             refused?.reason == "password" && refused.left != 0 -> _state.update { it.copy(checking = false, passwordError = errorOf(e)) }
             refused != null && linking && isSpent(refused) -> backToEntry(
-                if (refused.reason == "password") pairErrorText(refused.copy(reason = "newCode")) else errorOf(e), WelcomeErrorKind.CodeSpent,
+                if (refused.reason == "password") pairErrorText(refused.copy(reason = "newCode")) else errorOf(e, resolved?.via), WelcomeErrorKind.CodeSpent,
             )
             else -> fail(errorOf(e))
         }
@@ -245,7 +246,7 @@ class WelcomeViewModel(
         }
     }
 
-    private fun errorOf(e: Throwable): String = (e as? PairingException)?.let { pairErrorText(it.error) } ?: pairErrorText(PairError.BadAnswer)
+    private fun errorOf(e: Throwable, via: LinkVia? = null): String = (e as? PairingException)?.let { pairErrorText(it.error, via) } ?: pairErrorText(PairError.BadAnswer)
 
     /** A [kind] leaves the sheet: the banner on the entry page carries the way out. */
     private fun fail(message: String, kind: WelcomeErrorKind? = null) =

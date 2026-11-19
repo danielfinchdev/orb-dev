@@ -7,7 +7,8 @@ import dev.orb.app.link.net.UpdateSide
 import dev.orb.app.link.payload.LinkErrors
 
 /** Plain Spanish for what linking can fail with. The PC's own words are shown only when nothing better is known. */
-fun pairErrorText(e: PairError): String = when (e) {
+/** [via] tells a mistyped short code (the PC cannot tell it from a spent one) from a QR or link that really expired. */
+fun pairErrorText(e: PairError, via: dev.orb.app.link.payload.LinkVia? = null): String = when (e) {
     is PairError.Offline ->
         if (e.overLan) "No se pudo llegar al PC. Comprueba que está encendido, que Orb está abierto y que el cortafuegos permite la conexión."
         else "No se pudo llegar al PC. Comprueba que está encendido y que Orb está abierto."
@@ -19,6 +20,7 @@ fun pairErrorText(e: PairError): String = when (e) {
         e.reason == "wait" -> "Espera un momento antes de volver a probar."
         e.reason == "noMaster" || e.reason == "noVerifier" -> "El PC no tiene contraseña maestra para enlazar. Créala en Orb y vuelve a probar."
         e.reason == "tries" -> "Demasiados intentos. Espera un rato o desbloquea el PC."
+        e.reason == null && e.status == 401 && via == dev.orb.app.link.payload.LinkVia.CODE -> "El código no coincide o ya no vale. Compruébalo o genera uno nuevo en el PC."
         e.reason == null && e.status == 401 -> "Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC."
         e.reason == null && e.status == 429 -> "Demasiados intentos desde este móvil. Espera unos minutos."
         e.reason == null && (e.status == 404 || e.status == 410) -> "Esa dirección no responde como un Orb. Revisa la dirección del PC."

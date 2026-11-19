@@ -63,7 +63,7 @@ class WelcomeScreenTest {
         }
         vm.openSheet(); vm.setCode("ABCDEF"); vm.setAddress("http://192.168.1.20:3131"); vm.resolve(); vm.setPassword("secreto"); vm.confirm()
         rule.waitForIdle()
-        rule.onNodeWithText("Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC.").assertIsDisplayed()
+        rule.onNodeWithText("El código no coincide o ya no vale. Compruébalo o genera uno nuevo en el PC.").assertIsDisplayed()
         rule.onNodeWithText("Escanear otro QR").performClick()
         rule.waitForIdle()
         assertEquals(1, scans)

@@ -328,7 +328,7 @@ class LinkClient(
         val result = unwrap(opened.msg) as? JsonObject ?: JsonObject(emptyMap())
         val versions = PcVersions(result["v"].num()?.toInt(), result["min"].num()?.toInt(), pcVersionOrNull(result["version"].str()))
         val methods = (result["methods"] as? JsonArray)?.mapNotNull { it.str() }?.toSet()
-        val info = PcInfo(result["device"].str(), result["name"].str(), result["pc"].str(), versions, methods, result)
+        val info = PcInfo(result["device"].str(), pcNameOrNull(result["name"].str()), result["pc"].str(), versions, methods, result)
         _info.value = info
         val min = result["min"].num()
         if (min != null && updateNeeded(min) != null) {

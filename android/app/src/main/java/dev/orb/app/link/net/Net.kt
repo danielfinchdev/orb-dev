@@ -71,6 +71,26 @@ private val PC_VERSION = Regex("^\\d+(\\.\\d+){0,3}([-+][0-9A-Za-z.]{1,16})?$")
 /** The PC's own version text only when it looks like one: it is shown to the person, so nothing else is let through. */
 fun pcVersionOrNull(raw: String?): String? = raw?.takeIf { it.length <= 32 && PC_VERSION.matches(it) }
 
+private const val PC_NAME_MAX = 60
+
+/** The PC's own name as one short line: it is shown on several screens, so the PC cannot make it long or multi-line. */
+fun pcNameOrNull(raw: String?): String? {
+    if (raw == null) return null
+    val sb = StringBuilder()
+    var gap = false
+    for (ch in raw) {
+        val breaks = Character.isISOControl(ch) || Character.getType(ch).let { it == Character.LINE_SEPARATOR.toInt() || it == Character.PARAGRAPH_SEPARATOR.toInt() }
+        if (breaks) gap = true else { if (gap && sb.isNotEmpty()) sb.append(' '); gap = false; sb.append(ch) }
+    }
+    var line = sb.toString().trim()
+    if (line.length > PC_NAME_MAX) {
+        var end = PC_NAME_MAX
+        if (Character.isHighSurrogate(line[end - 1])) end--
+        line = line.substring(0, end).trimEnd()
+    }
+    return line.ifEmpty { null }
+}
+
 sealed class ConnectionState {
     data object Connecting : ConnectionState()
     data class Online(val base: String, val pcName: String?, val versions: PcVersions) : ConnectionState()

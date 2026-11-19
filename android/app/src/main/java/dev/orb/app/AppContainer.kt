@@ -16,6 +16,7 @@ import dev.orb.app.link.net.LinkClient
 import dev.orb.app.link.net.LinkSession
 import dev.orb.app.link.net.LinkSessionCodec
 import dev.orb.app.link.net.PairOk
+import dev.orb.app.link.net.pcNameOrNull
 import dev.orb.app.link.net.Pairing
 import dev.orb.app.link.net.ResolvedLink
 import dev.orb.app.link.api.PcCaller
@@ -159,7 +160,7 @@ class AppContainer(private val app: Application) {
             .stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting),
         lastContact = lastContact.at,
         retryNow = { _runtime.value?.client?.resume() },
-        pcName = { _runtime.value?.client?.let { it.pcInfo.value?.name ?: it.currentSession.name } },
+        pcName = { _runtime.value?.client?.let { it.pcInfo.value?.name ?: pcNameOrNull(it.currentSession.name) } },
         pcVersions = { _runtime.value?.client?.pcInfo?.value?.versions },
     )
 
