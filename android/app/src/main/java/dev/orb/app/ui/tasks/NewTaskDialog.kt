@@ -74,16 +74,16 @@ internal fun NewTaskDialog(state: NewTaskState, onCreate: (String, String, Strin
     }
 }
 
-/** The field of [OrbTextField] for a longer text: the same border and type, several lines. */
+/** The field of [OrbTextField] for a longer text: the same border and type, several lines; [soft] is the sheets' grey one. */
 @Composable
-internal fun TextArea(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier) {
+internal fun TextArea(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, soft: Boolean = false) {
     val shape = RoundedCornerShape(12.dp)
     Box(
-        modifier.fillMaxWidth().defaultMinSize(minHeight = 96.dp).clip(shape).background(OrbKit.card).border(1.dp, OrbKit.border, shape)
-            .padding(horizontal = 14.dp, vertical = 13.dp),
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 96.dp).clip(shape).background(if (soft) OrbKit.secondary else OrbKit.card)
+            .then(if (soft) Modifier else Modifier.border(1.dp, OrbKit.border, shape)).padding(horizontal = 14.dp, vertical = 13.dp),
         contentAlignment = Alignment.TopStart,
     ) {
-        if (value.isEmpty()) Text(label, color = OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
+        if (value.isEmpty()) Text(label, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
         BasicTextField(
             value, onValueChange, Modifier.fillMaxWidth().semantics { contentDescription = label }, minLines = 3, maxLines = 6,
             textStyle = TextStyle(color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 21.sp), cursorBrush = SolidColor(OrbKit.foreground),

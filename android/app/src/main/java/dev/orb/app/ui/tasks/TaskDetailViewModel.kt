@@ -61,6 +61,22 @@ object TaskActions {
         if (d.hasCheckpoint && !r.undone && (r.status == "done" || held) && can(ApiMethods.TASKS_DIFF)) out += TaskAction.SeeChanges
         return out
     }
+
+    /** Why a button of the fixed bar is off, in words for the person; null when [action] is allowed. */
+    fun barReason(action: TaskAction, d: TaskDetail, allowed: Set<TaskAction>): String? {
+        if (action in allowed) return null
+        val r = d.row
+        return when (action) {
+            TaskAction.Cancel -> if (r.status in CANCELLABLE) TaskTexts.BAR_PC_NO else TaskTexts.BAR_CANCEL_DONE
+            TaskAction.Reassign -> when {
+                r.held != null -> TaskTexts.BAR_REASSIGN_HELD
+                r.status in REASSIGNABLE -> TaskTexts.BAR_PC_NO
+                else -> TaskTexts.BAR_REASSIGN_STATE
+            }
+            TaskAction.Followup -> if (r.status == "cancelled") TaskTexts.BAR_FOLLOWUP_CANCELLED else TaskTexts.BAR_PC_NO
+            else -> null
+        }
+    }
 }
 
 /**

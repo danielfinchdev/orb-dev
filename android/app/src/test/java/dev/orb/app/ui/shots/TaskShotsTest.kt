@@ -6,6 +6,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.orb.app.ui.chats.ChatTime
@@ -89,6 +91,9 @@ class TaskShotsTest {
     @Test fun held() = shoot("-retenida", mockupTask("blocked", held = TaskHeld("borró 12 archivos", null)))
     @Test fun heldOceano() = shoot("-retenida", mockupTask("blocked", held = TaskHeld("borró 12 archivos", null)), OrbPaletteChoice.Oceano)
     @Test fun failed() = shoot("-fallida", mockupTask("failed"))
+    @Test fun menuOfAHeldTask() = shoot("-retenida-menu", mockupTask("blocked", held = TaskHeld("borró 12 archivos", null))) { rule.onNodeWithContentDescription("Más").performClick() }
+    @Test fun menuOfAWaitingTask() = shoot("-menu", waitingNotice()) { rule.onNodeWithContentDescription("Más").performClick() }
+    @Test fun detailsUnfolded() = shoot("-detalles", waitingNotice()) { rule.onNodeWithText("Más opciones").performScrollTo().performClick() }
     @Test fun cancelDialog() = shoot("-cancelar", waitingNotice()) { rule.onNodeWithText("Cancelar tarea").performClick() }
     @Test fun reassignSheet() = shoot("-reasignar", waitingNotice()) { rule.onNodeWithText("Reasignar").performClick() }
     @Test fun followupSheet() = shoot("-seguir", waitingNotice()) { rule.onNodeWithText("Seguir").performClick() }

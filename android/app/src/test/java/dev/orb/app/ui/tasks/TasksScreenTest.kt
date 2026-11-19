@@ -308,6 +308,11 @@ class TasksScreenTest {
         show(FakeTasksBackend())
         rule.onNodeWithText("No hay tareas").assertIsDisplayed()
         rule.onNodeWithText("Cuando Orbe o un agente creen una, aparecerá aquí.").assertIsDisplayed()
+        // The chips stay under the header and the note sits right below them, not in the middle of the screen.
+        val chips = rule.onNodeWithText("En cola").fetchSemanticsNode().positionInRoot.y
+        val note = rule.onNodeWithText("No hay tareas").fetchSemanticsNode().positionInRoot.y
+        assertTrue(chips < note)
+        assertTrue(note < 400f)
     }
 
     @Test fun withNothingLeftToDoTheBoardIsUpToDate() {

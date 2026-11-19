@@ -3,6 +3,10 @@ package dev.orb.app.ui.tasks
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.SemanticsNodeInteraction
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -54,6 +58,11 @@ class TaskDetailScreenTest {
     private fun backend(d: TaskDetail) = FakeTasksBackend().also { it.details[d.id] = Result.success(d) }
 
     private fun top(text: String) = rule.onNodeWithText(text).fetchSemanticsNode().positionInRoot.y
+    private fun SemanticsNodeInteraction.assertStateDescription(text: String?) = assert(
+        SemanticsMatcher("state description is $text") {
+            (if (SemanticsProperties.StateDescription in it.config) it.config[SemanticsProperties.StateDescription] else null) == text
+        },
+    )
     private fun menu() = rule.onNodeWithContentDescription("Más").performClick().also { rule.waitForIdle() }
 
     // The header
@@ -144,7 +153,7 @@ class TaskDetailScreenTest {
 
     // Held for review
 
-    @Test fun heldTaskShowsTheReasonSeeChangesAcceptAndAConfirmedUndo() {
+    @Test fun heldTaskShowsTheReasonSeeChangesAndAcceptAndUndoIsInTheMenuWithItsConfirmation() {
         val d = detail(task(5, status = "blocked", held = TaskHeld("ha eliminado 214 archivos", "C:/p")), hasCheckpoint = true)
         val b = backend(d)
         show(b, 5)
@@ -152,14 +161,52 @@ class TaskDetailScreenTest {
         rule.onNodeWithText("Retenida · creada hace 12 min por Orbe").assertIsDisplayed()
         rule.onNodeWithText("Orb la paró: ha eliminado 214 archivos en C:/p. Revisa los cambios antes de seguir.").assertIsDisplayed()
         rule.onNodeWithText("Ver cambios").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        // The card no longer carries «Deshacer»: it is in the «⋮» menu, and asks before touching anything.
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+        menu()
         rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
         rule.onNodeWithText("¿Deshacer esta tarea?").assertIsDisplayed()
         assertEquals(emptyList<String>(), b.calls)
-        // The button on the card and the one in the dialog.
-        rule.onAllNodesWithText("Deshacer").assertCountEquals(2)
-        rule.onAllNodesWithText("Deshacer")[1].performClick()
+        rule.onNodeWithText("Deshacer").performClick()
         rule.waitForIdle()
         assertEquals(listOf("undo 5"), b.calls)
+    }
+
+    @Test fun undoInTheMenuReadsTheTaskAgainAndUsesTheCheckpointItSaw() {
+        val d = detail(task(5, status = "blocked", held = TaskHeld("ha eliminado 214 archivos", "C:/p")), hasCheckpoint = true, checkpointId = "cp1")
+        val b = backend(d)
+        show(b, 5)
+        menu()
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        // Moving the button changed nothing about what it sends.
+        rule.onNodeWithText("Deshacer").performClick()
+        rule.waitForIdle()
+        assertEquals(listOf("cp1"), b.undoCheckpoints)
+    }
+
+    @Test fun aHeldTaskDrawsAllThreeButtonsOfTheBarAndSaysWhyTheOffOnesAreOff() {
+        val d = detail(task(5, status = "blocked", held = TaskHeld("ha eliminado 214 archivos", "C:/p")), hasCheckpoint = true)
+        show(backend(d), 5)
+        rule.onNodeWithText("Cancelar tarea").assertIsNotEnabled()
+        rule.onNodeWithText("Cancelar tarea").assertStateDescription(TaskTexts.BAR_CANCEL_DONE)
+        rule.onNodeWithText("Reasignar").assertStateDescription(null)
+        rule.onNodeWithText("Seguir").assertIsDisplayed()
+    }
+
+    @Test fun aFailedTaskKeepsTheBarAndItsOffButtonsSayWhy() {
+        val d = detail(task(8, status = "failed"))
+        val b = backend(d)
+        b.unavailable = setOf("tasks.reassign", "tasks.followup")
+        show(b, 8)
+        for (t in listOf("Cancelar tarea", "Reasignar", "Seguir")) rule.onNodeWithText(t).assertIsDisplayed()
+        rule.onNodeWithText("Cancelar tarea").assertIsNotEnabled()
+        rule.onNodeWithText("Cancelar tarea").assertStateDescription(TaskTexts.BAR_CANCEL_DONE)
+        rule.onNodeWithText("Reasignar").assertIsNotEnabled()
+        rule.onNodeWithText("Reasignar").assertStateDescription(TaskTexts.BAR_PC_NO)
+        rule.onNodeWithText("Seguir").assertIsNotEnabled()
     }
 
     @Test fun acceptAsksThePc() {
@@ -232,6 +279,31 @@ class TaskDetailScreenTest {
         for (t in listOf("Revisión", "Codex (cruzada) · correcto", "Depende de", "#41", "Programada", "Sí", "Copia aislada")) rule.onAllNodesWithText(t).onFirst().performScrollTo().assertIsDisplayed()
     }
 
+    @Test fun theFolderIsNeverARawPathAndTheTechnicalFactsAreFolded() {
+        val d = detail(task(44, status = "queued", project = "api-pagos", agent = "claude").copy(model = "Sonnet"), mode = "carpeta")
+        show(backend(d), 44)
+        rule.onNodeWithText("api-pagos").performScrollTo().assertIsDisplayed()
+        assertEquals(0, rule.onAllNodesWithText("C:/p", substring = true).fetchSemanticsNodes().size)
+        // Agent, model and reasoning are not asked for here: they wait under «Más opciones».
+        rule.onNodeWithText("Razonamiento").assertDoesNotExist()
+        rule.onNodeWithText("Más opciones").performScrollTo().performClick()
+        rule.waitForIdle()
+        for (t in listOf("Agente", "Modelo", "Razonamiento")) rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun aTaskWaitingForAnOkWithoutFactsShowsAgentModelAndReasoningInTheDetails() {
+        val d = detail(task(44, status = "awaiting_approval", agent = "claude").copy(model = "Sonnet"), previewHash = "h1")
+        show(backend(d), 44)
+        for (t in listOf("Agente", "Modelo", "Razonamiento")) rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun fileNamesInTheBriefAreDrawnInMonospace() {
+        val spans = CodeSpans.of("Traducir faq.html al inglés, versión 3.8.8 y `npm test`.")
+        val mono = spans.spanStyles.map { spans.text.substring(it.start, it.end) }
+        assertEquals(listOf("faq.html", "npm test"), mono)
+        assertEquals("Traducir faq.html al inglés, versión 3.8.8 y npm test.", spans.text)
+    }
+
     @Test fun aReviewByTheTasksOwnAgentIsNotCalledCrossed() {
         val d = detail(task(44, status = "done", agent = "codex"), review = TaskReview(50, "con fallos", "codex", null))
         show(backend(d), 44)
@@ -248,6 +320,8 @@ class TaskDetailScreenTest {
     @Test fun theDetailsKeepReadOnlyAndTheAccount() {
         val d = detail(task(44, status = "queued").copy(readonly = true)).copy(accountLabel = "Claude Pro", branch = "orb/44")
         show(backend(d), 44)
+        rule.onNodeWithText("Más opciones").performScrollTo().performClick()
+        rule.waitForIdle()
         for (t in listOf("Solo lectura", "Cuenta", "Claude Pro", "Rama", "orb/44")) rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
     }
 
@@ -291,7 +365,7 @@ class TaskDetailScreenTest {
         rule.onNodeWithText("Reasignar").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Reasignar a otra cuenta o agente").assertIsDisplayed()
-        for (t in listOf("Automático", "Claude · Sonnet 5.5", "Codex · Codex Pro · gpt-5", "Actual", "Más opciones")) rule.onNodeWithText(t).assertIsDisplayed()
+        for (t in listOf("Automático", "Claude · Sonnet 5.5", "Codex · Codex Pro · gpt-5", "Actual", "Más opciones")) rule.onAllNodesWithText(t).onLast().assertIsDisplayed()
         // «Razonamiento» is also a row of the details behind the sheet
         rule.onAllNodesWithText("Razonamiento").onLast().assertIsDisplayed()
         rule.onNodeWithText("Codex · Codex Pro · gpt-5").performClick()
@@ -365,9 +439,13 @@ class TaskDetailScreenTest {
         assertEquals(listOf("review 9"), b.calls)
     }
 
-    @Test fun withoutHistoryOrLinksOrReviewThereIsNoMenuButton() {
+    @Test fun theMenuButtonIsAlwaysThereAndAnEmptyHistorySaysSo() {
         show(backend(detail(task(7, status = "queued"))), 7)
-        rule.onNodeWithContentDescription("Más").assertDoesNotExist()
+        menu()
+        rule.onNodeWithText("Subtareas").assertDoesNotExist()
+        rule.onNodeWithText("Historial").performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText(TaskTexts.HISTORY_EMPTY).assertIsDisplayed()
     }
 
     @Test fun anUnreadableTaskOffersToTryAgain() {

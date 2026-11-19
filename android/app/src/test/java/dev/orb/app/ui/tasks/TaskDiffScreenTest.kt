@@ -123,22 +123,32 @@ class TaskDiffScreenTest {
 
     // The zoom
 
-    @Test fun theDiffStartsAtItsOwnSizeAndTheButtonsEnlargeAndReduceItWithinLimits() {
+    private fun zoomMenu() = rule.onNodeWithContentDescription("Más opciones").performClick().also { rule.waitForIdle() }
+
+    @Test fun theDiffHasNoMagnifierButtonsInTheSummaryRow() {
+        show(backend(TaskDiff(true, files, 0)))
+        rule.onNodeWithContentDescription("Ampliar el diff").assertDoesNotExist()
+        rule.onNodeWithContentDescription("Reducir el diff").assertDoesNotExist()
+    }
+
+    @Test fun theDiffStartsAtItsOwnSizeAndTheMenuEnlargesAndReducesItWithinLimits() {
         show(backend(TaskDiff(true, files, 0)))
         rule.onNode(zoomIs(100)).assertExists()
-        rule.onNodeWithContentDescription("Reducir el diff").assertIsNotEnabled()
-        rule.onNodeWithContentDescription("Ampliar el diff").performClick()
+        zoomMenu()
+        rule.onNodeWithText("Reducir el diff").assertIsNotEnabled()
+        rule.onNodeWithText("Ampliar el diff").performClick()
         rule.waitForIdle()
         rule.onNode(zoomIs(150)).assertExists()
-        rule.onNodeWithContentDescription("Reducir el diff").assertIsEnabled()
-        repeat(8) { rule.onNodeWithContentDescription("Ampliar el diff").performClick() }
-        rule.waitForIdle()
-        // never beyond four times
-        rule.onNode(zoomIs(400)).assertExists()
-        rule.onNodeWithContentDescription("Ampliar el diff").assertIsNotEnabled()
-        repeat(12) { rule.onNodeWithContentDescription("Reducir el diff").performClick() }
+        zoomMenu()
+        rule.onNodeWithText("Reducir el diff").assertIsEnabled()
+        rule.onNodeWithText("Reducir el diff").performClick()
         rule.waitForIdle()
         rule.onNode(zoomIs(100)).assertExists()
+        repeat(8) { zoomMenu(); rule.onNodeWithText("Ampliar el diff").performClick(); rule.waitForIdle() }
+        // never beyond four times
+        rule.onNode(zoomIs(400)).assertExists()
+        zoomMenu()
+        rule.onNodeWithText("Ampliar el diff").assertIsNotEnabled()
     }
 
     @Test fun pinchingWithTwoFingersEnlargesTheDiff() {
@@ -428,8 +438,8 @@ class TaskDiffScreenTest {
         rule.onNodeWithText("Ver rama").assertDoesNotExist()
     }
 
-    @Test fun withoutAnythingToOfferThereIsNoMenuButton() {
-        val b = backend(TaskDiff(true, files, 0))
+    @Test fun withoutFilesOrAnythingToOfferThereIsNoMenuButton() {
+        val b = backend(TaskDiff(false, emptyList(), 0, reason = "nophoto"))
         b.unavailable = setOf(
             dev.orb.app.link.api.ApiMethods.TASKS_REVIEW.name, dev.orb.app.link.api.ApiMethods.PROJECTS_SECURITY_REVIEW.name, dev.orb.app.link.api.ApiMethods.PROJECTS_BRANCH.name,
         )

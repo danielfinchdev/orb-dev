@@ -62,6 +62,17 @@ object TaskLines {
     /** «app-movil · Cursor»: what a running task shows, without its number (the bar below says it is alive). */
     fun workers(t: TaskRow): String = TaskTexts.projectAgent(t.project, agentName(t.agent))
 
+    /** The last name of a folder path (`app-movil` of `C:\work\app-movil`); the person never reads the whole path here. */
+    fun folderName(path: String): String = path.trimEnd('/', '\\').substringAfterLast('/').substringAfterLast('\\').ifBlank { path }
+
+    /** «Copia aislada», or the project's name, or the name of the folder; never a raw path. */
+    fun folderLabel(isolated: Boolean, project: String?, folder: String?): String = when {
+        isolated -> TaskTexts.FOLDER_ISOLATED
+        !project.isNullOrBlank() -> project
+        !folder.isNullOrBlank() -> folderName(folder)
+        else -> TaskTexts.FOLDER_SHARED
+    }
+
     /** «hace 12 min», «hace 3 h», «ayer», «el 3 nov»: when a task was made, as it follows a «creada»; null without a time. */
     fun ago(iso: String?, nowMs: Long): String? {
         val t = ChatTime.parse(iso) ?: return null

@@ -98,7 +98,12 @@ class TaskDiffShotsTest {
     // What the mockup leaves out
 
     @Test fun zoomed() = shoot("-ampliado") {
-        repeat(2) { rule.onNodeWithContentDescription("Ampliar el diff").performClick() }
+        repeat(2) {
+            rule.onNodeWithContentDescription("Más opciones").performClick()
+            rule.waitForIdle()
+            rule.onNodeWithText("Ampliar el diff").performClick()
+            rule.waitForIdle()
+        }
     }
     @Test fun secondFile() = shoot("-segundo-archivo") { rule.onNodeWithText("main.ts").performClick() }
     @Test fun alreadyAccepted() = shoot("-ya-aceptada", accepted = true)

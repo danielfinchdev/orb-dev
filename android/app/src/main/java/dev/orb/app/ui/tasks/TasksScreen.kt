@@ -57,6 +57,7 @@ import dev.orb.app.ui.kit.OrbRow
 import dev.orb.app.ui.kit.OrbSearchField
 import dev.orb.app.ui.kit.OrbSettingRow
 import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbEmpty
 import dev.orb.app.ui.kit.OrbSpinner
 import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.notes.NotesTexts
@@ -114,7 +115,7 @@ fun TasksScreen(vm: TasksViewModel, menu: ChatsMenu, onOpenTask: (Long) -> Unit,
     if (doomed != null) {
         val row = remember(doomed, state.groups) { state.groups.firstNotNullOfOrNull { g -> g.rows.firstOrNull { it.id == doomed } } }
         if (row == null) rejectFor = null else OrbDialog(
-            { rejectFor = null }, TaskTexts.rejectAsk(row.id), OrbDialogAction(TaskTexts.REJECT_CONFIRM, { rejectFor = null; vm.reject(row.id) }, danger = true),
+            { rejectFor = null }, TaskTexts.rejectAsk(row.id), OrbDialogAction(TaskTexts.REJECT_CONFIRM, { rejectFor = null; vm.reject(row.id) }),
             text = TaskTexts.rejectBodyFor(row.id, row.title), dismiss = OrbDialogAction(ChatTexts.CANCEL, { rejectFor = null }),
         )
     }
@@ -190,7 +191,11 @@ private fun Body(
         !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             if (state.online || state.refreshing) OrbSpinner(size = 28.dp) else NoPcYet()
         }
-        state.total == 0 -> Message(TaskTexts.EMPTY, TaskTexts.EMPTY_HINT, icon = OrbIcons.Tasks)
+        // The chips stay under the header and the empty note sits right below them, as the mockup draws it.
+        state.total == 0 -> Column(Modifier.fillMaxSize()) {
+            SectionChips(state, onSection)
+            OrbEmpty(TaskTexts.EMPTY, text = TaskTexts.EMPTY_HINT, icon = OrbIcons.Tasks)
+        }
         state.filter == TaskFilter.Done && state.done == 0 -> Message(TaskTexts.EMPTY_DONE, icon = OrbIcons.Tasks)
         state.filter == TaskFilter.Active && state.section == null && live == 0 -> Message(TaskTexts.ALL_CLEAR, TaskTexts.ALL_CLEAR_HINT, action = TaskTexts.SHOW_ALL, onAction = onShowAll, icon = OrbIcons.CircleCheck)
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 88.dp)) {

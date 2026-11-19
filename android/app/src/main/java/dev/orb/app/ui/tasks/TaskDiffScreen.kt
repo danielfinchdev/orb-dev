@@ -114,7 +114,10 @@ fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier
     }
     val diff = state.diff
     val enabled = state.online && !state.busy
-    val hasMenu = state.canReview || state.canSecurity || state.canBranch
+    // The enlargement lives in the «⋯» menu as well as in the pinch, so it can be done without the gesture.
+    val zoom = remember { DiffZoom() }
+    val showsFiles = diff != null && !state.notReady && diff.available && diff.files.isNotEmpty()
+    val hasMenu = showsFiles || state.canReview || state.canSecurity || state.canBranch
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
@@ -133,7 +136,7 @@ fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier
                     state.notReady -> Message(TaskTexts.NOT_READY, TaskTexts.NOT_READY_HINT, icon = OrbIcons.Clock)
                     !diff.available -> NoDiff(diff)
                     diff.files.isEmpty() -> Message(TaskTexts.NO_CHANGES, if (diff.hidden > 0) TaskTexts.hiddenFiles(diff.hidden) else TaskTexts.NO_CHANGED_FILES, icon = OrbIcons.GitCompare)
-                    else -> Files(diff)
+                    else -> Files(diff, zoom)
                 }
             }
             if (state.canAccept || state.canUndo || state.accepted) {
@@ -146,6 +149,10 @@ fun TaskDiffScreen(vm: TaskDiffViewModel, onBack: () -> Unit, modifier: Modifier
 
     if (menuOpen) {
         OrbSheet({ menuOpen = false }, title = TaskTexts.changesOf(state.id)) {
+            if (showsFiles) {
+                OrbSheetItem(TaskTexts.ZOOM_IN, { menuOpen = false; zoom.step(DiffZoom.STEP) }, icon = OrbIcons.ZoomIn, enabled = zoom.scale < DiffZoom.MAX)
+                OrbSheetItem(TaskTexts.ZOOM_OUT, { menuOpen = false; zoom.step(1f / DiffZoom.STEP) }, icon = OrbIcons.ZoomOut, enabled = zoom.scale > DiffZoom.MIN)
+            }
             if (state.canReview) OrbSheetItem(TaskTexts.CHANGES_MENU_REVIEW, { menuOpen = false; ask = DiffAsk.Review }, icon = OrbIcons.GitCompare, meta = state.reviewedBy?.let { dev.orb.app.ui.chats.agentName(it) ?: it })
             if (state.canSecurity) OrbSheetItem(TaskTexts.CHANGES_MENU_SECURITY, { menuOpen = false; ask = DiffAsk.Security }, icon = OrbIcons.ShieldCheck)
             if (state.canBranch) OrbSheetItem(TaskTexts.CHANGES_MENU_BRANCH, { menuOpen = false; vm.showBranch() }, icon = OrbIcons.GitBranch)
@@ -213,13 +220,11 @@ private fun FileCounts(f: DiffFile) {
 }
 
 @Composable
-private fun Files(diff: TaskDiff) {
+private fun Files(diff: TaskDiff, zoom: DiffZoom) {
     val pager = rememberPagerState { diff.files.size }
     val scope = rememberCoroutineScope()
-    val zoom = remember { DiffZoom() }
-    // Only these three flips are read while composing; the scale itself is read by the layer.
+    // Only this flip is read while composing; the scale itself is read by the layer.
     val zoomed by remember { derivedStateOf { zoom.scale > DiffZoom.MIN } }
-    val canGrow by remember { derivedStateOf { zoom.scale < DiffZoom.MAX } }
     // Each file is read at its own size.
     LaunchedEffect(pager.currentPage) { zoom.reset() }
     Column(Modifier.fillMaxSize()) {
@@ -238,9 +243,6 @@ private fun Files(diff: TaskDiff) {
             OrbBadge("+${diff.added}", kind = OrbBadgeKind.Ok)
             OrbBadge("−${diff.removed}", kind = OrbBadgeKind.Err)
             Box(Modifier.weight(1f))
-            // The accessible way to enlarge: the pinch has these two buttons and two actions of the diff itself.
-            OrbIconButton(OrbIcons.ZoomOut, TaskTexts.ZOOM_OUT, { zoom.step(1f / DiffZoom.STEP) }, enabled = zoomed)
-            OrbIconButton(OrbIcons.ZoomIn, TaskTexts.ZOOM_IN, { zoom.step(DiffZoom.STEP) }, enabled = canGrow)
         }
         if (diff.hidden > 0) OrbNote(TaskTexts.hiddenFiles(diff.hidden), Modifier.padding(horizontal = 16.dp, vertical = 2.dp))
         Box(
@@ -249,6 +251,7 @@ private fun Files(diff: TaskDiff) {
                 .pinchZoom(zoom)
                 .semantics {
                     stateDescription = TaskTexts.zoomState((zoom.scale * 100).toInt())
+                    // The screen reader enlarges with these two actions; everyone else with the pinch or the «⋯» menu.
                     customActions = listOf(
                         CustomAccessibilityAction(TaskTexts.ZOOM_IN) { zoom.step(DiffZoom.STEP); true },
                         CustomAccessibilityAction(TaskTexts.ZOOM_OUT) { zoom.step(1f / DiffZoom.STEP); true },
