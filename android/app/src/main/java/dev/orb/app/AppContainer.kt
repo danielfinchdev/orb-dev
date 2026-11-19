@@ -120,6 +120,9 @@ class AppContainer(private val app: Application) {
     /** Opens Android's own notice settings of the app and of each channel (their sound lives there). */
     val noticeSettings: NoticeSettings = AndroidNoticeSettings(app)
     val notificationAccess = AndroidNotificationAccess(app, notifyPrefs)
+    /** The camera permission as «Este móvil» shows it, and the battery optimization of Android. */
+    val cameraAccess = dev.orb.app.ui.scan.AndroidCameraAccess(app)
+    val batteryAccess: dev.orb.app.notify.BatteryAccess = dev.orb.app.notify.AndroidBatteryAccess(app)
     val keepAliveLauncher: ServiceLauncher = AndroidServiceLauncher(app)
     private val keepAliveRunning = MutableStateFlow(false)
     private var notifier: Notifier? = null

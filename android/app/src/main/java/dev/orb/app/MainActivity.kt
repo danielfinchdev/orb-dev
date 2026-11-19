@@ -18,8 +18,8 @@ class MainActivity : FragmentActivity() {
     private lateinit var container: AppContainer
     private var mine: AndroidAuthenticator? = null
 
-    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {
-        container.notificationAccess.refresh()
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        container.notificationAccess.dialogResult(granted)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -11,8 +11,10 @@ import dev.orb.app.lock.LockDelay
 import dev.orb.app.lock.LockSettings
 import dev.orb.app.notify.LockScreenNotice
 import dev.orb.app.notify.NoteChannel
+import dev.orb.app.notify.NoticeStatus
 import dev.orb.app.notify.NotifySettings
 import dev.orb.app.notify.NotifyTexts
+import dev.orb.app.ui.scan.CameraAccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,7 +35,8 @@ interface ThisPhoneBackend {
     val pcName: StateFlow<String?>
     val connection: StateFlow<ConnectionState>
     val settings: StateFlow<NotifySettings>
-    val notificationsEnabled: StateFlow<Boolean>
+    /** What Android lets the notices do now (permission and channels), read from the system. */
+    val noticeStatus: StateFlow<NoticeStatus>
 
     /** The PC's fingerprint as the link keeps it; null when there is no link. */
     fun fingerprint(): String?
@@ -48,6 +51,15 @@ interface ThisPhoneBackend {
 
     /** The system's settings of one channel: its sound lives there. */
     fun openChannelSettings(channel: NoteChannel)
+
+    /** Reads again what Android says about the permissions (the person may have changed them in the system settings). */
+    fun refreshPermissions()
+    fun cameraState(): CameraState
+    fun openCameraSettings()
+
+    /** True while Android may limit Orb in the background to save battery. */
+    fun batteryRestricted(): Boolean
+    fun openBatterySettings()
 
     /** One light call through the encrypted link (the `me` of the connection test); how long it takes is the latency. */
     suspend fun probe(): Result<Unit>
@@ -74,13 +86,18 @@ class RuntimeThisPhoneBackend(private val container: AppContainer) : ThisPhoneBa
     override val pcName: StateFlow<String?> = link.map { it.first }.stateIn(container.scope, SharingStarted.Eagerly, null)
     override val connection: StateFlow<ConnectionState> = link.map { it.second }.stateIn(container.scope, SharingStarted.Eagerly, ConnectionState.Connecting)
     override val settings get() = container.notifyPrefs.settings
-    override val notificationsEnabled get() = container.notificationAccess.enabled
+    override val noticeStatus get() = container.notificationAccess.status
     override fun fingerprint(): String? = container.runtime.value?.client?.currentSession?.pc
     override fun setKeepConnected(on: Boolean) = container.notifyPrefs.setKeepConnected(on)
     override fun setLockScreen(mode: LockScreenNotice) = container.notifyPrefs.setLockScreen(mode)
     override fun requestNotifications() = container.notificationAccess.request()
     override fun openNoticeSettings() = container.noticeSettings.openApp()
     override fun openChannelSettings(channel: NoteChannel) = container.noticeSettings.openChannel(channel)
+    override fun refreshPermissions() = container.notificationAccess.refresh()
+    override fun cameraState() = cameraStateOf(container.cameraAccess)
+    override fun openCameraSettings() = container.cameraAccess.openSettings()
+    override fun batteryRestricted() = container.batteryAccess.restricted()
+    override fun openBatterySettings() = container.batteryAccess.openSettings()
     override suspend fun probe(): Result<Unit> =
         container.runtime.value?.client?.me()?.map { } ?: Result.failure(IllegalStateException("not linked"))
     override val lock get() = container.lock.settings
@@ -89,6 +106,15 @@ class RuntimeThisPhoneBackend(private val container: AppContainer) : ThisPhoneBa
     override fun disableLock() = container.lock.disable()
     override fun setLockDelay(delay: LockDelay) = container.lock.setDelay(delay)
     override suspend fun unlink() = container.unlink()
+}
+
+/** The camera as «Este móvil» reports it. Whether Android would still show its dialog is only known by the scanner itself. */
+enum class CameraState { None, Allowed, NotAllowed }
+
+fun cameraStateOf(access: CameraAccess): CameraState = when {
+    !access.hasCamera -> CameraState.None
+    access.granted() -> CameraState.Allowed
+    else -> CameraState.NotAllowed
 }
 
 @Immutable
@@ -103,7 +129,9 @@ data class ThisPhoneState(
     val measuring: Boolean = false,
     val keepConnected: Boolean = true,
     val lockScreen: LockScreenNotice = LockScreenNotice.Generic,
-    val notificationsEnabled: Boolean = true,
+    val notices: NoticeStatus = NoticeStatus.On,
+    val camera: CameraState = CameraState.Allowed,
+    val batteryRestricted: Boolean = false,
     val unlinking: Boolean = false,
     val unlinked: Boolean = false,
     val appLock: Boolean = false,
@@ -126,19 +154,23 @@ class ThisPhoneViewModel(
     private val lockAvailable = MutableStateFlow(backend.lockCapability() == AuthCapability.Ready)
     private val latency = MutableStateFlow<Long?>(null)
     private val measuring = MutableStateFlow(false)
+    private val camera = MutableStateFlow(backend.cameraState())
+    private val battery = MutableStateFlow(backend.batteryRestricted())
 
     val state: StateFlow<ThisPhoneState> = combine(
-        backend.pcName, backend.connection, backend.settings, backend.notificationsEnabled, combine(busy, done) { b, d -> b to d },
+        backend.pcName, backend.connection, backend.settings, backend.noticeStatus, combine(busy, done) { b, d -> b to d },
     ) { name, conn, s, enabled, (b, d) ->
         ThisPhoneState(
             pcName = name, connection = conn, fingerprint = backend.fingerprint(),
             route = (conn as? ConnectionState.Online)?.let { RouteKind.of(it.base) },
-            keepConnected = s.keepConnected, lockScreen = s.lockScreen, notificationsEnabled = enabled, unlinking = b, unlinked = d,
+            keepConnected = s.keepConnected, lockScreen = s.lockScreen, notices = enabled, unlinking = b, unlinked = d,
         )
     }.combine(combine(backend.lock, lockAvailable, lockMessage) { l, a, m -> Triple(l, a, m) }) { st, (l, a, m) ->
         st.copy(appLock = l.enabled, lockDelay = l.delay, lockAvailable = a, lockMessage = m ?: ThisPhoneTexts.LOCK_AUTO_OFF.takeIf { l.autoOff })
     }.combine(combine(latency, measuring) { l, m -> l to m }) { st, (l, m) ->
         st.copy(latencyMs = l.takeIf { st.online }, measuring = m)
+    }.combine(combine(camera, battery) { c, b -> c to b }) { st, (c, b) ->
+        st.copy(camera = c, batteryRestricted = b)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThisPhoneState())
 
     /**
@@ -159,12 +191,42 @@ class ThisPhoneViewModel(
     fun setKeepConnected(on: Boolean) = backend.setKeepConnected(on)
     fun setLockScreen(mode: LockScreenNotice) = backend.setLockScreen(mode)
 
-    /** The switch reflects Android's permission: off asks for it, on opens the settings where it can be turned off. */
-    fun toggleNotifications() = if (state.value.notificationsEnabled) backend.openNoticeSettings() else backend.requestNotifications()
+    /**
+     * The switch reflects what Android really allows: off asks for the permission (or opens the settings when Android will not
+     * ask), on opens the settings where it can be turned off, and a notice channel that is off opens that channel's page.
+     */
+    fun toggleNotifications() {
+        val n = state.value.notices
+        when {
+            !n.allowed -> backend.requestNotifications()
+            n.offChannels.isNotEmpty() -> fixChannels()
+            else -> backend.openNoticeSettings()
+        }
+    }
+
     fun requestNotifications() = backend.requestNotifications()
     fun openChannelSettings(channel: NoteChannel) = backend.openChannelSettings(channel)
 
-    /** The person may have set a PIN or a fingerprint in Android since the screen was last shown. */
+    /** The page of the channel that is off, or the list of all of them when more than one is. */
+    fun fixChannels() {
+        val off = state.value.notices.offChannels
+        if (off.size == 1) backend.openChannelSettings(off.single()) else backend.openNoticeSettings()
+    }
+
+    fun openCameraSettings() = backend.openCameraSettings()
+    fun openBatterySettings() = backend.openBatterySettings()
+
+    /**
+     * Reads again everything the person can change outside Orb: it runs whenever the screen comes back (from Android's
+     * settings too), so nothing here is a copy that can go stale. The phone may also have got a PIN or a fingerprint.
+     */
+    fun refresh() {
+        backend.refreshPermissions()
+        camera.value = backend.cameraState()
+        battery.value = backend.batteryRestricted()
+        refreshLock()
+    }
+
     fun refreshLock() { lockAvailable.value = backend.lockCapability() == AuthCapability.Ready }
 
     fun setAppLock(on: Boolean) {
@@ -211,9 +273,21 @@ object ThisPhoneTexts {
     const val LINK_ROUTE = "Ruta"
     const val NOTICES = "Avisos de mensajes y tareas"
     const val NOTICES_HINT = "Chats y aprobaciones"
-    const val NOTICES_OFF = "Desactivados en Android"
+    const val NOTICES_OFF = "Avisos desactivados en Android"
     const val NOTICES_OFF_HINT = "Permite los avisos para recibir los chats y las aprobaciones."
+    const val NOTICES_OFF_SETTINGS_HINT = "Actívalos en los ajustes de Android para recibir los chats y las aprobaciones."
+    const val NOTICES_CHANNEL_OFF = "Un aviso está apagado en Android"
     const val ALLOW = "Permitir"
+    const val OPEN_SETTINGS = "Abrir ajustes"
+    const val SETTINGS = "Ajustes"
+    const val CAMERA = "Cámara"
+    const val CAMERA_ON = "Permitida. Orb solo la usa para leer el QR de tu PC."
+    const val CAMERA_OFF = "No permitida. Sin ella no se puede escanear el QR: escribe el código a mano o pega el enlace. Orb la pide al abrir el escáner."
+    const val CAMERA_NONE = "Este móvil no tiene cámara. Puedes enlazar escribiendo el código a mano."
+    const val BATTERY = "Ahorro de batería"
+    const val BATTERY_RESTRICTED = "Limitada. Android puede cerrar Orb para ahorrar batería y dejarías de recibir avisos con la app cerrada. En la pantalla que se abre, busca Orb y déjala sin restricciones."
+    const val BATTERY_FREE = "Sin restricción. Android no cierra Orb para ahorrar batería."
+    const val BATTERY_LINK = "Revisar el ahorro de batería"
     const val KEEP = "Mantener conectado"
     const val KEEP_HINT = "Avisos aunque cierres la app"
     const val KEEP_NOTE = "«Mantener conectado» muestra un aviso fijo discreto y no usa servicios de Google."
@@ -248,6 +322,10 @@ object ThisPhoneTexts {
     fun unlinkBody(pc: String?) =
         "Se olvida el enlace con ${pc?.takeIf { it.isNotBlank() } ?: "el PC"}: se borran la llave guardada, la copia guardada en el móvil " +
             "y los mensajes sin enviar, y dejarás de recibir avisos. Para volver a usarlo tendrás que enlazarlo otra vez con el PC."
+
+    /** Which notices Android keeps off: the names are the ones of the channels in Android's own settings. */
+    fun channelsOffHint(off: List<NoteChannel>): String =
+        off.joinToString(" y ") { "«${channel(it)}»" } + (if (off.size == 1) " está apagado" else " están apagados") + " en Android: esos avisos no llegan."
 
     fun lockScreenChoice(m: LockScreenNotice) = when (m) {
         LockScreenNotice.Full -> LOCK_SCREEN_FULL

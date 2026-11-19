@@ -23,6 +23,7 @@ import dev.orb.app.lock.LockDelay
 import dev.orb.app.lock.LockSettings
 import dev.orb.app.notify.LockScreenNotice
 import dev.orb.app.notify.NoteChannel
+import dev.orb.app.notify.NoticeStatus
 import dev.orb.app.notify.NotifySettings
 import dev.orb.app.ui.theme.DarkMode
 import dev.orb.app.ui.theme.MemoryStore
@@ -51,7 +52,12 @@ class FakeThisPhoneBackend : ThisPhoneBackend {
     override val pcName = MutableStateFlow<String?>("DanLaptop")
     override val connection = MutableStateFlow<ConnectionState>(ConnectionState.Online("http://100.101.102.103:4310", "DanLaptop", PcVersions(4, 2, "3.8.8")))
     override val settings = MutableStateFlow(NotifySettings())
-    override val notificationsEnabled = MutableStateFlow(true)
+    override val noticeStatus = MutableStateFlow(NoticeStatus.On)
+    var camera = CameraState.Allowed
+    var battery = false
+    var refreshed = 0
+    var cameraSettingsOpened = 0
+    var batterySettingsOpened = 0
     var fingerprintValue: String? = "8f3a-c21d-77e0"
     var requested = 0
     var noticeSettingsOpened = 0
@@ -69,6 +75,11 @@ class FakeThisPhoneBackend : ThisPhoneBackend {
     override fun requestNotifications() { requested++ }
     override fun openNoticeSettings() { noticeSettingsOpened++ }
     override fun openChannelSettings(channel: NoteChannel) { channels += channel }
+    override fun refreshPermissions() { refreshed++ }
+    override fun cameraState() = camera
+    override fun openCameraSettings() { cameraSettingsOpened++ }
+    override fun batteryRestricted() = battery
+    override fun openBatterySettings() { batterySettingsOpened++ }
     override suspend fun probe(): Result<Unit> { probes++; probeTook(); return probeResult }
     override val lock = MutableStateFlow(LockSettings())
     var capability = AuthCapability.Ready
@@ -178,17 +189,17 @@ class ThisPhoneTest {
     @Test fun theNoticesSwitchReflectsTheSystemPermissionAndOpensItsSettingsToTurnItOff() {
         show()
         rule.onNodeWithText("Avisos de mensajes y tareas").assertIsOn()
-        rule.onNodeWithText("Desactivados en Android").assertDoesNotExist()
+        rule.onNodeWithText("Avisos desactivados en Android").assertDoesNotExist()
         rule.onNodeWithText("Avisos de mensajes y tareas").performClick()
         assertEquals(1, backend.noticeSettingsOpened)
         assertEquals(0, backend.requested)
     }
 
     @Test fun withTheNoticesOffTheSwitchIsOffAskingForThePermissionAndAllowKeepsWorking() {
-        backend.notificationsEnabled.value = false
+        backend.noticeStatus.value = NoticeStatus(allowed = false, canAsk = true)
         show()
         rule.onNodeWithText("Avisos de mensajes y tareas").assertIsOff()
-        rule.onNodeWithText("Desactivados en Android").assertIsDisplayed()
+        rule.onNodeWithText("Avisos desactivados en Android").assertIsDisplayed()
         rule.onNodeWithText("Avisos de mensajes y tareas").performClick()
         assertEquals(1, backend.requested)
         rule.onNodeWithText("Permitir").performClick()

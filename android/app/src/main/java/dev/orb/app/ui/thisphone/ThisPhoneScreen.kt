@@ -33,6 +33,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.lock.LockDelay
 import dev.orb.app.notify.LockScreenNotice
@@ -71,7 +73,8 @@ fun ThisPhoneScreen(
     var channelsSheet by rememberSaveable { mutableStateOf(false) }
     var lockSheet by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.unlinked) { if (state.unlinked) onUnlinked() }
-    LaunchedEffect(Unit) { vm.refreshLock() }
+    // Everything the person can change in Android's settings is read again each time the screen comes back.
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { vm.refresh() }
     // One measurement each time the PC becomes reachable (the screen opening included), never a loop.
     LaunchedEffect(state.online) { if (state.online) vm.measure() }
 
@@ -85,12 +88,24 @@ fun ThisPhoneScreen(
                 Group(ThisPhoneTexts.SECTION_NOTICES)
                 Padded {
                     OrbCard {
-                        SwitchRow(ThisPhoneTexts.NOTICES, ThisPhoneTexts.NOTICES_HINT, state.notificationsEnabled, { vm.toggleNotifications() }, divider = false)
-                        // Without the permission nothing can arrive: say it and keep the way to ask for it.
-                        if (!state.notificationsEnabled) {
+                        // «On» only when a notice can really arrive: a channel turned off in Android counts as off too.
+                        SwitchRow(ThisPhoneTexts.NOTICES, ThisPhoneTexts.NOTICES_HINT, state.notices.working, { vm.toggleNotifications() }, divider = false)
+                        // Without the permission nothing can arrive: say it, and give the way to ask for it or to Android's settings.
+                        if (!state.notices.allowed) {
                             OrbSettingRow(
-                                ThisPhoneTexts.NOTICES_OFF, subtitle = ThisPhoneTexts.NOTICES_OFF_HINT,
-                                trailing = { OrbButton(ThisPhoneTexts.ALLOW, vm::requestNotifications, small = true) },
+                                ThisPhoneTexts.NOTICES_OFF,
+                                subtitle = if (state.notices.canAsk) ThisPhoneTexts.NOTICES_OFF_HINT else ThisPhoneTexts.NOTICES_OFF_SETTINGS_HINT,
+                                trailing = {
+                                    OrbButton(
+                                        if (state.notices.canAsk) ThisPhoneTexts.ALLOW else ThisPhoneTexts.OPEN_SETTINGS,
+                                        vm::requestNotifications, small = true,
+                                    )
+                                },
+                            )
+                        } else if (state.notices.offChannels.isNotEmpty()) {
+                            OrbSettingRow(
+                                ThisPhoneTexts.NOTICES_CHANNEL_OFF, subtitle = ThisPhoneTexts.channelsOffHint(state.notices.offChannels),
+                                trailing = { OrbButton(ThisPhoneTexts.OPEN_SETTINGS, vm::fixChannels, small = true) },
                             )
                         }
                         SwitchRow(ThisPhoneTexts.KEEP, ThisPhoneTexts.KEEP_HINT, state.keepConnected, vm::setKeepConnected)
@@ -107,6 +122,10 @@ fun ThisPhoneScreen(
                 }
                 // What the service shows and does not use: said once, quietly, under the card.
                 OrbNote(ThisPhoneTexts.KEEP_NOTE, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+                // Android may still close the app to save battery: the way to that setting is one tap from here.
+                Box(Modifier.padding(horizontal = 16.dp)) {
+                    OrbButton(ThisPhoneTexts.BATTERY_LINK, vm::openBatterySettings, small = true, kind = OrbButtonKind.Ghost)
+                }
 
                 Group(ThisPhoneTexts.SECTION_LOOK)
                 Padded { AppearanceCard(look, theme::setPalette, theme::setDark) }
@@ -140,8 +159,22 @@ fun ThisPhoneScreen(
                 Padded {
                     OrbCard {
                         OrbSettingRow(
-                            ThisPhoneTexts.LINK_TEST, subtitle = ThisPhoneTexts.LINK_TEST_HINT, divider = false, onClick = onLinkTest,
+                            ThisPhoneTexts.LINK_TEST, subtitle = ThisPhoneTexts.LINK_TEST_HINT, onClick = onLinkTest,
                             trailing = { Chevron() },
+                        )
+                        // What the person can change about Orb in Android, shown as the system has it right now.
+                        OrbSettingRow(
+                            ThisPhoneTexts.CAMERA, subtitle = when (state.camera) {
+                                CameraState.Allowed -> ThisPhoneTexts.CAMERA_ON
+                                CameraState.NotAllowed -> ThisPhoneTexts.CAMERA_OFF
+                                CameraState.None -> ThisPhoneTexts.CAMERA_NONE
+                            },
+                            trailing = if (state.camera == CameraState.None) null else ({ OrbButton(ThisPhoneTexts.SETTINGS, vm::openCameraSettings, small = true) }),
+                        )
+                        OrbSettingRow(
+                            ThisPhoneTexts.BATTERY, divider = false,
+                            subtitle = if (state.batteryRestricted) ThisPhoneTexts.BATTERY_RESTRICTED else ThisPhoneTexts.BATTERY_FREE,
+                            trailing = { OrbButton(ThisPhoneTexts.SETTINGS, vm::openBatterySettings, small = true) },
                         )
                     }
                 }

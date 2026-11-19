@@ -416,8 +416,10 @@ class WelcomeViewModelTest {
     @Test fun beforeAndroid13ThereIsNoPermissionToAsk() {
         val access = object : dev.orb.app.notify.NotificationAccess {
             override val enabled = kotlinx.coroutines.flow.MutableStateFlow(false)
+            override val status = kotlinx.coroutines.flow.MutableStateFlow(dev.orb.app.notify.NoticeStatus.On)
             override fun refresh() {}
             override fun request() {}
+            override fun dialogResult(granted: Boolean) {}
         }
         assertFalse(AndroidNoticeGate(access, sdk = 32).shouldAsk())
         assertTrue(AndroidNoticeGate(access, sdk = 33).shouldAsk())
