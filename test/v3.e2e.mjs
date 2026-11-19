@@ -88,10 +88,15 @@ try {
   await shot('03-conversaciones-directas');
   await call('chat.settings', { orchestrate: true });
 
-  step = 'Tareas sin botón Nueva tarea';
+  step = 'Tareas: «Nueva tarea» abre su diálogo';
   await win.click('[data-testid=nav-tasks]');
   await win.waitForTimeout(300);
-  assert.equal(await win.getByRole('button', { name: 'Nueva tarea', exact: true }).count(), 0, 'ya no hay «Nueva tarea»: se habla directamente con el agente');
+  // The Tareas screen draws «Nueva tarea» (the chat button is a different one: «Nuevo chat»).
+  assert.equal(await win.getByRole('button', { name: 'Nueva tarea', exact: true }).count(), 1, '«Nueva tarea» está en Tareas');
+  await win.click('[data-testid=task-new]');
+  await win.getByRole('dialog').getByRole('button', { name: 'Crear tarea', exact: true }).waitFor();
+  await win.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await win.getByRole('dialog').waitFor({ state: 'detached' });
 
   step = 'Security Review';
   await win.click('[data-testid=nav-projects]');
@@ -107,6 +112,9 @@ try {
   step = 'robot de la esquina';
   await win.click('[data-testid=nav-tasks]');
   await win.mouse.move(400, 300);
+  // The robot belongs to the Orb theme only: the default theme draws none, and choosing Orb brings it to its corner.
+  assert.equal(await win.locator('[data-testid=companion]').count(), 0, 'el tema predeterminado no dibuja el robot');
+  await call('config.save', { patch: { ui: { skin: 'orb' } } });
   await win.locator('[data-testid=companion]').waitFor({ timeout: 15000 }); // the robot of the notices has gone
   // Orb UI 2.0: the companion rests in its corner in sight (it no longer waits for the pointer to come near)
   await until(async () => (await win.locator('[data-testid=companion]').getAttribute('data-shown')) === 'true', 'el compañero está a la vista en su esquina');
