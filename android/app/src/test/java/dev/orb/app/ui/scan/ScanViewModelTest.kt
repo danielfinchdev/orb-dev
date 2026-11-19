@@ -1,5 +1,6 @@
 package dev.orb.app.ui.scan
 
+import androidx.lifecycle.SavedStateHandle
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -50,6 +51,7 @@ class ScanViewModelTest {
         val camera = Camera(explain = false)
         val vm = ScanViewModel(camera)
         vm.takeRequest()
+        vm.asking()
         vm.permissionResult(false)
         assertEquals(ScanPermission.Blocked, vm.state.value.permission)
         assertFalse(vm.canAskAgain())
@@ -61,6 +63,55 @@ class ScanViewModelTest {
         vm.resumed()
         assertEquals(ScanPermission.Granted, vm.state.value.permission)
     }
+
+    @Test fun closingTheDialogByTappingOutsideIsNotARefusalForGood() {
+        var now = 0L
+        val vm = ScanViewModel(Camera(explain = false)) { now }
+        vm.takeRequest()
+        vm.asking()
+        now += 2_000_000_000L // the person looked at the dialog for two seconds
+        vm.permissionResult(false)
+        assertEquals(ScanPermission.Denied, vm.state.value.permission)
+        assertTrue(vm.canAskAgain())
+    }
+
+    @Test fun aSecondRefusalIsFinalEvenIfTheDialogWasSeen() {
+        var now = 0L
+        val vm = ScanViewModel(Camera(explain = false)) { now }
+        vm.takeRequest()
+        vm.asking(); now += 2_000_000_000L; vm.permissionResult(false)
+        vm.asking(); now += 2_000_000_000L; vm.permissionResult(false)
+        assertEquals(ScanPermission.Blocked, vm.state.value.permission)
+    }
+
+    @Test fun anAnswerWithoutTheDialogIsFinalAtOnce() {
+        var now = 0L
+        val vm = ScanViewModel(Camera(explain = false)) { now }
+        vm.takeRequest()
+        vm.asking(); now += 20_000_000L; vm.permissionResult(false)
+        assertEquals(ScanPermission.Blocked, vm.state.value.permission)
+    }
+
+    @Test fun theScannerCanBeRecreatedWithoutTheWelcomePageInMemory() {
+        // The scanner only needs the camera; what it read travels through the welcome's saved state.
+        val handle = SavedStateHandle()
+        val vm = ScanViewModel(Camera(granted = true))
+        vm.onText(link)
+        ScanHandoff.deliver(handle, vm.state.value.found!!)
+        val recreated = ScanViewModel(Camera(granted = true))
+        assertNull(recreated.state.value.found)
+        assertEquals(link, ScanHandoff.take(handle))
+        assertNull(ScanHandoff.take(handle))
+    }
+
+    @Test fun pastingFromTheScannerIsTakenOnce() {
+        val handle = SavedStateHandle()
+        ScanHandoff.deliverPaste(handle)
+        assertTrue(ScanHandoff.takePaste(handle))
+        assertFalse(ScanHandoff.takePaste(handle))
+    }
+
+    @Test fun deliveringToNoOneIsHarmless() = ScanHandoff.deliver(null, link)
 
     @Test fun aPermissionTakenAwayInTheSettingsIsNoticedOnReturn() {
         val camera = Camera(granted = true)

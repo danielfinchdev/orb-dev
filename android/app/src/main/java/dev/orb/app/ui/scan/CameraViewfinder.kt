@@ -32,24 +32,39 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.lang.ref.WeakReference
 import java.util.concurrent.Executors
 
-/** The real [CameraAccess]: Android's permission state of this app and its settings page. */
-class AndroidCameraAccess(private val context: Context) : CameraAccess {
-    override val hasCamera: Boolean get() = context.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+/**
+ * The real [CameraAccess]: Android's permission state of this app and its settings page. It is held by a view model, so
+ * it keeps only the application context and a weak reference to the Activity that [attach] last gave it.
+ */
+class AndroidCameraAccess(context: Context) : CameraAccess {
+    private val app = context.applicationContext
+    private var activity: WeakReference<Activity>? = null
 
-    override fun granted(): Boolean = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    override val hasCamera: Boolean get() = app.packageManager.hasSystemFeature(PackageManager.FEATURE_CAMERA_ANY)
+
+    /** The Activity currently showing the scanner (null when it goes away); only [canExplain] needs one. */
+    fun attach(current: Activity?) {
+        activity = current?.let { WeakReference(it) }
+    }
+
+    override fun granted(): Boolean = ContextCompat.checkSelfPermission(app, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
 
     override fun canExplain(): Boolean {
-        val activity = generateSequence(context) { (it as? ContextWrapper)?.baseContext }.filterIsInstance<Activity>().firstOrNull() ?: return false
-        return ActivityCompat.shouldShowRequestPermissionRationale(activity, Manifest.permission.CAMERA)
+        val current = activity?.get() ?: return false
+        return ActivityCompat.shouldShowRequestPermissionRationale(current, Manifest.permission.CAMERA)
     }
 
     override fun openSettings() {
-        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        try { context.startActivity(intent) } catch (e: Exception) { /* no settings screen to show */ }
+        val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", app.packageName, null)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try { app.startActivity(intent) } catch (e: Exception) { /* no settings screen to show */ }
     }
 }
+
+/** The Activity under a (possibly wrapped) context, if there is one. */
+fun Context.findActivity(): Activity? = generateSequence(this) { (it as? ContextWrapper)?.baseContext }.filterIsInstance<Activity>().firstOrNull()
 
 /** Reads the brightness plane of each frame with [reader]; frames are looked at in memory and dropped, never stored or sent. */
 private class FrameAnalyzer(private val reader: QrReader, private val onText: (String) -> Unit) : ImageAnalysis.Analyzer {

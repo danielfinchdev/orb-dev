@@ -90,7 +90,7 @@ fun ScanScreen(
     val haptic = LocalHapticFeedback.current
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { vm.permissionResult(it) }
     // Asked here and only here, once per opening; a refusal is never followed by another dialog on its own.
-    LaunchedEffect(Unit) { if (vm.takeRequest()) launcher.launch(Manifest.permission.CAMERA) }
+    LaunchedEffect(Unit) { if (vm.takeRequest()) { vm.asking(); launcher.launch(Manifest.permission.CAMERA) } }
     LifecycleResumeEffect(Unit) {
         vm.resumed()
         onPauseOrDispose { vm.paused() }
@@ -109,7 +109,7 @@ fun ScanScreen(
     }
     val actions = ScanActions(
         back = onBack, toggleTorch = vm::toggleTorch, paste = onPaste,
-        give = { if (vm.canAskAgain()) launcher.launch(Manifest.permission.CAMERA) else vm.openSettings() },
+        give = { if (vm.canAskAgain()) { vm.asking(); launcher.launch(Manifest.permission.CAMERA) } else vm.openSettings() },
         settings = vm::openSettings,
     )
     ScanContent(state, actions, modifier, viewfinder)

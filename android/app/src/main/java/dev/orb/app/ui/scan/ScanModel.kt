@@ -1,5 +1,6 @@
 package dev.orb.app.ui.scan
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import dev.orb.app.link.payload.LinkErrors
 import dev.orb.app.link.payload.LinkPayloadException
@@ -76,15 +77,23 @@ fun openScanner(hasCamera: Boolean, scanner: () -> Unit, shortCode: () -> Unit) 
 
 private const val MAX_QR_CHARS = 4096
 
+// Android answers a request it will not show at once; a person needs far longer than this to read and tap the dialog.
+private const val NO_DIALOG_NANOS = 300_000_000L
+
 /**
  * What the scanner screen knows: the camera permission, the torch and what was read. Whatever a QR holds only goes through
  * [parseLinkPayload]; it is never opened, followed or kept.
  */
-class ScanViewModel(private val access: CameraAccess) : ViewModel() {
+class ScanViewModel(
+    private val access: CameraAccess,
+    private val clock: () -> Long = { System.nanoTime() },
+) : ViewModel() {
     private val _state = MutableStateFlow(ScanUiState(permission = if (access.granted()) ScanPermission.Granted else ScanPermission.Asking))
     val state: StateFlow<ScanUiState> = _state.asStateFlow()
 
     private var requested = false
+    private var askedAt: Long? = null
+    private var denials = 0
     private var lastText: String? = null
 
     /** True exactly once, on opening, when Android's dialog still has to be shown: the scanner never asks again by itself. */
@@ -95,9 +104,30 @@ class ScanViewModel(private val access: CameraAccess) : ViewModel() {
         return true
     }
 
-    /** Android's answer, or the button's. A refusal that Android will not show a dialog for again is a final one. */
-    fun permissionResult(granted: Boolean) = _state.update {
-        it.copy(permission = if (granted) ScanPermission.Granted else if (access.canExplain()) ScanPermission.Denied else ScanPermission.Blocked)
+    /** The system dialog is about to be shown (by the opening or by the button): its answer time is measured from here. */
+    fun asking() {
+        askedAt = clock()
+    }
+
+    /**
+     * Android's answer, or the button's. A refusal is final only when the system gave an answer without showing its dialog
+     * (it came back at once) or when it is the second one; closing the dialog by tapping outside is not a refusal for good.
+     */
+    @Synchronized
+    fun permissionResult(granted: Boolean) {
+        val since = askedAt
+        askedAt = null
+        if (!granted) denials++
+        val withoutDialog = since != null && clock() - since < NO_DIALOG_NANOS
+        _state.update {
+            it.copy(
+                permission = when {
+                    granted -> ScanPermission.Granted
+                    !access.canExplain() && (withoutDialog || denials >= 2) -> ScanPermission.Blocked
+                    else -> ScanPermission.Denied
+                },
+            )
+        }
     }
 
     /** Whether the «Dar permiso de cámara» button may show Android's dialog again (the person asked for it). */
@@ -142,4 +172,30 @@ class ScanViewModel(private val access: CameraAccess) : ViewModel() {
         }
         _state.update { if (hint == null) it.copy(found = text, hint = null, torch = false) else it.copy(hint = hint) }
     }
+}
+
+/**
+ * How a read link travels from the scanner back to the welcome page: through the saved state of the welcome's own
+ * back stack entry, so it survives the process being recreated with the scanner open. It is taken once and erased.
+ */
+object ScanHandoff {
+    const val KEY = "scanned-link"
+    const val PASTE_KEY = "scan-paste"
+
+    fun deliver(target: SavedStateHandle?, text: String) {
+        target?.set(KEY, text)
+    }
+
+    fun take(source: SavedStateHandle): String? {
+        val text = source.get<String>(KEY)
+        if (text != null) source.remove<String>(KEY)
+        return text
+    }
+
+    /** «Pegar el enlace» on the scanner: the welcome page opens its sheet. */
+    fun deliverPaste(target: SavedStateHandle?) {
+        target?.set(PASTE_KEY, true)
+    }
+
+    fun takePaste(source: SavedStateHandle): Boolean = source.remove<Boolean>(PASTE_KEY) == true
 }

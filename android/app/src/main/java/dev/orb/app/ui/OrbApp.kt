@@ -34,6 +34,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import dev.orb.app.AppContainer
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.chats.Brain
@@ -90,8 +91,10 @@ import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
 import dev.orb.app.ui.welcome.AndroidNoticeGate
 import dev.orb.app.ui.scan.AndroidCameraAccess
+import dev.orb.app.ui.scan.ScanHandoff
 import dev.orb.app.ui.scan.ScanScreen
 import dev.orb.app.ui.scan.ScanViewModel
+import dev.orb.app.ui.scan.findActivity
 import dev.orb.app.ui.scan.openScanner
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
@@ -238,10 +241,18 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
         popEnterTransition = { slideInHorizontally(OrbMotion.standard(OrbMotion.Medium)) { -it / 8 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
         popExitTransition = { slideOutHorizontally(OrbMotion.standard(OrbMotion.Medium)) { it / 5 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
     ) {
-        composable<Welcome> {
+        composable<Welcome> { entry ->
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
                 initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess)) }
             })
+            // What the scanner left for this page (it may have been recreated meanwhile): used once, then erased.
+            val handle = entry.savedStateHandle
+            val fromScanner by handle.getStateFlow<String?>(ScanHandoff.KEY, null).collectAsStateWithLifecycle()
+            val pasteFromScanner by handle.getStateFlow<Boolean>(ScanHandoff.PASTE_KEY, false).collectAsStateWithLifecycle()
+            LaunchedEffect(fromScanner, pasteFromScanner) {
+                ScanHandoff.take(handle)?.let(vm::scanned)
+                if (ScanHandoff.takePaste(handle)) vm.openSheet()
+            }
             val noticesOn by container.notificationAccess.enabled.collectAsStateWithLifecycle()
             val toChats = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } }
             val context = androidx.compose.ui.platform.LocalContext.current
@@ -253,15 +264,19 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             )
         }
         composable<ScanRoute> {
-            // The welcome page keeps its own view model underneath: a read link goes back to it as if it had been pasted.
-            val welcome = viewModel<WelcomeViewModel>(nav.getBackStackEntry<Welcome>())
             val context = androidx.compose.ui.platform.LocalContext.current
             val access = remember(context) { AndroidCameraAccess(context) }
+            // Only the Activity that shows the scanner now is known to the access, and it is let go with the screen.
+            DisposableEffect(access, context) {
+                access.attach(context.findActivity())
+                onDispose { access.attach(null) }
+            }
             val vm = viewModel<ScanViewModel>(factory = viewModelFactory { initializer { ScanViewModel(access) } })
             ScanScreen(
                 vm, onBack = { nav.popBackStack() },
-                onScanned = { text -> nav.popBackStack(); welcome.scanned(text) },
-                onPaste = { nav.popBackStack(); welcome.openSheet() },
+                // The welcome page takes the text from its saved state (see ScanHandoff), as if it had been pasted.
+                onScanned = { text -> ScanHandoff.deliver(nav.previousBackStackEntry?.savedStateHandle, text); nav.popBackStack() },
+                onPaste = { ScanHandoff.deliverPaste(nav.previousBackStackEntry?.savedStateHandle); nav.popBackStack() },
             )
         }
         composable<Home> {

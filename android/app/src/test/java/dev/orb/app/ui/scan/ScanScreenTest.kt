@@ -71,4 +71,32 @@ class ScanScreenTest {
         rule.onNodeWithText("Ese código no es de Orb.").assertExists()
         rule.onNodeWithText("Escanea el QR de tu Orb").assertIsDisplayed()
     }
+
+    private class Camera : CameraAccess {
+        override val hasCamera = true
+        override fun granted() = true
+        override fun canExplain() = true
+        override fun openSettings() {}
+    }
+
+    private fun scanning(text: String): Int {
+        var scanned = 0
+        val vm = ScanViewModel(Camera())
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, false) {
+                ScanScreen(vm, onBack = {}, onScanned = { scanned++ }, onPaste = {}, viewfinder = { androidx.compose.runtime.LaunchedEffect(Unit) { vm.onText(text) } })
+            }
+        }
+        rule.waitForIdle()
+        return scanned
+    }
+
+    @Test fun aQrThatIsNotOrbNeverReachesTheWelcomePage() {
+        assertEquals(0, scanning("https://example.com/promo"))
+        rule.onNodeWithText("Ese código no es de Orb.").assertExists()
+    }
+
+    @Test fun anOrbQrReachesTheWelcomePageOnce() {
+        assertEquals(1, scanning("http://192.168.1.20:3131/#vincular=ABCDEF&pc=" + "A".repeat(43) + "&v=4"))
+    }
 }
