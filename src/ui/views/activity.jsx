@@ -35,6 +35,8 @@ const CHIP = 'inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 round
 // characters of one event line in the list
 const LINE = 140;
 const COLS = 'grid-cols-[52px_150px_72px_150px_minmax(0,1fr)]';
+// on a phone the row stacks: the sentence at full width, and under it one small line (hour, who, level, project)
+const COLS_NARROW = 'max-sm:grid-cols-[auto_auto_auto_minmax(0,1fr)] max-sm:gap-x-2.5 max-sm:gap-y-1';
 
 export function ActivityView({ tabs }) {
   const t = useT();
@@ -117,7 +119,7 @@ export function ActivityView({ tabs }) {
       </div>
       <ListCard>
         {paged ? (
-          <div className={cn('arow head text-faint-foreground grid items-center gap-3 px-3.5 py-2 text-micro uppercase', COLS)} aria-hidden="true">
+          <div className={cn('arow head text-faint-foreground grid items-center gap-3 px-3.5 py-2 text-micro uppercase max-sm:hidden', COLS)} aria-hidden="true">
             <span>{t('logbooks.colTime')}</span><span>{t('logbooks.colSource')}</span><span>{t('logbooks.colLevel')}</span><span>{t('logbooks.colProject')}</span><span>{t('logbooks.colWhat')}</span>
           </div>
         ) : null}
@@ -160,12 +162,12 @@ function PagedRow({ r, t, locale, open, onOpen, marked, canMark, onMark }) {
   const kindLabel = r.kind && activityLabel(t, r.kind) !== r.kind ? activityLabel(t, r.kind) : '';
   return (
     <div className={cn('border-border border-b last:border-b-0', marked && 'bg-accent/60')} data-level={r.level} data-testid="activity-row">
-      <button type="button" onClick={onOpen} aria-expanded={open} className={cn('lrow arow hover:bg-accent/60 grid w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-ring', COLS)}>
+      <button type="button" onClick={onOpen} aria-expanded={open} className={cn('lrow arow hover:bg-accent/60 grid w-full cursor-pointer items-center gap-3 px-3.5 py-2.5 text-left outline-none focus-visible:outline-2 focus-visible:outline-ring', COLS, COLS_NARROW)}>
         <span className="text-muted-foreground font-mono text-caption" title={fmtTime(r.at)}>{hourOf(r.at)}</span>
-        <span className="src inline-flex items-center gap-1.5 truncate text-control"><SrcIcon className="text-muted-foreground size-3.5 shrink-0" />{t(`logbooks.source.${r.source}`)}</span>
+        <span className="src inline-flex max-sm:text-caption items-center gap-1.5 truncate text-control"><SrcIcon className="text-muted-foreground size-3.5 shrink-0" />{t(`logbooks.source.${r.source}`)}</span>
         <Badge variant={LEVEL_BADGE[r.level] ?? 'info'} className="w-full justify-center">{t(`logbooks.level.${r.level}`)}</Badge>
         <span className="proj text-muted-foreground inline-flex min-w-0 items-center gap-1.5 text-caption">{r.project ? <ProjectIcon name={r.project} /> : null}<span className="truncate">{r.project ?? t('logbooks.noProject')}</span></span>
-        <span className="what min-w-0 text-control break-words whitespace-pre-wrap" title={r.text}>{what(r, t, locale, LINE)}</span>
+        <span className="what max-sm:order-first max-sm:col-span-full min-w-0 text-control break-words whitespace-pre-wrap" title={r.text}>{what(r, t, locale, LINE)}</span>
       </button>
       {open ? (
         <div className="detail bg-secondary border-border border-t px-3.5 pt-3 pb-3.5 pl-16" data-testid="activity-detail">
