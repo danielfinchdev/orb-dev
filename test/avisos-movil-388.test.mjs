@@ -65,8 +65,8 @@ test('cada tipo nuevo: una nota sin acciones, con tipo, destino y texto corto', 
 });
 
 test('vista previa apagada: sin detalle, pero con tipo y destino', () => {
-  const n = noticeNote({ kind: 'held', task: 39, reasons: 'ha eliminado 12 archivos' }, { preview: 'none', hiddenText: 'Tienes un mensaje nuevo' });
-  assert.equal(n.hidden, true); assert.equal(n.body, 'Tienes un mensaje nuevo'); assert.equal(n.title, 'Orb');
+  const n = noticeNote({ kind: 'held', task: 39, reasons: 'ha eliminado 12 archivos' }, { preview: 'none' });
+  assert.equal(n.hidden, true); assert.equal(n.body, 'Tienes un aviso nuevo'); assert.equal(n.title, 'Orb');
   assert.ok(!JSON.stringify(n).includes('eliminado'));
   assert.equal(n.kind, 'held'); assert.deepEqual(n.target, { type: 'task', id: 39 });
   assert.equal(noticeNote({ kind: 'done', task: 1 }, { preview: 'all' }).hidden, false);
@@ -408,4 +408,50 @@ test('el motor: la vigilancia de límites sigue el ritmo de 5 s y los hechos lle
   assert.ok(slow.includes('limitWatch.tick()'), 'dentro de la rama lenta');
   assert.equal(engine.split('limitWatch.tick()').length - 1, 1);
   assert.ok(engine.includes('announce: (fact) => remote?.announce(fact)'));
+});
+
+test('cada ocurrencia lleva su nid: dos límites o dos retenciones iguales son dos avisos distintos', async () => {
+  wipe(); fs.rmSync(pushLog, { force: true });
+  remote.announce({ kind: 'limit', account: 'cuenta-a' });
+  remote.announce({ kind: 'limit', account: 'cuenta-a' });
+  remote.announce({ kind: 'held', task: 5, reasons: 'ha eliminado 3 archivos' });
+  remote.announce({ kind: 'held', task: 5, reasons: 'ha eliminado 3 archivos' });
+  const live = pushed();
+  assert.equal(live.length, 4);
+  assert.ok(live.every((d) => Number.isInteger(d.nid)));
+  assert.equal(new Set(live.map((d) => d.nid)).size, 4);
+  const rows = (await call('notes.list')).notes;
+  assert.equal(rows.length, 4);
+  assert.deepEqual(rows.map((r) => r.id).sort((a, b) => a - b), live.map((d) => d.nid).sort((a, b) => a - b));
+  for (const d of live) { const r = rows.find((x) => x.id === d.nid); assert.equal(r.key, d.tag.slice(4)); assert.equal(r.kind, d.kind); }
+  assert.ok(!('nid' in rows[0]), 'notes.list keeps its own id');
+});
+
+test('la nota en vivo de un mensaje de chat solo gana nid', () => {
+  wipe(); fs.rmSync(pushLog, { force: true });
+  const c = board.createConversation({ title: 'Casa' }).id;
+  remote.broadcast('chat:new', { id: 8, role: 'orb', body: 'Ya está', meta: null, conversation: c });
+  const [got] = pushed();
+  const [row] = listRecent(board, {});
+  assert.equal(got.nid, row.id);
+  const expected = buildNote({ chat: { kind: 'conversation', id: c, name: 'Casa' }, line: { id: 8, role: 'orb', body: 'Ya está' }, preview: 'chat', assistantName: ctx.config.assistantName ?? 'Orb' });
+  for (const k of ['title', 'body', 'hidden', 'icon', 'route', 'kind']) assert.deepEqual(got[k], expected[k], k);
+  assert.equal(got.tag, `orb-${expected.key}`);
+});
+
+test('texto oculto: los avisos que no son de chat no dicen «mensaje»; los de chat, como siempre', async () => {
+  wipe();
+  const c = board.createConversation({ title: 'Casa' }).id;
+  remote.broadcast('chat:new', { role: 'orb', body: 'Hola', meta: null, conversation: c });
+  for (const fact of [{ kind: 'done', task: 1 }, { kind: 'held', task: 2, reasons: 'x' }, { kind: 'limit', account: 'a' }, { kind: 'update', version: '4.0.0' }]) remote.announce(fact);
+  const was = ctx.config.mobile; const lang = ctx.config.language;
+  const hiddenOf = async () => { ctx.config = { ...ctx.config, mobile: { ...(was ?? {}), preview: 'none' } }; try { return (await call('notes.list')).notes; } finally { ctx.config = { ...ctx.config, mobile: was }; } };
+  try {
+    let notes = await hiddenOf();
+    for (const n of notes) assert.equal(n.body, n.kind === 'message' ? 'Tienes un mensaje nuevo' : 'Tienes un aviso nuevo', n.kind);
+    ctx.config = { ...ctx.config, language: 'en' };
+    notes = await hiddenOf();
+    for (const n of notes.filter((x) => x.kind !== 'message')) assert.equal(n.body, 'You have a new notice');
+    assert.equal(noticeNote({ kind: 'limit', account: 'a' }, { preview: 'none' }).body, 'You have a new notice');
+  } finally { ctx.config = { ...ctx.config, language: lang }; }
 });

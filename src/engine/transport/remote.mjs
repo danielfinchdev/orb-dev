@@ -514,7 +514,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   function announce(fact) {
     const once = fact?.kind === 'update' ? `note_update:${String(fact.version ?? '').slice(0, 30)}` : null;
     if (once && board.setting(once)) return false; // once per version
-    const built = noticeNote(fact, { preview: pushPreview(ctx.config), assistantName: ctx.config.assistantName ?? 'Orb', hiddenText: tr('msg.remote.pushHidden') });
+    const built = noticeNote(fact, { preview: pushPreview(ctx.config), assistantName: ctx.config.assistantName ?? 'Orb' });
     const delivered = built ? pushNote(dress(built), null) : false;
     // a version nobody was told about (no phone linked yet) is still news the day a phone links
     if (once && delivered) board.setting(once, '1');
@@ -524,10 +524,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const clearNotes = () => { try { board.run('DELETE FROM mobile_notes'); } catch (error) { log(`avisos: ${error.message}`); } };
   // The note goes out (sealed event to the open apps, Web Push to the others) and is kept in the short list a phone reads
   // back with notes.list. What is kept has no actions, no card and no token.
-  function pushNote(n, conversation) {
+  function pushNote(note, conversation) {
     // Nothing is kept while no phone is linked: the first one to link must not read notices from before it existed.
     if (!board.all('SELECT * FROM devices WHERE public_key IS NOT NULL').some(validDevice)) return false;
-    try { recordNote(board, { key: n.key, kind: n.kind, title: n.title, body: n.body, hidden: n.hidden, route: n.route, line: n.line, target: targetOfNote(n) }, { conversation }); } catch (error) { log(`avisos: ${error.message}`); }
+    // The saved row's id (the `id` notes.list gives) travels as `nid`, so a phone tells two notices with the same text apart.
+    // The row is written before the delivery; if it cannot be written the notice goes out without `nid`.
+    let n = note;
+    try { n = { ...note, nid: recordNote(board, { key: n.key, kind: n.kind, title: n.title, body: n.body, hidden: n.hidden, route: n.route, line: n.line, target: targetOfNote(n) }, { conversation }) }; } catch (error) { log(`avisos: ${error.message}`); }
     const openNow = new Set();
     for (const c of clients) {
       openNow.add(c.device);
@@ -536,7 +539,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     for (const d of board.all('SELECT * FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id) || !validDevice(d)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
+      const data = { title: n.title, body: n.body, hidden: n.hidden, ...(n.nid != null ? { nid: n.nid } : {}), tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
         actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, n) };
       sendPush(sub, data, own().vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })

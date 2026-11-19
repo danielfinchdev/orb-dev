@@ -5,6 +5,7 @@
 // The texts live here (not in the locale files) so the note's wording stays next to its shape.
 import { ctx } from '../../platform/context.mjs';
 import { noteId } from '../../shared/notes.mjs';
+import { hiddenNoticeText } from '../../domain/notes/recent.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { cooldownUntil } from '../../domain/usage/budget.mjs';
@@ -41,8 +42,8 @@ const version = (v) => String(v ?? '').replace(/[^0-9A-Za-z.+-]/g, '').slice(0, 
 
 // The note of one fact, or null (nothing to say).
 // fact: { kind: 'done', task } | { kind: 'held', task, reasons } | { kind: 'update', version } | { kind: 'limit', account }
-// opts: { preview, assistantName, hiddenText }
-export function noticeNote(fact, { preview = 'chat', assistantName = 'Orb', hiddenText = 'Tienes un mensaje nuevo' } = {}) {
+// opts: { preview, assistantName } (the hidden text of these notices is fixed: they are not messages)
+export function noticeNote(fact, { preview = 'chat', assistantName = 'Orb' } = {}) {
   let key; let body; let route = { view: 'chat' }; let target;
   if (fact?.kind === 'done' || fact?.kind === 'held') {
     const id = Number(fact.task);
@@ -59,7 +60,7 @@ export function noticeNote(fact, { preview = 'chat', assistantName = 'Orb', hidd
   } else return null;
   const shown = preview !== 'none';
   return {
-    key, id: noteId(key), route, title: assistantName, body: shown ? body : hiddenText, hidden: !shown,
+    key, id: noteId(key), route, title: assistantName, body: shown ? body : hiddenNoticeText(ctx.config?.language), hidden: !shown,
     kind: fact.kind, icon: '/icon.png', actions: [], silent: false, target
   };
 }
