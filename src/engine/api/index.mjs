@@ -323,7 +323,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
         // the phone gets places, not this PC's folders (the same swap as in the report)
         if (principal?.channel === 'desktop') return page;
         const hide = (v) => (typeof v === 'string' ? hidePcPaths(v) : v);
-        return { ...page, items: page.items.map((it) => ({ ...it, text: hide(it.text), ...(it.before !== undefined ? { before: hide(it.before) } : {}), ...(it.after !== undefined ? { after: hide(it.after) } : {}) })) };
+        return { ...page, items: page.items.map((it) => ({ ...it, text: hide(it.text), detail: hide(it.detail), title: hide(it.title), ...(it.before !== undefined ? { before: hide(it.before) } : {}), ...(it.after !== undefined ? { after: hide(it.after) } : {}) })) };
       }
       const rows = board.recentEvents(Math.min(Number(limit) || 300, 2000));
       const needle = String(q ?? '').toLowerCase().trim();

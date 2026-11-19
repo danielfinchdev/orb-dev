@@ -227,6 +227,19 @@ test('activity.list for the phone hides this PC folders in the paged form; the d
   assert.ok(pc.items[0].text.includes(ctx.home));
 });
 
+test('activity.list for the phone also hides this PC folders in detail and title', async () => {
+  reset();
+  const dir = path.join(ctx.home, 'core', 'x');
+  const task = board.createTask({ project: 'viejo', title: `en ${dir}`, description: 'x', agent: 'claude' }, 'usuario');
+  board.event(task.id, 'claude', 'agent.reply', `ruta ${dir} fin`);
+  const pick = (r) => r.items.find((i) => i.kind === 'agent.reply');
+  const ph = pick(await call('activity.list', { sources: ['subagentes'], q: 'ruta' }, phone));
+  assert.ok(ph, 'the event is listed');
+  for (const f of ['detail', 'title']) assert.ok(!ph[f].includes(ctx.home) && ph[f].includes('<Orb>'), `${f}: ${ph[f]}`);
+  const pc = pick(await call('activity.list', { sources: ['subagentes'], q: 'ruta' }));
+  assert.ok(pc.detail.includes(ctx.home) && pc.title.includes(ctx.home));
+});
+
 test('events: a filter that only matches the oldest rows does not repeat them on the next page', () => {
   reset();
   for (let i = 0; i < 100; i++) board.event(null, 'claude', 'task.quiet', `zeta ${i}`);
