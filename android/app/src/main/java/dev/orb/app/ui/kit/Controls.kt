@@ -111,7 +111,7 @@ fun OrbButton(
             horizontalArrangement = Arrangement.spacedBy(6.dp, if (block) Alignment.CenterHorizontally else Alignment.Start),
         ) {
             if (icon != null) Icon(icon, null, Modifier.size(if (small) 16.dp else 20.dp), tint = fg)
-            Text(text, color = fg, fontSize = if (small) 13.sp else 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+            Text(text, color = fg, fontSize = if (small) 13.sp else 14.5.sp, lineHeight = 20.sp, fontWeight = if (kind == OrbButtonKind.Primary) FontWeight.Normal else FontWeight.Medium, maxLines = 1)
         }
     }
 }
@@ -255,6 +255,8 @@ fun OrbTextField(
     leading: ImageVector? = null, trailing: (@Composable () -> Unit)? = null, secret: Boolean = false,
     keyboardType: androidx.compose.ui.text.input.KeyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
     enabled: Boolean = true, invalid: Boolean = false,
+    /** What the empty field shows; the [label] by default, nothing when a label above the field already says it. */
+    placeholder: String = label,
     /** More than one makes a growing multi-line input (a note) instead of the fixed single-line row; [maxLines] caps the growth. */
     minLines: Int = 1, maxLines: Int = 8,
 ) {
@@ -267,7 +269,7 @@ fun OrbTextField(
     ) {
         if (leading != null) Icon(leading, null, Modifier.size(18.dp), tint = OrbKit.mutedForeground)
         Box(Modifier.weight(1f), contentAlignment = if (multi) Alignment.TopStart else Alignment.CenterStart) {
-            if (value.isEmpty()) Text(label, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
+            if (value.isEmpty() && placeholder.isNotEmpty()) Text(placeholder, color = if (soft) OrbKit.mutedForeground else OrbKit.faintForeground, fontSize = 15.sp, maxLines = 1)
             BasicTextField(
                 value, onValueChange,
                 Modifier.fillMaxWidth().then(if (focus != null) Modifier.focusRequester(focus) else Modifier).semantics { contentDescription = label },

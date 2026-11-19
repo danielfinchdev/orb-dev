@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -207,6 +208,10 @@ fun OrbDialog(
     dismiss: OrbDialogAction? = null,
     /** Drawn above the title in the text colour, as the mockup's `.mdlg > i`. */
     icon: ImageVector? = null,
+    /** The mark's size; the mockup's welcome question draws a small one. */
+    iconSize: Dp = 24.dp,
+    /** How far the dialog floats; `.mdlg` casts a long soft shadow. */
+    elevation: Dp = 12.dp,
     content: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
@@ -219,10 +224,10 @@ fun OrbDialog(
             contentAlignment = Alignment.Center,
         ) {
             Surface(
-                modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }, shape = RadiusBig, color = OrbKit.popover, contentColor = OrbKit.foreground, shadowElevation = 12.dp,
+                modifier.fillMaxWidth().pointerInput(Unit) { detectTapGestures { } }, shape = RadiusBig, color = OrbKit.popover, contentColor = OrbKit.foreground, shadowElevation = elevation,
             ) {
                 Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 20.dp, bottom = 12.dp)) {
-                    if (icon != null) Icon(icon, null, Modifier.padding(bottom = 8.dp).size(24.dp), tint = OrbKit.foreground)
+                    if (icon != null) Icon(icon, null, Modifier.padding(bottom = 8.dp).size(iconSize), tint = OrbKit.foreground)
                     Text(
                         title, Modifier.padding(bottom = 8.dp).semantics { heading() }, color = OrbKit.foreground, fontSize = 18.sp,
                         lineHeight = 24.sp, fontFamily = OrbFonts.title, fontWeight = FontWeight.SemiBold,

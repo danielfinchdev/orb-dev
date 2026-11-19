@@ -8,6 +8,7 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -182,3 +183,15 @@ fun OrbBottomBar(tabs: List<OrbTab>, selected: String, onSelect: (OrbTab) -> Uni
 }
 
 private fun Modifier.matchParentSizeCompat(): Modifier = this.then(Modifier.size(56.dp, 30.dp))
+
+/** The bottom action area of a full page (`.foot`): a hairline above it, then the buttons with 20 dp at the sides. */
+@Composable
+fun OrbFoot(modifier: Modifier = Modifier, spacing: Dp = 10.dp, content: @Composable ColumnScope.() -> Unit) {
+    Column(modifier.fillMaxWidth()) {
+        Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
+        Column(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(spacing), content = content,
+        )
+    }
+}

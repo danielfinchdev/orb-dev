@@ -64,6 +64,8 @@ fun OrbRow(
     titleStyled: AnnotatedString? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    /** The mockup's notices row: the time joins the second line and the badge sits alone, centred on the right. */
+    centerBadge: Boolean = false,
 ) {
     val click = if (onClick != null) Modifier.combinedClickable(role = Role.Button, onLongClick = onLongClick, onClick = onClick) else Modifier
     Row(
@@ -76,12 +78,17 @@ fun OrbRow(
                 titleStyled ?: AnnotatedString(title), color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 22.sp,
                 fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
-            if (subtitle != null) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp), content = subtitle)
+            if (subtitle != null || (centerBadge && time != null)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(if (centerBadge) 0.dp else 6.dp)) {
+                    subtitle?.invoke(this)
+                    if (centerBadge && time != null) Text(if (subtitle != null) " · $time" else time, color = OrbKit.faintForeground, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1)
+                }
             }
             if (actions != null) Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), content = actions)
         }
-        if (time != null || badge != null) {
+        if (centerBadge) {
+            if (badge != null) Box(Modifier.align(Alignment.CenterVertically)) { badge() }
+        } else if (time != null || badge != null) {
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (time != null) Text(time, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
                 badge?.invoke()
