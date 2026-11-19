@@ -71,6 +71,8 @@ fun OrbSheet(
     closeLabel: String = "Cerrar",
     showClose: Boolean = false,
     header: (@Composable RowScope.() -> Unit)? = null,
+    /** Stays under the scrolling body, always in view (the mockups' `.actbar`). */
+    footer: (@Composable ColumnScope.() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val maxHeight = (LocalConfiguration.current.screenHeightDp * 0.88f).dp
@@ -95,6 +97,7 @@ fun OrbSheet(
                 }
             }
             Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()), content = content)
+            if (footer != null) footer()
         }
     }
 }

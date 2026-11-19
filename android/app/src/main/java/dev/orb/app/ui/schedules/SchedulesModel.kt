@@ -12,7 +12,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
 
 /** The frequencies the PC accepts, in the order the form offers them. */
-val ScheduleEvery = listOf("daily", "weekly", "every_hours", "hourly", "once")
+val ScheduleEvery = listOf("daily", "weekly", "monthly", "every_hours", "hourly", "once")
 
 @Immutable
 data class ScheduleItem(
@@ -38,6 +38,12 @@ data class ScheduleItem(
     val tz: String? = null,
     /** The day of the month of a monthly schedule. */
     val monthDay: Int? = null,
+    /** The model of [agent]; null keeps the agent's own default. */
+    val model: String? = null,
+    /** `preguntar` makes every run ask first; null follows the PC's settings. */
+    val autonomy: String? = null,
+    /** Whether a run tells the phone; null when the PC does not say (an older one). */
+    val notifyMobile: Boolean? = null,
 )
 
 /** What the form sends to `schedules.create`. */
@@ -57,7 +63,45 @@ data class NewSchedule(
     val agent: String = "any",
     /** A model id of [agent]; null keeps the agent's own default. */
     val model: String? = null,
+    /** The day of the month of a monthly schedule. */
+    val monthDay: Int? = null,
+    /** An IANA zone; null follows the PC's own. */
+    val tz: String? = null,
+    /** Null leaves the PC's default (it tells the phone); only sent to a PC that knows the field. */
+    val notifyMobile: Boolean? = null,
+    /** The phone can only ask for `preguntar`; anything looser is the PC window's to give. */
+    val autonomy: String? = null,
 )
+
+/**
+ * What an edit sends to `schedules.update`: a null field is left as the PC has it. [model] and [tz] take an empty text to
+ * clear them. Nothing here loosens what the PC keeps tight: the PC refuses to take «read only» off or to lift
+ * `preguntar` from the phone, so the form never offers it.
+ */
+@Immutable
+data class SchedulePatch(
+    val enabled: Boolean? = null,
+    val approve: Boolean = false,
+    val title: String? = null,
+    val description: String? = null,
+    val project: String? = null,
+    val agent: String? = null,
+    val model: String? = null,
+    val readonly: Boolean? = null,
+    val sameChat: Boolean? = null,
+    /** Set together: the PC reads the whole timing of a schedule at once. */
+    val every: String? = null,
+    val atTime: String? = null,
+    val hours: Int? = null,
+    val weekdays: List<Int>? = null,
+    val monthDay: Int? = null,
+    val tz: String? = null,
+    val notifyMobile: Boolean? = null,
+    val autonomy: String? = null,
+) {
+    /** True when nothing would change on the PC. */
+    val isEmpty get() = this == SchedulePatch()
+}
 
 object SchedulesParser {
     fun list(el: JsonElement?): List<ScheduleItem> = (el as? JsonArray).orEmpty().mapNotNull { x ->
@@ -73,6 +117,8 @@ object SchedulesParser {
             nextRun = o.str("next_run"), lastRun = o.str("last_run"), lastTask = o.long("last_task"),
             sameChat = o.bool("same_chat"), whenText = o.str("when") ?: every,
             tz = o.str("tz")?.takeIf { it.isNotBlank() }, monthDay = o.int("month_day"),
+            model = o.str("model")?.takeIf { it.isNotBlank() }, autonomy = o.str("autonomy")?.takeIf { it.isNotBlank() },
+            notifyMobile = if (o.containsKey("notify_mobile")) o.bool("notify_mobile") else null,
         )
     }
 

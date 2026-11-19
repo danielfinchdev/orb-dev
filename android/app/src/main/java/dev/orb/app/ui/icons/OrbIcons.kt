@@ -238,6 +238,12 @@ object OrbIcons {
     val ZoomIn by lazy { lucide("zoom-in", circle(11f, 11f, 8f), "m21 21-4.35-4.35", "M11 8v6", "M8 11h6") }
     val ZoomOut by lazy { lucide("zoom-out", circle(11f, 11f, 8f), "m21 21-4.35-4.35", "M8 11h6") }
     val GitCompare by lazy { lucide("git-compare", circle(18f, 18f, 3f), circle(6f, 6f, 3f), "M13 6h3a2 2 0 0 1 2 2v7", "M11 18H8a2 2 0 0 1-2-2V9") }
+    val CalendarClock by lazy {
+        lucide(
+            "calendar-clock", "M16 14v2.2l1.6 1", "M16 2v3", "M21 7.338V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h2.338", "M3 9h5.859", "M8 2v3",
+            circle(16f, 16f, 6f),
+        )
+    }
     val Eye by lazy {
         lucide(
             "eye", "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", circle(12f, 12f, 3f),

@@ -193,23 +193,174 @@ class SchedulesViewModelTest {
         assertTrue(b.calls.isEmpty())
     }
 
-    @Test fun editSavesTitleAndInstructions() = runTest(dispatcher) {
+    @Test fun editSavesOnlyWhatChanged() = runTest(dispatcher) {
         val b = FakeSchedulesBackend(listOf(schedule(4)))
         val vm = vm(b)
         advanceUntilIdle()
         vm.openEdit(schedule(4))
-        vm.saveEdit("Nuevo", "Otra cosa")
+        vm.saveEdit(SchedulePatch(title = "Nuevo", description = "Otra cosa"))
         advanceUntilIdle()
         assertEquals(listOf("update 4 enabled=null approve=false title=Nuevo description=Otra cosa"), b.calls)
+        assertNull(b.patches.single().every)
+        assertNull(vm.state.value.form)
     }
 
-    @Test fun approvingSendsTheApproval() = runTest(dispatcher) {
+    @Test fun anEditWithNothingChangedJustCloses() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(4)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openEdit(schedule(4))
+        vm.saveEdit(SchedulePatch())
+        advanceUntilIdle()
+        assertTrue(b.calls.isEmpty())
+        assertNull(vm.state.value.form)
+    }
+
+    @Test fun editLoadsTheProjectsAndAgentsToo() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(4)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openEdit(schedule(4))
+        advanceUntilIdle()
+        assertEquals(listOf("app-movil", "api-pagos"), vm.state.value.form?.projects)
+        assertEquals(listOf("claude", "codex"), vm.state.value.form?.agents?.map { it.id })
+    }
+
+    // Approval: nothing is approved without the dialog, and the dialog shows what the PC has now.
+
+    @Test fun approvalReadsTheScheduleAgainBeforeAskingForTheOk() = runTest(dispatcher) {
         val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
         val vm = vm(b)
         advanceUntilIdle()
-        vm.approve(schedule(5, approved = false))
+        val shown = vm.state.value.items.single()
+        // The PC changed the text after the list was read.
+        b.items = listOf(schedule(5, approved = false, title = "Otro nombre"))
+        b.listGate = kotlinx.coroutines.CompletableDeferred()
+        val before = b.listCount
+        vm.openApproval(shown)
+        runCurrent()
+        assertTrue(vm.state.value.approval!!.loading)
+        assertEquals("Revisar dependencias", vm.state.value.approval!!.item.title)
+        b.listGate!!.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(b.listCount > before)
+        val a = vm.state.value.approval!!
+        assertFalse(a.loading)
+        assertTrue(a.changed)
+        assertEquals("Otro nombre", a.item.title)
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun approvalSendsNothingWhileItReadsOrWhenItCouldNotRead() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        b.listGate = kotlinx.coroutines.CompletableDeferred()
+        vm.openApproval(schedule(5, approved = false))
+        runCurrent()
+        vm.confirmApproval()
+        advanceUntilIdle()
+        assertTrue(b.calls.isEmpty())
+        b.listGate!!.complete(Unit)
+        b.listGate = null
+        advanceUntilIdle()
+        vm.closeApproval()
+        b.listResult = Result.failure(LinkException(LinkError.Timeout))
+        vm.openApproval(schedule(5, approved = false))
+        advanceUntilIdle()
+        assertTrue(vm.state.value.approval!!.failed)
+        vm.confirmApproval()
+        advanceUntilIdle()
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun confirmingTheDialogApprovesWhatItShows() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openApproval(schedule(5, approved = false))
+        advanceUntilIdle()
+        vm.confirmApproval()
         advanceUntilIdle()
         assertEquals(listOf("update 5 enabled=null approve=true title=null description=null"), b.calls)
+        assertNull(vm.state.value.approval)
+    }
+
+    @Test fun anAlreadyApprovedOrDeletedScheduleClosesTheDialog() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        val got = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { got += it } }
+        b.items = listOf(schedule(5, approved = true))
+        vm.openApproval(schedule(5, approved = false))
+        advanceUntilIdle()
+        assertNull(vm.state.value.approval)
+        b.items = emptyList()
+        vm.openApproval(schedule(5, approved = false))
+        advanceUntilIdle()
+        assertNull(vm.state.value.approval)
+        assertEquals(listOf(SchedulesTexts.APPROVE_ALREADY, SchedulesTexts.APPROVE_GONE), got)
+    }
+
+    @Test fun anApprovedScheduleHasNoApprovalDialog() = runTest(dispatcher) {
+        val vm = vm(FakeSchedulesBackend(listOf(schedule(1))))
+        advanceUntilIdle()
+        vm.openApproval(schedule(1))
+        advanceUntilIdle()
+        assertNull(vm.state.value.approval)
+    }
+
+    @Test fun anOpenApprovalFollowsALaterChangeOnThePc() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openApproval(schedule(5, approved = false))
+        advanceUntilIdle()
+        assertFalse(vm.state.value.approval!!.changed)
+        b.items = listOf(schedule(5, approved = false, title = "Cambiada"))
+        b.events.tryEmit(dev.orb.app.link.net.LinkEvent("board:changed", kotlinx.serialization.json.JsonNull))
+        advanceUntilIdle()
+        val a = vm.state.value.approval!!
+        assertTrue(a.changed)
+        assertEquals("Cambiada", a.item.title)
+    }
+
+    @Test fun theLastRunOutcomeComesFromTheTaskList() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(1, lastTask = 12, lastRun = "2026-11-18T23:30:00.000Z")))
+        b.outcomeMap = Result.success(mapOf(12L to "done"))
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals("done", vm.state.value.outcomes[12L])
+    }
+
+    @Test fun theNewFieldsAreOfferedOnlyToAPcThatKnowsThem() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(1)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.pcFields)
+        b.unavailable = setOf(ApiMethods.CHAT_EDIT_QUEUED.name)
+        b.connectionState.value = ConnectionState.Connecting
+        advanceUntilIdle()
+        assertFalse(vm.state.value.pcFields)
+    }
+
+    @Test fun parserReadsTheZoneTheMonthDayAndThePermissions() {
+        val el = Json.parseToJsonElement(
+            """[{"id":3,"project":"p","title":"t","description":"d","every":"monthly","at_time":"09:00","weekdays":[],"enabled":1,"approved":1,
+            "month_day":5,"tz":"Europe/Madrid","model":"opus","autonomy":"preguntar","notify_mobile":0}]""",
+        )
+        val s = SchedulesParser.list(el).single()
+        assertEquals(5, s.monthDay)
+        assertEquals("Europe/Madrid", s.tz)
+        assertEquals("opus", s.model)
+        assertEquals("preguntar", s.autonomy)
+        assertEquals(false, s.notifyMobile)
+        // An older PC has none of them.
+        val old = SchedulesParser.list(Json.parseToJsonElement("""[{"id":4,"project":"p","title":"t","every":"daily"}]""")).single()
+        assertNull(old.tz)
+        assertNull(old.notifyMobile)
+        assertNull(old.autonomy)
     }
 
     @Test fun whatThePcLacksIsHidden() = runTest(dispatcher) {

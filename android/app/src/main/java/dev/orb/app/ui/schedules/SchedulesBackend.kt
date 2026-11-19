@@ -2,12 +2,15 @@ package dev.orb.app.ui.schedules
 
 import dev.orb.app.LinkRuntime
 import dev.orb.app.link.api.ApiMethod
+import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.ui.chats.AgentOption
 import dev.orb.app.ui.chats.NewChatParser
+import dev.orb.app.ui.chats.long
+import dev.orb.app.ui.chats.str
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.SharedFlow
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -39,9 +43,12 @@ interface SchedulesBackend {
     suspend fun agents(): Result<List<AgentOption>>
     suspend fun create(s: NewSchedule): Result<Unit>
 
-    /** Only the fields that are not null change. */
-    suspend fun update(id: Long, enabled: Boolean? = null, approve: Boolean = false, title: String? = null, description: String? = null): Result<Unit>
+    /** Only the fields of [patch] that are not null change. */
+    suspend fun update(id: Long, patch: SchedulePatch): Result<Unit>
     suspend fun run(id: Long): Result<Unit>
+
+    /** How the task of each last run stands (task id to its status), for the «Última: ayer, bien» line; empty when unknown. */
+    suspend fun outcomes(): Result<Map<Long, String>> = Result.success(emptyMap())
 }
 
 class RuntimeSchedulesBackend(private val runtime: LinkRuntime, private val container: dev.orb.app.AppContainer? = null) : SchedulesBackend {
@@ -95,18 +102,48 @@ class RuntimeSchedulesBackend(private val runtime: LinkRuntime, private val cont
             put("same_chat", s.sameChat)
             put("agent", s.agent)
             s.model?.let { put("model", it) }
+            s.monthDay?.let { put("month_day", it) }
+            s.tz?.let { put("tz", it) }
+            s.notifyMobile?.let { put("notify_mobile", it) }
+            s.autonomy?.let { put("autonomy", it) }
         },
     ).unit()
 
-    override suspend fun update(id: Long, enabled: Boolean?, approve: Boolean, title: String?, description: String?) = api.schedules.update(
+    override suspend fun update(id: Long, patch: SchedulePatch) = api.schedules.update(
         buildJsonObject {
             put("id", id)
-            if (enabled != null) put("enabled", enabled)
-            if (approve) put("approve", true)
-            if (title != null) put("title", title)
-            if (description != null) put("description", description)
+            patch.enabled?.let { put("enabled", it) }
+            if (patch.approve) put("approve", true)
+            patch.title?.let { put("title", it) }
+            patch.description?.let { put("description", it) }
+            patch.project?.let { put("project", it) }
+            patch.agent?.let { put("agent", it) }
+            // An empty text clears the model or the zone on the PC; a field left out stays as it is.
+            patch.model?.let { put("model", it) }
+            patch.readonly?.let { put("readonly", it) }
+            patch.sameChat?.let { put("same_chat", it) }
+            patch.every?.let { put("every", it) }
+            patch.atTime?.let { put("at_time", it) }
+            patch.hours?.let { put("hours", it) }
+            patch.weekdays?.let { days -> put("weekdays", JsonArray(days.map { JsonPrimitive(it) })) }
+            patch.monthDay?.let { put("month_day", it) }
+            patch.tz?.let { put("tz", it) }
+            patch.notifyMobile?.let { put("notify_mobile", it) }
+            patch.autonomy?.let { put("autonomy", it) }
         },
     ).unit()
+
+    // The board has no «what happened to this run» of its own; the task list says how each last task ended.
+    override suspend fun outcomes(): Result<Map<Long, String>> {
+        if (!api.available(ApiMethods.TASKS_LIST)) return Result.success(emptyMap())
+        return api.tasks.list().mapCatching { el ->
+            (el as? JsonArray).orEmpty().mapNotNull { x ->
+                val o = x as? JsonObject ?: return@mapNotNull null
+                val id = o.long("id") ?: return@mapNotNull null
+                id to (o.str("status") ?: return@mapNotNull null)
+            }.toMap()
+        }
+    }
 
     override suspend fun run(id: Long) = api.schedules.run(buildJsonObject { put("id", id) }).unit()
 }
