@@ -120,4 +120,9 @@ class DirectParserTest {
         assertEquals(1, items.size)
         assertEquals("algo", (items[0] as DItem.Note).text)
     }
+
+    @Test fun theContextPercentIsWhatTheRowSays() {
+        val info = DirectParser.info(dev.orb.app.data.json("""{"id":"s1","context":{"used":62,"size":100}}""") as kotlinx.serialization.json.JsonObject)!!
+        assertEquals(62, info.contextPercent)
+    }
 }

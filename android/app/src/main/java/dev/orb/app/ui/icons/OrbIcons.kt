@@ -187,4 +187,33 @@ object OrbIcons {
         lucide("fold-vertical", "M12 22v-6", "M12 8V2", "M4 12H2", "M10 12H8", "M16 12h-2", "M22 12h-2", "m15 19-3-3-3 3", "m15 5-3 3-3-3")
     }
     val SearchX by lazy { lucide("search-x", "m13.5 8.5-5 5", "m8.5 8.5 5 5", "m21 21-4.35-4.35", circle(11f, 11f, 8f)) }
+    val GitFork by lazy { lucide("git-fork", circle(12f, 18f, 3f), circle(6f, 6f, 3f), circle(18f, 6f, 3f), "M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9", "M12 12v3") }
+    val Minimize2 by lazy { lucide("minimize-2", "m14 10 7-7", "M20 10h-6V4", "m3 21 7-7", "M4 14h6v6") }
+    val History by lazy { lucide("history", "M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8", "M3 3v5h5", "M12 7v5l4 2") }
+    val FilePen by lazy {
+        lucide(
+            "file-pen", "M12.659 22H18a2 2 0 0 0 2-2V8a2.4 2.4 0 0 0-.706-1.706l-3.588-3.588A2.4 2.4 0 0 0 14 2H6a2 2 0 0 0-2 2v9.34", "M14 2v5a1 1 0 0 0 1 1h5",
+            "M10.378 12.622a1 1 0 0 1 3 3.003L8.36 20.637a2 2 0 0 1-.854.506l-2.867.837a.5.5 0 0 1-.62-.62l.836-2.869a2 2 0 0 1 .506-.853z",
+        )
+    }
+    val ShieldQuestion by lazy {
+        lucide(
+            "shield-question",
+            "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+            "M9.1 9a3 3 0 0 1 5.82 1c0 2-3 3-3 3", "M12 17h.01",
+        )
+    }
+    val ShieldAlert by lazy {
+        lucide(
+            "shield-alert",
+            "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z",
+            "M12 8v4", "M12 16h.01",
+        )
+    }
+    val Terminal by lazy { lucide("terminal", "M12 19h8", "m4 17 6-6-6-6") }
+    val Eye by lazy {
+        lucide(
+            "eye", "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", circle(12f, 12f, 3f),
+        )
+    }
 }

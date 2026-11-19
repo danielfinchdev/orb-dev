@@ -55,6 +55,8 @@ data class DirectChatState(
     val queue: List<QueuedMsg> = emptyList(),
     /** Item ids of requests with an answer on its way to the PC. */
     val busyCards: Set<Long> = emptySet(),
+    /** The last line the person wrote: its correction mark says it reaches the agent that is working. */
+    val lastUserId: Long? = null,
 ) {
     val agentName get() = agentName(agent)
 }
@@ -191,7 +193,7 @@ class DirectChatViewModel(
         items.addAll(shown)
         for (g in ghost.values) {
             val echoed = shown.any { it is DItem.User && it.id > g.baseId && it.text == g.pending.text }
-            if (!echoed) items += DItem.Waiting(g.pending.copy(state = PendingState.Sending))
+            if (!echoed) items += DItem.Waiting(g.pending.copy(state = PendingState.Arrived))
         }
         queued.mapTo(items) { DItem.Waiting(it) }
         val i = st.info
@@ -207,6 +209,7 @@ class DirectChatViewModel(
             stalled = i?.stalled == true && !busy, limited = i?.limited == true, settled = i?.settled == true,
             canSteer = i?.canSteer ?: (agent == "claude" || agent == "codex"), canCompact = i?.canCompact ?: (agent == "claude" || agent == "codex"),
             queue = st.queue, busyCards = st.busy,
+            lastUserId = shown.lastOrNull { it is DItem.User }?.let { (it as DItem.User).id },
         )
     }
 

@@ -255,4 +255,27 @@ class DirectChatViewModelTest {
         b.events.tryEmit(itemEvent(11, "tool", "tool_result", """{"id":"t1","output":"ok"}""")); runCurrent()
         assertNull(vm.state.value.activity)
     }
+
+    // ---------- context bar, fork from a line, delivery marks ----------
+
+    @Test fun theContextPercentReachesTheState() = runTest(dispatcher) {
+        val vm = vm(FakeDirectChatBackend(base))
+        assertEquals(58, vm.state.value.contextPercent)
+    }
+
+    @Test fun aMessageThePcTookShowsOneTickUntilItsOwnLineArrives() = runTest(dispatcher) {
+        val b = FakeDirectChatBackend(base)
+        val vm = vm(b)
+        vm.send("Hazlo"); runCurrent()
+        // the thread cannot be read yet, so the line is not back: the PC has the message, nothing else
+        b.loadError = LinkException(LinkError.Timeout)
+        b.outbox.value = emptyList(); runCurrent()
+        val waiting = vm.state.value.items.last() as DItem.Waiting
+        assertEquals(PendingState.Arrived, waiting.pending.state)
+    }
+
+    @Test fun theLastUserLineIsKnown() = runTest(dispatcher) {
+        val vm = vm(FakeDirectChatBackend(base))
+        assertEquals(1L, vm.state.value.lastUserId)
+    }
 }

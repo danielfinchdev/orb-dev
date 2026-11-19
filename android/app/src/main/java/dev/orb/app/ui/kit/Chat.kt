@@ -162,6 +162,8 @@ fun OrbTaskCard(
     icon: ImageVector? = null,
     lineRich: androidx.compose.ui.text.AnnotatedString? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
+    /** Free content between the header (or [line]) and the footer: what a permission asks for, its reason, its details. */
+    body: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth().clip(RadiusCard).background(OrbKit.card).border(1.dp, OrbKit.border, RadiusCard)) {
         Column(Modifier.semantics(mergeDescendants = true) {}) {
@@ -191,6 +193,10 @@ fun OrbTaskCard(
                 }
             }
         }
+        if (body != null) {
+            Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
+            Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = body)
+        }
         if (footer != null) {
             Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
             Row(
@@ -214,6 +220,35 @@ fun OrbQueueBar(text: String, modifier: Modifier = Modifier, onEdit: (() -> Unit
         Icon(OrbIcons.ListEnd, null, Modifier.size(16.dp), tint = OrbKit.mutedForeground)
         Text(text, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (onEdit != null) OrbButton(editLabel, onEdit, kind = OrbButtonKind.Ghost, small = true)
+    }
+}
+
+/**
+ * `.ctxbar` with a quiet action at its end («Contexto 62 %  ⎇ Bifurcar»): [text] on the left and, when [action] is given, an
+ * icon with its label that [onAction] runs. [enabled] false dims the action and takes it out of reach.
+ */
+@Composable
+fun OrbContextBar(
+    text: String, modifier: Modifier = Modifier, action: String? = null, actionIcon: ImageVector? = null, onAction: (() -> Unit)? = null,
+    enabled: Boolean = true,
+) {
+    Row(
+        modifier.fillMaxWidth().heightIn(min = 24.dp).padding(start = 18.dp, end = if (action != null) 6.dp else 18.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(text, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (action != null) {
+            val tone = if (enabled) OrbKit.mutedForeground else OrbKit.mutedForeground.copy(alpha = 0.45f)
+            // 48 dp tall to touch, drawn like the 12 sp line of the mockup
+            Row(
+                Modifier.heightIn(min = 48.dp).clip(RadiusCtl).clickable(enabled = enabled && onAction != null, role = Role.Button, onClick = { onAction?.invoke() })
+                    .padding(horizontal = 10.dp).semantics { if (!enabled) disabled() },
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                if (actionIcon != null) Icon(actionIcon, null, Modifier.size(16.dp), tint = tone)
+                Text(action, color = tone, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1)
+            }
+        }
     }
 }
 

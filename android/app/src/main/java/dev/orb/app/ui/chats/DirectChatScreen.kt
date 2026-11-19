@@ -6,8 +6,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,7 +13,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,35 +20,47 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import dev.orb.app.ui.kit.OrbFab
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import dev.orb.app.ui.kit.OrbSnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.connectionText
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbComposerLabel
+import dev.orb.app.ui.kit.OrbContextBar
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbFab
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetDivider
+import dev.orb.app.ui.kit.OrbSheetInfo
+import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.OrbSheetLabel
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbTopBar
+import dev.orb.app.ui.offline.ConnectionBand
 import dev.orb.app.ui.theme.OrbMotion
 import dev.orb.app.ui.theme.OrbTheme
 
@@ -77,26 +86,26 @@ fun DirectChatScreen(
     }
     var stick by remember { mutableStateOf(true) }
     var renaming by remember { mutableStateOf(false) }
-    val actions = remember(vm) { DirectActions(vm::decide, vm::retrySend, vm::discard, vm::resume) }
+    var sheet by rememberSaveable { mutableStateOf(false) }
+    var compactAsk by rememberSaveable { mutableStateOf(false) }
+    var editingId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val actions = remember(vm) { DirectActions(vm::decide, vm::retrySend, vm::discard, vm::resume, fork = vm::fork) }
+    val editing = state.queue.firstOrNull { it.id == editingId }
+    // The message being edited left the queue (the PC took it): the box goes back to what it was.
+    LaunchedEffect(editing == null) { if (editing == null) editingId = null }
 
     Box(modifier.fillMaxSize().imePadding()) {
         Column(Modifier.fillMaxSize()) {
-            DirectTopBar(
-                state, onBack,
-                MenuActions(vm::fork, vm::compact, vm::stop, vm::resume, vm::settle, { renaming = true }, vm::archive),
-            )
-            AnimatedVisibility(!state.online && state.loaded && !state.deleted, enter = fadeIn() + slideInVertically { -it / 2 }, exit = fadeOut()) {
-                OfflineStrip()
-            }
+            DirectTopBar(state, onBack, onMenu = { sheet = true })
+            if (state.loaded && !state.deleted) ConnectionBand(state.connection)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.deleted -> DeletedDirect(onBack, if (state.canRestore) vm::restore else null)
                     !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    else -> DirectList(vm, state, actions, nowMs, stick, onStick = { stick = it })
+                    else -> DirectList(vm, state, actions, nowMs, stick, onStick = { stick = it }, editingId = editingId, onEditQueued = { editingId = it.id })
                 }
             }
             if (!state.deleted) {
-                QueueTray(state.queue, state.online, vm::editQueued, vm::removeQueued, vm::moveQueued)
                 val choices = remember(state.busy, state.canSteer, vm) {
                     if (!state.busy) emptyList()
                     else listOfNotNull(
@@ -107,14 +116,40 @@ fun DirectChatScreen(
                 Composer(
                     online = state.online, busy = state.busy, mode = null, canSetMode = false,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop, onMode = {},
-                    placeholder = ChatTexts.directField(state.agentName), busyChoices = choices,
-                    leading = { AgentChip(state.agent, state.model ?: state.agentName) },
-                    attach = vm.attach,
+                    placeholder = when {
+                        state.stalled -> DirectTexts.STALLED_PLACEHOLDER
+                        state.busy -> DirectTexts.WORKING_PLACEHOLDER
+                        else -> ChatTexts.directField(state.agentName)
+                    },
+                    busyChoices = choices,
+                    leading = { PermissionLabel(state) },
+                    attach = vm.attach, mic = true,
+                    above = { text, clear ->
+                        if (editing != null) QueueEditBar(
+                            canSave = text.isNotBlank() && state.online,
+                            onSave = { vm.editQueued(editing, text); clear(); editingId = null },
+                            onCancel = { clear(); editingId = null },
+                        ) else ContextLine(state, onFork = vm::fork, onCompact = { compactAsk = true })
+                    },
+                    seed = editing?.let { ComposerSeed(it.id, it.text) },
+                    sendOverride = editing?.let { q -> { t: String -> vm.editQueued(q, t); editingId = null } },
                 )
             }
         }
         OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp))
     }
+    if (sheet) ChatSheet(
+        state, onDismiss = { sheet = false },
+        MenuActions(
+            { sheet = false; vm.fork() }, { sheet = false; compactAsk = true }, { sheet = false; vm.stop() }, { sheet = false; vm.resume() },
+            { sheet = false; vm.settle() }, { sheet = false; renaming = true }, { sheet = false; vm.archive() },
+        ),
+    )
+    if (compactAsk) OrbDialog(
+        onDismiss = { compactAsk = false }, title = DirectTexts.COMPACT_ASK_TITLE, text = DirectTexts.compactAskBody(state.agentName),
+        confirm = OrbDialogAction(DirectTexts.COMPACT_CONFIRM, { compactAsk = false; vm.compact() }),
+        dismiss = OrbDialogAction(ChatTexts.CANCEL, { compactAsk = false }),
+    )
     if (renaming) TextDialog(
         ChatTexts.RENAME_TITLE, ChatTexts.TITLE_FIELD, state.title, ChatTexts.SAVE,
         onDismiss = { renaming = false }, onConfirm = { vm.rename(it); renaming = false },
@@ -126,50 +161,91 @@ private class MenuActions(
     val settle: () -> Unit, val rename: () -> Unit, val archive: () -> Unit,
 )
 
+/** The useful line under the name: agent, project and what it is doing; with no link, what is wrong with it. */
+internal fun directHeaderLine(state: DirectChatState): String = when (state.connection) {
+    is ConnectionState.Online -> DirectTexts.infoLine(
+        state.agentName ?: ChatTexts.AGENT_FALLBACK, state.project,
+        if (state.busy) DirectTexts.STATE_WORKING else state.permission?.let(ChatTexts::permissionName),
+    )
+    is ConnectionState.Offline, is ConnectionState.Connecting -> ChatTexts.STATE_RECONNECTING
+    else -> connectionText(state.connection)
+}
+
 @Composable
-private fun DirectTopBar(state: DirectChatState, onBack: () -> Unit, menu: MenuActions) {
-    var open by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(OrbIcons.ArrowLeft, ChatTexts.BACK, tint = OrbTheme.colors.text2) }
-        AgentAvatar(state.agent, 36.dp)
-        Column(Modifier.weight(1f).padding(start = 12.dp)) {
-            Text(
-                state.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Medium, maxLines = 1,
-                overflow = TextOverflow.Ellipsis, modifier = Modifier.semantics { heading() },
-            )
-            Text(
-                listOfNotNull(
-                    "${state.project ?: ChatTexts.NO_PROJECT} ${ChatTexts.IN_THE_PC}", state.permission?.let(ChatTexts::permissionName)?.takeIf { it.isNotEmpty() },
-                ).joinToString(" · "),
-                color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (!state.deleted) Box {
-            IconButton(onClick = { open = true }) { Icon(OrbIcons.MoreVertical, ChatTexts.MORE, tint = OrbTheme.colors.text2) }
-            DropdownMenu(open, onDismissRequest = { open = false }) {
-                val on = state.online
-                MenuRow(ChatTexts.FORK, on && !state.busy, menu.fork) { open = false }
-                if (state.canCompact) MenuRow(ChatTexts.compactContext(state.contextPercent), on && !state.busy, menu.compact) { open = false }
-                if (state.busy) MenuRow(ChatTexts.INTERRUPT, on, menu.stop) { open = false }
-                if (state.stalled) MenuRow(ChatTexts.RESUME, on, menu.resume) { open = false }
-                if (!state.settled) MenuRow(ChatTexts.SETTLE, on, menu.settle) { open = false }
-                MenuRow(ChatTexts.RENAME, on, menu.rename) { open = false }
-                MenuRow(ChatTexts.ARCHIVE, on, menu.archive) { open = false }
-                if (!on) Text(ChatTexts.NEEDS_PC, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-            }
+private fun DirectTopBar(state: DirectChatState, onBack: () -> Unit, onMenu: () -> Unit) {
+    OrbTopBar(
+        state.title, sub = directHeaderLine(state), sideWidth = 56.dp,
+        subColor = if (state.online) OrbKit.mutedForeground else OrbKit.destructive,
+        leading = { OrbIconButton(OrbIcons.ArrowLeft, ChatTexts.BACK, onBack) },
+        actions = { if (!state.deleted) OrbIconButton(OrbIcons.MoreVertical, DirectTexts.MORE_BUTTON, onMenu) },
+    )
+}
+
+/** «Chat con Claude»: what can be done to the whole conversation, and under «Más opciones» what only the PC's chat has. */
+@Composable
+private fun ChatSheet(state: DirectChatState, onDismiss: () -> Unit, menu: MenuActions) {
+    var more by rememberSaveable { mutableStateOf(false) }
+    val on = state.online
+    OrbSheet(onDismiss = onDismiss, title = DirectTexts.sheetTitle(state.agentName)) {
+        if (!on) OrbSheetLabel(DirectTexts.NEEDS_PC_SHEET)
+        OrbSheetItem(
+            DirectTexts.FORK_HERE, menu.fork, icon = OrbIcons.GitFork, enabled = on && !state.busy, meta = if (state.busy) DirectTexts.WHY_WORKING else null,
+        )
+        OrbSheetItem(
+            DirectTexts.COMPACT, menu.compact, icon = OrbIcons.Minimize2, enabled = on && !state.busy && state.canCompact,
+            meta = when { !state.canCompact -> DirectTexts.WHY_AGENT; state.busy -> DirectTexts.WHY_WORKING; else -> state.contextPercent?.let { "$it %" } },
+        )
+        OrbSheetItem(DirectTexts.RESUME, menu.resume, icon = OrbIcons.History, enabled = on && state.stalled, meta = if (state.stalled) null else DirectTexts.WHY_NOT_STALLED)
+        OrbSheetItem(DirectTexts.SETTLE, menu.settle, icon = OrbIcons.CircleCheck, enabled = on && !state.settled, meta = if (state.settled) DirectTexts.WHY_SETTLED else null)
+        OrbSheetItem(
+            DirectTexts.STOP, menu.stop, icon = OrbIcons.Square, danger = true, enabled = on && state.busy, meta = if (state.busy) null else DirectTexts.WHY_NOT_WORKING,
+        )
+        OrbSheetDivider()
+        OrbSheetLabel(DirectTexts.ONLY_ON_PC)
+        OrbSheetItem(DirectTexts.MORE_OPTIONS, { more = !more }, chevron = true)
+        if (more) {
+            OrbSheetItem(ChatTexts.RENAME, menu.rename, icon = OrbIcons.Pencil, enabled = on)
+            OrbSheetItem(ChatTexts.ARCHIVE, menu.archive, icon = OrbIcons.Archive, enabled = on)
+            state.model?.let { OrbSheetInfo(DirectTexts.MODEL, OrbIcons.Brain, meta = it) }
+            state.permission?.let(ChatTexts::permissionName)?.takeIf { it.isNotEmpty() }?.let { OrbSheetInfo(DirectTexts.PERMISSIONS, OrbIcons.ShieldCheck, meta = it) }
         }
     }
 }
 
-/** The PC cannot be reached. What is shown was saved on the phone; what is written waits to leave. */
+/** The permission the agent works with, in the box's bottom row; where it cannot be said, the agent's name. */
 @Composable
-private fun OfflineStrip() {
-    Column(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)
-            .background(OrbTheme.colors.warnSoft, androidx.compose.foundation.shape.RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 10.dp),
+private fun PermissionLabel(state: DirectChatState) {
+    val name = state.permission?.let(ChatTexts::permissionName)?.takeIf { it.isNotEmpty() } ?: (state.agentName ?: ChatTexts.AGENT_FALLBACK)
+    val icon = when (state.permission) {
+        "leer" -> OrbIcons.Eye; "editar" -> OrbIcons.FilePen; "auto" -> OrbIcons.ShieldCheck; "total" -> OrbIcons.ShieldAlert; else -> null
+    }
+    OrbComposerLabel(name, icon = icon, description = "${DirectTexts.PERMISSION_LABEL}: $name")
+}
+
+/** `.ctxbar`: how full the agent's context is and, at its end, what can be done about it. */
+@Composable
+private fun ContextLine(state: DirectChatState, onFork: () -> Unit, onCompact: () -> Unit) {
+    val percent = state.contextPercent ?: return
+    // Copying and compacting both need the agent to be idle; while it works the action is shown but off.
+    val compact = state.busy && state.canCompact
+    OrbContextBar(
+        DirectTexts.context(percent),
+        action = if (compact) DirectTexts.CONTEXT_COMPACT else DirectTexts.CONTEXT_FORK,
+        actionIcon = if (compact) OrbIcons.Minimize2 else OrbIcons.GitFork,
+        onAction = if (compact) onCompact else onFork, enabled = state.online && !state.busy,
+    )
+}
+
+/** `.ctxbar` while a queued message is edited in the box: what is going on, «Cancelar» and «Guardar». */
+@Composable
+private fun QueueEditBar(canSave: Boolean, onSave: () -> Unit, onCancel: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Text(ChatTexts.ORBE_OFFLINE_TITLE, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(ChatTexts.ORBE_OFFLINE_BODY, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
+        Text(DirectTexts.QUEUE_EDIT_BAR, Modifier.weight(1f), color = OrbKit.mutedForeground, style = MaterialTheme.typography.labelMedium)
+        OrbButton(ChatTexts.CANCEL, onCancel, kind = OrbButtonKind.Ghost, small = true)
+        OrbButton(ChatTexts.QUEUED_SAVE, onSave, kind = OrbButtonKind.Primary, small = true, enabled = canSave)
     }
 }
 
@@ -183,24 +259,16 @@ private fun DeletedDirect(onBack: () -> Unit, onRestore: (() -> Unit)?) {
         Icon(OrbIcons.Trash, null, Modifier.size(40.dp), tint = OrbTheme.colors.text3)
         Text(ChatTexts.DELETED_TITLE, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
         Text(ChatTexts.DELETED_BODY, color = OrbTheme.colors.text2, textAlign = TextAlign.Center, style = MaterialTheme.typography.bodyMedium)
-        if (onRestore != null) androidx.compose.material3.Button(onClick = onRestore) { Text(ChatTexts.RESTORE_ASK) }
-        if (onRestore != null) androidx.compose.material3.TextButton(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
-        else androidx.compose.material3.Button(onClick = onBack) { Text(ChatTexts.BACK_TO_CHATS) }
-    }
-}
-
-/** The agent and model chip the composer shows where the permission pill sits in an Orbe chat. */
-@Composable
-private fun AgentChip(agent: String?, label: String?) {
-    Row(Modifier.height(32.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AgentAvatar(agent, 20.dp)
-        if (label != null) Text(label, color = OrbTheme.colors.text2, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (onRestore != null) OrbButton(ChatTexts.RESTORE_ASK, onRestore, kind = OrbButtonKind.Primary)
+        if (onRestore != null) OrbButton(ChatTexts.BACK_TO_CHATS, onBack, kind = OrbButtonKind.Ghost)
+        else OrbButton(ChatTexts.BACK_TO_CHATS, onBack, kind = OrbButtonKind.Primary)
     }
 }
 
 @Composable
 private fun DirectList(
     vm: DirectChatViewModel, state: DirectChatState, actions: DirectActions, nowMs: () -> Long, stick: Boolean, onStick: (Boolean) -> Unit,
+    editingId: Long?, onEditQueued: (QueuedMsg) -> Unit,
 ) {
     val listState = rememberLazyListState()
     val items = state.items
@@ -229,7 +297,7 @@ private fun DirectList(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState, modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             if (state.loadingOlder) item(key = "older", contentType = "older") {
                 Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp) }
@@ -248,12 +316,18 @@ private fun DirectList(
             if (state.busy) item(key = "live", contentType = "live") {
                 val live by vm.liveText.collectAsStateWithLifecycle()
                 AgentLiveBubble(
-                    state.agent, state.activity, state.queue.size, text = { live.text }, nowMs = nowMs,
+                    state.agent, state.agentName ?: ChatTexts.AGENT_FALLBACK, state.activity, text = { live.text },
                     modifier = Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)),
                 )
             }
             if (state.stalled) item(key = "stalled", contentType = "stalled") {
-                StalledCard(state.limited, state.online, actions.resume, Modifier.animateItem())
+                StalledCard(
+                    state.limited, state.online, actions.resume, Modifier.animateItem(),
+                    onFork = actions.fork, forkEnabled = state.online && !state.busy,
+                )
+            }
+            if (state.queue.isNotEmpty()) item(key = "queue", contentType = "queue") {
+                QueueCard(state.queue, state.online, editingId, onEditQueued, vm::removeQueued, vm::moveQueued, Modifier.animateItem())
             }
         }
         AnimatedVisibility(
@@ -263,9 +337,4 @@ private fun DirectList(
             OrbFab(ChatTexts.NEW_BELOW, OrbIcons.ArrowDown, { onStick(true); unseen = false }, Modifier.semantics { contentDescription = ChatTexts.NEW_BELOW_DESC })
         }
     }
-}
-
-@Composable
-private fun MenuRow(text: String, enabled: Boolean, run: () -> Unit, close: () -> Unit) {
-    DropdownMenuItem(text = { Text(text) }, enabled = enabled, onClick = { close(); run() })
 }

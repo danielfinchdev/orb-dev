@@ -379,29 +379,6 @@ private fun LiveActivity(info: LiveInfo, nowMs: () -> Long) {
     }
 }
 
-/** The line of a direct chat's agent at work (the direct chat has its own marks until it is redrawn). */
-@Composable
-internal fun ActivityLine(info: LiveInfo, nowMs: () -> Long) {
-    val label = info.activity ?: if (info.hasText) ChatTexts.WRITING else ChatTexts.THINKING
-    val pulse = rememberInfiniteTransition(label = "thinking")
-    val alpha by pulse.animateFloat(
-        0.45f, 1f, infiniteRepeatable(tween(900, easing = OrbMotion.EaseStd), androidx.compose.animation.core.RepeatMode.Reverse), label = "alpha",
-    )
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(OrbIcons.Loader, null, Modifier.size(14.dp).alpha(alpha), tint = MaterialTheme.colorScheme.primary)
-        AnimatedContent(
-            label, transitionSpec = { fadeIn(tween(OrbMotion.Short)) togetherWith fadeOut(tween(OrbMotion.Fast)) }, label = "activity",
-            modifier = Modifier.weight(1f, fill = false),
-        ) { Text(it, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodyMedium, maxLines = 1) }
-        val since = info.since
-        if (since != null) {
-            val now by produceState(nowMs()) { while (true) { delay(1000); value = nowMs() } }
-            Text(elapsedText(now - since), color = OrbTheme.colors.text3, style = MaterialTheme.typography.labelMedium)
-        }
-        if (info.queued > 0) Text("· " + ChatTexts.queuedTurns(info.queued), color = OrbTheme.colors.text3, style = MaterialTheme.typography.labelMedium)
-    }
-}
-
 // ---------- Cards ----------
 
 /** What the cards can ask for; wired to the view model by the screen, to a recorder in tests. */

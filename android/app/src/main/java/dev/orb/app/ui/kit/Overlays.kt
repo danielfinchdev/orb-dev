@@ -36,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -110,12 +111,14 @@ fun OrbSheetItem(
     danger: Boolean = false,
     checked: Boolean? = null,
     chevron: Boolean = false,
+    /** False draws the row dimmed and out of reach; [meta] can say why. */
+    enabled: Boolean = true,
 ) {
     val tone = if (danger) OrbKit.destructive else OrbKit.foreground
-    val click = if (checked != null) Modifier.selectable(selected = checked, role = Role.RadioButton, onClick = onClick)
-    else Modifier.clickable(role = Role.Button, onClick = onClick)
+    val click = if (checked != null) Modifier.selectable(selected = checked, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+    else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
     Row(
-        modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).then(click).padding(horizontal = 20.dp),
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).then(click).then(if (enabled) Modifier else Modifier.alpha(0.45f)).padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = if (danger) OrbKit.destructive else OrbKit.mutedForeground)
