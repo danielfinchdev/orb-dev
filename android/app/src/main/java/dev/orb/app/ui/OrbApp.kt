@@ -150,6 +150,27 @@ fun OrbApp(container: AppContainer) {
     }
 }
 
+/** The new-chat sheet and where it leads; [fixedProject] chooses a project at the start (the project's page does), null leaves the PC's own choice. */
+@Composable
+private fun NewChatHost(container: AppContainer, nav: androidx.navigation.NavHostController, key: String, fixedProject: String?, onDismiss: () -> Unit) {
+    val newChatBackend = remember { container.newChatBackend() } ?: return
+    val vm = viewModel<NewChatViewModel>(key = key, factory = viewModelFactory { initializer { NewChatViewModel(newChatBackend) } })
+    // Picked before the PC's options arrive, so they keep it instead of the active project.
+    LaunchedEffect(vm, fixedProject) { if (fixedProject != null) vm.pickProject(fixedProject) }
+    NewChatSheet(
+        vm, onDismiss = onDismiss,
+        onOutcome = { outcome ->
+            onDismiss()
+            when (outcome) {
+                is NewChatOutcome.Session -> nav.navigate(ChatRoute("session", outcome.id))
+                is NewChatOutcome.Draft -> with(outcome.draft) {
+                    nav.navigate(OrbeDraftRoute(setProject, project, brain?.agent, brain?.model, brain?.reasoning))
+                }
+            }
+        },
+    )
+}
+
 @Composable
 private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation.NavHostController) {
     var appearance by rememberSaveable { mutableStateOf(false) }
@@ -218,22 +239,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 )
             }
             if (newChatOpen && backend != null) {
-                val newChatBackend = remember { container.newChatBackend() }
-                if (newChatBackend != null) {
-                    val vm = viewModel<NewChatViewModel>(key = "newchat:$newChatSheet", factory = viewModelFactory { initializer { NewChatViewModel(newChatBackend) } })
-                    NewChatSheet(
-                        vm, onDismiss = { newChatOpen = false },
-                        onOutcome = { outcome ->
-                            newChatOpen = false
-                            when (outcome) {
-                                is NewChatOutcome.Session -> nav.navigate(ChatRoute("session", outcome.id))
-                                is NewChatOutcome.Draft -> with(outcome.draft) {
-                                    nav.navigate(OrbeDraftRoute(setProject, project, brain?.agent, brain?.model, brain?.reasoning))
-                                }
-                            }
-                        },
-                    )
-                }
+                NewChatHost(container, nav, key = "newchat:$newChatSheet", fixedProject = null, onDismiss = { newChatOpen = false })
             }
             if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
         }
@@ -309,12 +315,15 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.projectsBackend() }
             if (backend != null) {
                 val vm = viewModel<ProjectDetailViewModel>(key = "project:${route.name}", factory = viewModelFactory { initializer { ProjectDetailViewModel(backend, route.name) } })
+                var newChat by rememberSaveable { mutableStateOf(false) }
                 ProjectDetailScreen(
                     vm, onBack = { nav.popBackStack() },
                     onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) }, onOpenTask = { nav.navigate(TaskRoute(it)) },
                     onOpenPrs = { nav.navigate(PrListRoute(it)) },
                     onOpenWhiteboard = { nav.navigate(WhiteboardRoute(it)) },
+                    onNewChat = { newChat = true }, onOpenChanges = { nav.navigate(TaskChangesRoute(it)) },
                 )
+                if (newChat) NewChatHost(container, nav, key = "newchat:project:${route.name}", fixedProject = route.name, onDismiss = { newChat = false })
             }
         }
         composable<PrListRoute> { entry ->

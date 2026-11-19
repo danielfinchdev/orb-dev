@@ -53,11 +53,95 @@ class ProjectDetailViewModelTest {
         assertEquals(12L, ProjectInfoParser.taskId(Json.parseToJsonElement("""{"id":12,"title":"x"}""")))
     }
 
-    @Test fun branchLineSummarisesChangesAndPending() {
-        assertEquals("dev · 2 cambios · 1 por subir", ProjectTexts.branchValue(ProjectGit("dev", 2, 1, null)))
-        assertEquals("main · 1 cambio", ProjectTexts.branchValue(ProjectGit("main", 1, 0, null)))
-        assertEquals("main", ProjectTexts.branchValue(ProjectGit("main", null, null, null)))
-        assertEquals("Sin git", ProjectTexts.branchValue(null))
+    @Test fun theRowAndTheSheetNameEachThingTruthfully() {
+        assertEquals("dev · 2", ProjectTexts.branchMeta(ProjectGit("dev", 2, 1, null)))
+        assertEquals("main", ProjectTexts.branchMeta(ProjectGit("main", 0, null, null)))
+        assertEquals("HEAD suelto · 1", ProjectTexts.branchMeta(ProjectGit(null, 1, null, null)))
+        assertNull(ProjectTexts.branchMeta(null))
+        assertEquals("1 archivo sin confirmar", ProjectTexts.uncommitted(1))
+        assertEquals("3 archivos sin confirmar", ProjectTexts.uncommitted(3))
+        assertEquals("Ninguna tarea con cambios sin aceptar", ProjectTexts.unaccepted(0))
+        assertEquals("1 tarea con cambios sin aceptar", ProjectTexts.unaccepted(1))
+        assertEquals("2 tareas con cambios sin aceptar", ProjectTexts.unaccepted(2))
+        assertEquals("android · rama dev", ProjectTexts.barLine("android", ProjectGit("dev", null, null, null)))
+        assertNull(ProjectTexts.barLine(null, null))
+    }
+
+    @Test fun onlyFinishedWorkNotAcceptedNorUndoneCountsAsTaskChanges() = runTest(dispatcher) {
+        val b = FakeProjectsBackend()
+        b.detailResult = Result.success(
+            ProjectDetailData(
+                emptyList(),
+                listOf(
+                    task(1, status = "done"), task(2, status = "done", accepted = true), task(3, status = "done", undone = true),
+                    task(4, status = "running"), task(5, status = "done").copy(readonly = true), task(6, status = "done"),
+                    task(7, status = "awaiting_approval"), task(8, status = "queued"), task(9, status = "failed"),
+                ),
+                ProjectGit("dev", 2, null, null),
+            ),
+        )
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertEquals(listOf(1L, 6L), vm.state.value.unaccepted.map { it.id })
+        // running, waiting for the OK and queued
+        assertEquals(3, vm.state.value.openTasks)
+    }
+
+    @Test fun aFinishedProjectCarriesItsKeyAndReopensThroughThePc() = runTest(dispatcher) {
+        val b = backend()
+        b.detailResult = Result.success(ProjectDetailData(emptyList(), emptyList(), null, "web", "k1", "2026-10-01"))
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.archived)
+        vm.reopen()
+        advanceUntilIdle()
+        assertEquals(listOf("reopen k1"), b.calls)
+    }
+
+    @Test fun anActiveProjectCannotBeReopened() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertFalse(vm.state.value.archived)
+        vm.reopen()
+        advanceUntilIdle()
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun newTaskFixesTheProjectAndCreatesThroughThePc() = runTest(dispatcher) {
+        val b = backend()
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openNewTask()
+        runCurrent()
+        assertEquals(listOf("app-movil"), vm.state.value.newTask?.projects)
+        assertFalse(vm.state.value.newTask!!.loading)
+        vm.createTask("app-movil", " Ajustar ", " el pie ")
+        advanceUntilIdle()
+        assertEquals(listOf("task app-movil|Ajustar|el pie"), b.calls)
+        assertNull(vm.state.value.newTask)
+    }
+
+    @Test fun aFailedNewTaskKeepsTheDialogWithTheError() = runTest(dispatcher) {
+        val b = backend()
+        b.actionResult = Result.failure(LinkException(LinkError.Timeout))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openNewTask()
+        vm.createTask("app-movil", "t", "d")
+        advanceUntilIdle()
+        assertTrue(vm.state.value.newTask?.error != null)
+        assertFalse(vm.state.value.newTask!!.saving)
+    }
+
+    @Test fun newTaskIsHiddenAndRefusedWhenThePcCannotCreate() = runTest(dispatcher) {
+        val b = backend()
+        b.unavailable = setOf(ApiMethods.TASKS_CREATE.name)
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertFalse(vm.state.value.canNewTask)
+        vm.openNewTask()
+        assertNull(vm.state.value.newTask)
     }
 
     @Test fun loadsChatsTasksAndBranch() = runTest(dispatcher) {

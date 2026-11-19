@@ -249,4 +249,12 @@ object OrbIcons {
             "eye", "M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0", circle(12f, 12f, 3f),
         )
     }
+    val NotebookText by lazy {
+        lucide(
+            "notebook-text", "M2 6h4", "M2 10h4", "M2 14h4", "M2 18h4", "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z",
+            "M9.5 8h5", "M9.5 12H16", "M9.5 16H14",
+        )
+    }
+    val Presentation by lazy { lucide("presentation", "M2 3h20", "M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3", "m7 21 5-5 5 5") }
+    val GitPullRequest by lazy { lucide("git-pull-request", circle(18f, 18f, 3f), circle(6f, 6f, 3f), "M13 6h3a2 2 0 0 1 2 2v7", "M6 9v12") }
 }

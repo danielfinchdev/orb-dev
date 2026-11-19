@@ -1,29 +1,21 @@
 package dev.orb.app.ui.projects
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.selection.selectable
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.RadioButton
-import dev.orb.app.ui.kit.OrbSnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -35,30 +27,45 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.link.api.ConfirmAction
 import dev.orb.app.link.api.Confirmed
 import dev.orb.app.link.api.UserConfirmation
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
-import dev.orb.app.ui.tasks.LabelValue
-import dev.orb.app.ui.tasks.SectionLabel
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbNote
+import dev.orb.app.ui.kit.OrbRow
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSpinner
+import dev.orb.app.ui.kit.OrbSubtitle
+import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.offline.NeedsPcNote
-import dev.orb.app.ui.theme.OrbTheme
 
+/** The header of the pull request screens: the back arrow and one line of title. */
 @Composable
 private fun PrBar(title: String, onBack: () -> Unit) {
-    Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(OrbIcons.ArrowLeft, ProjectTexts.BACK, tint = OrbTheme.colors.text2) }
-        Text(
-            title, Modifier.weight(1f).semantics { heading() },
-            style = MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis,
-        )
+    OrbTopBar(title = title, leading = { OrbIconButton(OrbIcons.ArrowLeft, ProjectTexts.BACK, onBack) })
+}
+
+@Composable
+private fun Label(text: String) {
+    Text(text, Modifier.padding(top = 16.dp, bottom = 4.dp), color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
+}
+
+@Composable
+private fun Fact(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Text(label, Modifier.weight(0.4f), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp)
+        Text(value, Modifier.weight(0.6f), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
     }
 }
 
@@ -68,21 +75,16 @@ fun PrListScreen(vm: PrListViewModel, onBack: () -> Unit, onOpenPr: (Int) -> Uni
     Column(modifier.fillMaxSize()) {
         PrBar("${ProjectTexts.PRS_TITLE} · ${vm.name}", onBack)
         when {
-            state.loading && state.prs.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            state.error != null && state.prs.isEmpty() -> Message(ProjectTexts.PRS_ERROR, state.error, ProjectTexts.RETRY, vm::refresh)
-            state.prs.isEmpty() -> Message(ProjectTexts.PRS_EMPTY)
+            state.loading && state.prs.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
+            state.error != null && state.prs.isEmpty() -> Message(ProjectTexts.PRS_ERROR, state.error, ProjectTexts.RETRY, vm::refresh, icon = OrbIcons.CircleAlert)
+            state.prs.isEmpty() -> Message(ProjectTexts.PRS_EMPTY, icon = OrbIcons.GitPullRequest)
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 items(state.prs, key = { it.number }) { pr ->
-                    Column(
-                        Modifier.fillMaxWidth().clickable { onOpenPr(pr.number) }.padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                    ) {
-                        Text("#${pr.number} ${pr.title}", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            listOfNotNull(pr.head, ProjectTexts.PR_DRAFT.takeIf { pr.draft }, pr.author).joinToString(" · "),
-                            style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        )
-                    }
+                    OrbRow(
+                        "#${pr.number} ${pr.title}", onClick = { onOpenPr(pr.number) },
+                        lead = { Icon(OrbIcons.GitPullRequest, null, Modifier.size(16.dp), tint = OrbKit.mutedForeground) },
+                        subtitle = { OrbSubtitle(listOfNotNull(pr.head, ProjectTexts.PR_DRAFT.takeIf { pr.draft }, pr.author).joinToString(" · ")) },
+                    )
                 }
             }
         }
@@ -100,37 +102,35 @@ fun PrDetailScreen(vm: PrDetailViewModel, onBack: () -> Unit, modifier: Modifier
         Column(Modifier.fillMaxSize()) {
             PrBar(pr?.let { "#${it.number} ${it.title}" } ?: "#${vm.number}", onBack)
             when {
-                pr == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                pr == null -> Message(ProjectTexts.PR_ERROR, state.error, ProjectTexts.RETRY, vm::refresh)
+                pr == null && state.loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
+                pr == null -> Message(ProjectTexts.PR_ERROR, state.error, ProjectTexts.RETRY, vm::refresh, icon = OrbIcons.CircleAlert)
                 else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp).padding(bottom = 24.dp)) {
-                    state.error?.let { Text(it, Modifier.padding(bottom = 8.dp), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
-                    LabelValue(ProjectTexts.PR_STATE, ProjectTexts.prState(pr))
-                    LabelValue(ProjectTexts.PR_BRANCH, listOfNotNull(pr.head, pr.base).joinToString(" → "))
-                    pr.author?.takeIf { it.isNotBlank() }?.let { LabelValue(ProjectTexts.PR_AUTHOR, it) }
-                    LabelValue(ProjectTexts.PR_CHANGES, ProjectTexts.changes(pr))
-                    ProjectTexts.reviewDecision(pr.reviewDecision)?.let { LabelValue(ProjectTexts.PR_REVIEW, it) }
-                    if (pr.open) ProjectTexts.mergeable(pr.mergeable)?.let { LabelValue(ProjectTexts.PR_MERGE_STATE, it) }
-                    SectionLabel(ProjectTexts.PR_CHECKS)
-                    Text(ProjectTexts.checksSummary(pr.checks), style = MaterialTheme.typography.bodyMedium)
+                    state.error?.let { Text(it, Modifier.padding(bottom = 8.dp), color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp) }
+                    Fact(ProjectTexts.PR_STATE, ProjectTexts.prState(pr))
+                    Fact(ProjectTexts.PR_BRANCH, listOfNotNull(pr.head, pr.base).joinToString(" → "))
+                    pr.author?.takeIf { it.isNotBlank() }?.let { Fact(ProjectTexts.PR_AUTHOR, it) }
+                    Fact(ProjectTexts.PR_CHANGES, ProjectTexts.changes(pr))
+                    ProjectTexts.reviewDecision(pr.reviewDecision)?.let { Fact(ProjectTexts.PR_REVIEW, it) }
+                    if (pr.open) ProjectTexts.mergeable(pr.mergeable)?.let { Fact(ProjectTexts.PR_MERGE_STATE, it) }
+                    Label(ProjectTexts.PR_CHECKS)
+                    Text(ProjectTexts.checksSummary(pr.checks), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
                     pr.checks.forEach { c ->
                         Text(
                             "${if (c.passed) "✓" else if (c.failed) "✗" else "…"} ${c.name}", Modifier.padding(top = 2.dp),
-                            style = MaterialTheme.typography.bodySmall, color = if (c.failed) MaterialTheme.colorScheme.error else OrbTheme.colors.text2,
+                            color = if (c.failed) OrbKit.destructive else OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp,
                         )
                     }
                     if (pr.body.isNotBlank()) {
-                        SectionLabel(ProjectTexts.PR_DESCRIPTION)
-                        Text(pr.body, style = MaterialTheme.typography.bodyMedium)
+                        Label(ProjectTexts.PR_DESCRIPTION)
+                        Text(pr.body, color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
                     }
                     if (state.needsPcUpdate) {
-                        Text(ProjectTexts.PR_MERGE_UPDATE_PC, Modifier.padding(top = 16.dp), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+                        OrbNote(ProjectTexts.PR_MERGE_UPDATE_PC, Modifier.padding(top = 16.dp))
                     }
                     // Only an open pull request the PC can merge offers the button; a merged or closed one never does.
                     if (state.canMerge) {
                         if (!state.online) NeedsPcNote(Modifier.padding(top = 12.dp))
-                        Button(onClick = { confirming = true }, enabled = state.online && !state.merging, modifier = Modifier.padding(top = 20.dp)) {
-                            Text(ProjectTexts.PR_MERGE)
-                        }
+                        OrbButton(ProjectTexts.PR_MERGE, { confirming = true }, Modifier.padding(top = 20.dp), kind = OrbButtonKind.Primary, enabled = state.online && !state.merging)
                     }
                 }
             }
@@ -154,27 +154,25 @@ fun PrDetailScreen(vm: PrDetailViewModel, onBack: () -> Unit, modifier: Modifier
 @Composable
 private fun MergeDialog(pr: PrDetail, project: String, busy: Boolean, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
     var method by rememberSaveable { mutableStateOf(MergeMethods.first()) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(ProjectTexts.PR_MERGE_ASK) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("$project · #${pr.number} ${pr.title}", fontWeight = FontWeight.SemiBold)
-                Text(listOfNotNull(pr.head, pr.base).joinToString(" → "), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
-                Text(ProjectTexts.PR_MERGE_METHOD, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.labelMedium, color = OrbTheme.colors.text2)
-                for (m in MergeMethods) {
-                    Row(
-                        Modifier.fillMaxWidth().selectable(selected = method == m, onClick = { method = m }, role = Role.RadioButton),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = method == m, onClick = null)
-                        Text(ProjectTexts.mergeMethod(m), Modifier.padding(start = 8.dp))
-                    }
+    OrbDialog(
+        onDismiss = onDismiss, title = ProjectTexts.PR_MERGE_ASK,
+        confirm = OrbDialogAction(ProjectTexts.PR_MERGE, { onConfirm(method) }, enabled = !busy),
+        dismiss = OrbDialogAction(ProjectTexts.CANCEL, onDismiss),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("$project · #${pr.number} ${pr.title}", color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold)
+            Text(listOfNotNull(pr.head, pr.base).joinToString(" → "), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp)
+            Text(ProjectTexts.PR_MERGE_METHOD, Modifier.padding(top = 4.dp), color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
+            for (m in MergeMethods) {
+                Row(
+                    Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).selectable(selected = method == m, onClick = { method = m }, role = Role.RadioButton),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Icon(if (method == m) OrbIcons.CircleCheck else OrbIcons.Circle, null, Modifier.size(20.dp), tint = if (method == m) OrbKit.foreground else OrbKit.mutedForeground)
+                    Text(ProjectTexts.mergeMethod(m), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
                 }
-                Text(ProjectTexts.PR_MERGE_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
             }
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(method) }, enabled = !busy) { Text(ProjectTexts.PR_MERGE) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(ProjectTexts.CANCEL) } },
-    )
+            OrbNote(ProjectTexts.PR_MERGE_NOTE)
+        }
+    }
 }
