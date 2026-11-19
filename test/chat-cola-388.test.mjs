@@ -256,3 +256,16 @@ test('the activity log writes the edit with the phone mark', () => {
   assert.match(rows.at(-2).text, /^\[movil\] edited a queued message: nuevo texto$/);
   assert.equal(rows.at(-1).text, 'removed a queued message');
 });
+
+test('editQueued with expect: equal goes through, different is refused untouched, absent is as before', async () => {
+  const { o, call } = setup();
+  const conversation = start(o);
+  o.ask('segundo', '', { conversation });
+  const [a] = await call('chat.queue', { conversation });
+  await assert.rejects(call('chat.editQueued', { conversation, queueId: a.id, text: 'nuevo', expect: 'otro' }), /ha cambiado/);
+  await assert.rejects(call('chat.editQueued', { conversation, queueId: a.id, remove: true, expect: 'otro' }), /ha cambiado/);
+  assert.deepEqual((await call('chat.queue', { conversation })).map((q) => q.text), ['segundo']);
+  await call('chat.editQueued', { conversation, queueId: a.id, text: 'nuevo', expect: 'segundo' });
+  assert.deepEqual((await call('chat.queue', { conversation })).map((q) => q.text), ['nuevo']);
+  assert.deepEqual(await call('chat.editQueued', { conversation, queueId: a.id, remove: true }), []);
+});

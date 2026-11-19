@@ -51,10 +51,15 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     // The messages written while the assistant works, waiting for their turn: → [{ id, text, at }] (id: a text; at: ms).
     // Only a message that has not started can be changed: text edits it, remove drops it (→ the queue left).
     'chat.queue': ({ conversation }) => orchestrator.queueOf(conversationId(conversation)),
-    'chat.editQueued': ({ conversation, queueId, text, remove }) => {
+    'chat.editQueued': ({ conversation, queueId, text, remove, expect }) => {
       const id = conversationId(conversation);
       trash.assertNotTrashed(id);
       const qid = str(queueId, 'mensaje', 64);
+      // expect (optional): the text the phone showed; if the queued message changed meanwhile nothing is edited or removed.
+      if (expect != null) {
+        const now = orchestrator.queueOf(id).find((m) => String(m.id) === qid);
+        if (now && now.text !== expect) fail('el mensaje en cola ha cambiado desde que lo viste; ábrelo de nuevo');
+      }
       if (remove) return orchestrator.editQueued(id, qid, { remove: true });
       const t = str(text, 'mensaje', 20000);
       return orchestrator.editQueued(id, qid, { text: t, mentions: expandMentions(board, sessions, t) });
