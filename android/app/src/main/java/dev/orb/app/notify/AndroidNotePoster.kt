@@ -42,6 +42,8 @@ object NotifyChannels {
 class AndroidNotePoster(
     private val context: Context,
     private val jobs: NoteJobs,
+    // What the person chose for the lock screen; «nothing» also applies to the result notices.
+    private val lockScreen: () -> LockScreenNotice = { LockScreenNotice.Generic },
     // True while the Orb lock is on: the result notice then carries no chat title.
     private val hideTitles: () -> Boolean = { false },
 ) : NotePoster {
@@ -73,11 +75,14 @@ class AndroidNotePoster(
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(openApp(plan.id, 0, plan.tap))
         if (plan.silent) b.setSilent(true)
-        if (plan.lockScreenPublic) {
-            b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        } else {
-            b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            b.setPublicVersion(base(plan.channel, plan.publicTitle, plan.publicText).build())
+        when (plan.lockScreen) {
+            LockScreenNotice.Full -> b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            LockScreenNotice.Generic -> {
+                b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                b.setPublicVersion(base(plan.channel, plan.publicTitle, plan.publicText).build())
+            }
+            // SECRET: nothing at all while locked; no public version is given, so there is nothing to show instead.
+            LockScreenNotice.Hidden -> b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
         }
         plan.actions.forEachIndexed { i, a ->
             val slot = i + 1
@@ -104,6 +109,7 @@ class AndroidNotePoster(
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSilent(true)
             .setContentIntent(openApp(job.group, 0, tap))
+        if (lockScreen() == LockScreenNotice.Hidden) b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
         if (goneAfterMs != null) b.setTimeoutAfter(goneAfterMs)
         notify(job.group, b)
     }

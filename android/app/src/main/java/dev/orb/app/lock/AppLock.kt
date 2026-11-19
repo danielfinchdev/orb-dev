@@ -6,24 +6,33 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** How long the app may stay in the background before it asks again. */
+/** How long the app may stay in the background before it asks again; [Immediate] is «Al salir». */
 enum class LockDelay(val key: String, val ms: Long) {
-    Immediate("now", 0), OneMinute("1m", 60_000), FiveMinutes("5m", 5 * 60_000L);
+    Immediate("now", 0), FiveMinutes("5m", 5 * 60_000L), FifteenMinutes("15m", 15 * 60_000L);
 
     companion object {
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: OneMinute
+        /** The one-minute choice was dropped: whoever had it moves to the nearest one offered, five minutes. */
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: FiveMinutes
     }
 }
 
 /** [autoOff]: the lock turned itself off because the phone lost its PIN and fingerprint; «Este móvil» says so. */
-data class LockSettings(val enabled: Boolean = false, val delay: LockDelay = LockDelay.OneMinute, val autoOff: Boolean = false)
+data class LockSettings(val enabled: Boolean = false, val delay: LockDelay = LockDelay.FiveMinutes, val autoOff: Boolean = false)
 
 /**
  * The only thing kept about the lock: whether it is on and the delay. No secret lives here; the real protection is
  * the system's own authentication (fingerprint, face or the phone's PIN), asked every time the app opens.
  */
 class LockPrefs(private val store: KeyValueStore) {
-    private val _settings = MutableStateFlow(LockSettings(store.getBoolean(ENABLED, false), LockDelay.fromKey(store.getString(DELAY)), store.getBoolean(AUTO_OFF, false)))
+    private val _settings: MutableStateFlow<LockSettings>
+
+    init {
+        val delay = LockDelay.fromKey(store.getString(DELAY))
+        // Saved in its new form so the old key is gone for good.
+        if (store.getString(DELAY) == "1m") store.edit { putString(DELAY, delay.key) }
+        _settings = MutableStateFlow(LockSettings(store.getBoolean(ENABLED, false), delay, store.getBoolean(AUTO_OFF, false)))
+    }
+
     val settings: StateFlow<LockSettings> = _settings.asStateFlow()
 
     /** A deliberate choice of the person: it also clears the note about an automatic switch-off. */
@@ -192,7 +201,7 @@ object LockTexts {
     const val ENABLE_SUBTITLE = "Confirma que eres tú para activarlo"
 
     const val LOCKED_TITLE = "Orb está bloqueado"
-    const val LOCKED_NOTE = "Bloqueo opcional. Lo activaste en Este móvil › Seguridad y puedes quitarlo cuando quieras."
+    const val LOCKED_NOTE = "Bloqueo opcional. Lo activaste en Menú › Este móvil › Seguridad y puedes quitarlo cuando quieras."
     const val UNLOCK = "Desbloquear"
     const val UNLOCK_HINT = "Usa tu huella para ver tus chats y tareas"
     const val USE_PIN = "Usar PIN del móvil"

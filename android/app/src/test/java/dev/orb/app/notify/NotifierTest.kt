@@ -85,17 +85,22 @@ class NotePlannerTest {
 
     @Test fun lockScreenContentIsPrivateUnlessAskedOtherwise() {
         val p = plan(MESSAGE)
-        assertFalse(p.lockScreenPublic)
+        assertEquals(LockScreenNotice.Generic, p.lockScreen)
         assertEquals("Tienes un mensaje nuevo", p.publicText)
         assertEquals("Orb necesita tu respuesta", plan(APPROVAL).publicText)
-        assertTrue(plan(MESSAGE, NotifySettings(lockScreenPublic = true)).lockScreenPublic)
+        assertEquals(LockScreenNotice.Full, plan(MESSAGE, NotifySettings(lockScreen = LockScreenNotice.Full)).lockScreen)
+        assertEquals(LockScreenNotice.Hidden, plan(MESSAGE, NotifySettings(lockScreen = LockScreenNotice.Hidden)).lockScreen)
+    }
+
+    @Test fun nothingOnTheLockScreenStaysNothingEvenWithTheAppLockOn() {
+        assertEquals(LockScreenNotice.Hidden, plan(APPROVAL, NotifySettings(lockScreen = LockScreenNotice.Hidden, appLock = true)).lockScreen)
     }
 
     @Test fun withTheAppLockOnNoticesCarryNoContentNorButtons() {
-        val p = plan(APPROVAL, NotifySettings(lockScreenPublic = true, appLock = true))
+        val p = plan(APPROVAL, NotifySettings(lockScreen = LockScreenNotice.Full, appLock = true))
         assertEquals("Orb", p.title)
         assertEquals("Orb necesita tu respuesta", p.text)
-        assertFalse(p.lockScreenPublic)
+        assertEquals(LockScreenNotice.Generic, p.lockScreen)
         assertTrue(p.actions.isEmpty())
         assertFalse(p.tap.acts)
         assertEquals("Orb", p.tap.title)

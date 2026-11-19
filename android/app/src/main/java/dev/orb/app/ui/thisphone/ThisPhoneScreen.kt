@@ -1,20 +1,21 @@
 package dev.orb.app.ui.thisphone
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Switch
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,98 +24,231 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.lock.LockDelay
+import dev.orb.app.notify.LockScreenNotice
+import dev.orb.app.notify.NoteChannel
+import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBadge
+import dev.orb.app.ui.kit.OrbBadgeKind
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbCard
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbNote
+import dev.orb.app.ui.kit.OrbSettingRow
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.OrbSwitch
+import dev.orb.app.ui.settings.AppearanceCard
 import dev.orb.app.ui.shell.ScreenBar
-import dev.orb.app.ui.shell.UnlinkDialog
-import dev.orb.app.ui.theme.OrbTheme
+import dev.orb.app.ui.theme.ThemePrefs
 
-/** The «Este móvil» screen: the link, the notices, the lock screen, the look and the way to unlink. */
+/**
+ * The «Este móvil» screen, as the mockup draws it: the link (PC, fingerprint, route), the notices, the look, the security
+ * and the way to unlink. What the mockup does not draw but the phone keeps (the connection test) is under «Más opciones».
+ */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ThisPhoneScreen(vm: ThisPhoneViewModel, onBack: () -> Unit, onAppearance: () -> Unit, onUnlinked: () -> Unit, modifier: Modifier = Modifier) {
+fun ThisPhoneScreen(
+    vm: ThisPhoneViewModel, theme: ThemePrefs, onBack: () -> Unit, onLinkTest: () -> Unit, onUnlinked: () -> Unit, modifier: Modifier = Modifier,
+) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val look by theme.settings.collectAsStateWithLifecycle()
     var confirming by rememberSaveable { mutableStateOf(false) }
+    var lockScreenSheet by rememberSaveable { mutableStateOf(false) }
+    var channelsSheet by rememberSaveable { mutableStateOf(false) }
+    var lockSheet by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(state.unlinked) { if (state.unlinked) onUnlinked() }
     LaunchedEffect(Unit) { vm.refreshLock() }
+    // One measurement each time the PC becomes reachable (the screen opening included), never a loop.
+    LaunchedEffect(state.online) { if (state.online) vm.measure() }
 
     Column(modifier.fillMaxSize()) {
-        ScreenBar(ThisPhoneTexts.TITLE, onBack, ThisPhoneTexts.BACK)
-        Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Section(ThisPhoneTexts.SECTION_LINK)
-            Info(state.pcName?.takeIf { it.isNotBlank() } ?: ThisPhoneTexts.NO_NAME, ThisPhoneTexts.link(state.connection))
+        ScreenBar(ThisPhoneTexts.TITLE, onBack, ThisPhoneTexts.BACK, sub = ThisPhoneTexts.headerSub(state.pcName, state.connection))
+        PullToRefreshBox(isRefreshing = state.measuring, onRefresh = vm::measure, modifier = Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                Group(ThisPhoneTexts.SECTION_LINK)
+                LinkCard(state)
 
-            Section(ThisPhoneTexts.SECTION_NOTICES)
-            SwitchRow(ThisPhoneTexts.KEEP, ThisPhoneTexts.KEEP_HINT, state.keepConnected, vm::setKeepConnected)
-            Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(ThisPhoneTexts.NOTICES, style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        if (state.notificationsEnabled) ThisPhoneTexts.NOTICES_ON else ThisPhoneTexts.NOTICES_OFF,
-                        style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2,
-                    )
-                }
-                if (!state.notificationsEnabled) TextButton(onClick = vm::requestNotifications) { Text(ThisPhoneTexts.ALLOW) }
-            }
-            SwitchRow(ThisPhoneTexts.LOCK_CONTENT, ThisPhoneTexts.LOCK_CONTENT_HINT, state.lockScreenPublic, vm::setLockScreenPublic)
-
-            Section(ThisPhoneTexts.SECTION_SECURITY)
-            // Turning it off stays possible whatever Android now has; only turning it on needs something to authenticate with.
-            SwitchRow(
-                ThisPhoneTexts.FINGERPRINT,
-                if (state.lockAvailable || state.appLock) ThisPhoneTexts.FINGERPRINT_HINT else ThisPhoneTexts.FINGERPRINT_UNAVAILABLE,
-                checked = state.appLock, onChange = vm::setAppLock, enabled = state.lockAvailable || state.appLock,
-            )
-            state.lockMessage?.let {
-                Text(it, Modifier.padding(horizontal = 24.dp), style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn)
-            }
-            if (state.appLock) {
-                Text(ThisPhoneTexts.LOCK_DELAY, Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp), style = MaterialTheme.typography.bodyMedium)
-                Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LockDelay.entries.forEach { d ->
-                        FilterChip(selected = state.lockDelay == d, onClick = { vm.setLockDelay(d) }, label = { Text(ThisPhoneTexts.delay(d)) })
+                Group(ThisPhoneTexts.SECTION_NOTICES)
+                Padded {
+                    OrbCard {
+                        SwitchRow(ThisPhoneTexts.NOTICES, ThisPhoneTexts.NOTICES_HINT, state.notificationsEnabled, { vm.toggleNotifications() }, divider = false)
+                        // Without the permission nothing can arrive: say it and keep the way to ask for it.
+                        if (!state.notificationsEnabled) {
+                            OrbSettingRow(
+                                ThisPhoneTexts.NOTICES_OFF, subtitle = ThisPhoneTexts.NOTICES_OFF_HINT,
+                                trailing = { OrbButton(ThisPhoneTexts.ALLOW, vm::requestNotifications, small = true) },
+                            )
+                        }
+                        SwitchRow(ThisPhoneTexts.KEEP, ThisPhoneTexts.KEEP_HINT, state.keepConnected, vm::setKeepConnected)
+                        OrbSettingRow(
+                            ThisPhoneTexts.LOCK_SCREEN, onClick = { lockScreenSheet = true },
+                            subtitle = if (state.appLock) ThisPhoneTexts.LOCK_SCREEN_WITH_LOCK else ThisPhoneTexts.lockScreenChoice(state.lockScreen),
+                            trailing = { Chevron() },
+                        )
+                        OrbSettingRow(
+                            ThisPhoneTexts.CHANNELS, subtitle = ThisPhoneTexts.CHANNELS_HINT, onClick = { channelsSheet = true },
+                            trailing = { Chevron() },
+                        )
                     }
                 }
-            }
+                // What the service shows and does not use: said once, quietly, under the card.
+                OrbNote(ThisPhoneTexts.KEEP_NOTE, Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
 
-            Section(ThisPhoneTexts.SECTION_LOOK)
-            Text(
-                ThisPhoneTexts.APPEARANCE,
-                Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onAppearance).padding(horizontal = 24.dp, vertical = 16.dp),
-                style = MaterialTheme.typography.bodyLarge,
-            )
+                Group(ThisPhoneTexts.SECTION_LOOK)
+                Padded { AppearanceCard(look, theme::setPalette, theme::setDark) }
 
-            TextButton(onClick = { confirming = true }, enabled = !state.unlinking, modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp)) {
-                Text(ThisPhoneTexts.UNLINK, color = MaterialTheme.colorScheme.error)
+                Group(ThisPhoneTexts.SECTION_SECURITY)
+                Padded {
+                    OrbCard {
+                        // Turning it off stays possible whatever Android now has; only turning it on needs something to authenticate with.
+                        val usable = state.lockAvailable || state.appLock
+                        OrbSettingRow(
+                            ThisPhoneTexts.APP_LOCK, divider = false, onClick = if (usable) ({ lockSheet = true }) else null,
+                            subtitle = if (usable) ThisPhoneTexts.lockChoice(if (state.appLock) state.lockDelay else null) else ThisPhoneTexts.FINGERPRINT_UNAVAILABLE,
+                            trailing = { OrbSwitch(state.appLock, vm::setAppLock, label = ThisPhoneTexts.APP_LOCK, enabled = usable) },
+                        )
+                    }
+                }
+                state.lockMessage?.let {
+                    Text(it, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), color = OrbKit.warningInk, fontSize = 13.sp, lineHeight = 18.sp)
+                }
+
+                Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OrbButton(
+                        ThisPhoneTexts.UNLINK, { confirming = true }, Modifier.fillMaxWidth(), kind = OrbButtonKind.Danger, block = true,
+                        enabled = !state.unlinking, icon = OrbIcons.Unlink,
+                    )
+                    OrbNote(ThisPhoneTexts.UNLINK_NOTE)
+                }
+
+                // What the mockup does not draw but the phone keeps.
+                Group(ThisPhoneTexts.MORE_OPTIONS)
+                Padded {
+                    OrbCard {
+                        OrbSettingRow(
+                            ThisPhoneTexts.LINK_TEST, subtitle = ThisPhoneTexts.LINK_TEST_HINT, divider = false, onClick = onLinkTest,
+                            trailing = { Chevron() },
+                        )
+                    }
+                }
+                Box(Modifier.size(24.dp))
             }
         }
     }
-    if (confirming) UnlinkDialog(onConfirm = { confirming = false; vm.unlink() }, onDismiss = { confirming = false })
-}
 
-@Composable
-private fun Section(title: String) =
-    Text(title, Modifier.padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 4.dp), style = MaterialTheme.typography.labelLarge, color = OrbTheme.colors.text3)
-
-@Composable
-private fun Info(title: String, detail: String) {
-    Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(title, style = MaterialTheme.typography.bodyLarge)
-        Text(detail, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+    if (lockScreenSheet) {
+        OrbSheet({ lockScreenSheet = false }, title = ThisPhoneTexts.LOCK_SCREEN) {
+            for (mode in LockScreenNotice.entries) {
+                Choice(ThisPhoneTexts.lockScreenChoice(mode), state.lockScreen == mode) { vm.setLockScreen(mode); lockScreenSheet = false }
+            }
+        }
+    }
+    if (channelsSheet) {
+        OrbSheet({ channelsSheet = false }, title = ThisPhoneTexts.CHANNELS) {
+            for (c in NoteChannel.entries) {
+                OrbSheetItem(ThisPhoneTexts.channel(c), { vm.openChannelSettings(c); channelsSheet = false }, icon = OrbIcons.Bell, chevron = true)
+            }
+            OrbNote(ThisPhoneTexts.CHANNELS_NOTE, Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+        }
+    }
+    if (lockSheet) {
+        OrbSheet({ lockSheet = false }, title = ThisPhoneTexts.APP_LOCK) {
+            val options: List<LockDelay?> = listOf(null, LockDelay.Immediate, LockDelay.FiveMinutes, LockDelay.FifteenMinutes)
+            for (o in options) {
+                Choice(ThisPhoneTexts.lockChoice(o), (if (state.appLock) state.lockDelay else null) == o) { vm.chooseLock(o); lockSheet = false }
+            }
+        }
+    }
+    if (confirming) {
+        OrbDialog(
+            { confirming = false }, ThisPhoneTexts.UNLINK_TITLE, OrbDialogAction(ThisPhoneTexts.UNLINK_CONFIRM, { confirming = false; vm.unlink() }, danger = true),
+            text = ThisPhoneTexts.unlinkBody(state.pcName), dismiss = OrbDialogAction(ThisPhoneTexts.CANCEL, { confirming = false }),
+        )
     }
 }
 
+/** `.mgrp b`: the heading of a group of cards. */
 @Composable
-private fun SwitchRow(title: String, hint: String, checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean = true) {
-    Row(
-        Modifier.fillMaxWidth().toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onChange).padding(horizontal = 24.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f).padding(end = 12.dp)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = if (enabled) androidx.compose.ui.graphics.Color.Unspecified else OrbTheme.colors.text3)
-            Text(hint, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
+private fun Group(title: String) {
+    Text(
+        title, Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp).semantics { heading() },
+        color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium,
+    )
+}
+
+/** `.pad`: the 16 dp the cards keep from the edges. */
+@Composable
+private fun Padded(content: @Composable () -> Unit) {
+    Box(Modifier.padding(horizontal = 16.dp)) { content() }
+}
+
+@Composable
+private fun Chevron() {
+    Icon(OrbIcons.ChevronRight, null, Modifier.size(20.dp), tint = OrbKit.faintForeground)
+}
+
+/** A row whose whole body is the switch, announced as one. */
+@Composable
+private fun SwitchRow(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit, divider: Boolean = true) {
+    OrbSettingRow(
+        title, Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onChange), subtitle = subtitle, divider = divider,
+        trailing = { OrbSwitch(checked, null) },
+    )
+}
+
+/** A choice of a sheet, as the mockup draws it: a check in front of the chosen one, an empty circle in front of the others. */
+@Composable
+private fun Choice(text: String, selected: Boolean, onClick: () -> Unit) {
+    OrbSheetItem(
+        text, onClick, Modifier.semantics { this.selected = selected },
+        icon = if (selected) OrbIcons.Check else OrbIcons.Circle,
+    )
+}
+
+@Composable
+private fun LinkCard(s: ThisPhoneState) {
+    Padded {
+        OrbCard {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // The PC cannot be reached: say so before the details, which then describe the last known link.
+                if (!s.online && s.connection !is dev.orb.app.link.net.ConnectionState.Connecting) {
+                    OrbBadge(ThisPhoneTexts.link(s.connection).substringBefore(" · "), kind = OrbBadgeKind.Warn)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Kv(OrbIcons.Monitor, ThisPhoneTexts.LINK_PC, s.pcName?.takeIf { it.isNotBlank() } ?: ThisPhoneTexts.NO_NAME)
+                    Kv(OrbIcons.Fingerprint, ThisPhoneTexts.LINK_FINGERPRINT, s.fingerprint ?: ThisPhoneTexts.NO_FINGERPRINT, mono = true)
+                    Kv(OrbIcons.Route, ThisPhoneTexts.LINK_ROUTE, ThisPhoneTexts.route(s))
+                }
+            }
         }
-        Switch(checked = checked, onCheckedChange = null, enabled = enabled)
+    }
+}
+
+/** `.kv-m`: a key with its small icon and the value after it. */
+@Composable
+private fun Kv(icon: ImageVector, key: String, value: String, mono: Boolean = false) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.Top) {
+        Row(Modifier.width(88.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(icon, null, Modifier.size(16.dp), tint = OrbKit.mutedForeground)
+            Text(key, color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp)
+        }
+        Text(
+            value, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp,
+            fontFamily = if (mono) FontFamily.Monospace else FontFamily.Default,
+        )
     }
 }

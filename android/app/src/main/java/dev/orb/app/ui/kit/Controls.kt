@@ -178,7 +178,8 @@ fun OrbSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, 
             val on = i == selected
             val shape = RoundedCornerShape(6.dp)
             Box(
-                Modifier.then(if (stretch) Modifier.weight(1f) else Modifier).height(32.dp).then(if (on) Modifier.shadow(1.dp, shape) else Modifier).clip(shape)
+                // Stretched choices share the width by the length of their text, so a long one is not cut short.
+                Modifier.then(if (stretch) Modifier.weight(label.length + 6f) else Modifier).height(32.dp).then(if (on) Modifier.shadow(1.dp, shape) else Modifier).clip(shape)
                     .background(if (on) OrbKit.card else Color.Transparent)
                     .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(i) }).padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center,

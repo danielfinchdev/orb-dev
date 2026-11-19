@@ -36,6 +36,27 @@ enum class OrbPaletteChoice(val key: String, val label: String) {
 }
 
 /**
+ * The sample dot of each palette in «Apariencia» (the mockup's `data-pc` colours). They are the same in light and dark,
+ * so a palette is always recognised by the same colour; the only colours written by hand outside the palettes.
+ */
+val SampleGrafito = Color(0xFFD44F13)
+val SampleOceano = Color(0xFF1881E1)
+val SampleBosque = Color(0xFF2C965D)
+val SampleUva = Color(0xFF9260DA)
+val SampleRubi = Color(0xFFD93F5A)
+val SampleArena = Color(0xFFB7752B)
+
+val OrbPaletteChoice.sample: Color
+    get() = when (this) {
+        OrbPaletteChoice.Grafito -> SampleGrafito
+        OrbPaletteChoice.Oceano -> SampleOceano
+        OrbPaletteChoice.Bosque -> SampleBosque
+        OrbPaletteChoice.Uva -> SampleUva
+        OrbPaletteChoice.Rubi -> SampleRubi
+        OrbPaletteChoice.Arena -> SampleArena
+    }
+
+/**
  * Grafito: neutral greys with a single orange accent (orb-ui.css, light and dark blocks). The text tokens were checked
  * for WCAG AA against the field and the soft fills; the control outline (`--input`) for 3:1. Primary is neutral
  * (near-black by day, near-white at night): the accent is only for text on [OrbPalette.primarySoft].

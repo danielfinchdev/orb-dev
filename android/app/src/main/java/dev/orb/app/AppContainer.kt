@@ -22,7 +22,9 @@ import dev.orb.app.link.api.PcCaller
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.notify.AndroidNetworkWatcher
 import dev.orb.app.notify.AndroidNotePoster
+import dev.orb.app.notify.AndroidNoticeSettings
 import dev.orb.app.notify.AndroidNotificationAccess
+import dev.orb.app.notify.NoticeSettings
 import dev.orb.app.notify.AndroidServiceLauncher
 import dev.orb.app.notify.KeepAliveController
 import dev.orb.app.notify.KeepAlivePolicy
@@ -111,7 +113,9 @@ class AppContainer(private val app: Application) {
     /** What the phone remembers about its notices and the «Mantener conectado» service; not secrets. */
     val notifyPrefs = NotifyPrefs(SharedPrefsStore(app.getSharedPreferences("orb.notify", android.content.Context.MODE_PRIVATE)))
     val noteJobs = NoteJobs(SharedPrefsJobStorage(app.getSharedPreferences("orb.notes", android.content.Context.MODE_PRIVATE)))
-    private val notePoster = AndroidNotePoster(app, noteJobs) { lockPrefs.settings.value.enabled }
+    private val notePoster = AndroidNotePoster(app, noteJobs, { notifyPrefs.settings.value.lockScreen }) { lockPrefs.settings.value.enabled }
+    /** Opens Android's own notice settings of the app and of each channel (their sound lives there). */
+    val noticeSettings: NoticeSettings = AndroidNoticeSettings(app)
     val notificationAccess = AndroidNotificationAccess(app, notifyPrefs)
     val keepAliveLauncher: ServiceLauncher = AndroidServiceLauncher(app)
     private val keepAliveRunning = MutableStateFlow(false)
@@ -289,7 +293,7 @@ class AppContainer(private val app: Application) {
         lastContact.clear()
         chatListPrefs.clear()
         notifyPrefs.setKeepConnected(true)
-        notifyPrefs.setLockScreenPublic(false)
+        notifyPrefs.setLockScreen(dev.orb.app.notify.LockScreenNotice.Generic)
         SecureStore.remove(app, SESSION_KEY)
         wipe.wipe()
         outboxLock.withLock { outboxFor = null; outboxRepo = null }

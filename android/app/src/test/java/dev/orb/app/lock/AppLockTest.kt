@@ -48,10 +48,38 @@ class AppLockTest {
     @Test fun locksOnlyAfterTheChosenTimeInTheBackground() {
         prefs.setEnabled(true)
         val g = gate().also { it.unlock() }
-        g.onBackground(); clock += 59_999; g.onForeground()
+        g.onBackground(); clock += 299_999; g.onForeground()
         assertTrue(g.isOpen())
-        g.onBackground(); clock += 60_000; g.onForeground()
+        g.onBackground(); clock += 300_000; g.onForeground()
         assertFalse(g.isOpen())
+    }
+
+    @Test fun fifteenMinutesWaitFifteenMinutes() {
+        prefs.setEnabled(true); prefs.setDelay(LockDelay.FifteenMinutes)
+        val g = gate().also { it.unlock() }
+        g.onBackground(); clock += 899_999; g.onForeground()
+        assertTrue(g.isOpen())
+        g.onBackground(); clock += 900_000; g.onForeground()
+        assertFalse(g.isOpen())
+    }
+
+    @Test fun whoeverHadOneMinuteMovesToFiveAndItIsSavedThatWay() {
+        store.edit { putBoolean("lock.enabled", true); putString("lock.delay", "1m") }
+        val migrated = LockPrefs(store)
+        assertEquals(LockDelay.FiveMinutes, migrated.settings.value.delay)
+        assertTrue(migrated.settings.value.enabled)
+        assertEquals("5m", store.getString("lock.delay"))
+    }
+
+    @Test fun anUnknownOrMissingDelayIsFiveMinutes() {
+        assertEquals(LockDelay.FiveMinutes, LockPrefs(MemoryStore()).settings.value.delay)
+        store.edit { putString("lock.delay", "weird") }
+        assertEquals(LockDelay.FiveMinutes, LockPrefs(store).settings.value.delay)
+    }
+
+    @Test fun theChoicesOfTheMockupHaveTheirKeys() {
+        assertEquals(listOf("now", "5m", "15m"), LockDelay.entries.map { it.key })
+        assertEquals(LockDelay.Immediate, LockDelay.fromKey("now"))
     }
 
     @Test fun theDelayOptionsApply() {

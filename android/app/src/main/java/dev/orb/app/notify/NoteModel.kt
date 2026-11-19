@@ -134,7 +134,7 @@ data class NotificationPlan(
     /** What the lock screen shows when the content is hidden. */
     val publicTitle: String,
     val publicText: String,
-    val lockScreenPublic: Boolean,
+    val lockScreen: LockScreenNotice,
     val silent: Boolean,
     val tap: NoteJob,
     val actions: List<PlannedAction>,
@@ -161,7 +161,8 @@ object NotePlanner {
             text = if (settings.appLock) hidden else note.body,
             publicTitle = "Orb",
             publicText = hidden,
-            lockScreenPublic = settings.lockScreenPublic && !settings.appLock,
+            // With the Orb lock on the text never leaves the app, whatever was chosen; «nothing» stays nothing.
+            lockScreen = if (settings.appLock && settings.lockScreen == LockScreenNotice.Full) LockScreenNotice.Generic else settings.lockScreen,
             silent = note.silent,
             tap = tap,
             actions = actions,
