@@ -178,8 +178,9 @@ export async function fullSnapshot(repo, { message }) {
 // although their date says nobody wrote them after it was taken (at: when it started; an older one without it, its
 // commit's second). A file written after it (the user's later edit) has a newer date and is not counted. → [{ status, path }]
 // The date of a file's last write can be set back (by the task, or by a copy or an unzip the user made later, which keep the
-// source's date), but its change date (ctime) cannot: one newer than the snapshot means somebody touched the file after the
-// task ended, so it is not counted as hidden. Those paths go to `later` (when given): left as they are and reported.
+// source's date), while its change date (ctime) follows every ordinary write, copy and date change: one newer than the
+// snapshot means somebody touched the file after the task ended, so it is not counted as hidden. Those paths go to `later`
+// (when given): left as they are and reported, so a task that forged that date still cannot hide the file from the person.
 // A change date in the future is no proof of a later edit (a task may set it so, to hide a change): it is trusted only up to
 // `now` (plus a little slack for clock jitter), and beyond it the file counts as changed by the task.
 export function missedBy(repo, after, full, later = [], now = Date.now()) {

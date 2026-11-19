@@ -109,11 +109,23 @@ original line is still there when you hover it or copy it.
 
 **Undo says what is lost.** When a task has no snapshot of its end, the Undo dialog in the PC window now says that the folder goes back to how it was before the task and that later changes are lost too, instead of promising to keep them.
 
+**Safer.** A task the guard holds can no longer be accepted from the phone or a linked browser without having seen its
+changes, nor through the OK to a report: that is done on the PC. "Sync", "Push branch" and creating a repository never
+run a transport command an agent wrote into the repository's git settings, and the guard asks before an agent changes a
+remote's address, a push redirect or a proxy there. Undo leaves alone, and names, a file you copied into the folder
+after the task ended, even when the copy kept an old date. Orb does not run a Java it finds inside its own folder. On
+the phone, the "Orb only" lock-screen option hides a notice's text on a locked phone whatever Android is set to show,
+the master password step stays out of recents and screenshots, a refusal from the PC shows as one short line, PC paths
+are hidden in every activity field, and the PC's refusals are recognised when Orb is set to English.
+
 ### Before going back to 3.8.7
 
 Pause or delete your monthly schedules first. 3.8.7 does not know "every month" and would run them far more often than
 that. It also ignores what 3.8.8 added to a schedule: its own time zone (3.8.7 uses yours) and the permission chosen for
 its runs (3.8.7 uses the one in Settings).
+
+Unmute the chats you muted "for 1 hour" or "for 8 hours" from the phone as well: 3.8.7 does not know a mute that ends
+and would keep them muted for good.
 
 ## What's new in 3.8.7
 
