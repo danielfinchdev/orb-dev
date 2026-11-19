@@ -171,7 +171,8 @@ private fun Body(
             if (state.online || state.refreshing) OrbSpinner(size = 28.dp) else NoPcYet()
         }
         finished && state.finished.isEmpty() -> Message(ProjectTexts.EMPTY_FINISHED, icon = OrbIcons.FolderGit2)
-        !finished && state.projects.isEmpty() -> Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center) {
+        // The empty note sits at the top, as in the mockup.
+        !finished && state.projects.isEmpty() -> Column(Modifier.fillMaxSize()) {
             OrbEmpty(
                 ProjectTexts.EMPTY, text = ProjectTexts.EMPTY_HINT, icon = OrbIcons.FolderGit2,
                 actions = if (state.canCreate) ({ OrbButton(ProjectTexts.EMPTY_NEW, onNew, kind = OrbButtonKind.Primary) }) else null,
@@ -264,7 +265,7 @@ private fun NewProjectSheet(state: NewProjectState, categories: List<String>, on
         },
     ) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OrbTextField(name, { name = it }, ProjectTexts.NEW_NAME)
+            OrbTextField(name, { name = it }, ProjectTexts.NEW_NAME, soft = true)
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 OrbChip(ProjectTexts.NO_CATEGORY, category == null, { category = null })
                 for (c in categories) OrbChip(c, category == c, { category = c })

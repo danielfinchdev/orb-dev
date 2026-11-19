@@ -37,11 +37,11 @@ fun ScheduleField(
 ) {
     val multi = maxLines > 1
     Box(
-        modifier.clip(FieldShape).background(OrbKit.card).border(1.dp, OrbKit.border, FieldShape)
+        modifier.clip(FieldShape).background(OrbKit.secondary)
             .defaultMinSize(minHeight = if (multi) (22 * minLines + 26).dp else 48.dp).padding(horizontal = 14.dp, vertical = if (multi) 12.dp else 0.dp),
         contentAlignment = if (multi) Alignment.TopStart else Alignment.CenterStart,
     ) {
-        if (value.isEmpty()) Text(hint, color = OrbKit.faintForeground, fontSize = 15.sp, lineHeight = 22.sp, maxLines = if (multi) 3 else 1)
+        if (value.isEmpty()) Text(hint, color = OrbKit.mutedForeground, fontSize = 15.sp, lineHeight = 22.sp, maxLines = if (multi) 3 else 1)
         BasicTextField(
             value, onValueChange, Modifier.fillMaxWidth().semantics { contentDescription = label },
             singleLine = !multi, minLines = minLines, maxLines = maxLines,

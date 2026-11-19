@@ -67,7 +67,7 @@ class ProjectsScreenTest {
     @Test fun cardsShowBranchChangesAndTheStateOfTheTasks() {
         show(withGit())
         rule.onNodeWithText("app-movil").assertIsDisplayed()
-        rule.onNodeWithText("dev · 2 cambios").assertIsDisplayed()
+        rule.onNodeWithText("dev · 2 archivos sin confirmar").assertIsDisplayed()
         rule.onNodeWithText("main · al día").assertIsDisplayed()
         rule.onNodeWithText("2 tareas").assertIsDisplayed()
         rule.onNodeWithText("1 por aprobar").assertIsDisplayed()
@@ -86,7 +86,7 @@ class ProjectsScreenTest {
         val b = withGit().also { it.gitReadable = false }
         show(b)
         rule.onNodeWithText("app-movil").assertIsDisplayed()
-        rule.onNodeWithText("dev · 2 cambios").assertDoesNotExist()
+        rule.onNodeWithText("dev · 2 archivos sin confirmar").assertDoesNotExist()
         rule.onNodeWithText("main · al día").assertDoesNotExist()
         assertEquals(0, b.gitCount)
     }
@@ -95,16 +95,16 @@ class ProjectsScreenTest {
         val b = withGit().also { it.gitGate = CompletableDeferred() }
         show(b)
         rule.onNodeWithText("app-movil").assertIsDisplayed()
-        rule.onNodeWithText("dev · 2 cambios").assertDoesNotExist()
+        rule.onNodeWithText("dev · 2 archivos sin confirmar").assertDoesNotExist()
         b.gitGate!!.complete(Unit)
         rule.waitForIdle()
-        rule.onNodeWithText("dev · 2 cambios").assertIsDisplayed()
+        rule.onNodeWithText("dev · 2 archivos sin confirmar").assertIsDisplayed()
     }
 
     @Test fun projectsWithoutGitHaveNoLine() {
         val b = withGit().also { it.gitResult = Result.success(mapOf("app-movil" to ProjectGit("dev", 1, null, null))) }
         show(b)
-        rule.onNodeWithText("dev · 1 cambio").assertIsDisplayed()
+        rule.onNodeWithText("dev · 1 archivo sin confirmar").assertIsDisplayed()
         rule.onAllNodesWithText("main · al día").assertCountEquals(0)
     }
 

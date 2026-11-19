@@ -54,9 +54,9 @@ class ProjectDetailViewModelTest {
     }
 
     @Test fun theRowAndTheSheetNameEachThingTruthfully() {
-        assertEquals("dev · 2", ProjectTexts.branchMeta(ProjectGit("dev", 2, 1, null)))
+        assertEquals("dev · 2 sin confirmar", ProjectTexts.branchMeta(ProjectGit("dev", 2, 1, null)))
         assertEquals("main", ProjectTexts.branchMeta(ProjectGit("main", 0, null, null)))
-        assertEquals("HEAD suelto · 1", ProjectTexts.branchMeta(ProjectGit(null, 1, null, null)))
+        assertEquals("HEAD suelto · 1 sin confirmar", ProjectTexts.branchMeta(ProjectGit(null, 1, null, null)))
         assertNull(ProjectTexts.branchMeta(null))
         assertEquals("1 archivo sin confirmar", ProjectTexts.uncommitted(1))
         assertEquals("3 archivos sin confirmar", ProjectTexts.uncommitted(3))

@@ -63,10 +63,10 @@ class ProjectsViewModelTest {
     }
 
     @Test fun gitLineSaysBranchAndChangesAndStaysOutWithoutData() {
-        assertEquals("dev · 2 cambios", ProjectTexts.gitLine(ProjectGit("dev", 2, null, null)))
+        assertEquals("dev · 2 archivos sin confirmar", ProjectTexts.gitLine(ProjectGit("dev", 2, null, null)))
         assertEquals("main · al día", ProjectTexts.gitLine(ProjectGit("main", 0, null, null)))
-        assertEquals("main · 1 cambio", ProjectTexts.gitLine(ProjectGit("main", 1, null, null)))
-        assertEquals("HEAD suelto · 3 cambios", ProjectTexts.gitLine(ProjectGit(null, 3, null, null)))
+        assertEquals("main · 1 archivo sin confirmar", ProjectTexts.gitLine(ProjectGit("main", 1, null, null)))
+        assertEquals("HEAD suelto · 3 archivos sin confirmar", ProjectTexts.gitLine(ProjectGit(null, 3, null, null)))
         assertNull(ProjectTexts.gitLine(null))
         assertNull(ProjectTexts.gitLine(ProjectGit("main", null, null, null)))
     }

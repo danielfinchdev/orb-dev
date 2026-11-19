@@ -177,9 +177,12 @@ class SchedulesScreenTest {
         rule.onNodeWithText("Borrarla: en el PC.").assertIsDisplayed()
     }
 
-    @Test fun theMoreButtonOpensTheSameSheetForAScreenReader() {
+    @Test fun theRowsHaveNoMoreButtonAndTheLongPressActionIsOfferedToAScreenReader() {
         show(FakeSchedulesBackend(listOf(schedule(1))))
-        rule.onNode(hasContentDescription("Más acciones: Revisar dependencias")).performClick()
+        rule.onNode(hasContentDescription("Más acciones: Revisar dependencias")).assertDoesNotExist()
+        val long = rule.onNodeWithText("Revisar dependencias").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.OnLongClick]
+        assertEquals("Abrir acciones", long.label)
+        rule.onNodeWithText("Revisar dependencias").performTouchInput { longClick() }
         rule.waitForIdle()
         rule.onNodeWithText("Ejecutar ahora").assertIsDisplayed()
         rule.onNodeWithText("Desactivar").assertIsDisplayed()

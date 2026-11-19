@@ -195,7 +195,11 @@ class ProjectsShotsTest {
         rule.onNodeWithText("Revisión cruzada").performClick()
     })
     @Test fun newTask() = page(OrbPaletteChoice.Grafito, "-nueva-tarea", after = { rule.onNodeWithText("Tarea").performClick() })
-    @Test fun projectTasks() = page(OrbPaletteChoice.Grafito, "-tareas", after = { rule.onNodeWithText("Tareas del proyecto").performScrollTo().performClick() })
+    @Test fun moreOfTheProject() = page(OrbPaletteChoice.Grafito, "-mas-opciones", after = { rule.onNodeWithText("Más opciones").performScrollTo().performClick() })
+    @Test fun projectTasks() = page(OrbPaletteChoice.Grafito, "-tareas", after = {
+        rule.onNodeWithText("Más opciones").performScrollTo().performClick()
+        rule.onNodeWithText("Tareas del proyecto").performScrollTo().performClick()
+    })
     @Test fun log() = page(OrbPaletteChoice.Grafito, "-bitacora", after = { rule.onNodeWithText("Bitácora del proyecto").performScrollTo().performClick() })
     @Test fun scrolledDown() = page(OrbPaletteChoice.Grafito, "-contraida", after = { rule.onNodeWithText("Terminar proyecto").performScrollTo() })
     @Test fun withoutTheLinkPage() = page(OrbPaletteChoice.Grafito, "-sin-conexion", detailBackend().apply { connectionState.value = ConnectionState.Offline(null, null) })

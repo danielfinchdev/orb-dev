@@ -36,6 +36,7 @@ import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -81,8 +82,8 @@ private const val COLLAPSE_PX = 140f
 
 /**
  * A project's page (screen 22). The bar stays on top with the name and a useful line; the large header (dot, name, what its
- * tasks are doing) and the buttons scroll away under it. What the mockup does not draw (pull requests, the review, the tasks
- * list) sits under «Más del proyecto» at the end.
+ * tasks are doing) and the buttons scroll away under it. What the mockup does not draw (pull requests and the tasks list) sits
+ * under «Más opciones», folded at the end of «Más del proyecto». The cross review is in the «Rama y cambios» sheet.
  */
 @Composable
 fun ProjectDetailScreen(
@@ -109,6 +110,7 @@ fun ProjectDetailScreen(
     var branchOpen by rememberSaveable { mutableStateOf(false) }
     var pickChanges by rememberSaveable { mutableStateOf(false) }
     var tasksOpen by rememberSaveable { mutableStateOf(false) }
+    var moreOpen by rememberSaveable { mutableStateOf(false) }
     val enabled = state.online && !state.busy
     val scroll = rememberScrollState()
     val scrolled by remember { derivedStateOf { scroll.value > 8 } }
@@ -156,9 +158,13 @@ fun ProjectDetailScreen(
                     if (!state.archived && state.canSecurityReview) MoreRow(OrbIcons.ShieldCheck, ProjectTexts.SECURITY_REVIEW, enabled = enabled) { confirmReview = "security" }
                     if (state.canLog) MoreRow(OrbIcons.NotebookText, ProjectTexts.LOG, onClick = vm::openLog)
                     if (onOpenWhiteboard != null && state.canWhiteboard) MoreRow(OrbIcons.Presentation, ProjectTexts.WHITEBOARD, meta = ProjectTexts.WHITEBOARD_META, enabled = state.online) { onOpenWhiteboard(state.name) }
-                    if (state.canPrs) MoreRow(OrbIcons.GitPullRequest, ProjectTexts.PRS) { onOpenPrs(state.name) }
-                    if (!state.archived && state.canReview) MoreRow(OrbIcons.GitCompare, ProjectTexts.REVIEW, enabled = enabled) { confirmReview = "review" }
-                    if (state.tasks.isNotEmpty()) MoreRow(OrbIcons.Tasks, ProjectTexts.TASKS_ROW, meta = state.tasks.size.toString()) { tasksOpen = true }
+                    if (state.canPrs || state.tasks.isNotEmpty()) {
+                        FoldRow(moreOpen) { moreOpen = !moreOpen }
+                        if (moreOpen) {
+                            if (state.canPrs) MoreRow(OrbIcons.GitPullRequest, ProjectTexts.PRS) { onOpenPrs(state.name) }
+                            if (state.tasks.isNotEmpty()) MoreRow(OrbIcons.Tasks, ProjectTexts.TASKS_ROW, meta = state.tasks.size.toString()) { tasksOpen = true }
+                        }
+                    }
                     if (!state.archived && state.canFinish) MoreRow(OrbIcons.CircleCheck, ProjectTexts.FINISH, danger = true, enabled = enabled) { confirmFinish = true }
                     Box(Modifier.size(16.dp))
                 }
@@ -193,13 +199,13 @@ fun ProjectDetailScreen(
     }
     if (confirmFinish) OrbDialog(
         onDismiss = { confirmFinish = false }, title = ProjectTexts.finishAsk(state.name),
-        confirm = OrbDialogAction(ProjectTexts.FINISH_CONFIRM, { confirmFinish = false; vm.finish() }, danger = true),
+        confirm = OrbDialogAction(ProjectTexts.FINISH_CONFIRM, { confirmFinish = false; vm.finish() }),
         text = ProjectTexts.FINISH_BODY, dismiss = OrbDialogAction(ProjectTexts.CANCEL, { confirmFinish = false }),
     )
     state.log?.let { LogSheet(it, onDismiss = vm::closeLog, onRetry = vm::openLog) }
 }
 
-/** The large header: the dot, the name and what the tasks are doing. It fades and rises as the page scrolls, without recomposing. */
+/** The header: the dot, the name and what the tasks are doing. It fades and rises as the page scrolls, without recomposing. */
 @Composable
 private fun Header(state: ProjectDetailState, scrollOf: () -> Int) {
     Row(
@@ -210,12 +216,14 @@ private fun Header(state: ProjectDetailState, scrollOf: () -> Int) {
         },
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        ProjectDot(state.name, size = ProjectDotSize.Large)
-        Column(Modifier.weight(1f)) {
-            Text(
-                state.name, Modifier.semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
-            )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ProjectDot(state.name, size = ProjectDotSize.Normal)
+                Text(
+                    state.name, Modifier.weight(1f, fill = false).semantics { heading() }, color = OrbKit.foreground, fontSize = 16.sp, lineHeight = 22.sp,
+                    fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
             Text(
                 if (state.archived) ProjectTexts.finishedOn(state.finishedAt) else ProjectTexts.headerLine(state.openTasks),
                 color = OrbKit.faintForeground, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
@@ -239,6 +247,19 @@ private fun MoreRow(icon: ImageVector, title: String, meta: String? = null, dang
         Icon(icon, null, Modifier.size(20.dp), tint = if (danger) OrbKit.destructive else OrbKit.mutedForeground)
         Text(title, Modifier.weight(1f), color = tone, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
         if (meta != null) Text(meta, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    }
+}
+
+/** «Más opciones»: the quiet row that folds what the mockup does not draw. */
+@Composable
+private fun FoldRow(open: Boolean, onToggle: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().defaultMinSize(minHeight = 56.dp).clickable(role = Role.Button, onClick = onToggle)
+            .semantics { stateDescription = if (open) ProjectTexts.EXPANDED else ProjectTexts.COLLAPSED }.padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(if (open) OrbIcons.ChevronUp else OrbIcons.ChevronDown, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+        Text(ProjectTexts.NEW_MORE, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 15.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium)
     }
 }
 

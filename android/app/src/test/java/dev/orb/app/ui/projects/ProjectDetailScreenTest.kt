@@ -85,16 +85,24 @@ class ProjectDetailScreenTest {
         show(backend())
         rule.onNodeWithText("Versión 2.0 de la app").assertIsDisplayed()
         rule.onNodeWithText("Más del proyecto").performScrollTo().assertIsDisplayed()
-        rule.onNodeWithText("dev · 2").performScrollTo().assertIsDisplayed()
-        for (t in listOf("Revisión de seguridad", "Bitácora del proyecto", "Pull requests", "Revisión", "Tareas del proyecto", "Terminar proyecto")) {
+        rule.onNodeWithText("dev · 2 sin confirmar").performScrollTo().assertIsDisplayed()
+        for (t in listOf("Revisión de seguridad", "Bitácora del proyecto", "Terminar proyecto")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
+        // What the mockup does not draw is folded under «Más opciones»; the cross review is in «Rama y cambios» only.
+        for (t in listOf("Pull requests", "Tareas del proyecto")) rule.onNodeWithText(t).assertDoesNotExist()
+        rule.onNodeWithText("Revisión").assertDoesNotExist()
+        rule.onNodeWithText("Más opciones").performScrollTo().performClick()
+        rule.waitForIdle()
+        for (t in listOf("Pull requests", "Tareas del proyecto")) rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText("Revisión").assertDoesNotExist()
     }
 
     @Test fun theChatRowOpensTheChatAndTheTasksRowListsTheProjectsTasks() {
         val taps = show(backend())
         rule.onNodeWithText("Versión 2.0 de la app").performClick()
         assertEquals("1", taps.chat?.id)
+        rule.onNodeWithText("Más opciones").performScrollTo().performClick()
         rule.onNodeWithText("Tareas del proyecto").performScrollTo().performClick()
         rule.waitForIdle()
         rule.onNodeWithText("#7 Ajustar el pie").performClick()
@@ -154,7 +162,7 @@ class ProjectDetailScreenTest {
         rule.onNodeWithText("Ver cambios").performClick()
         rule.waitForIdle()
         assertEquals(0L, taps.changes)
-        rule.onNodeWithText("Cambios por aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Cambios sin aceptar").assertIsDisplayed()
         rule.onNodeWithText("#10 Ya aceptada").assertDoesNotExist()
         rule.onNodeWithText("#9 Pasar a Compose").performClick()
         rule.waitForIdle()
@@ -166,7 +174,7 @@ class ProjectDetailScreenTest {
         rule.onNodeWithText("Rama y cambios").performScrollTo().performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Ninguna tarea con cambios sin aceptar").assertIsDisplayed()
-        rule.onNodeWithText("No hay cambios de tareas por aceptar").assertIsDisplayed()
+        rule.onNodeWithText("No hay cambios de tareas sin aceptar").assertIsDisplayed()
         rule.onNodeWithText("Ver cambios").assertIsNotEnabled()
         rule.onNodeWithText("Ver cambios").performClick()
         assertEquals(0L, taps.changes)
@@ -212,7 +220,9 @@ class ProjectDetailScreenTest {
         assertEquals(emptyList<String>(), b.calls)
         rule.onNodeWithText("Pedir revisión").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Revisión").performScrollTo().performClick()
+        rule.onNodeWithText("Rama y cambios").performScrollTo().performClick()
+        rule.waitForIdle()
+        rule.onNodeWithText("Revisión cruzada").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Pedir revisión").performClick()
         rule.waitForIdle()
@@ -264,6 +274,7 @@ class ProjectDetailScreenTest {
 
     @Test fun moreOfTheProjectKeepsPullRequestsAndTheirRoute() {
         val taps = show(backend())
+        rule.onNodeWithText("Más opciones").performScrollTo().performClick()
         rule.onNodeWithText("Pull requests").performScrollTo().performClick()
         assertEquals("app-movil", taps.prs)
     }
@@ -284,6 +295,7 @@ class ProjectDetailScreenTest {
         rule.onNodeWithText("Terminar proyecto").assertDoesNotExist()
         rule.onNodeWithText("Revisión de seguridad").assertDoesNotExist()
         rule.onNodeWithText("Pull requests").assertDoesNotExist()
+        rule.onNodeWithText("Más opciones").performScrollTo().assertIsDisplayed()
     }
 
     @Test fun withoutTheLinkTheActionsDoNotAct() {

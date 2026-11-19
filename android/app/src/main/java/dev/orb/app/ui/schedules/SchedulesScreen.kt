@@ -87,7 +87,8 @@ fun SchedulesScreen(
                         )
                     }
                     !state.loaded -> Centered { OrbSpinner(size = 28.dp) }
-                    state.items.isEmpty() -> Centered {
+                    // The empty note sits at the top, as in the mockup.
+                    state.items.isEmpty() -> Column(Modifier.fillMaxSize()) {
                         OrbEmpty(
                             SchedulesTexts.EMPTY, text = SchedulesTexts.EMPTY_HINT, icon = OrbIcons.CalendarClock,
                             actions = if (state.canCreate) ({ OrbButton(SchedulesTexts.NEW, vm::openNew, kind = OrbButtonKind.Primary, enabled = enabled) }) else null,
@@ -169,7 +170,7 @@ private fun ScheduleRow(
     val hasMenu = state.canUpdate || state.canRun
     OrbRow(
         title = s.title,
-        // The long press is also an action a screen reader offers, named for what it does.
+        // The row opens its actions on a tap or a long press; a screen reader is offered the same, named for what it does.
         modifier = Modifier.semantics { onLongClick(SchedulesTexts.ROW_ACTIONS) { if (hasMenu) onMenu(); hasMenu } },
         lead = { Icon(OrbIcons.CalendarClock, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground) },
         subtitle = {
@@ -181,12 +182,9 @@ private fun ScheduleRow(
         },
         actions = if (badges.isEmpty()) null else ({ for ((text, kind) in badges) OrbBadge(text, kind = kind) }),
         badge = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (hasMenu) OrbIconButton(OrbIcons.MoreVertical, "${SchedulesTexts.MORE}: ${s.title}", onMenu)
-                if (state.canUpdate) OrbSwitch(
-                    s.enabled, onToggle, label = "${SchedulesTexts.SWITCH}: ${s.title}", enabled = enabled && !needsApproval,
-                )
-            }
+            if (state.canUpdate) OrbSwitch(
+                s.enabled, onToggle, label = "${SchedulesTexts.SWITCH}: ${s.title}", enabled = enabled && !needsApproval,
+            )
         },
         onClick = if (hasMenu) onMenu else null,
         onLongClick = if (hasMenu) onMenu else null,

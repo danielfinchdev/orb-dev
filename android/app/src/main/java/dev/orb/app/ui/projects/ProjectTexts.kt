@@ -26,6 +26,8 @@ object ProjectTexts {
     const val NEW_ICON = "Icono"
     const val NEW_ICON_NOTE = "El punto sale del nombre del proyecto; no se guarda nada más."
     const val NEW_MORE = "Más opciones"
+    const val EXPANDED = "Desplegado"
+    const val COLLAPSED = "Plegado"
     const val NEW_PC_NOTE = "Clonar, importar, renombrar y eliminar proyectos: en el PC."
     const val NEW_CREATE = "Crear"
     fun iconOf(name: String) = if (name.isBlank()) "Icono: aún sin nombre" else "Icono de $name"
@@ -47,11 +49,11 @@ object ProjectTexts {
     fun open(n: Int) = if (n == 1) "1 tarea" else "$n tareas"
     fun toApprove(n: Int) = "$n por aprobar"
 
-    /** «dev · 2 cambios», «main · al día»; null when git said nothing about the project, so the card has no such line. */
+    /** «dev · 2 archivos sin confirmar», «main · al día»; null when git said nothing about the project, so the card has no such line. */
     fun gitLine(g: ProjectGit?): String? {
         val changes = g?.changes ?: return null
         val where = g.branch ?: DETACHED_HEAD
-        return "$where · " + when (changes) { 0 -> "al día"; 1 -> "1 cambio"; else -> "$changes cambios" }
+        return "$where · " + if (changes == 0) "al día" else uncommitted(changes)
     }
     fun finishedOn(at: String?) = if (at.isNullOrBlank()) "Terminado" else "Terminado el ${at.take(10)}"
 
@@ -71,14 +73,14 @@ object ProjectTexts {
     const val BRANCH = "Rama y cambios"
     const val BRANCH_NAME = "Rama"
     const val BRANCH_CHANGES = "Cambios"
-    const val BRANCH_TASKS = "Por aceptar"
+    const val BRANCH_TASKS = "Tareas"
     const val BRANCH_AHEAD = "Por subir"
     fun ahead(n: Int) = if (n == 1) "1 commit sin subir" else "$n commits sin subir"
     const val NO_GIT = "Sin git"
     const val CROSS_REVIEW = "Revisión cruzada"
     const val SEE_CHANGES = "Ver cambios"
-    const val NO_TASK_CHANGES = "No hay cambios de tareas por aceptar"
-    const val PICK_CHANGES = "Cambios por aceptar"
+    const val NO_TASK_CHANGES = "No hay cambios de tareas sin aceptar"
+    const val PICK_CHANGES = "Cambios sin aceptar"
     const val TASKS_ROW = "Tareas del proyecto"
     const val SEE_IN_PC = "Los cambios sin confirmar de todo el proyecto solo se ven en el PC."
 
@@ -91,7 +93,7 @@ object ProjectTexts {
     fun branchMeta(g: ProjectGit?): String? {
         if (g == null) return null
         val changes = g.changes?.takeIf { it > 0 }
-        return listOfNotNull(g.branch ?: DETACHED_HEAD, changes?.toString()).joinToString(" · ")
+        return listOfNotNull(g.branch ?: DETACHED_HEAD, changes?.let { "$it sin confirmar" }).joinToString(" · ")
     }
 
     fun headerLine(open: Int) = if (open == 0) "Sin tareas en curso" else if (open == 1) "1 tarea en curso" else "$open tareas en curso"
@@ -101,7 +103,6 @@ object ProjectTexts {
     const val FINISHED_HINT = "Está en «Terminados»"
     const val WHITEBOARD_META = "Se abre en el móvil"
     fun finishAsk(name: String) = "¿Terminar «$name»?"
-    const val REVIEW = "Revisión"
     const val REVIEW_ASK = "¿Pedir la revisión del proyecto?"
     const val SECURITY_ASK = "¿Pedir la revisión de seguridad?"
     const val REVIEW_BODY = "Un agente revisará el proyecto y gastará parte de tu plan."

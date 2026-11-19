@@ -89,7 +89,7 @@ fun ScheduleSheet(
         },
     ) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OrbTextField(draft.title, { draft = draft.copy(title = it) }, SchedulesTexts.FIELD_NAME)
+            OrbTextField(draft.title, { draft = draft.copy(title = it) }, SchedulesTexts.FIELD_NAME, soft = true)
             ScheduleField(draft.what, { draft = draft.copy(what = it) }, SchedulesTexts.FIELD_WHAT, hint = SchedulesTexts.FIELD_WHAT_HINT, minLines = 3)
             if (draft.kind == ScheduleKind.DAYS && !draft.foreignTiming) {
                 DayChips(draft.days) { draft = draft.copy(days = it) }
