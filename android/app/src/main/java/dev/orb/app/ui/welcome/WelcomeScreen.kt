@@ -45,6 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
+import dev.orb.app.ui.kit.OrbBanner
+import dev.orb.app.ui.kit.OrbBannerKind
 import dev.orb.app.ui.kit.OrbButton
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbCard
@@ -80,6 +82,7 @@ class WelcomeActions(
     val declineNotices: () -> Unit = {},
     val done: () -> Unit = {},
     val openThisPhone: () -> Unit = {},
+    val dismissError: () -> Unit = {},
 )
 
 /** The text on the clipboard, or null when there is none. */
@@ -112,6 +115,7 @@ fun WelcomeScreen(
         setAddress = vm::setAddress, paste = { vm.paste(readClipboard(context)) }, resolve = vm::resolve, back = vm::back,
         setPassword = vm::setPassword, toggleShowPassword = vm::toggleShowPassword, confirm = vm::confirm,
         activateNotices = vm::activateNotices, declineNotices = vm::declineNotices, done = onDone, openThisPhone = onOpenThisPhone,
+        dismissError = vm::dismissError,
     )
     WelcomeContent(state, actions, modifier)
 }
@@ -127,7 +131,7 @@ fun WelcomeContent(state: WelcomeUiState, a: WelcomeActions, modifier: Modifier 
         if (state.stage == WelcomeStage.Entry && state.sheet) ShortCodeSheet(state, a)
         if (state.noticeDialog) {
             OrbDialog(
-                onDismiss = a.declineNotices, title = "¿Avisos de Orb?",
+                onDismiss = a.declineNotices, title = "¿Avisos de Orb?", icon = OrbIcons.Bell,
                 text = "Mensajes nuevos y tareas que esperan tu OK. Puedes responder desde el aviso.",
                 confirm = OrbDialogAction("Activar", a.activateNotices), dismiss = OrbDialogAction("Ahora no", a.declineNotices),
             )
@@ -152,7 +156,15 @@ private fun Hero(title: String, modifier: Modifier = Modifier, text: androidx.co
 
 @Composable
 private fun EntryPage(state: WelcomeUiState, a: WelcomeActions) {
+    val failure = state.errorKind?.let { kind -> state.error?.let { kind to it } }
     Column(Modifier.fillMaxSize()) {
+        if (failure != null) {
+            val (kind, message) = failure
+            OrbBanner(
+                message, if (kind == WelcomeErrorKind.CodeSpent) OrbIcons.Clock else OrbIcons.ShieldAlert, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                kind = if (kind == WelcomeErrorKind.CodeSpent) OrbBannerKind.Warning else OrbBannerKind.Error,
+            )
+        }
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Hero(
                 "Enlaza el móvil con tu Orb", mark = true,
@@ -164,7 +176,12 @@ private fun EntryPage(state: WelcomeUiState, a: WelcomeActions) {
             )
         }
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine)
+            when (failure?.first) {
+                // The way out of a banner is the first button; both bring the first page back as it was.
+                WelcomeErrorKind.CodeSpent -> OrbButton("Escanear otro QR", { a.dismissError(); a.onScan() }, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine)
+                WelcomeErrorKind.NotPrivate -> OrbButton("Volver", a.dismissError, kind = OrbButtonKind.Primary, block = true)
+                null -> OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine)
+            }
             OrbButton("Sin cámara: código corto", a.openSheet, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
             OrbNote("Wi-Fi de casa o Tailscale. Todo va cifrado.", Modifier.fillMaxWidth().padding(top = 4.dp))
         }
@@ -176,7 +193,7 @@ private fun Label(text: String) = Text(text, color = OrbKit.mutedForeground, fon
 
 @Composable
 private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
-    OrbSheet(onDismiss = a.closeSheet, title = "Sin cámara: código corto", showClose = true) {
+    OrbSheet(onDismiss = a.closeSheet, title = "Sin cámara: código corto", showClose = true, dismissible = !state.busy) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Label("Pega el enlace")

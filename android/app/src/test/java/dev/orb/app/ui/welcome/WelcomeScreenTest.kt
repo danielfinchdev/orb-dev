@@ -25,9 +25,9 @@ import org.robolectric.annotation.Config
 class WelcomeScreenTest {
     @get:Rule val rule = createAndroidComposeRule<ComponentActivity>()
 
-    private class Pc : Linker {
-        override suspend fun resolve(payload: LinkPayload) =
-            Result.success(ResolvedLink(payload.urls, payload.code, "pc", ByteArray(32), "8f3a-c21d-77e0", "DanLaptop", payload.via))
+    private class Pc(val failWith: dev.orb.app.link.net.PairError? = null) : Linker {
+        override suspend fun resolve(payload: LinkPayload): Result<ResolvedLink> =
+            if (failWith != null) Result.failure(dev.orb.app.link.net.PairingException(failWith)) else Result.success(ResolvedLink(payload.urls, payload.code, "pc", ByteArray(32), "8f3a-c21d-77e0", "DanLaptop", payload.via))
 
         override suspend fun link(link: ResolvedLink, password: String, deviceName: String) =
             Result.success(PairOk(LinkSession("id", ByteArray(32), ByteArray(32), listOf("http://192.168.1.20:3131")), null, 0))
@@ -49,6 +49,47 @@ class WelcomeScreenTest {
     }
 
     private fun vm(notices: NoticeGate? = null) = WelcomeViewModel(Pc(), "Test", {}, Dispatchers.Unconfined, notices)
+
+    private fun content(state: WelcomeUiState, actions: WelcomeActions) =
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, false) { WelcomeContent(state, actions) } }
+
+    @Test fun anExpiredCodeIsABannerWhoseButtonScansAnotherAndClearsIt() {
+        val vm = WelcomeViewModel(Pc(dev.orb.app.link.net.PairError.Refused(410, "x", "expired", null, null)), "Test", {}, Dispatchers.Unconfined)
+        var scans = 0
+        rule.setContent {
+            OrbTheme(OrbPaletteChoice.Grafito, false) {
+                WelcomeScreen(vm, onDone = {}, onOpenThisPhone = {}, onScan = { scans++ })
+            }
+        }
+        vm.openSheet(); vm.setCode("ABCDEF"); vm.setAddress("http://192.168.1.20:3131"); vm.resolve()
+        rule.waitForIdle()
+        rule.onNodeWithText("El código ha caducado. Genera uno nuevo en el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Escanear otro QR").performClick()
+        rule.waitForIdle()
+        assertEquals(1, scans)
+        assertEquals(null, vm.state.value.error)
+        rule.onNodeWithText("Escanear el código QR").assertIsDisplayed()
+    }
+
+    @Test fun aPublicAddressIsABannerWhoseButtonGoesBack() {
+        val vm = vm()
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, false) { WelcomeScreen(vm, onDone = {}, onOpenThisPhone = {}) } }
+        vm.openSheet(); vm.setCode("ABCDEF"); vm.setAddress("http://8.8.8.8:3131"); vm.resolve()
+        rule.waitForIdle()
+        rule.onNodeWithText("Esa dirección no es privada: usa el Wi-Fi de casa o Tailscale.").assertIsDisplayed()
+        rule.onNodeWithText("Sin cámara: código corto").assertIsDisplayed()
+        rule.onNodeWithText("Volver").performClick()
+        rule.waitForIdle()
+        assertEquals(null, vm.state.value.errorKind)
+        rule.onNodeWithText("Escanear el código QR").assertIsDisplayed()
+    }
+
+    @Test fun theNoticeQuestionHasItsBellAndKeepsBothAnswers() {
+        content(WelcomeUiState(stage = WelcomeStage.Done, pc = PcIdentity("DanLaptop", listOf("a", "b", "c"), false), noticeDialog = true), WelcomeActions())
+        rule.onNodeWithText("¿Avisos de Orb?").assertIsDisplayed()
+        rule.onNodeWithText("Activar").assertIsDisplayed()
+        rule.onNodeWithText("Ahora no").assertIsDisplayed()
+    }
 
     @Test fun welcomeShowsTheMarkTheInstructionAndTheTwoWays() {
         show(vm())
