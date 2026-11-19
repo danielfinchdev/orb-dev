@@ -32,6 +32,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBanner
 import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbFoot
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbCard
 import dev.orb.app.ui.kit.OrbIconButton
@@ -80,7 +81,7 @@ fun UpdateContent(view: UpdateView, browserMissing: Boolean, actions: UpdateActi
                 }
             }
         }
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OrbFoot(spacing = 10.dp) {
             when (view) {
                 is UpdateView.App -> {
                     OrbButton(UpdateTexts.DOWNLOAD, actions.download, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.Download, big = true)
@@ -101,9 +102,9 @@ fun UpdateContent(view: UpdateView, browserMissing: Boolean, actions: UpdateActi
 @Composable
 private fun VersionLine(label: String, value: String, bold: Boolean = false) {
     androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(label, Modifier.width(104.dp), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 21.sp)
+        Text(label, Modifier.width(104.dp), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 18.sp)
         Text(
-            value, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp,
+            value, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 18.sp,
             fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal,
         )
     }

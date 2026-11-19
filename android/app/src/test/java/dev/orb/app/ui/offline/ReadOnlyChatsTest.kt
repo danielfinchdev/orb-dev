@@ -50,8 +50,9 @@ class ReadOnlyChatsTest {
         rule.onNodeWithContentDescription(PcOffTexts.BACK_TO_PC).assertIsDisplayed()
         rule.onNodeWithText(OfflineTexts.READ_ONLY_TITLE).assertIsDisplayed()
         rule.onNodeWithText("Revisar pasarela").assertIsDisplayed()
-        // One notice only, and no retry strip: retrying lives on the screen before.
-        assertEquals(1, rule.onAllNodesWithText("Sin conexión · solo lectura. ", substring = true).fetchSemanticsNodes().size)
+        // The title is said once (under ORB·E, not again in the notice), and no retry strip: retrying lives on the screen before.
+        assertEquals(1, rule.onAllNodesWithText(OfflineTexts.READ_ONLY_TITLE, substring = true).fetchSemanticsNodes().size)
+        rule.onNodeWithText("Última conexión", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Lo que escribas en un chat sale al volver la conexión.", substring = true).assertIsDisplayed()
         for (gone in listOf("Reintentar ahora", "Buscar chats y proyectos", "Todos", "No leídos", "Trabajando", "Directos", "Nuevo chat")) {
             assertEquals(gone, 0, rule.onAllNodesWithText(gone).fetchSemanticsNodes().size)

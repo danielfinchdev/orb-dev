@@ -39,6 +39,7 @@ import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBanner
 import dev.orb.app.ui.kit.OrbBannerKind
 import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbFoot
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbDialog
 import dev.orb.app.ui.kit.OrbDialogAction
@@ -93,6 +94,10 @@ class PcOffActions(
     val confirmOther: () -> Unit = {},
 )
 
+/** The small lines of the page's centre: the mockup's `.hero p`, a quiet 13 sp in the muted grey, not the 12 sp footnote. */
+@Composable
+private fun HeroNote(text: String) = Text(text, Modifier.fillMaxWidth(), color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 19.sp, textAlign = TextAlign.Center)
+
 /** The 06 page as a pure function of what it shows. */
 @Composable
 fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, confirmingOther: Boolean, actions: PcOffActions, modifier: Modifier = Modifier, unlinking: Boolean = false) {
@@ -120,7 +125,7 @@ fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, con
                                 OrbButton(PcOffTexts.NOW, actions.retryNow, small = true)
                             }
                             OrbProgress(retry.fraction, description = retry.text)
-                            OrbNote(PcOffTexts.RETRY_NOTE)
+                            HeroNote(PcOffTexts.RETRY_NOTE)
                         }
                         PcOffRetry.Connecting -> {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -131,10 +136,10 @@ fun PcOffContent(pcName: String?, lastConnection: String, retry: PcOffRetry, con
                         }
                     }
                 }
-                OrbNote(PcOffTexts.TAILSCALE)
+                HeroNote(PcOffTexts.TAILSCALE)
             }
         }
-        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OrbFoot(spacing = 10.dp) {
             OrbButton(PcOffTexts.SEE_SAVED, actions.seeSaved, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.Database, big = true)
             OrbButton(PcOffTexts.OTHER_PC, actions.linkOther, kind = OrbButtonKind.Secondary, block = true, big = true)
         }
@@ -188,7 +193,7 @@ val LocalReadOnly = compositionLocalOf<ReadOnlyMode?> { null }
 
 /** The text of the read-only notice. «Today» is read again when the screen comes back and when the day turns. */
 @Composable
-private fun readOnlyText(info: OfflineInfo): String {
+private fun readOnlyText(info: OfflineInfo, withTitle: Boolean = true): String {
     val lastContact by info.lastContact.collectAsStateWithLifecycle()
     val connection by info.connection.collectAsStateWithLifecycle()
     val seen = (connection as? ConnectionState.Offline)?.lastSeen ?: lastContact
@@ -198,7 +203,7 @@ private fun readOnlyText(info: OfflineInfo): String {
         delay(OfflineTexts.untilNextDay(now))
         now = info.clock()
     }
-    return OfflineTexts.readOnlyBanner(seen, now)
+    return if (withTitle) OfflineTexts.readOnlyBanner(seen, now) else OfflineTexts.readOnlyNote(seen, now)
 }
 
 /** The note of the read-only app over a screen that keeps its own header: the way back and why nothing leaves. */
@@ -214,7 +219,7 @@ fun ReadOnlyBar(info: OfflineInfo, onBack: () -> Unit, modifier: Modifier = Modi
 /** The header of the saved chats list (06 «Chats guardados»): back arrow, ORB·E with its line, and one notice below. */
 @Composable
 fun ReadOnlyHeader(mode: ReadOnlyMode, modifier: Modifier = Modifier) {
-    val text = readOnlyText(mode.info)
+    val text = readOnlyText(mode.info, withTitle = false)
     Column(modifier.fillMaxWidth()) {
         OrbTopBar(
             "Orb", sub = OfflineTexts.READ_ONLY_TITLE, center = { OrbWordmark() },

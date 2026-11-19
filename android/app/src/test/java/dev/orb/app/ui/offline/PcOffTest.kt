@@ -177,6 +177,7 @@ class AbsoluteTimeTest {
         assertEquals("Aún no se ha conectado con este PC.", OfflineTexts.lastConnectionAbsolute(null, now, utc))
         assertEquals("Sin conexión · solo lectura. Última conexión hoy, 19:52. Lo que escribas en un chat sale al volver la conexión.", OfflineTexts.readOnlyBanner(at(2026, 11, 19, 19, 52), now, utc))
         assertTrue(OfflineTexts.readOnlyBanner(null, now, utc).startsWith("Sin conexión · solo lectura."))
+        assertEquals("Última conexión hoy, 19:52. Lo que escribas en un chat sale al volver la conexión.", OfflineTexts.readOnlyNote(at(2026, 11, 19, 19, 52), now, utc))
     }
 
     @Test fun theDayTurnsAtLocalMidnight() {

@@ -80,8 +80,11 @@ object OfflineTexts {
     const val READ_ONLY_TITLE = "Sin conexión · solo lectura"
 
     /** The note of the read-only app. A chat still takes messages: they wait in the queue, so the note says so. */
-    fun readOnlyBanner(at: Long?, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()) =
-        "$READ_ONLY_TITLE. " + (if (at == null) "$SAVED_UNKNOWN." else "Última conexión ${absolute(at, now, tz)}.") + " Lo que escribas en un chat sale al volver la conexión."
+    fun readOnlyBanner(at: Long?, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()) = "$READ_ONLY_TITLE. " + readOnlyNote(at, now, tz)
+
+    /** The same note without its title, for the header that already says «Sin conexión · solo lectura» under ORB·E. */
+    fun readOnlyNote(at: Long?, now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()) =
+        (if (at == null) "$SAVED_UNKNOWN." else "Última conexión ${absolute(at, now, tz)}.") + " Lo que escribas en un chat sale al volver la conexión."
 
     /** Milliseconds until the next local midnight (plus a second, so the wake-up lands on the new day). */
     fun untilNextDay(now: Long, tz: java.util.TimeZone = java.util.TimeZone.getDefault()): Long {
