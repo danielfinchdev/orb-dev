@@ -144,7 +144,9 @@ data class TaskDiff(
      * Anything not listed here (unfinished merge, no final photo, unknown reason, task still running) offers nothing.
      */
     fun allowsAccept(undone: Boolean): Boolean = when {
-        available || reason == null -> true
+        available -> true
+        // No diff and no reason is an unreadable answer: nothing is offered rather than guessing what the PC allows.
+        reason == null -> false
         reason == NO_PHOTO -> !undone
         reason in ACCEPT_WITHOUT_DIFF -> true
         else -> false
@@ -154,7 +156,7 @@ data class TaskDiff(
      * Whether «Deshacer» may be offered for this diff. Undoing sends the whole folder back to before the task, so it is only
      * offered when the person has seen what changes (a diff) or the PC keeps a copy to restore from a folder without git.
      */
-    val allowsUndo: Boolean get() = available || reason == null || reason == NO_GIT
+    val allowsUndo: Boolean get() = available || reason == NO_GIT
 
     companion object {
         const val JOINED_BY_HAND = "joinedbyhand"

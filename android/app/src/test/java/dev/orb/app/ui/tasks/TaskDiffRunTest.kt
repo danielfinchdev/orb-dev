@@ -200,6 +200,30 @@ class TaskDiffRunTest {
         assertEquals("other" to (false to false), "other" to buttonsFor("somethingnew"))
     }
 
+    @Test fun anUnavailableDiffWithoutReasonOffersNothing() {
+        val d = TaskDiff(false, emptyList(), 0, reason = null)
+        assertFalse(d.allowsAccept(false))
+        assertFalse(d.allowsAccept(true))
+        assertFalse(d.allowsUndo)
+    }
+
+    @Test fun anAnswerThatIsNotAnObjectOffersNothing() {
+        for (raw in listOf("[]", "null", "\"x\"", "7")) {
+            val d = TasksParser.diff(Json.parseToJsonElement(raw))
+            assertNull(d.reason)
+            assertFalse(raw, d.allowsAccept(false))
+            assertFalse(raw, d.allowsUndo)
+        }
+    }
+
+    @Test fun aCopyTaskWithoutFinalPhotoOffersNoButtonEither() {
+        val b = FakeTasksBackend().also {
+            it.details[4] = Result.success(detail(task(4, "Push", status = "done"), hasCheckpoint = true, checkpointId = "run2", mode = "copia"))
+            it.diffs[4] = Result.success(TaskDiff(false, emptyList(), 0, reason = "nophotoafter"))
+        }
+        runTest(dispatcher) { val s = vm(b).state.value; assertEquals(false to false, s.canAccept to s.canUndo) }
+    }
+
     @Test fun aTaskAlreadyUndoneWithNoPhotoIsNotOfferedAccept() {
         assertEquals(false to false, buttonsFor("nophoto", undone = true))
     }

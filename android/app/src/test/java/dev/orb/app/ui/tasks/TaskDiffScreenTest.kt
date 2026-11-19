@@ -259,7 +259,7 @@ class TaskDiffScreenTest {
 
     @Test fun aTaskWithoutFinalPhotoIsToldAndOffersNoButtonAtAll() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "nophotoafter")))
-        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Para deshacerla, hazlo desde el PC: allí se ve lo que se perdería.").assertIsDisplayed()
+        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea, así que aquí no hay cambios que enseñar. Deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después: solo se puede hacer desde el PC.").assertIsDisplayed()
         rule.onNodeWithText("Aceptar").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
@@ -317,7 +317,7 @@ class TaskDiffScreenTest {
     }
 
     @Test fun thePcsRefusalForNoFinalPhotoIsShownAsItIs() =
-        refusalIsShownAsItIs("el PC no guardó el estado final de esta tarea; deshazla desde el PC, donde se ve lo que se perdería")
+        refusalIsShownAsItIs("el PC no guardó el estado final de esta tarea; deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después. Hazlo desde el PC si de verdad quieres eso")
 
     @Test fun thePcsRefusalForAnUnfinishedMergeIsShownAsItIs() =
         refusalIsShownAsItIs("la unión de esta tarea quedó sin terminar; resuélvela en el PC")
@@ -345,6 +345,15 @@ class TaskDiffScreenTest {
         show(backend(TaskDiff(false, emptyList(), 0)))
         rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()
         rule.onNodeWithText("La tarea no cambió archivos, sigue en marcha, se deshizo o el proyecto no usa git.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
+    }
+
+    @Test fun anUnavailableDiffWithoutReasonOffersNoButtonAndKeepsTheGenericSentence() {
+        show(backend(TaskDiff(available = false, files = emptyList(), more = 0, reason = null)))
+        rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun anAvailableDiffWithoutFilesSaysTheTaskChangedNone() {

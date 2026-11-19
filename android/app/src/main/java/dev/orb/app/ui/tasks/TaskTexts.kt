@@ -316,7 +316,7 @@ object TaskTexts {
     const val JOINED_BY_HAND = "Cambios unidos a mano en el PC"
     const val JOINED_BY_HAND_HINT = "Los cambios de esta tarea se unieron a mano en el PC. Aquí no se pueden ver ni deshacer."
     const val NO_PHOTO_AFTER = "No hay cambios que enseñar"
-    const val NO_PHOTO_AFTER_HINT = "El PC no pudo guardar el estado final de esta tarea, así que no hay cambios que enseñar. Para deshacerla, hazlo desde el PC: allí se ve lo que se perdería."
+    const val NO_PHOTO_AFTER_HINT = "El PC no pudo guardar el estado final de esta tarea, así que aquí no hay cambios que enseñar. Deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después: solo se puede hacer desde el PC."
     const val RESOLVE_ON_PC = "La unión de los cambios quedó sin terminar"
     const val RESOLVE_ON_PC_HINT = "La unión de los cambios de esta tarea quedó sin terminar. Resuélvela en el PC."
     const val UNKNOWN_RUN = "Punto de vuelta anterior a la última actualización"
