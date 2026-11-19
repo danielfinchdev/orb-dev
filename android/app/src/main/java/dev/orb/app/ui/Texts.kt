@@ -24,7 +24,7 @@ fun pairErrorText(e: PairError, via: dev.orb.app.link.payload.LinkVia? = null): 
         e.reason == null && e.status == 401 -> "Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC."
         e.reason == null && e.status == 429 -> "Demasiados intentos desde este móvil. Espera unos minutos."
         e.reason == null && (e.status == 404 || e.status == 410) -> "Esa dirección no responde como un Orb. Revisa la dirección del PC."
-        else -> e.error
+        else -> dev.orb.app.link.net.pcMessage(e.error, "El PC rechazó el enlace.")
     }
     PairError.KdfTooHeavy -> "El PC pide más memoria de la que tiene este móvil para comprobar la contraseña."
     PairError.NoShortCode -> "Ese Orb no tiene un código en pantalla. Muestra el código de enlace en el PC."

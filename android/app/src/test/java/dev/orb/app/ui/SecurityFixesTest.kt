@@ -87,3 +87,20 @@ class PcNameTextTest {
         assertNull(pcNameOrNull(null))
     }
 }
+
+class PcMessageTextTest {
+    @Test fun aRefusalIsOneShortLine() {
+        val raw = "Hola\r\n\n  llama al‮ 600 123 456​" + "x".repeat(500)
+        val shown = dev.orb.app.link.net.pcMessage(raw, "nada")
+        assertTrue(shown.length <= 200)
+        assertEquals("Hola llama al 600 123 456", shown.take(25))
+        assertTrue(shown.none { it == '\n' || it == '\r' || it == '‮' || it == '​' })
+    }
+
+    @Test fun anEmptyOneFallsBack() {
+        assertEquals("nada", dev.orb.app.link.net.pcMessage("‮\n", "nada"))
+        assertEquals("nada", dev.orb.app.link.net.pcMessage(null, "nada"))
+    }
+
+    @Test fun aShortNormalTextIsUntouched() = assertEquals("gh no está instalado", dev.orb.app.link.net.pcMessage("gh no está instalado", ""))
+}

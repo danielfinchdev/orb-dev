@@ -183,7 +183,7 @@ object ProjectTexts {
     /** The PC's own words when it refused, so «gh no está instalado» reaches the person unchanged. */
     fun pcError(e: Throwable): String {
         val refused = (e as? dev.orb.app.link.net.LinkException)?.error as? dev.orb.app.link.net.LinkError.Refused
-        return refused?.error?.takeIf { it.isNotBlank() } ?: dev.orb.app.ui.linkErrorText(e)
+        return refused?.error?.takeIf { it.isNotBlank() }?.let { dev.orb.app.link.net.pcMessage(it, "") } ?: dev.orb.app.ui.linkErrorText(e)
     }
 
     fun mergeMethod(m: String) = when (m) {

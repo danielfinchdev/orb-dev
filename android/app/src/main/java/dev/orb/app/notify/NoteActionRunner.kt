@@ -3,6 +3,7 @@ package dev.orb.app.notify
 import dev.orb.app.link.api.PcCaller
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
+import dev.orb.app.link.net.pcMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.withTimeout
@@ -84,7 +85,7 @@ class NoteActionRunner(
         LinkError.Offline -> NotifyTexts.OFFLINE
         LinkError.Timeout -> NotifyTexts.TIMEOUT
         LinkError.NotLinked -> NotifyTexts.NOT_LINKED
-        is LinkError.Refused -> err.error
+        is LinkError.Refused -> pcMessage(err.error, "El PC lo rechazó (${err.status}).")
         LinkError.BadAnswer -> NotifyTexts.BAD_ANSWER
         else -> NotifyTexts.OFFLINE
     }

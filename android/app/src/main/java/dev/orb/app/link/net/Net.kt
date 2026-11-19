@@ -74,24 +74,35 @@ fun pcVersionOrNull(raw: String?): String? = raw?.takeIf { it.length <= 32 && PC
 private const val PC_NAME_MAX = 60
 
 /** The PC's own name as one short line: it is shown on several screens, so the PC cannot make it long or multi-line. */
-fun pcNameOrNull(raw: String?): String? {
-    if (raw == null) return null
+fun pcNameOrNull(raw: String?): String? = oneLine(raw, PC_NAME_MAX).ifEmpty { null }
+
+private const val PC_MESSAGE_MAX = 200
+
+/**
+ * A refusal's text from the PC as one short line, for painting only. An unauthenticated PC can send anything, so a long or
+ * multi-line text cannot take over the screen. Phrases are matched on the raw text, never on this.
+ */
+fun pcMessage(raw: String?, fallback: String): String = oneLine(raw, PC_MESSAGE_MAX).ifEmpty { fallback }
+
+/** Line breaks and control characters become one space, format characters (right-to-left override, zero-width) are dropped, then it is cut to [max]. */
+private fun oneLine(raw: String?, max: Int): String {
+    if (raw == null) return ""
     val sb = StringBuilder()
     var gap = false
     for (ch in raw) {
         val type = Character.getType(ch)
         val breaks = Character.isISOControl(ch) || type == Character.LINE_SEPARATOR.toInt() || type == Character.PARAGRAPH_SEPARATOR.toInt()
-        // Format characters (right-to-left override, zero-width) draw nothing or reorder the line, so they are dropped, not turned into a gap.
+        // Format characters draw nothing or reorder the line, so they are dropped, not turned into a gap.
         if (type == Character.FORMAT.toInt()) continue
         if (breaks) gap = true else { if (gap && sb.isNotEmpty()) sb.append(' '); gap = false; sb.append(ch) }
     }
     var line = sb.toString().trim()
-    if (line.length > PC_NAME_MAX) {
-        var end = PC_NAME_MAX
+    if (line.length > max) {
+        var end = max
         if (Character.isHighSurrogate(line[end - 1])) end--
         line = line.substring(0, end).trimEnd()
     }
-    return line.ifEmpty { null }
+    return line
 }
 
 /** The PC's name for a screen, from one place: the live answer first, then the saved session name (an older version may have stored it unbounded). */

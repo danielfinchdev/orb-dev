@@ -289,7 +289,7 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 /** Reads the PC's refusals by their text: the engine sends them without a code, in the language Orb is set to on the PC. */
 object ChatErrors {
     /** What the PC itself said when it refused, word for word; null when the failure was not a refusal. */
-    fun pcText(e: Throwable): String? = refusal(e)?.takeIf { it.isNotBlank() }
+    fun pcText(e: Throwable): String? = refusal(e)?.takeIf { it.isNotBlank() }?.let { dev.orb.app.link.net.pcMessage(it, "") }
     /** The PC refused because the queued message has another text now than the one the person saw. */
     fun queuedChanged(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ha cambiado desde que lo viste", ignoreCase = true) || it.contains("has changed since you saw it", ignoreCase = true) } == true
