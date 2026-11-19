@@ -50,8 +50,8 @@ test('lista de programadas: the zone and the wording of the timing follow the mo
 });
 
 test('proyecto: the first row of the summary cards keeps the rule under the title', () => {
-  assert.match(page, /'border-border rounded-none border-t', compact \? 'px-0 py-2' : 'first:border-t-0'/);
-  assert.match(page, /'border-border cursor-pointer rounded-none border-t', compact \? 'px-0 py-2' : 'first:border-t-0'/);
+  // the task rows and the chat rows: both open what they show, so both carry the pointer
+  assert.equal(page.match(/'border-border cursor-pointer rounded-none border-t', compact \? 'px-0 py-2' : 'first:border-t-0'/g)?.length, 2);
 });
 
 test('pizarra: no picker in the header; the project list is in ⋯ and uses projects.setActive', () => {
