@@ -38,7 +38,7 @@ const LABEL = { flutter: 'Flutter', androidSdk: 'Android SDK', java: 'Java (JDK)
 
 const isFile = (f) => { try { return fs.statSync(f).isFile(); } catch { return false; } };
 const isDir = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
-const inside = (dir, root, win) => { if (!root) return false; const rel = path.relative(win ? root.toLowerCase() : root, win ? dir.toLowerCase() : dir); return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
+const inside = (dir, root, win) => { if (!root) return false; const rel = path.relative(win ? root.toLowerCase() : root, win ? dir.toLowerCase() : dir); return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)); };
 
 // → [{ id, label, path (found and usable, or null), inCore (found only inside Orb's core), missing ([paths the PATH or a
 //    variable names that do not exist]), url }]

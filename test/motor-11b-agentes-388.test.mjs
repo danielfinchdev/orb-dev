@@ -65,7 +65,11 @@ test('herramientas: Flutter, SDK de Android y Java con su versión, leída de su
   const planted = path.join(root, 'orbcore', 'herramientas', 'jdk');
   touch(path.join(planted, 'bin', win ? 'java.exe' : 'java'));
   assert.equal(toolVersion('java', path.join(planted, 'bin'), { core: path.join(root, 'orbcore'), run: () => assert.fail('a java inside the Orb folder must not be run') }), null);
-  touch(path.join(planted, 'release'), 'JAVA_VERSION="17.0.1"\n');
+  // a folder whose name merely starts with two dots is inside the core, not a parent of it
+  const dots = path.join(root, 'orbcore', '..x', 'jdk');
+  touch(path.join(dots, 'bin', win ? 'java.exe' : 'java'));
+  assert.equal(toolVersion('java', path.join(dots, 'bin'), { core: path.join(root, 'orbcore'), run: () => assert.fail('a java in a folder named ..x inside the core must not be run') }), null);
+  touch(path.join(planted, 'release'),'JAVA_VERSION="17.0.1"\n');
   assert.equal(toolVersion('java', path.join(planted, 'bin'), { core: path.join(root, 'orbcore'), run: () => assert.fail('release is read, not run') }), '17.0.1');
 });
 
