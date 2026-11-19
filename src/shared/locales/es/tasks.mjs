@@ -86,6 +86,7 @@ export default {
   'tasks.retry.done': 'Añadida de nuevo a la cola',
   'tasks.undo.title': 'Deshacer esta tarea',
   'tasks.undo.body': 'Se devuelven los archivos a como estaban antes de #{id}. Los cambios posteriores se conservan.',
+  'tasks.undo.bodyNoFinal': 'No hay foto del final de #{id}: al deshacerla, la carpeta vuelve a como estaba antes de la tarea y se pierde también lo que se haya cambiado después.',
   'tasks.undo.bodyPhoto': 'Se devuelven los archivos a como estaban antes de #{id} (foto previa {time}). Los cambios posteriores se conservan.',
   'tasks.undo.ok': 'Deshacer',
   'tasks.undo.btn': 'Deshacer esta tarea',

@@ -123,3 +123,21 @@ test('a real scheduler.discardBranch after an abandoned join: the phone is refus
   // a second discard has no branch left
   await assert.rejects(sched.discardBranch(task.id));
 });
+
+test('tasks.get says whether the undo point has the photo of the end of the task', () => {
+  const board = new Board();
+  const dir = path.join(home.home, 'web', `fp${Date.now()}`); fs.mkdirSync(dir, { recursive: true });
+  board.addProject({ name: path.basename(dir), path: dir }, 'usuario');
+  const task = board.createTask({ project: path.basename(dir), title: 'T', description: 'x', agent: 'claude' }, 'usuario');
+  const methods = workMethods({ board, scheduler: {} });
+  const get = () => methods['tasks.get']({ id: task.id }).finalPhoto;
+  assert.equal(get(), null);
+  board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', commit: 'aaa', repo: 'r' }, after: null });
+  assert.equal(get(), false);
+  board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', commit: 'aaa', repo: 'r' }, after: { commit: 'bbb' } });
+  assert.equal(get(), true);
+  board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'copy' }, after: null });
+  assert.equal(get(), false);
+  board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'copy' }, after: { files: {} } });
+  assert.equal(get(), true);
+});

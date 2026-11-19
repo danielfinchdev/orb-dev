@@ -91,7 +91,9 @@ export async function acceptHeld(t, task) {
   return act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
 }
 // What «Deshacer» says it will do: the task and, when the task's events are at hand, the time of the snapshot it goes back to.
+// `finalPhoto === false` (tasks.get): no photo of the end of the task, so the whole folder goes back, later changes included.
 export function undoBody(t, task) {
+  if (task.finalPhoto === false) return t('tasks.undo.bodyNoFinal', { id: task.id });
   const at = task.events?.find((e) => e.kind === 'checkpoint')?.at;
   return at ? t('tasks.undo.bodyPhoto', { id: task.id, time: new Date(at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) }) : t('tasks.undo.body', { id: task.id });
 }
@@ -105,6 +107,8 @@ export async function undoTask(t, task, during = (fn) => fn()) {
   if (undoing.has(task.id)) return undefined;
   undoing.add(task.id);
   try {
+    // a row of a list does not carry whether the end photo exists: ask the detail, and fall back to the plain text if it fails
+    if (task.finalPhoto === undefined) { try { task = { ...task, finalPhoto: (await call('tasks.get', { id: task.id }))?.finalPhoto }; } catch { /* the dialog keeps its usual text */ } }
     if (await confirm(t('tasks.undo.title'), undoBody(t, task), { ok: t('tasks.undo.ok'), danger: true, tone: 'primary' })) return await during(() => act(call('tasks.undo', { id: task.id })));
     return undefined;
   } finally { undoing.delete(task.id); }

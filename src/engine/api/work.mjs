@@ -41,6 +41,13 @@ function checkpointIdOf(board, taskId) {
 // A phone that sends the checkpointId is refused while the stored end photo still belongs to an earlier run (a task
 // re-run in an isolated copy keeps the previous undo point until its work is joined). A point whose run cannot be known
 // (an old one) only blocks what touches files: accepting just marks the task, so it passes with { files: false }.
+// Whether the undo point has the photo of the end of the task. Without it an undo takes the folder as it is now as «after»
+// and rolls back later work too. null: there is no undo point at all.
+function finalPhotoOf(board, taskId) {
+  const cp = board.settingJson(`checkpoint:${taskId}`);
+  if (!cp?.before) return null;
+  return Boolean(cp.before.kind === 'git' ? cp.after?.commit : cp.after);
+}
 function assertPointCurrent(board, taskId, { files = true } = {}) {
   const cp = board.settingJson(`checkpoint:${taskId}`);
   const run = cp?.after?.run;
@@ -101,7 +108,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
       const now = board.projectPathNow(d) ?? null;
       const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
-      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -130,9 +137,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       if (checkpoint != null || principal?.channel !== 'desktop') {
         if (joinedByHand(board, tid)) fail(tr('msg.undo.joinedByHand'));
         if (joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
-        // Without an end photo the undo would take the folder as it is now as «after» and roll back later work too.
-        const cp = board.settingJson(`checkpoint:${tid}`);
-        if (cp?.before && !(cp.before.kind === 'git' ? cp.after?.commit : cp.after)) fail(tr('msg.undo.noFinalState'));
+        if (finalPhotoOf(board, tid) === false) fail(tr('msg.undo.noFinalState'));
         assertPointCurrent(board, tid);
       }
       return scheduler.undo(tid);

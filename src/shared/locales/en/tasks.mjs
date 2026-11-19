@@ -86,6 +86,7 @@ export default {
   'tasks.retry.done': 'Added back to the queue',
   'tasks.undo.title': 'Undo this task',
   'tasks.undo.body': 'The files go back to how they were before #{id}. Later changes are kept.',
+  'tasks.undo.bodyNoFinal': 'There is no snapshot of the end of #{id}: undoing it puts the folder back as it was before the task and also loses anything changed afterwards.',
   'tasks.undo.bodyPhoto': 'The files go back to how they were before #{id} (snapshot {time}). Later changes are kept.',
   'tasks.undo.ok': 'Undo',
   'tasks.undo.btn': 'Undo this task',

@@ -180,3 +180,13 @@ test('step 7C2: what the mock-up draws and Orb already had is connected: +N −M
   assert.match(pc, /data-testid="task-cancel-running"/);
   assert.match(pc, /key: 'cancel'/);
 });
+
+test('the undo dialog says what is lost when the task has no final snapshot', async () => {
+  const { default: es } = await import('../src/shared/locales/es.mjs');
+  const { default: en } = await import('../src/shared/locales/en.mjs');
+  assert.match(es['tasks.undo.bodyNoFinal'], /se pierde también lo que se haya cambiado después/);
+  assert.match(en['tasks.undo.bodyNoFinal'], /loses anything changed afterwards/);
+  const state = read('src/ui/components/task-state.jsx');
+  assert.match(state, /task\.finalPhoto === false\) return t\('tasks\.undo\.bodyNoFinal'/);
+  assert.match(state, /call\('tasks\.get', \{ id: task\.id \}\)/);
+});
