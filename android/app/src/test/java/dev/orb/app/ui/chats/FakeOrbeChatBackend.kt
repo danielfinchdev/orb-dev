@@ -56,6 +56,10 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     var queueOnPc: List<OrbeQueued> = emptyList()
     var queueResult: Result<List<OrbeQueued>>? = null
     var editResult: Result<List<OrbeQueued>>? = null
+    /** Holds `chat.editQueued` open so a test can change the editor while the answer is on its way. */
+    var editGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+    /** Runs when `chat.editQueued` is called, before it answers: the PC changing while the request is on its way. */
+    var onEdit: () -> Unit = {}
     var queueReads = 0
     /** Called with the text of each action that changes a task, so a test can make the PC answer as it would afterwards. */
     var onAction: (String) -> Unit = {}
@@ -141,8 +145,11 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     val editExpects = ArrayList<String?>()
     var undoResult: Result<Unit>? = null
     override suspend fun queue(conversation: Long): Result<List<OrbeQueued>> { queueReads++; calls += "queue"; return queueResult ?: Result.success(queueOnPc) }
-    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>> {
+    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean, expect: String?): Result<List<OrbeQueued>> {
         calls += if (remove) "queue-remove $queueId" else "queue-edit $queueId $text"
+        editExpects += expect
+        onEdit()
+        editGate?.await()
         editResult?.let { return it }
         queueOnPc = if (remove) queueOnPc.filter { it.id != queueId } else queueOnPc.map { if (it.id == queueId) it.copy(text = text.orEmpty()) else it }
         return Result.success(queueOnPc)

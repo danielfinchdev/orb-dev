@@ -175,7 +175,8 @@ interface OrbeChatBackend {
     suspend fun queue(conversation: Long): Result<List<OrbeQueued>>
 
     /** Changes ([text]) or removes ([remove]) one queued message; → the queue that is left. */
-    suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>>
+    /** [expect]: the text the person saw; the PC refuses to change a message that has another text now. */
+    suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean, expect: String? = null): Result<List<OrbeQueued>>
     suspend fun decideRequest(session: String, request: String, decision: String): Result<Unit>
 }
 
@@ -281,11 +282,12 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
         if (!api.available(ApiMethods.CHAT_QUEUE)) Result.success(emptyList())
         else api.chat.queue(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.queue(it) }
 
-    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>> =
+    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean, expect: String?): Result<List<OrbeQueued>> =
         api.chat.editQueued(
             buildJsonObject {
                 put("conversation", conversation)
                 put("queueId", queueId)
+                if (expect != null) put("expect", expect)
                 if (remove) put("remove", true) else put("text", text.orEmpty())
             },
         ).map { OrbeParser.queue(it) }
@@ -307,6 +309,10 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 object ChatErrors {
     /** What the PC itself said when it refused, word for word; null when the failure was not a refusal. */
     fun pcText(e: Throwable): String? = refusal(e)?.takeIf { it.isNotBlank() }
+    /** The PC refused because the queued message has another text now than the one the person saw. */
+    fun queuedChanged(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("ha cambiado desde que lo viste", ignoreCase = true) } == true
+
     fun queuedGone(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ya no está en la cola", ignoreCase = true) || it.contains("no longer in the queue", ignoreCase = true) } == true
 

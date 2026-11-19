@@ -57,9 +57,12 @@ data class ApprovalAsk(val detail: TaskDetail)
 @Immutable
 data class UndoAsk(val task: Long, val title: String, val files: Int?, val checkpoint: String? = null)
 
-/** The queued message being edited; [error] is what the PC answered to the last try, word for word. */
+/**
+ * The queued message being edited; [error] is what the PC answered to the last try, word for word. [session] tells one opening
+ * of the editor from the next: an answer that comes back after the editor was closed or opened on another message is not for it.
+ */
 @Immutable
-data class QueueEditor(val item: OrbeQueued, val busy: Boolean = false, val error: String? = null, val revision: Int = 0)
+data class QueueEditor(val item: OrbeQueued, val busy: Boolean = false, val error: String? = null, val revision: Int = 0, val session: Long = 0)
 
 @Immutable
 data class OrbeChatState(
@@ -175,12 +178,12 @@ class OrbeChatViewModel(
     private var asked = HashSet<Long>()
     private var markedAt = 0L
     private var maxId = 0L
-    private var loadedOnceMore = false
-
-    /** A message that left the queue (the PC took it) and waits for its own line to come back. */
 
     /** The id of the latest line of the thread that names each task: which cards are the newest. */
     @Volatile private var recency: Map<Long, Long> = emptyMap()
+    private var loadedOnceMore = false
+
+    /** A message that left the queue (the PC took it) and waits for its own line to come back. */
     private class Ghost(val pending: PendingMessage, val baseId: Long)
 
     private val parseCache = HashMap<String, ChatMessage?>()
@@ -272,10 +275,10 @@ class OrbeChatViewModel(
         for ((id, m) in lines.fresh) if (id !in byId) byId[id] = m
         val real = byId.values.sortedBy { it.id }.map { m -> lines.overrides[m.id]?.let { m.copy(card = it) } ?: m }
         maxId = real.maxOfOrNull { it.id } ?: 0L
+        recency = HashMap<Long, Long>().also { r -> for (m in real) tasksOf(m).forEach { t -> r[t] = m.id } }
         val items = ArrayList<ChatItem>(real.size + lines.provisional.size + queued.size + ghost.size)
         real.mapTo(items) { ChatItem.Msg(it) }
         // A provisional line (a truncated `chat:new`) goes once its saved version is among the lines, so it does not show twice.
-        recency = HashMap<Long, Long>().also { r -> for (m in real) tasksOf(m).forEach { t -> r[t] = m.id } }
         val newReal = real.takeLast(6)
         lines.provisional.filterNot { p -> newReal.any { it.role == p.role && it.body.startsWith(p.body.trimEnd('…').take(80)) } }
             .mapTo(items) { ChatItem.Msg(it, provisional = true) }
@@ -306,9 +309,6 @@ class OrbeChatViewModel(
         return ids
     }
 
-    /** Asks for the running tasks again; the screen calls it while something is running. */
-    fun refreshLive() { liveRequests.trySend(Unit) }
-
     private fun tasksOf(m: ChatMessage): List<Long> {
         val out = ArrayList<Long>(2)
         m.task?.let(out::add)
@@ -320,6 +320,9 @@ class OrbeChatViewModel(
         }
         return out
     }
+
+    /** Asks for the running tasks again; the screen calls it while something is running. */
+    fun refreshLive() { liveRequests.trySend(Unit) }
 
     private fun onEvent(ev: LinkEvent) {
         val o = ev.payload as? JsonObject
@@ -733,10 +736,15 @@ class OrbeChatViewModel(
 
     fun openQueued(id: String) {
         val item = queueItems.value.firstOrNull { it.id == id } ?: return
-        queueEditor.value = QueueEditor(item)
+        queueEditor.value = QueueEditor(item, session = editorSessions.incrementAndGet())
     }
 
     fun closeQueued() { queueEditor.value = null }
+
+    private val editorSessions = java.util.concurrent.atomic.AtomicLong()
+
+    /** The editor the person is looking at is still the one a request was sent for. */
+    private fun stillEditing(e: QueueEditor) = queueEditor.value?.let { it.item.id == e.item.id && it.session == e.session } == true
 
     fun saveQueued(text: String) {
         val editing = queueEditor.value ?: return
@@ -749,51 +757,83 @@ class OrbeChatViewModel(
             // The message may have been edited on the PC while this editor was open: saving would silently replace that text.
             val current = backend.queue(conversation).fold(
                 { list -> queueItems.value = list; list.firstOrNull { it.id == editing.item.id } ?: GONE },
-                { e -> queueFailure(editing.item.id, e); return@launch },
+                { e -> queueFailure(editing.item.id, e, editing); return@launch },
             )
             when {
-                current === GONE -> { queueEditor.value = null; _messages.trySend(ChatTexts.QUEUE_STARTED) }
-                current.text != editing.item.text ->
-                    queueEditor.value = QueueEditor(current, error = ChatTexts.QUEUE_CHANGED, revision = editing.revision + 1)
-                else -> backend.editQueued(conversation, editing.item.id, t, remove = false).fold(
-                    onSuccess = { list -> queueItems.value = list; queueEditor.value = null },
-                    onFailure = { queueFailure(editing.item.id, it) },
+                current === GONE -> if (stillEditing(editing)) { queueEditor.value = null; _messages.trySend(ChatTexts.QUEUE_STARTED) }
+                current.text != editing.item.text -> reloadEditor(editing, current)
+                // `expect` makes the PC refuse if the text changed after the read above too.
+                else -> backend.editQueued(conversation, editing.item.id, t, remove = false, expect = editing.item.text).fold(
+                    onSuccess = { list -> queueItems.value = list; if (stillEditing(editing)) queueEditor.value = null },
+                    onFailure = { queueFailure(editing.item.id, it, editing) },
                 )
             }
         }
+    }
+
+    /** The PC has another text for the message: that one is loaded into the editor and the person decides again. */
+    private fun reloadEditor(editing: QueueEditor, current: OrbeQueued) {
+        if (stillEditing(editing)) queueEditor.value = QueueEditor(current, error = ChatTexts.QUEUE_CHANGED, revision = editing.revision + 1, session = editing.session)
     }
 
     /** Ids being removed: a second tap on the same "Quitar" must not ask the PC again and then say it already left. */
     private val removing = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     fun removeQueued(id: String) {
-        if (queueItems.value.none { it.id == id } || !removing.add(id)) return
+        val shown = queueItems.value.firstOrNull { it.id == id } ?: return
+        if (!removing.add(id)) return
+        val editing = queueEditor.value?.takeIf { it.item.id == id }
         viewModelScope.launch {
             try {
-                backend.editQueued(conversation, id, null, remove = true).fold(
+                // The text the person saw: a message edited on the PC meanwhile is not thrown away unseen.
+                backend.editQueued(conversation, id, null, remove = true, expect = (editing?.item ?: shown).text).fold(
                     onSuccess = { list -> queueItems.value = list; if (queueEditor.value?.item?.id == id) queueEditor.value = null },
-                    onFailure = { queueFailure(id, it) },
+                    onFailure = { queueFailure(id, it, editing) },
                 )
             } finally { removing.remove(id) }
         }
     }
 
-    private fun queueFailure(id: String, e: Throwable) {
+    /** [editing] is the editor the failed request was sent from, if any; its answer does not touch another editor. */
+    private fun queueFailure(id: String, e: Throwable, editing: QueueEditor?) {
         if (ChatErrors.queuedGone(e)) {
-            if (queueEditor.value?.item?.id == id) queueEditor.value = null
+            if (queueEditor.value?.item?.id == id && (editing == null || stillEditing(editing))) queueEditor.value = null
             _messages.trySend(ChatTexts.QUEUE_STARTED)
             queueRequests.trySend(Unit)
             return
         }
+        if (ChatErrors.queuedChanged(e)) {
+            // Load what the PC has now and let the person decide: nothing was changed.
+            viewModelScope.launch {
+                backend.queue(conversation).onSuccess { list ->
+                    queueItems.value = list
+                    val current = list.firstOrNull { it.id == id }
+                    when {
+                        current == null -> { if (editing != null && stillEditing(editing)) queueEditor.value = null; _messages.trySend(ChatTexts.QUEUE_STARTED) }
+                        editing != null -> reloadEditor(editing, current)
+                        else -> _messages.trySend(ChatTexts.QUEUE_CHANGED_REMOVE)
+                    }
+                }.onFailure { say(it) }
+            }
+            return
+        }
         // The PC's own words, as it said them (a command cannot wait in the queue, the text is too long...).
         val said = ChatErrors.pcText(e) ?: linkErrorText(e)
-        val editing = queueEditor.value
-        if (editing != null && editing.item.id == id) queueEditor.value = editing.copy(busy = false, error = said) else _messages.trySend(said)
+        val open = queueEditor.value
+        if (editing != null && open != null && stillEditing(editing)) queueEditor.value = open.copy(busy = false, error = said)
+        else if (editing == null && open != null && open.item.id == id) queueEditor.value = open.copy(busy = false, error = said)
+        else _messages.trySend(said)
     }
 
     private fun say(e: Throwable) {
         if (ChatErrors.deleted(e)) { deleted.value = true; return }
         _messages.trySend(linkErrorText(e))
+    }
+
+    /** The PC's own words when it refused, else the link's. */
+    private fun sayPc(e: Throwable) {
+        if (ChatErrors.deleted(e)) { deleted.value = true; return }
+        _messages.trySend(ChatErrors.pcText(e) ?: linkErrorText(e))
     }
 
     companion object {
@@ -808,9 +848,3 @@ class OrbeChatViewModel(
         private val MENTION = Regex("""(?<![\w&])#(\d{1,7})\b""")
     }
 }
-    /** The PC's own words when it refused, else the link's. */
-    private fun sayPc(e: Throwable) {
-        if (ChatErrors.deleted(e)) { deleted.value = true; return }
-        _messages.trySend(ChatErrors.pcText(e) ?: linkErrorText(e))
-    }
-
