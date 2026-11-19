@@ -59,6 +59,8 @@ test('el panel de la PR no pide la PR terminada de la rama por defecto y no repi
   const jsx = read('src/ui/components/pr-card.jsx');
   assert.match(jsx, /DEFAULT_BRANCHES = new Set\(\['main', 'master'\]\)/);
   assert.match(jsx, /lastPrs\.has\(key\)/);
+  // a missing PR or a failed lookup is never remembered
+  assert.match(jsx, /if \(!found\) \{ if \(alive\) setPr\(null\); return; \}\s+lastPrs\.set\(key, found\)/);
 });
 
 test('leer al abrir: con la ventana oculta no se lee y el chat de Orbe marcado vuelve a leerse al llegar una línea', () => {

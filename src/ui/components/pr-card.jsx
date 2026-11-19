@@ -95,7 +95,12 @@ export function usePr(session) {
       // (gh missing or offline: just no tab).
       if (DEFAULT_BRANCHES.has(info.branch)) { if (alive) setPr(null); return; }
       const key = `${session.id}:${info.branch}`;
-      if (!lastPrs.has(key)) lastPrs.set(key, await call('projects.branchPr', { name: project, branch: info.branch }).catch(() => null));
+      if (!lastPrs.has(key)) {
+        const found = await call('projects.branchPr', { name: project, branch: info.branch }).catch(() => null);
+        // Only a real PR is remembered: «no PR yet» or a failed gh call must be asked again, or the tab stays hidden.
+        if (!found) { if (alive) setPr(null); return; }
+        lastPrs.set(key, found);
+      }
       if (alive) setPr(lastPrs.get(key));
     }).catch(quiet);
     return () => { alive = false; };
