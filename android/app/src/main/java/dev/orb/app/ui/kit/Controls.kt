@@ -163,18 +163,18 @@ fun OrbChip(
     }
 }
 
-/** `.segm`: a track with one raised choice; for two to four short options. */
+/** `.segm`: a track with one raised choice; for two to four short options. [stretch] makes the choices share the full width. */
 @Composable
-fun OrbSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier) {
+fun OrbSegmented(options: List<String>, selected: Int, onSelect: (Int) -> Unit, modifier: Modifier = Modifier, stretch: Boolean = false) {
     Row(
-        modifier.clip(RadiusCtl).background(OrbKit.secondary).padding(2.dp).selectableGroup(),
+        modifier.then(if (stretch) Modifier.fillMaxWidth() else Modifier).clip(RadiusCtl).background(OrbKit.secondary).padding(2.dp).selectableGroup(),
         horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         options.forEachIndexed { i, label ->
             val on = i == selected
             val shape = RoundedCornerShape(6.dp)
             Box(
-                Modifier.height(32.dp).then(if (on) Modifier.shadow(1.dp, shape) else Modifier).clip(shape)
+                Modifier.then(if (stretch) Modifier.weight(1f) else Modifier).height(32.dp).then(if (on) Modifier.shadow(1.dp, shape) else Modifier).clip(shape)
                     .background(if (on) OrbKit.card else Color.Transparent)
                     .selectable(selected = on, role = Role.RadioButton, onClick = { onSelect(i) }).padding(horizontal = 10.dp),
                 contentAlignment = Alignment.Center,

@@ -2,6 +2,7 @@ package dev.orb.app.ui.chats
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -29,12 +30,12 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
@@ -82,7 +83,10 @@ import dev.orb.app.ui.kit.OrbBadgeKind
 import dev.orb.app.ui.kit.OrbBubble
 import dev.orb.app.ui.kit.OrbButton
 import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbChip
 import dev.orb.app.ui.kit.OrbDelivery
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
 import dev.orb.app.ui.kit.OrbDeliveryMark
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbMessageText
@@ -264,7 +268,10 @@ private fun SystemMessage(m: ChatMessage, state: OrbeChatState, actions: CardAct
     when (val card = m.card) {
         is MsgCard.Permission -> PermissionCard(m, card, state.online, m.id in state.busyCards, actions, modifier)
         is MsgCard.TaskAttention -> TaskCard(m, card.task, state, actions, modifier)
-        is MsgCard.TaskEnd -> NoteLine(m.body, modifier, fold = card.result)
+        // A task with no card of its own in the thread gets one when it ends; otherwise its card already says how it ended.
+        is MsgCard.TaskEnd ->
+            if (m.task != null && m.task !in state.attentionTasks) TaskCard(m, m.task, state, actions, modifier, result = card.result)
+            else NoteLine(m.body, modifier, fold = card.result.ifBlank { null })
         else -> NoteLine(m.body, modifier)
     }
 }
@@ -402,9 +409,15 @@ class CardActions(
     val answer: (ChatMessage, List<String>, String?, Boolean) -> Unit,
     val accept: (ChatMessage) -> Unit,
     val decideRequest: (ChatMessage, String) -> Unit,
-    val askApproval: (Long) -> Unit,
-    val rejectTask: (Long) -> Unit,
+    /** «Aprobar» of a task's card with the fingerprint of what the card showed. */
+    val approve: (Long, String?) -> Unit,
+    /** «Rechazar»: the screen confirms before the task is cancelled. */
+    val reject: (Long) -> Unit,
     val watchTask: (Long) -> Unit,
+    val acceptTask: (Long) -> Unit,
+    /** «Deshacer»: the screen confirms before the files of the PC are touched. */
+    val undoTask: (Long) -> Unit,
+    val openChanges: (Long) -> Unit,
 )
 
 @Composable
@@ -431,6 +444,7 @@ fun QuestionCard(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: 
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun OpenQuestion(m: ChatMessage, q: MsgCard.Question, online: Boolean, sending: Boolean, actions: CardActions) {
     val picked = remember(m.id) { mutableStateListOf<String>() }
@@ -438,53 +452,48 @@ private fun OpenQuestion(m: ChatMessage, q: MsgCard.Question, online: Boolean, s
     var typing by rememberSaveable(m.id) { mutableStateOf(false) }
     val limit = if (q.multi) 4 else 1
     val canSend = online && !sending && (picked.isNotEmpty() || other.isNotBlank())
-    CardFrame {
-        if (!q.header.isNullOrBlank()) Text(q.header, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-        Text(q.question.ifBlank { m.body }, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-        Text(if (q.multi) ChatTexts.ANSWER_PICK_MANY else ChatTexts.ANSWER_PICK, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-        for (o in q.options) {
-            val on = o.label in picked
-            Row(
-                Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp))
-                    .selectable(on, enabled = online && !sending, role = if (q.multi) Role.Checkbox else Role.RadioButton) {
-                        if (q.multi) { if (on) picked.remove(o.label) else if (picked.size < limit) picked.add(o.label) }
-                        else { picked.clear(); picked.add(o.label) }
-                        if (picked.isNotEmpty()) typing = false
-                    }
-                    .padding(horizontal = 4.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                if (q.multi) Checkbox(on, null) else RadioButton(on, null)
-                Column(Modifier.padding(start = 8.dp)) {
-                    Text(o.label, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                    if (!o.description.isNullOrBlank()) Text(o.description, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-                }
+    // The question reads as the person's own thread (the mockup's `.chips`): the text, one chip per option, «Otra respuesta…».
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!q.header.isNullOrBlank()) Text(q.header, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp, fontWeight = FontWeight.Medium)
+        OrbMessageText(q.question.ifBlank { m.body })
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (o in q.options) {
+                val on = o.label in picked
+                OrbChip(o.label, on, {
+                    if (!online || sending) return@OrbChip
+                    if (q.multi) { if (on) picked.remove(o.label) else if (picked.size < limit) picked.add(o.label) }
+                    else { picked.clear(); picked.add(o.label) }
+                    if (picked.isNotEmpty()) typing = false
+                })
             }
+            OrbChip(ChatTexts.ANSWER_OTHER_CHIP, typing || other.isNotBlank(), {
+                if (!online || sending) return@OrbChip
+                typing = true
+                if (!q.multi) picked.clear()
+            })
         }
-        Row(
-            Modifier.fillMaxWidth().heightIn(min = 52.dp).clip(RoundedCornerShape(12.dp))
-                .clickable(enabled = online && !sending) { typing = true; if (!q.multi) picked.clear() }.padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(OrbIcons.Pencil, null, Modifier.padding(start = 2.dp).size(20.dp), tint = OrbTheme.colors.text2)
-            Text(ChatTexts.ANSWER_OTHER, Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+        // What an option means, for the ones the person has chosen: the chips keep to a word.
+        for (o in q.options) if (o.label in picked && !o.description.isNullOrBlank()) {
+            Text(o.description, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
         }
+        Text(if (q.multi) ChatTexts.ANSWER_PICK_MANY else ChatTexts.ANSWER_PICK, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
         AnimatedVisibility(typing || other.isNotBlank(), enter = expandVertically(OrbMotion.standard()) + fadeIn(), exit = shrinkVertically(OrbMotion.standard()) + fadeOut()) {
             BasicTextField(
                 other, { other = it.take(2000) }, enabled = online && !sending,
-                textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
-                cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(MaterialTheme.colorScheme.surface)
-                    .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+                textStyle = MaterialTheme.typography.bodyLarge.copy(color = OrbKit.foreground),
+                cursorBrush = SolidColor(OrbKit.foreground),
+                modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(OrbKit.card)
+                    .border(BorderStroke(1.dp, OrbKit.border), RoundedCornerShape(12.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
             )
         }
-        if (!online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-            TextButton(onClick = { actions.answer(m, emptyList(), null, true) }, enabled = online && !sending) { Text(ChatTexts.ANSWER_SKIP) }
-            Button(
-                onClick = { actions.answer(m, if (other.isBlank()) picked.toList() else emptyList(), other.takeIf { it.isNotBlank() }, false) },
-                enabled = canSend,
-            ) { Text(ChatTexts.ANSWER_SEND) }
+        if (!online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically) {
+            OrbButton(ChatTexts.ANSWER_SKIP, { actions.answer(m, emptyList(), null, true) }, kind = OrbButtonKind.Ghost, enabled = online && !sending)
+            OrbButton(
+                ChatTexts.ANSWER_SEND,
+                { actions.answer(m, if (other.isBlank()) picked.toList() else emptyList(), other.takeIf { it.isNotBlank() }, false) },
+                kind = OrbButtonKind.Primary, enabled = canSend,
+            )
         }
     }
 }
@@ -570,37 +579,143 @@ private fun PermissionCard(m: ChatMessage, p: MsgCard.Permission, online: Boolea
     }
 }
 
-/** A task that waits for the person's OK: «Aprobar» / «Rechazar», with the task's state read from the PC. */
+/** How a task's card is drawn now: asking for the OK, folded to one line after the answer, or by its state. */
+private enum class TaskCardKind { Waiting, Approved, Rejected, Accepted, Plain }
+
+/**
+ * A task of the thread, as the PC describes it. Waiting for the OK it shows what is approved (what the task is, who runs it,
+ * where and why it asks) and «Aprobar» sends the fingerprint of exactly that; finished, it counts what it changed and
+ * offers «Cambios», «Deshacer» and «Aceptar» where the PC allows them.
+ */
 @Composable
-private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: CardActions, modifier: Modifier) {
+private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: CardActions, modifier: Modifier, result: String? = null) {
     androidx.compose.runtime.LaunchedEffect(task) { actions.watchTask(task) }
-    val status = state.taskStatus[task]
     val info = state.taskInfo[task]
-    val waiting = status == "awaiting_approval"
+    val status = info?.status ?: state.taskStatus[task]
+    val kind = when {
+        status == "awaiting_approval" || (info == null && status == null) -> TaskCardKind.Waiting
+        status == "cancelled" && info?.decision == "rejected" -> TaskCardKind.Rejected
+        (status == "queued" || status == "running") && info?.decision == "approved" -> TaskCardKind.Approved
+        status == "done" && info?.accepted == true -> TaskCardKind.Accepted
+        else -> TaskCardKind.Plain
+    }
+    val busy = -task in state.busyCards
+    Column(modifier.fillMaxWidth().animateContentSize(OrbMotion.standard()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        AnimatedContent(
+            kind, label = "task-card",
+            transitionSpec = { fadeIn(tween(OrbMotion.Medium, easing = OrbMotion.EaseOut)) togetherWith fadeOut(tween(OrbMotion.Fast)) },
+        ) { k ->
+            when (k) {
+                TaskCardKind.Waiting -> WaitingCard(m, task, info, state, busy, actions)
+                TaskCardKind.Approved -> {
+                    val (badge, bk) = taskBadge(status)
+                    OrbTaskCard(ChatTexts.taskApproved(task), badge, badgeKind = bk, icon = OrbIcons.CircleCheck)
+                }
+                TaskCardKind.Rejected -> OrbTaskCard(ChatTexts.taskRejected(task), ChatTexts.TASK_REJECTED_BADGE, badgeKind = OrbBadgeKind.Err, icon = OrbIcons.CircleX)
+                TaskCardKind.Accepted -> OrbTaskCard(ChatTexts.taskAccepted(task), ChatTexts.TASK_ACCEPTED_BADGE, badgeKind = OrbBadgeKind.Ok, icon = OrbIcons.CircleCheck)
+                TaskCardKind.Plain -> PlainCard(task, info, status, state, busy, actions)
+            }
+        }
+        // The line that came with the message, which the PC already cleaned of secrets, not the raw result of the task.
+        result?.takeIf { it.isNotBlank() }?.let { ResultFold(it) }
+    }
+}
+
+/** «Espera tu OK»: the card is the place where the person sees what they are about to approve. */
+@Composable
+private fun WaitingCard(m: ChatMessage, task: Long, info: TaskDetail?, state: OrbeChatState, busy: Boolean, actions: CardActions) {
     val body = m.body.removePrefix("⚠️").trim()
     val named = !info?.title.isNullOrBlank()
-    val (badge, kind) = taskBadge(status)
+    // Under Auto a task that still asks is one the PC found delicate; its reasons are on the card.
+    val delicate = state.mode == "auto" && info?.reasons?.isNotEmpty() == true
+    val approvable = info != null && info.approvable && dev.orb.app.ui.tasks.TaskAction.Approve in info.actions
     OrbTaskCard(
         title = if (named) ChatTexts.taskTitle(task, info?.title) else body,
-        badge = badge, badgeKind = kind, modifier = modifier, agent = info?.agent,
-        // Waiting, the line says why; later it says who is on it.
-        line = if (waiting && named) body else info?.agent?.let { agentName(it) ?: it },
-        lineMaxLines = if (waiting && named) 3 else 1,
-        footer = if (waiting) {
+        badge = if (delicate) ChatTexts.TASK_SENSITIVE else ChatTexts.taskStatus("awaiting_approval"), badgeKind = OrbBadgeKind.Warn,
+        agent = info?.agent,
+        line = if (info != null && named) ChatTexts.approvalLine(info.agent?.let { agentName(it) ?: it }, info.model, info.project, info.reasons) else body,
+        lineMaxLines = 4,
+        footer = {
+            val enabled = state.online && !busy
+            if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
+            OrbButton(ChatTexts.REJECT, { actions.reject(task) }, enabled = enabled)
+            // The fingerprint sent is the one of the text above: a card that cannot show what is approved only opens the task.
+            val shown = info?.hash
+            OrbButton(
+                if (approvable) ChatTexts.APPROVE else ChatTexts.SEE_AND_APPROVE, { actions.approve(task, shown) },
+                kind = OrbButtonKind.Primary, enabled = enabled,
+            )
+        },
+    )
+}
+
+@Composable
+private fun PlainCard(task: Long, info: TaskDetail?, status: String?, state: OrbeChatState, busy: Boolean, actions: CardActions) {
+    val named = !info?.title.isNullOrBlank()
+    val undone = info?.undone == true
+    val (badge, bk) = if (undone) ChatTexts.TASK_UNDONE_BADGE to OrbBadgeKind.Neutral else taskBadge(status)
+    val stat = state.taskStat[task]
+    val granted = info?.actions.orEmpty()
+    val canSee = dev.orb.app.ui.tasks.TaskAction.SeeChanges in granted
+    val canUndo = dev.orb.app.ui.tasks.TaskAction.UndoHeld in granted
+    val canAccept = dev.orb.app.ui.tasks.TaskAction.AcceptHeld in granted
+    val autoPassed = info != null && info.autonomy == "auto" && info.approvalRequired == false && (status == "queued" || status == "running")
+    val green = OrbKit.success
+    val red = OrbKit.destructive
+    val rich = if (status == "done" && !undone && info != null) doneLine(info, stat, green, red) else null
+    OrbTaskCard(
+        title = if (named) ChatTexts.taskTitle(task, info?.title) else ChatTexts.taskTitle(task, null), badge = badge, badgeKind = bk, agent = info?.agent,
+        line = if (rich != null || undone) null else if (autoPassed) ChatTexts.TASK_AUTO_PASSED else info?.agent?.let { agentName(it) ?: it },
+        lineRich = rich,
+        footer = if (!undone && (canSee || canUndo || canAccept)) {
             {
-                val enabled = state.online && -task !in state.busyCards
-                if (!state.online) Text(ChatTexts.NEEDS_PC_TO_ANSWER, Modifier.weight(1f), color = OrbKit.mutedForeground, fontSize = 12.sp, lineHeight = 16.sp)
-                OrbButton(ChatTexts.REJECT, { actions.rejectTask(task) }, enabled = enabled)
-                OrbButton(ChatTexts.APPROVE, { actions.askApproval(task) }, kind = OrbButtonKind.Primary, enabled = enabled)
+                val enabled = state.online && !busy
+                if (canSee) OrbButton(ChatTexts.TASK_CHANGES, { actions.openChanges(task) })
+                if (canUndo) OrbButton(ChatTexts.TASK_UNDO, { actions.undoTask(task) }, enabled = enabled)
+                if (canAccept) OrbButton(ChatTexts.TASK_ACCEPT, { actions.acceptTask(task) }, kind = OrbButtonKind.Primary, enabled = enabled)
             }
         } else null,
     )
 }
 
+/** «3 archivos · +42 −7 · revisada por Claude»: only the parts the PC gave. */
+private fun doneLine(info: TaskDetail, stat: TaskStat?, green: androidx.compose.ui.graphics.Color, red: androidx.compose.ui.graphics.Color): androidx.compose.ui.text.AnnotatedString? {
+    val review = info.reviewAgent?.takeIf { it.isNotBlank() }?.let { ChatTexts.reviewedBy(agentName(it) ?: it) }
+    if (stat == null && review == null) return null
+    return buildAnnotatedString {
+        var first = true
+        fun sep() { if (!first) append(" · "); first = false }
+        if (stat != null) {
+            sep(); append(ChatTexts.taskFiles(stat.files))
+            if (stat.added != null && stat.removed != null) {
+                sep()
+                withStyle(SpanStyle(color = green)) { append("+${stat.added}") }
+                append(" ")
+                withStyle(SpanStyle(color = red)) { append("−${stat.removed}") }
+            }
+        }
+        if (review != null) { sep(); append(review) }
+    }
+}
+
+/** The task's own result, folded under its card. */
+@Composable
+private fun ResultFold(result: String) {
+    var open by rememberSaveable(result) { mutableStateOf(false) }
+    Text(
+        if (open) ChatTexts.HIDE_DETAILS else ChatTexts.SEE_RESULT,
+        Modifier.clickable(role = Role.Button) { open = !open }.heightIn(min = 48.dp).padding(horizontal = 4.dp).wrapContentHeight(Alignment.CenterVertically),
+        color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelMedium,
+    )
+    AnimatedVisibility(open, enter = expandVertically(OrbMotion.standard()) + fadeIn(), exit = shrinkVertically(OrbMotion.standard()) + fadeOut()) {
+        Text(result, Modifier.padding(horizontal = 4.dp), color = OrbTheme.colors.text2, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 private fun taskBadge(status: String?): Pair<String, OrbBadgeKind> = when (status) {
     "awaiting_approval", null -> ChatTexts.taskStatus("awaiting_approval") to OrbBadgeKind.Warn
     "running" -> ChatTexts.TASK_RUNNING to OrbBadgeKind.Acc
-    "done" -> "Hecha" to OrbBadgeKind.Ok
+    "done" -> ChatTexts.TASK_DONE to OrbBadgeKind.Ok
     "failed" -> ChatTexts.taskStatus(status) to OrbBadgeKind.Err
     "blocked" -> ChatTexts.taskStatus(status) to OrbBadgeKind.Warn
     else -> ChatTexts.taskStatus(status) to OrbBadgeKind.Neutral
@@ -622,20 +737,17 @@ fun LiveTaskCard(t: LiveTask, modifier: Modifier = Modifier) {
 @Composable
 fun ApprovalDialog(ask: ApprovalAsk, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     val d = ask.detail
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("${ChatTexts.APPROVE_TASK_TITLE} #${d.id}") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(d.title, fontWeight = FontWeight.SemiBold)
-                if (!d.agent.isNullOrBlank()) Text(ChatTexts.agentWithModel(agentName(d.agent) ?: d.agent, d.model), color = OrbTheme.colors.text2)
-                if (!d.project.isNullOrBlank()) Text(d.project, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, color = OrbTheme.colors.text2)
-                if (d.reasons.isNotEmpty()) Text(d.reasons.joinToString(", ") { ChatTexts.reason(it) }, color = OrbTheme.colors.text2)
-                Text(ChatTexts.ON_PC_NOTE, color = OrbTheme.colors.text3, style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = { TextButton(onClick = onConfirm) { Text(ChatTexts.APPROVE) } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(ChatTexts.CANCEL) } },
-    )
+    OrbDialog(
+        onDismiss = onDismiss, title = "${ChatTexts.APPROVE_TASK_TITLE} #${d.id}",
+        confirm = OrbDialogAction(ChatTexts.APPROVE, onConfirm),
+        dismiss = OrbDialogAction(ChatTexts.CANCEL, onDismiss),
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(d.title, color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
+            if (!d.agent.isNullOrBlank()) Text(ChatTexts.agentWithModel(agentName(d.agent) ?: d.agent, d.model), color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
+            if (!d.project.isNullOrBlank()) Text(d.project, color = OrbKit.mutedForeground, fontFamily = FontFamily.Monospace, fontSize = 12.5.sp)
+            if (d.reasons.isNotEmpty()) Text(d.reasons.joinToString(", ") { ChatTexts.reason(it) }, color = OrbKit.mutedForeground, fontSize = 14.5.sp, lineHeight = 22.sp)
+            Text(ChatTexts.ON_PC_NOTE, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+    }
 }
-

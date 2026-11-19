@@ -27,8 +27,32 @@ import kotlinx.serialization.json.put
 /** What `app.state` says that matters to one chat. */
 data class PcSnapshot(val mode: String?, val chat: JsonObject?)
 
-/** The task behind an approval card, as the PC describes it, to show before the person agrees. */
-data class TaskDetail(val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>, val hash: String?, val model: String? = null)
+/**
+ * The task behind a card, as the PC describes it in one `tasks.get`: what the person sees before agreeing ([title], [agent],
+ * [model], [project], [reasons]) and the [hash] of exactly that, which goes back with the OK. [actions] are the ones the PC
+ * allows for it now (the same rule as the task's own screen).
+ */
+data class TaskDetail(
+    val id: Long, val title: String, val status: String?, val agent: String?, val project: String?, val reasons: List<String>,
+    val hash: String?, val model: String? = null,
+    /** `auto` / `preguntar`: how the task was created; with [approvalRequired] it tells whether Auto let it through. */
+    val autonomy: String? = null,
+    val approvalRequired: Boolean? = null,
+    val held: Boolean = false,
+    val accepted: Boolean = false,
+    val undone: Boolean = false,
+    val actions: Set<dev.orb.app.ui.tasks.TaskAction> = emptySet(),
+    /** The agent that reviewed the task (`tasks.get.review`), when one did. */
+    val reviewAgent: String? = null,
+    /** What the person last decided on the PC for this task: `approved` or `rejected` (from its history), else null. */
+    val decision: String? = null,
+) {
+    /**
+     * Whether a card can show everything the OK is about: what the task is, who runs it and the fingerprint of it. Without
+     * these the OK is not given from the card (the person is sent to the task's own screen).
+     */
+    val approvable: Boolean get() = title.isNotBlank() && !agent.isNullOrBlank() && !hash.isNullOrBlank() && status == "awaiting_approval"
+}
 
 /**
  * What one Orbe chat needs from the PC and the cache. Every action is a request to the PC; the phone only keeps the
@@ -77,7 +101,20 @@ interface OrbeChatBackend {
     suspend fun liveTasks(): Result<List<LiveTask>>
 
     suspend fun taskDetail(id: Long): Result<TaskDetail>
+
+    /** What a finished task changed, as counts only (`tasks.diff {stat}`); null when the PC says nothing usable. */
+    suspend fun taskStat(id: Long): Result<TaskStat?>
     suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit>
+
+    /** `tasks.accept` / `tasks.undo` of one task. */
+    suspend fun acceptTask(id: Long): Result<Unit>
+    suspend fun undoTask(id: Long): Result<Unit>
+
+    /** The messages waiting in the PC's queue behind the running turn (`chat.queue`). */
+    suspend fun queue(conversation: Long): Result<List<OrbeQueued>>
+
+    /** Changes ([text]) or removes ([remove]) one queued message; → the queue that is left. */
+    suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>>
     suspend fun decideRequest(session: String, request: String, decision: String): Result<Unit>
 }
 
@@ -166,15 +203,28 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
     override suspend fun liveTasks(): Result<List<LiveTask>> =
         if (!api.available(ApiMethods.TASKS_LIVE)) Result.success(emptyList()) else api.tasks.live().map { OrbeParser.liveTasks(it) }
 
-    override suspend fun taskDetail(id: Long): Result<TaskDetail> = api.tasks.get(buildJsonObject { put("id", id) }).mapCatching { el ->
-        val o = el as? JsonObject ?: throw LinkException(LinkError.BadAnswer)
-        TaskDetail(
-            id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"), agent = o.str("agent"),
-            project = o.str("project_path") ?: o.str("project"),
-            reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
-            hash = o.str("previewHash"), model = o.str("model"),
-        )
-    }
+    override suspend fun taskDetail(id: Long): Result<TaskDetail> =
+        api.tasks.get(buildJsonObject { put("id", id) }).mapCatching { el -> OrbeParser.taskDetail(el, id, api::available) ?: throw LinkException(LinkError.BadAnswer) }
+
+    override suspend fun taskStat(id: Long): Result<TaskStat?> =
+        if (!api.available(ApiMethods.TASKS_DIFF)) Result.success(null)
+        else api.tasks.diff(buildJsonObject { put("id", id); put("stat", true) }).map { OrbeParser.taskStat(it) }
+
+    override suspend fun acceptTask(id: Long) = api.tasks.accept(buildJsonObject { put("id", id) }).map { }
+    override suspend fun undoTask(id: Long) = api.tasks.undo(buildJsonObject { put("id", id) }).map { }
+
+    override suspend fun queue(conversation: Long): Result<List<OrbeQueued>> =
+        if (!api.available(ApiMethods.CHAT_QUEUE)) Result.success(emptyList())
+        else api.chat.queue(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.queue(it) }
+
+    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>> =
+        api.chat.editQueued(
+            buildJsonObject {
+                put("conversation", conversation)
+                put("queueId", queueId)
+                if (remove) put("remove", true) else put("text", text.orEmpty())
+            },
+        ).map { OrbeParser.queue(it) }
 
     override suspend fun decideTask(id: Long, approve: Boolean, hash: String?) = api.tasks.approve(
         buildJsonObject {
@@ -191,6 +241,11 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 
 /** Reads the PC's refusals by their text: the engine sends them without a code. */
 object ChatErrors {
+    /** What the PC itself said when it refused, word for word; null when the failure was not a refusal. */
+    fun pcText(e: Throwable): String? = refusal(e)?.takeIf { it.isNotBlank() }
+    fun queuedGone(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("ya no está en la cola", ignoreCase = true) || it.contains("no longer in the queue", ignoreCase = true) } == true
+
     fun deleted(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ya no existe", ignoreCase = true) || it.contains("en la papelera", ignoreCase = true) } == true
     fun questionGone(e: Throwable): Boolean =

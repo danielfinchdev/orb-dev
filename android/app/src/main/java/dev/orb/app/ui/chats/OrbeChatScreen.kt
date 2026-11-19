@@ -31,6 +31,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,7 +67,9 @@ import dev.orb.app.ui.kit.OrbIconButton
 import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbSendButton
 import dev.orb.app.ui.kit.OrbSheet
-import dev.orb.app.ui.kit.OrbSheetChoice
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbSegmented
 import dev.orb.app.ui.kit.OrbSheetInfo
 import dev.orb.app.ui.kit.OrbSheetItem
 import dev.orb.app.ui.kit.OrbSnackbarHost
@@ -79,8 +82,8 @@ import kotlinx.coroutines.delay
 /**
  * The conversation with Orbe. A remote control: it shows what the PC says and sends what the person asks for.
  * [liveRefreshMs] is how often the running tasks are asked for again while something is running (0 = only on events).
- * [queued], [onEditQueued] and [onRemoveQueued] are for a PC that lists the queued messages: the bar then quotes the first
- * one and offers to edit it; until then it only counts them.
+ * [onOpenTask] and [onOpenChanges] go to the task's own screen and to its changes: from a card, from «Ver» after an undo and
+ * when a card cannot show what it asks to approve.
  */
 @Composable
 fun OrbeChatScreen(
@@ -89,17 +92,27 @@ fun OrbeChatScreen(
     modifier: Modifier = Modifier,
     nowMs: () -> Long = System::currentTimeMillis,
     liveRefreshMs: Long = 4_000L,
-    queued: List<QueuedMsg> = emptyList(),
-    onEditQueued: ((QueuedMsg, String) -> Unit)? = null,
-    onRemoveQueued: ((QueuedMsg) -> Unit)? = null,
+    onOpenTask: (Long) -> Unit = {},
+    onOpenChanges: (Long) -> Unit = {},
 ) {
     val state by vm.state.collectAsStateWithLifecycle()
     val liveInfo by vm.liveInfo.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    val openTask by rememberUpdatedState(onOpenTask)
+    LaunchedEffect(vm) { vm.openTask.collect { openTask(it) } }
+    LaunchedEffect(vm) {
+        vm.undone.collect { id ->
+            if (snackbar.showSnackbar(ChatTexts.TASK_UNDONE_SNACK, actionLabel = ChatTexts.TASK_SEE) == SnackbarResult.ActionPerformed) openTask(id)
+        }
+    }
     var stick by remember { mutableStateOf(true) }
+    var rejectAsk by rememberSaveable { mutableStateOf<Long?>(null) }
     val actions = remember(vm) {
-        CardActions(vm::answer, vm::accept, vm::decideRequest, vm::askApproval, vm::rejectTask, vm::watchTask)
+        CardActions(
+            vm::answer, vm::accept, vm::decideRequest, vm::approveFromCard, { rejectAsk = it }, vm::watchTask,
+            vm::acceptTask, vm::askUndo, onOpenChanges,
+        )
     }
     // While a task runs (or the assistant may be starting one) its card is kept fresh; events cover the rest.
     val tracking = state.online && (liveInfo?.busy == true || state.liveTasks.isNotEmpty())
@@ -111,6 +124,7 @@ fun OrbeChatScreen(
         Column(Modifier.fillMaxSize()) {
             ChatTopBar(state, liveInfo, onBack, onCompact = vm::compact)
             if (state.loaded && !state.deleted) ConnectionBand(state.connection)
+            if (state.canSetMode && !state.deleted) ModeSelector(state.mode, vm::setMode)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.deleted -> DeletedChat(onBack, if (state.canRestore) vm::restore else null)
@@ -119,10 +133,14 @@ fun OrbeChatScreen(
                 }
             }
             if (!state.deleted) {
-                ChatQueueBar(liveInfo?.queued ?: 0, items = queued, onEdit = onEditQueued, onRemove = onRemoveQueued)
+                val queue = if (state.canEditQueue) QueueActions(
+                    state.queue, state.queueEditor, onOpen = { vm.openQueued(it.id) }, onClose = vm::closeQueued, onSave = vm::saveQueued,
+                    onRemove = { vm.removeQueued(it.id) },
+                ) else null
+                ChatQueueBar(liveInfo?.queued ?: 0, queue = queue)
                 Composer(
                     online = state.online, busy = liveInfo?.busy == true, mode = state.mode, canSetMode = state.canSetMode,
-                    onSend = { stick = true; vm.send(it) }, onStop = vm::stop, onMode = vm::setMode,
+                    onSend = { stick = true; vm.send(it) }, onStop = vm::stop,
                     attach = vm.attach, brain = state.brain?.label ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
                 )
             }
@@ -130,6 +148,34 @@ fun OrbeChatScreen(
         OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp))
     }
     state.approval?.let { ApprovalDialog(it, onConfirm = vm::confirmApproval, onDismiss = vm::dismissApproval) }
+    rejectAsk?.let { task ->
+        OrbDialog(
+            onDismiss = { rejectAsk = null }, title = ChatTexts.REJECT_ASK_TITLE, text = ChatTexts.REJECT_ASK_BODY,
+            confirm = OrbDialogAction(ChatTexts.REJECT_CONFIRM, { rejectAsk = null; vm.rejectTask(task) }, danger = true),
+            dismiss = OrbDialogAction(ChatTexts.REJECT_BACK, { rejectAsk = null }),
+        )
+    }
+    state.undoAsk?.let { ask ->
+        OrbDialog(
+            onDismiss = vm::dismissUndo, title = ChatTexts.undoAskTitle(ask.task), text = ChatTexts.undoAskBody(ask.files),
+            confirm = OrbDialogAction(ChatTexts.UNDO_CONFIRM, vm::confirmUndo),
+            dismiss = OrbDialogAction(ChatTexts.CANCEL, vm::dismissUndo),
+        )
+    }
+}
+
+/** `.segm` under the header with its sentence: how the PC treats what needs an OK (`permissions.setMode`). */
+@Composable
+private fun ModeSelector(mode: String?, onMode: (String) -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        OrbSegmented(
+            listOf(ChatTexts.MODE_AUTO, ChatTexts.MODE_ASK), selected = when (mode) { "auto" -> 0; "preguntar" -> 1; else -> -1 },
+            onSelect = { onMode(if (it == 0) "auto" else "preguntar") }, stretch = true,
+            modifier = Modifier.semantics { contentDescription = ChatTexts.MODE_SELECTOR },
+        )
+        val note = when (mode) { "auto" -> ChatTexts.MODE_NOTE_AUTO; "preguntar" -> ChatTexts.MODE_NOTE_ASK; else -> null }
+        if (note != null) Text(note, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
+    }
 }
 
 /** The useful line under the name: the project and what Orbe is doing; with no link, what is wrong with it. */
@@ -269,7 +315,9 @@ class ComposerChoice(val label: String, val send: (String) -> Unit)
 @Composable
 internal fun Composer(
     online: Boolean, busy: Boolean, mode: String?, canSetMode: Boolean,
-    onSend: (String) -> Unit, onStop: () -> Unit, onMode: (String) -> Unit,
+    onSend: (String) -> Unit, onStop: () -> Unit,
+    /** Unused: the mode is chosen in the selector under the header; the box only shows it. */
+    onMode: (String) -> Unit = {},
     placeholder: String = ChatTexts.MESSAGE_FIELD,
     /** While the agent works and there is text: the ways to send it («Corregir», «Encolar»); the first is the send button's. */
     busyChoices: List<ComposerChoice> = emptyList(),
@@ -318,7 +366,8 @@ internal fun Composer(
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (attach != null) OrbComposerIcon(OrbIcons.Plus, dev.orb.app.attach.AttachTexts.ADD, { problem = null; sheet = true })
-            if (leading != null) leading() else if (canSetMode) ModePill(mode, onMode)
+            // Only says which mode is on; the choice is made in the selector under the header.
+            if (leading != null) leading() else if (canSetMode) ChatTexts.modeLabel(mode).let { OrbComposerLabel(it, icon = OrbIcons.ShieldCheck, description = "${ChatTexts.MODE_SELECTOR}: $it") }
             if (brain != null) OrbComposerLabel(brain, description = "${ChatTexts.BRAIN_DESC}: $brain")
             Box(Modifier.weight(1f))
             if (mic) OrbComposerIcon(OrbIcons.Mic, ChatTexts.MIC_SOON, {}, enabled = false)
@@ -332,20 +381,6 @@ internal fun Composer(
                     }
                 },
             )
-        }
-    }
-}
-
-/** «Auto» / «Preguntar»: the PC's way of treating what needs a permission; tapping it opens the choice. */
-@Composable
-internal fun ModePill(mode: String?, onMode: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val label = when (mode) { "auto" -> ChatTexts.MODE_AUTO; "preguntar" -> ChatTexts.MODE_ASK; else -> ChatTexts.MODE_UNKNOWN }
-    OrbComposerLabel(label, icon = OrbIcons.ShieldCheck, onClick = { open = true })
-    if (open) {
-        OrbSheet(onDismiss = { open = false }, title = ChatTexts.MODE_MENU) {
-            OrbSheetChoice(ChatTexts.MODE_AUTO, ChatTexts.MODE_AUTO_HINT, OrbIcons.Shield, selected = mode == "auto", onClick = { open = false; onMode("auto") })
-            OrbSheetChoice(ChatTexts.MODE_ASK, ChatTexts.MODE_ASK_HINT, OrbIcons.ShieldCheck, selected = mode == "preguntar", onClick = { open = false; onMode("preguntar") })
         }
     }
 }

@@ -146,7 +146,8 @@ fun OrbThinking(text: String, modifier: Modifier = Modifier) {
 
 /**
  * `.mturn`: a task in the conversation. The header names it with [badge] for its state; [line] (monospace) says what
- * it is doing now, with a turning mark while [working]; [footer] holds its buttons.
+ * it is doing now, with a turning mark while [working]; [footer] holds its buttons. [icon] replaces the agent's mark in the
+ * header (a task folded to one line); [lineRich] is a [line] with parts in colour (the counts of a finished task).
  */
 @Composable
 fun OrbTaskCard(
@@ -158,6 +159,8 @@ fun OrbTaskCard(
     line: String? = null,
     working: Boolean = false,
     lineMaxLines: Int = 1,
+    icon: ImageVector? = null,
+    lineRich: androidx.compose.ui.text.AnnotatedString? = null,
     footer: (@Composable RowScope.() -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth().clip(RadiusCard).background(OrbKit.card).border(1.dp, OrbKit.border, RadiusCard)) {
@@ -166,19 +169,23 @@ fun OrbTaskCard(
                 Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                if (agent != null) AgentMark(agent, size = 16.dp, description = null)
+                if (icon != null) Icon(icon, null, Modifier.size(16.dp), tint = OrbKit.foreground)
+                else if (agent != null) AgentMark(agent, size = 16.dp, description = null)
                 Text(title, Modifier.weight(1f), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 OrbBadge(badge, kind = badgeKind)
             }
-            if (line != null) {
+            if (line != null || lineRich != null) {
                 Box(Modifier.fillMaxWidth().height(1.dp).background(OrbKit.border))
                 Row(
                     Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     if (working) OrbSpinner(size = 12.dp)
-                    Text(
-                        line, Modifier.weight(1f), color = OrbKit.foreground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp,
+                    if (lineRich != null) Text(
+                        lineRich, Modifier.weight(1f), color = OrbKit.foreground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp,
+                        maxLines = lineMaxLines, overflow = TextOverflow.Ellipsis,
+                    ) else Text(
+                        line.orEmpty(), Modifier.weight(1f), color = OrbKit.foreground, fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 16.sp,
                         maxLines = lineMaxLines, overflow = TextOverflow.Ellipsis,
                     )
                 }

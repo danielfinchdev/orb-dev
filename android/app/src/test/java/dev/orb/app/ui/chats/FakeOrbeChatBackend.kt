@@ -7,6 +7,7 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.LinkException
+import dev.orb.app.ui.tasks.TaskAction
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -46,7 +47,18 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     var actionResult: Result<Unit> = Result.success(Unit)
     var modeOnPc: String? = "preguntar"
     var chatOnPc: JsonObject? = null
-    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1")
+    var taskDetail = TaskDetail(42, "Guardar el carrito", "awaiting_approval", "claude", "C:/tienda", listOf("red"), "h1", actions = setOf(TaskAction.Approve))
+    /** What `tasks.get` answers per task; a task not listed answers [taskDetail]. */
+    val detailsOnPc = HashMap<Long, TaskDetail>()
+    var statOnPc: TaskStat? = null
+    var statResult: Result<TaskStat?>? = null
+    var queueAvailable = true
+    var queueOnPc: List<OrbeQueued> = emptyList()
+    var queueResult: Result<List<OrbeQueued>>? = null
+    var editResult: Result<List<OrbeQueued>>? = null
+    var queueReads = 0
+    /** Called with the text of each action that changes a task, so a test can make the PC answer as it would afterwards. */
+    var onAction: (String) -> Unit = {}
 
     override suspend fun load(conversation: Long, before: Long?): Result<Int> {
         loads++
@@ -58,7 +70,11 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     override suspend fun markRead(conversation: Long): Result<Unit> { calls += "read"; return Result.success(Unit) }
     var setModeAvailable = true
     var restoreAvailable = true
-    override fun available(m: ApiMethod) = if (m == dev.orb.app.link.api.ApiMethods.CONVERSATIONS_RESTORE) restoreAvailable else setModeAvailable
+    override fun available(m: ApiMethod) = when (m) {
+        dev.orb.app.link.api.ApiMethods.CONVERSATIONS_RESTORE -> restoreAvailable
+        dev.orb.app.link.api.ApiMethods.CHAT_QUEUE, dev.orb.app.link.api.ApiMethods.CHAT_EDIT_QUEUED -> queueAvailable
+        else -> setModeAvailable
+    }
     var restoreResult: Result<Unit> = Result.success(Unit)
     override suspend fun restore(conversation: Long): Result<Unit> { calls += "restore"; return restoreResult }
 
@@ -91,8 +107,18 @@ class FakeOrbeChatBackend(initial: List<String> = emptyList()) : OrbeChatBackend
     override suspend fun brain(conversation: Long): Result<BrainInfo?> { brainReads++; return Result.success(brainOnPc) }
     override suspend fun liveTasks(): Result<List<LiveTask>> { liveReads++; return Result.success(liveOnPc) }
 
-    override suspend fun taskDetail(id: Long): Result<TaskDetail> { calls += "detail $id"; detailGate?.await(); return Result.success(taskDetail) }
-    override suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit> { calls += "task $id $approve $hash"; return actionResult }
+    override suspend fun taskDetail(id: Long): Result<TaskDetail> { calls += "detail $id"; detailGate?.await(); return Result.success(detailsOnPc[id] ?: taskDetail) }
+    override suspend fun taskStat(id: Long): Result<TaskStat?> { calls += "stat $id"; return statResult ?: Result.success(statOnPc) }
+    override suspend fun acceptTask(id: Long): Result<Unit> { calls += "taskaccept $id"; onAction("taskaccept $id"); return actionResult }
+    override suspend fun undoTask(id: Long): Result<Unit> { calls += "undo $id"; onAction("undo $id"); return actionResult }
+    override suspend fun queue(conversation: Long): Result<List<OrbeQueued>> { queueReads++; calls += "queue"; return queueResult ?: Result.success(queueOnPc) }
+    override suspend fun editQueued(conversation: Long, queueId: String, text: String?, remove: Boolean): Result<List<OrbeQueued>> {
+        calls += if (remove) "queue-remove $queueId" else "queue-edit $queueId $text"
+        editResult?.let { return it }
+        queueOnPc = if (remove) queueOnPc.filter { it.id != queueId } else queueOnPc.map { if (it.id == queueId) it.copy(text = text.orEmpty()) else it }
+        return Result.success(queueOnPc)
+    }
+    override suspend fun decideTask(id: Long, approve: Boolean, hash: String?): Result<Unit> { calls += "task $id $approve $hash"; onAction("task $id $approve"); return actionResult }
     override suspend fun decideRequest(session: String, request: String, decision: String): Result<Unit> { calls += "request $session $request $decision"; return actionResult }
 
     fun goOffline() { connectionState.value = OFFLINE }

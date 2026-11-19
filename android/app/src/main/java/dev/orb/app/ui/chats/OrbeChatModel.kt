@@ -78,6 +78,14 @@ data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reaso
     }
 }
 
+/** A message that waits in the PC's queue behind the running turn (`chat.queue`); [id] is the PC's own. */
+@Immutable
+data class OrbeQueued(val id: String, val text: String, val at: Long)
+
+/** What a finished task changed, counts only (`tasks.diff {stat:true}`). The line counts are null when the PC cut the list. */
+@Immutable
+data class TaskStat(val files: Int, val added: Int?, val removed: Int?)
+
 /** A task that is running now (`tasks.live`): what it is doing, said by the PC. */
 @Immutable
 data class LiveTask(val id: Long, val title: String, val agent: String?, val doing: String?, val percent: Int?, val waiting: Boolean)
@@ -123,7 +131,8 @@ object OrbeParser {
                 status = meta.str("status") ?: if (meta.str("kind") == "task-approval") "pending" else "expired",
             )
             "attention" -> meta.long("task")?.let { MsgCard.TaskAttention(it) } ?: MsgCard.None
-            "task-end" -> meta.str("result")?.let { MsgCard.TaskEnd(it) } ?: MsgCard.None
+            // A task that ended without a written result still ends: its card is drawn from the task itself.
+            "task-end" -> if (meta.long("task") != null || meta.str("result") != null) MsgCard.TaskEnd(meta.str("result").orEmpty()) else MsgCard.None
             else -> MsgCard.None
         }
     }
@@ -175,6 +184,62 @@ object OrbeParser {
     }
 
     fun conversationOf(payload: JsonObject): Long? = payload.long("conversation")
+
+    private val DECISIONS = setOf("task.approved", "task.rejected", "approval.required")
+
+    /**
+     * `tasks.get` → what a card shows and the fingerprint of it. Everything comes from this one answer, so the [TaskDetail.hash]
+     * always belongs to the text beside it. [can] says which methods the PC has, as the task's own screen asks it.
+     */
+    fun taskDetail(el: kotlinx.serialization.json.JsonElement?, id: Long, can: (dev.orb.app.link.api.ApiMethod) -> Boolean): TaskDetail? {
+        val o = el as? JsonObject ?: return null
+        val parsed = dev.orb.app.ui.tasks.TasksParser.detail(o)
+        val review = o["review"] as? JsonObject
+        return TaskDetail(
+            id = o.long("id") ?: id, title = o.str("title").orEmpty(), status = o.str("status"), agent = o.str("assigned_to") ?: o.str("agent"),
+            project = o.str("project_path") ?: o.str("project"),
+            reasons = (o["sensitivity"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content },
+            hash = o.str("previewHash"), model = o.str("model"),
+            autonomy = o.str("autonomy"),
+            approvalRequired = (o["approval"] as? JsonObject)?.takeIf { it["required"] != null }?.bool("required"),
+            held = parsed?.row?.held != null, accepted = parsed?.accepted == true, undone = parsed?.row?.undone == true,
+            actions = parsed?.let { cardActions(it, can) }.orEmpty(),
+            reviewAgent = review?.str("agent"),
+            decision = parsed?.events?.lastOrNull { it.kind in DECISIONS }?.kind?.let { if (it == "task.approved") "approved" else if (it == "task.rejected") "rejected" else null },
+        )
+    }
+
+    /**
+     * What a card may offer: the task screen's own rule ([dev.orb.app.ui.tasks.TaskActions]) plus «Aceptar» and «Deshacer» for
+     * finished work, with the conditions of the changes screen (done or held, a checkpoint, not undone, not accepted) and
+     * only where the PC has the method. Nothing else is offered from a card.
+     */
+    internal fun cardActions(d: dev.orb.app.ui.tasks.TaskDetail, can: (dev.orb.app.link.api.ApiMethod) -> Boolean): Set<dev.orb.app.ui.tasks.TaskAction> {
+        val held = d.row.held != null
+        val finished = held || d.row.status == "done"
+        val out = LinkedHashSet(dev.orb.app.ui.tasks.TaskActions.of(d, can))
+        if (!d.accepted && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_ACCEPT)) out += dev.orb.app.ui.tasks.TaskAction.AcceptHeld
+        if (d.hasCheckpoint && !d.row.undone && finished && can(dev.orb.app.link.api.ApiMethods.TASKS_UNDO)) out += dev.orb.app.ui.tasks.TaskAction.UndoHeld
+        return out
+    }
+
+    /**
+     * `tasks.diff {stat:true}` → file and line counts, or null when there is nothing to count. A PC that does not know `stat`
+     * answers with whole patches (and may have cut them): its numbers are not trusted, so the card shows none.
+     */
+    fun taskStat(el: kotlinx.serialization.json.JsonElement?): TaskStat? {
+        val d = dev.orb.app.ui.tasks.TasksParser.diff(el ?: return null)
+        if (!d.available || d.files.any { it.patch.isNotEmpty() }) return null
+        val n = d.files.size + d.more
+        if (n == 0) return null
+        return TaskStat(n, d.added.takeIf { d.more == 0 }, d.removed.takeIf { d.more == 0 })
+    }
+
+    /** `chat.queue` / `chat.editQueued` → the queue in the PC's order; an entry without an id is dropped. */
+    fun queue(el: kotlinx.serialization.json.JsonElement?): List<OrbeQueued> = (el as? JsonArray).orEmpty().mapNotNull { x ->
+        val o = x as? JsonObject ?: return@mapNotNull null
+        OrbeQueued(o.str("id") ?: return@mapNotNull null, o.str("text").orEmpty(), o.long("at") ?: 0L)
+    }
 }
 
 /** What a tool does, in words: the same table as the PC's own chat, so the phone says the same thing. */

@@ -4,12 +4,14 @@ import dev.orb.app.data.json
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.link.net.LinkException
+import dev.orb.app.ui.tasks.TaskAction
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.JsonObject
@@ -393,5 +395,333 @@ class OrbeChatViewModelTest {
         runCurrent()
         assertEquals("Guardar el carrito", vm.state.value.taskInfo[42]?.title)
         assertEquals("awaiting_approval", vm.state.value.taskStatus[42])
+    }
+
+    // ---------- Approving and undoing from the card ----------
+
+    private val attention = raw(5, "system", "⚠️ La #42 espera tu OK", """{"kind":"attention","task":42}""")
+    private val doneActions = setOf(TaskAction.SeeChanges, TaskAction.UndoHeld, TaskAction.AcceptHeld)
+
+    private fun TestScope.said(vm: OrbeChatViewModel): MutableList<String> {
+        val out = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { out += it } }
+        return out
+    }
+
+    private fun TestScope.opened(vm: OrbeChatViewModel): MutableList<Long> {
+        val out = ArrayList<Long>()
+        backgroundScope.launch { vm.openTask.collect { out += it } }
+        return out
+    }
+
+    @Test fun approvingFromTheCardSendsTheFingerprintOfWhatItShowed() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        val vm = vm(b)
+        vm.watchTask(42)
+        runCurrent()
+        val shown = vm.state.value.taskInfo[42]!!
+        assertTrue(shown.approvable)
+        vm.approveFromCard(42, shown.hash)
+        runCurrent()
+        assertEquals(1, b.calls.count { it.startsWith("task 42 true") })
+        assertTrue(b.calls.contains("task 42 true h1"))
+    }
+
+    @Test fun withoutAFingerprintTheCardApprovesNothingAndOpensTheTask() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        b.taskDetail = b.taskDetail.copy(hash = null)
+        val vm = vm(b)
+        val opened = opened(vm)
+        vm.watchTask(42)
+        runCurrent()
+        assertFalse(vm.state.value.taskInfo[42]!!.approvable)
+        vm.approveFromCard(42, null)
+        vm.approveFromCard(42, "h1")
+        runCurrent()
+        assertTrue(b.calls.none { it.startsWith("task ") })
+        assertEquals(listOf(42L, 42L), opened)
+    }
+
+    @Test fun aTaskThatCannotBeDescribedIsNotApprovedFromTheCard() = runTest(dispatcher) {
+        for (broken in listOf(
+            FakeOrbeChatBackend(two).taskDetail.copy(agent = null),
+            FakeOrbeChatBackend(two).taskDetail.copy(title = ""),
+            FakeOrbeChatBackend(two).taskDetail.copy(actions = emptySet()),
+        )) {
+            val b = FakeOrbeChatBackend(two + attention)
+            b.taskDetail = broken
+            val vm = vm(b)
+            val opened = opened(vm)
+            vm.watchTask(42)
+            runCurrent()
+            vm.approveFromCard(42, broken.hash)
+            runCurrent()
+            assertTrue(b.calls.none { it.startsWith("task ") })
+            assertEquals(listOf(42L), opened)
+        }
+    }
+
+    @Test fun aCardNobodyHasReadYetShowsTheDescriptionBeforeAnyOk() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        val vm = vm(b)
+        // No watchTask: the card has nothing to show, so the dialog is the way and it approves what it shows.
+        vm.approveFromCard(42, null)
+        runCurrent()
+        assertEquals("h1", vm.state.value.approval!!.detail.hash)
+        assertTrue(b.calls.none { it.startsWith("task ") })
+        vm.confirmApproval()
+        runCurrent()
+        assertTrue(b.calls.contains("task 42 true h1"))
+    }
+
+    @Test fun ifTheTaskChangedSinceTheCardWasDrawnTheOldOneIsNotApproved() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        val vm = vm(b)
+        val said = said(vm)
+        vm.watchTask(42)
+        runCurrent()
+        // The PC now describes another task under the same number, and the app has read it.
+        b.detailsOnPc[42] = b.taskDetail.copy(title = "Borrar build/ y reinstalar", hash = "h2")
+        b.events.tryEmit(LinkEvent("approval:changed", json("""{}""")))
+        runCurrent()
+        assertEquals("h2", vm.state.value.taskInfo[42]!!.hash)
+        // A tap on the old card (it still carried h1) approves nothing.
+        vm.approveFromCard(42, "h1")
+        runCurrent()
+        assertTrue(b.calls.none { it.startsWith("task ") })
+        assertEquals(listOf(ChatTexts.TASK_CHANGED), said)
+        // The new one, once seen, can be approved with its own fingerprint.
+        vm.approveFromCard(42, "h2")
+        runCurrent()
+        assertTrue(b.calls.contains("task 42 true h2"))
+    }
+
+    @Test fun ifTheAppDidNotKnowYetThePcRefusesTheOldFingerprintAndTheCardIsReadAgain() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        val vm = vm(b)
+        val said = said(vm)
+        vm.watchTask(42)
+        runCurrent()
+        b.detailsOnPc[42] = b.taskDetail.copy(hash = "h2")
+        b.actionResult = refused("La tarea #42 cambió desde que la viste.")
+        vm.approveFromCard(42, "h1")
+        runCurrent()
+        assertTrue(b.calls.contains("task 42 true h1"))
+        assertEquals("h2", vm.state.value.taskInfo[42]!!.hash)
+        assertEquals(1, said.size)
+        assertFalse(-42L in vm.state.value.busyCards)
+    }
+
+    @Test fun rejectingFromTheCardSendsTheHashOfTheTask() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        val vm = vm(b)
+        b.detailsOnPc[42] = b.taskDetail.copy(status = "cancelled", actions = emptySet(), decision = "rejected")
+        vm.rejectTask(42)
+        runCurrent()
+        assertTrue(b.calls.contains("task 42 false h1"))
+        val folded = vm.state.value.taskInfo[42]!!
+        assertEquals("rejected", folded.decision)
+    }
+
+    @Test fun approvingFoldsTheCardAndSaysSo() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        val vm = vm(b)
+        val said = said(vm)
+        vm.watchTask(42)
+        runCurrent()
+        // What the PC answers once it approved: queued, with the approval in its history.
+        b.detailsOnPc[42] = b.taskDetail.copy(status = "queued", actions = emptySet(), decision = "approved")
+        vm.approveFromCard(42, "h1")
+        runCurrent()
+        assertEquals("approved", vm.state.value.taskInfo[42]!!.decision)
+        assertEquals("queued", vm.state.value.taskStatus[42])
+        assertEquals(listOf(ChatTexts.APPROVED_SNACK), said)
+    }
+
+    @Test fun undoAsksFirstAndOnlyTouchesThePcAfterTheYes() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        b.taskDetail = b.taskDetail.copy(status = "done", actions = doneActions, hash = null)
+        b.statOnPc = TaskStat(3, 42, 7)
+        val vm = vm(b)
+        val undone = ArrayList<Long>()
+        backgroundScope.launch { vm.undone.collect { undone += it } }
+        vm.watchTask(42)
+        runCurrent()
+        vm.askUndo(42)
+        runCurrent()
+        assertEquals(UndoAsk(42, "Guardar el carrito", 3), vm.state.value.undoAsk)
+        assertTrue(b.calls.none { it.startsWith("undo") })
+        vm.dismissUndo()
+        vm.confirmUndo()
+        runCurrent()
+        assertTrue(b.calls.none { it.startsWith("undo") })
+        vm.askUndo(42)
+        vm.confirmUndo()
+        runCurrent()
+        assertEquals(1, b.calls.count { it == "undo 42" })
+        assertEquals(listOf(42L), undone)
+        assertNull(vm.state.value.undoAsk)
+    }
+
+    @Test fun undoAndAcceptOnlyExistForWhatThePcAllowsForThatTask() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        // A task that still waits has no changes to undo or accept: nothing is asked, nothing is sent.
+        val vm = vm(b)
+        vm.watchTask(42)
+        runCurrent()
+        vm.askUndo(42)
+        vm.acceptTask(42)
+        runCurrent()
+        assertNull(vm.state.value.undoAsk)
+        assertTrue(b.calls.none { it.startsWith("undo") || it.startsWith("taskaccept") })
+        b.detailsOnPc[42] = b.taskDetail.copy(status = "done", actions = setOf(TaskAction.AcceptHeld))
+        b.events.tryEmit(LinkEvent("board:changed", json("""{}""")))
+        runCurrent()
+        vm.askUndo(42)
+        assertNull(vm.state.value.undoAsk)
+        vm.acceptTask(42)
+        runCurrent()
+        assertTrue(b.calls.contains("taskaccept 42"))
+    }
+
+    @Test fun theCountsOfAFinishedTaskAreOnlyAskedWhereThereAreChanges() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two + attention)
+        b.taskDetail = b.taskDetail.copy(status = "done", actions = doneActions)
+        b.statOnPc = TaskStat(3, 42, 7)
+        val vm = vm(b)
+        vm.watchTask(42)
+        runCurrent()
+        assertEquals(TaskStat(3, 42, 7), vm.state.value.taskStat[42])
+        // An older PC says nothing usable: the card has no counts, and nothing breaks.
+        val old = FakeOrbeChatBackend(two + attention)
+        old.taskDetail = old.taskDetail.copy(status = "done", actions = doneActions)
+        old.statOnPc = null
+        val vm2 = vm(old)
+        vm2.watchTask(42)
+        runCurrent()
+        assertNull(vm2.state.value.taskStat[42])
+        assertEquals(setOf(TaskAction.SeeChanges, TaskAction.UndoHeld, TaskAction.AcceptHeld), vm2.state.value.taskInfo[42]!!.actions)
+        val failing = FakeOrbeChatBackend(two + attention)
+        failing.taskDetail = failing.taskDetail.copy(status = "done", actions = doneActions)
+        failing.statResult = refused("x").map { null }
+        val vm3 = vm(failing)
+        vm3.watchTask(42)
+        runCurrent()
+        assertNull(vm3.state.value.taskStat[42])
+    }
+
+    // ---------- The PC's queue behind the running turn ----------
+
+    private val q1 = OrbeQueued("q1", "y luego súbelo a la rama dev", 1_000L)
+    private val q2 = OrbeQueued("q2", "avísame cuando acabe", 2_000L)
+
+    @Test fun theQueueIsListedAndAskedAgainWhenTheStateChanges() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1, q2)
+        val vm = vm(b)
+        assertEquals(listOf(q1, q2), vm.state.value.queue)
+        assertTrue(vm.state.value.canEditQueue)
+        // The PC changed it (the desktop took one out) and says so with chat:state.
+        b.queueOnPc = listOf(q2)
+        advanceTimeBy(1_100)
+        b.events.tryEmit(stateEvent(7, busy = true, queued = 1))
+        runCurrent()
+        assertEquals(listOf(q2), vm.state.value.queue)
+        assertTrue(b.queueReads >= 2)
+    }
+
+    @Test fun editingAQueuedMessageSendsItsIdAndTheNewText() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1, q2)
+        val vm = vm(b)
+        vm.openQueued("q1")
+        runCurrent()
+        assertEquals(q1, vm.state.value.queueEditor!!.item)
+        vm.saveQueued("  y luego súbelo a main  ")
+        runCurrent()
+        assertTrue(b.calls.contains("queue-edit q1 y luego súbelo a main"))
+        assertNull(vm.state.value.queueEditor)
+        assertEquals("y luego súbelo a main", vm.state.value.queue.first().text)
+    }
+
+    @Test fun removingAQueuedMessageKeepsTheOthersInOrder() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1, q2)
+        val vm = vm(b)
+        vm.removeQueued("q1")
+        runCurrent()
+        assertTrue(b.calls.contains("queue-remove q1"))
+        assertEquals(listOf(q2), vm.state.value.queue)
+    }
+
+    @Test fun anEmptyEditIsNotSentAndANoChangeJustCloses() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1)
+        val vm = vm(b)
+        vm.openQueued("q1")
+        vm.saveQueued("   ")
+        runCurrent()
+        assertEquals(ChatTexts.QUEUE_EMPTY, vm.state.value.queueEditor!!.error)
+        vm.saveQueued(q1.text)
+        runCurrent()
+        assertNull(vm.state.value.queueEditor)
+        assertTrue(b.calls.none { it.startsWith("queue-edit") })
+    }
+
+    @Test fun thePcsRefusalIsShownWordForWordAndTheEditorStaysOpen() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1)
+        val vm = vm(b)
+        val text = "Un mensaje en cola no puede ser un comando (/clear, /compact): quítalo y envía el comando."
+        b.editResult = Result.failure(LinkException(LinkError.Refused(400, text)))
+        vm.openQueued("q1")
+        runCurrent()
+        vm.saveQueued("/clear")
+        runCurrent()
+        val ed = vm.state.value.queueEditor!!
+        assertEquals(text, ed.error)
+        assertFalse(ed.busy)
+        assertEquals(q1, ed.item)
+    }
+
+    @Test fun ifTheMessageStartedWhileEditingTheEditorClosesAndSaysSo() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1)
+        val vm = vm(b)
+        val said = said(vm)
+        vm.openQueued("q1")
+        runCurrent()
+        // The queue no longer has it (the turn took it) and the PC says the state changed.
+        b.queueOnPc = emptyList()
+        advanceTimeBy(1_100)
+        b.events.tryEmit(stateEvent(7, busy = true, queued = 0))
+        runCurrent()
+        assertNull(vm.state.value.queueEditor)
+        assertEquals(listOf(ChatTexts.QUEUE_STARTED), said)
+    }
+
+    @Test fun ifTheSaveIsRefusedBecauseItLeftTheQueueTheEditorClosesAndSaysSo() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueOnPc = listOf(q1)
+        val vm = vm(b)
+        val said = said(vm)
+        b.editResult = Result.failure(LinkException(LinkError.Refused(400, "Ese mensaje ya no está en la cola.")))
+        vm.openQueued("q1")
+        vm.saveQueued("otra cosa")
+        runCurrent()
+        assertNull(vm.state.value.queueEditor)
+        assertEquals(listOf(ChatTexts.QUEUE_STARTED), said)
+    }
+
+    @Test fun aPcWithoutTheQueueKeepsTheCountOnly() = runTest(dispatcher) {
+        val b = FakeOrbeChatBackend(two)
+        b.queueAvailable = false
+        val vm = vm(b)
+        b.events.tryEmit(stateEvent(7, busy = true, queued = 2))
+        runCurrent()
+        assertFalse(vm.state.value.canEditQueue)
+        assertEquals(0, b.queueReads)
+        assertEquals(2, vm.liveInfo.value!!.queued)
+        assertTrue(vm.state.value.queue.isEmpty())
     }
 }

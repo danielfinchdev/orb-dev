@@ -256,6 +256,7 @@ object ChatTexts {
     const val ANSWER_PICK = "Elige una opción o escribe otra. Responde al agente en el PC."
     const val ANSWER_PICK_MANY = "Elige hasta 4 opciones o escribe otra. Responde al agente en el PC."
     const val ANSWER_OTHER = "Otra respuesta"
+    const val ANSWER_OTHER_CHIP = "Otra respuesta…"
     const val ANSWER_SEND = "Responder"
     const val ANSWER_SKIP = "Saltar"
     const val ANSWERED = "Respondida"
@@ -374,6 +375,55 @@ object ChatTexts {
         "ruta_cambiada" -> "carpeta modificada"
         else -> code
     }
+
+    // Permissions selector under the header
+    const val MODE_SELECTOR = "Permisos de las tareas"
+    const val MODE_NOTE_ASK = "Preguntar: te pido el OK antes de cada cambio."
+    const val MODE_NOTE_AUTO = "Auto: Orb aprueba lo normal y te pregunta lo delicado."
+    fun modeLabel(mode: String?) = when (mode) { "auto" -> MODE_AUTO; "preguntar" -> MODE_ASK; else -> MODE_UNKNOWN }
+
+    // Task cards
+    const val SEE_AND_APPROVE = "Ver y aprobar"
+    /** What the OK is about, on one line: who runs it, with which model, where, and why it asks. */
+    fun approvalLine(agent: String?, model: String?, project: String?, reasons: List<String>): String = listOfNotNull(
+        agent?.takeIf { it.isNotBlank() }?.let { agentWithModel(it, model) },
+        project?.takeIf { it.isNotBlank() },
+        reasons.joinToString(", ") { reason(it) }.ifBlank { null },
+    ).joinToString(" · ")
+    const val TASK_CHANGES = "Cambios"
+    const val TASK_UNDO = "Deshacer"
+    const val TASK_ACCEPT = "Aceptar"
+    const val TASK_DONE = "Hecha"
+    const val TASK_ACCEPTED_BADGE = "Completada"
+    const val TASK_UNDONE_BADGE = "Deshecha"
+    const val TASK_REJECTED_BADGE = "Rechazada"
+    const val TASK_SENSITIVE = "Delicado: pide tu OK"
+    const val TASK_AUTO_PASSED = "Aprobada sola por Auto: es lo normal"
+    const val APPROVED_SNACK = "Aprobada"
+    const val TASK_ACCEPTED = "Aceptada"
+    const val TASK_CHANGED = "La tarea ha cambiado desde que la viste: revisa lo nuevo antes de aprobar."
+    const val TASK_UNDONE_SNACK = "Deshecho"
+    const val TASK_SEE = "Ver"
+    fun taskApproved(id: Long) = "#$id Aprobada"
+    fun taskRejected(id: Long) = "#$id Rechazada"
+    fun taskAccepted(id: Long) = "#$id Aceptada"
+    fun reviewedBy(who: String) = "revisada por $who"
+    fun taskFiles(n: Int) = if (n == 1) "1 archivo" else "$n archivos"
+    fun undoAskTitle(id: Long) = "¿Deshacer la tarea #$id?"
+    fun undoAskBody(files: Int?) =
+        (if (files == null) "Se revierten los archivos que cambió." else "Se revierten los ${taskFiles(files)} que cambió.") + " Los cambios posteriores se conservan."
+    const val UNDO_CONFIRM = "Deshacer esta tarea"
+    const val REJECT_ASK_TITLE = "¿Rechazar esta tarea?"
+    const val REJECT_ASK_BODY = "Rechazarla cancela la tarea."
+    const val REJECT_CONFIRM = "Rechazar y cancelar"
+    const val REJECT_BACK = "Volver"
+
+    // Queue of messages behind the running turn
+    const val QUEUE_STARTED = "Ese mensaje ya salió de la cola: no se pudo cambiar."
+    const val QUEUE_EMPTY = "El mensaje no puede quedar vacío."
+    const val QUEUE_CLOSE = "Cerrar"
+    const val QUEUE_LIST_TITLE = "Mensajes en cola"
+    const val QUEUE_SAVING = "Guardando…"
 
     fun taskStatus(s: String?): String = when (s) {
         "running" -> "Trabajando"

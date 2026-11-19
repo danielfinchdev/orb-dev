@@ -7,6 +7,7 @@ import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.ui.linkErrorText
+import dev.orb.app.ui.tasks.TaskAction
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
@@ -49,6 +50,14 @@ sealed interface ChatItem {
 @Immutable
 data class ApprovalAsk(val detail: TaskDetail)
 
+/** «Deshacer esta tarea» waiting for the person's yes; [files] is how many files it changed, when the PC said. */
+@Immutable
+data class UndoAsk(val task: Long, val title: String, val files: Int?)
+
+/** The queued message being edited; [error] is what the PC answered to the last try, word for word. */
+@Immutable
+data class QueueEditor(val item: OrbeQueued, val busy: Boolean = false, val error: String? = null)
+
 @Immutable
 data class OrbeChatState(
     val title: String = ChatTexts.UNTITLED,
@@ -80,6 +89,15 @@ data class OrbeChatState(
     val liveTasks: List<LiveTask> = emptyList(),
     /** What the PC says about the tasks behind cards: title, agent and state. */
     val taskInfo: Map<Long, TaskDetail> = emptyMap(),
+    /** File and line counts of finished tasks (`tasks.diff {stat}`); a task missing here shows no counts. */
+    val taskStat: Map<Long, TaskStat> = emptyMap(),
+    /** Tasks that have their own «espera tu OK» card in this thread, so their end does not draw a second one. */
+    val attentionTasks: Set<Long> = emptySet(),
+    /** The PC's queue behind the running turn, in order; empty with a PC that cannot list it. */
+    val queue: List<OrbeQueued> = emptyList(),
+    val canEditQueue: Boolean = false,
+    val queueEditor: QueueEditor? = null,
+    val undoAsk: UndoAsk? = null,
 )
 
 /** The streamed answer. Apart from the rest of the state so only its own bubble is drawn again on each piece. */
@@ -129,6 +147,23 @@ class OrbeChatViewModel(
     private val brain = MutableStateFlow<BrainInfo?>(null)
     private val runningTasks = MutableStateFlow<List<LiveTask>>(emptyList())
     private val taskInfo = MutableStateFlow<Map<Long, TaskDetail>>(emptyMap())
+    private val taskStat = MutableStateFlow<Map<Long, TaskStat>>(emptyMap())
+    private val queueItems = MutableStateFlow<List<OrbeQueued>>(emptyList())
+    private val queueEditor = MutableStateFlow<QueueEditor?>(null)
+    private val undoAsk = MutableStateFlow<UndoAsk?>(null)
+    private val queueRequests = Channel<Unit>(Channel.CONFLATED)
+    private val taskRefreshes = Channel<Unit>(Channel.CONFLATED)
+    private var lastQueued = 0
+
+    private val _opens = Channel<Long>(Channel.BUFFERED)
+
+    /** Tasks the person must see on their own screen (a card that cannot show what it asks to approve). */
+    val openTask = _opens.receiveAsFlow()
+
+    private val _undone = Channel<Long>(Channel.BUFFERED)
+
+    /** Tasks just undone, for the «Deshecho · Ver» notice. */
+    val undone = _undone.receiveAsFlow()
     private val liveRequests = Channel<Unit>(Channel.CONFLATED)
     private val ghosts = MutableStateFlow<Map<String, Ghost>>(emptyMap())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
@@ -157,7 +192,8 @@ class OrbeChatViewModel(
         val statusFlow = combine(backend.connection, mode, busyCards, taskStatus, approval) { c, m, b, t, a -> Status(c, m, b, t, a) }
         val flagsFlow = combine(deleted, loadFailed, loadedOnce, canLoadMore, loadingOlder) { d, f, l, c, o -> Flags(d, f, l, c, o) }
 
-        val extraFlow = combine(brain, runningTasks, taskInfo) { b, l, t -> Extra(b, l, t) }
+        val bitsFlow = combine(queueItems, queueEditor, undoAsk) { q, e, u -> Bits(q, e, u) }
+        val extraFlow = combine(brain, runningTasks, taskInfo, taskStat, bitsFlow) { b, l, t, st, bits -> Extra(b, l, t, st, bits) }
         val headerFlow = combine(backend.header(conversation), extraFlow) { h, e -> h to e }
 
         combine(listFlow, pendingFlow, statusFlow, flagsFlow, headerFlow) { lines, pend, st, fl, head ->
@@ -189,14 +225,30 @@ class OrbeChatViewModel(
             }
         }
 
+        // The PC's queue is asked again whenever it says it changed, at most once a second however many events say so.
+        viewModelScope.launch {
+            for (u in queueRequests) {
+                if (backend.connection.value is ConnectionState.Online) refreshQueue()
+                kotlinx.coroutines.delay(QUEUE_GAP_MS)
+            }
+        }
+        // Cards of tasks that are not settled are read again when the board changes.
+        viewModelScope.launch {
+            for (u in taskRefreshes) {
+                if (backend.connection.value is ConnectionState.Online) unsettledTasks().forEach { refreshTask(it) }
+                kotlinx.coroutines.delay(LIVE_GAP_MS)
+            }
+        }
+
         // The first answer of the PC, and again whenever the link comes back.
         backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().onEach { online ->
-            if (online) { reloads.trySend(Unit); loadSnapshot(); markRead(); liveRequests.trySend(Unit) }
+            if (online) { reloads.trySend(Unit); loadSnapshot(); markRead(); liveRequests.trySend(Unit); if (canEditQueue()) queueRequests.trySend(Unit) }
         }.launchIn(viewModelScope)
     }
 
     private data class Lines(val saved: List<ChatMessage>, val fresh: Map<Long, ChatMessage>, val provisional: List<ChatMessage>, val overrides: Map<Long, MsgCard>)
-    private data class Extra(val brain: BrainInfo?, val running: List<LiveTask>, val info: Map<Long, TaskDetail>)
+    private data class Bits(val queue: List<OrbeQueued>, val editor: QueueEditor?, val undo: UndoAsk?)
+    private data class Extra(val brain: BrainInfo?, val running: List<LiveTask>, val info: Map<Long, TaskDetail>, val stat: Map<Long, TaskStat>, val bits: Bits)
     private data class Status(val c: ConnectionState, val mode: String?, val busy: Set<Long>, val tasks: Map<Long, String>, val approval: ApprovalAsk?)
     private data class Flags(val deleted: Boolean, val failed: Boolean, val loaded: Boolean, val more: Boolean, val older: Boolean)
 
@@ -228,6 +280,8 @@ class OrbeChatViewModel(
             canLoadMore = fl.more, loadingOlder = fl.older, loadFailed = fl.failed, mode = st.mode,
             canSetMode = backend.available(ApiMethods.PERMISSIONS_SET_MODE), canCompact = backend.available(ApiMethods.CHAT_COMPACT),
             busyCards = st.busy, taskStatus = st.tasks, approval = st.approval, brain = extra.brain, taskInfo = extra.info,
+            taskStat = extra.stat, attentionTasks = real.mapNotNull { (it.card as? MsgCard.TaskAttention)?.task }.toSet(),
+            queue = extra.bits.queue, canEditQueue = canEditQueue(), queueEditor = extra.bits.editor, undoAsk = extra.bits.undo,
             liveTasks = referencedTasks(real).let { ids -> extra.running.filter { it.id in ids }.sortedBy { it.id } },
         )
     }
@@ -265,12 +319,16 @@ class OrbeChatViewModel(
             }
             LinkEvent.RELOAD -> if (o != null && OrbeParser.conversationOf(o) == conversation) { reloads.trySend(Unit); viewModelScope.launch { loadSnapshot() } }
             "config:changed" -> viewModelScope.launch { loadSnapshot() }
-            "board:changed" -> liveRequests.trySend(Unit)
+            "board:changed" -> { liveRequests.trySend(Unit); taskRefreshes.trySend(Unit) }
+            "approval:changed" -> taskRefreshes.trySend(Unit)
         }
     }
 
     private fun onState(o: JsonObject) {
         val info = OrbeParser.live(o)
+        // `queued` counts turns, not messages: the list itself is only ever read from the PC.
+        if (canEditQueue() && (info.queued > 0 || queueItems.value.isNotEmpty() || info.queued != lastQueued)) queueRequests.trySend(Unit)
+        lastQueued = info.queued
         if (info.busy) {
             _liveInfo.value = info
             _liveText.value = LiveText(OrbeParser.partial(o))
@@ -451,16 +509,55 @@ class OrbeChatViewModel(
         backend.taskDetail(task).onSuccess { d ->
             d.status?.let { s -> taskStatus.update { it + (task to s) } }
             taskInfo.update { it + (task to d) }
+            // The counts are only worth asking for while there are changes to look at.
+            if (TaskAction.SeeChanges in d.actions) {
+                backend.taskStat(task).onSuccess { st -> taskStat.update { m -> if (st != null) m + (task to st) else m - task } }
+            } else taskStat.update { it - task }
         }
     }
 
-    /** «Aprobar»: first shows what the task is and where it runs, as the PC's own window does. */
+    /** The tasks whose card can still change: waiting, queued, running, or done without an answer to «Aceptar». */
+    private fun unsettledTasks(): List<Long> = taskInfo.value.values.filter { d ->
+        d.status in UNSETTLED || (d.status == "done" && !d.accepted && !d.undone)
+    }.map { it.id }.take(MAX_REFRESH)
+
+    /**
+     * The card's «Aprobar». The card showed the task as [shownHash] fingerprints it: only that is approved. If the card
+     * cannot show what the OK is about, or what it showed is no longer what was read last, nothing is approved here.
+     */
+    fun approveFromCard(task: Long, shownHash: String?) {
+        val key = taskKey(task)
+        if (key in busyCards.value) return
+        val info = taskInfo.value[task]
+        when {
+            // Nothing read yet: the PC's description is fetched and shown in the dialog (or the task's screen opens).
+            info == null -> askApproval(task)
+            shownHash.isNullOrBlank() || !info.approvable || TaskAction.Approve !in info.actions -> _opens.trySend(task)
+            // What was on screen is not the latest read: the new one is drawn first, the OK waits for a new tap.
+            shownHash != info.hash -> _messages.trySend(ChatTexts.TASK_CHANGED)
+            else -> {
+                busyCards.update { it + key }
+                viewModelScope.launch {
+                    decideTask(task, true, shownHash)
+                    busyCards.update { it - key }
+                }
+            }
+        }
+    }
+
+    /** The PC's description in a dialog, read now; a task that is still not describable opens its own screen instead. */
     fun askApproval(task: Long) {
         val key = taskKey(task)
         if (key in busyCards.value) return
         busyCards.update { it + key }
         viewModelScope.launch {
-            backend.taskDetail(task).fold({ approval.value = ApprovalAsk(it) }, { say(it) })
+            backend.taskDetail(task).fold(
+                {
+                    taskInfo.update { m -> m + (task to it) }
+                    if (it.approvable && TaskAction.Approve in it.actions) approval.value = ApprovalAsk(it) else _opens.trySend(task)
+                },
+                { say(it) },
+            )
             busyCards.update { it - key }
         }
     }
@@ -482,6 +579,7 @@ class OrbeChatViewModel(
         }
     }
 
+    /** Called after the person confirmed the rejection. */
     fun rejectTask(task: Long) {
         val key = taskKey(task)
         if (key in busyCards.value) return
@@ -494,9 +592,116 @@ class OrbeChatViewModel(
 
     private suspend fun decideTask(task: Long, approve: Boolean, hash: String?) {
         backend.decideTask(task, approve, hash).fold(
-            onSuccess = { taskStatus.update { it + (task to if (approve) "approved" else "cancelled") }; refreshTask(task); reloads.trySend(Unit) },
+            onSuccess = {
+                taskStatus.update { it + (task to if (approve) "queued" else "cancelled") }
+                // The card folds at once; the PC's own answer replaces this right after.
+                taskInfo.update { m ->
+                    m[task]?.let { d -> m + (task to d.copy(status = if (approve) "queued" else "cancelled", decision = if (approve) "approved" else "rejected", actions = emptySet())) } ?: m
+                }
+                if (approve) _messages.trySend(ChatTexts.APPROVED_SNACK)
+                refreshTask(task); reloads.trySend(Unit)
+            },
             onFailure = { say(it); refreshTask(task) },
         )
+    }
+
+    /** «Aceptar» on a finished task's card (`tasks.accept`), only where the PC allows it for that task. */
+    fun acceptTask(task: Long) {
+        val key = taskKey(task)
+        if (key in busyCards.value || TaskAction.AcceptHeld !in taskInfo.value[task]?.actions.orEmpty()) return
+        busyCards.update { it + key }
+        viewModelScope.launch {
+            backend.acceptTask(task).fold(
+                onSuccess = { _messages.trySend(ChatTexts.TASK_ACCEPTED); refreshTask(task) },
+                onFailure = { say(it); refreshTask(task) },
+            )
+            busyCards.update { it - key }
+        }
+    }
+
+    /** «Deshacer» only asks: the files of the PC are not touched until [confirmUndo]. */
+    fun askUndo(task: Long) {
+        val info = taskInfo.value[task] ?: return
+        if (TaskAction.UndoHeld !in info.actions) return
+        undoAsk.value = UndoAsk(task, info.title, taskStat.value[task]?.files)
+    }
+
+    fun dismissUndo() { undoAsk.value = null }
+
+    fun confirmUndo() {
+        val ask = undoAsk.value ?: return
+        undoAsk.value = null
+        val key = taskKey(ask.task)
+        // The same rule as when it was asked: the task may have changed while the dialog was open.
+        if (key in busyCards.value || TaskAction.UndoHeld !in taskInfo.value[ask.task]?.actions.orEmpty()) return
+        busyCards.update { it + key }
+        viewModelScope.launch {
+            backend.undoTask(ask.task).fold(
+                onSuccess = { _undone.trySend(ask.task); refreshTask(ask.task) },
+                onFailure = { say(it); refreshTask(ask.task) },
+            )
+            busyCards.update { it - key }
+        }
+    }
+
+    // --- The PC's queue behind the running turn ---
+
+    private fun canEditQueue() = backend.available(ApiMethods.CHAT_QUEUE) && backend.available(ApiMethods.CHAT_EDIT_QUEUED)
+
+    private suspend fun refreshQueue() {
+        backend.queue(conversation).onSuccess { list ->
+            queueItems.value = list
+            val editing = queueEditor.value
+            // The message left the queue while it was being edited: the editor closes and says so.
+            if (editing != null && list.none { it.id == editing.item.id }) {
+                queueEditor.value = null
+                _messages.trySend(ChatTexts.QUEUE_STARTED)
+            }
+        }
+    }
+
+    fun openQueued(id: String) {
+        val item = queueItems.value.firstOrNull { it.id == id } ?: return
+        queueEditor.value = QueueEditor(item)
+    }
+
+    fun closeQueued() { queueEditor.value = null }
+
+    fun saveQueued(text: String) {
+        val editing = queueEditor.value ?: return
+        if (editing.busy) return
+        val t = text.trim()
+        if (t.isEmpty()) { queueEditor.value = editing.copy(error = ChatTexts.QUEUE_EMPTY); return }
+        if (t == editing.item.text) { queueEditor.value = null; return }
+        queueEditor.value = editing.copy(busy = true, error = null)
+        viewModelScope.launch {
+            backend.editQueued(conversation, editing.item.id, t, remove = false).fold(
+                onSuccess = { list -> queueItems.value = list; queueEditor.value = null },
+                onFailure = { queueFailure(editing.item.id, it) },
+            )
+        }
+    }
+
+    fun removeQueued(id: String) {
+        viewModelScope.launch {
+            backend.editQueued(conversation, id, null, remove = true).fold(
+                onSuccess = { list -> queueItems.value = list; if (queueEditor.value?.item?.id == id) queueEditor.value = null },
+                onFailure = { queueFailure(id, it) },
+            )
+        }
+    }
+
+    private fun queueFailure(id: String, e: Throwable) {
+        if (ChatErrors.queuedGone(e)) {
+            if (queueEditor.value?.item?.id == id) queueEditor.value = null
+            _messages.trySend(ChatTexts.QUEUE_STARTED)
+            queueRequests.trySend(Unit)
+            return
+        }
+        // The PC's own words, as it said them (a command cannot wait in the queue, the text is too long...).
+        val said = ChatErrors.pcText(e) ?: linkErrorText(e)
+        val editing = queueEditor.value
+        if (editing != null && editing.item.id == id) queueEditor.value = editing.copy(busy = false, error = said) else _messages.trySend(said)
     }
 
     private fun say(e: Throwable) {
@@ -508,6 +713,9 @@ class OrbeChatViewModel(
         const val PAGE = 150
         const val OLDER_PAGE = 100
         const val LIVE_GAP_MS = 1_500L
+        const val QUEUE_GAP_MS = 1_000L
+        private const val MAX_REFRESH = 12
+        private val UNSETTLED = setOf("awaiting_approval", "queued", "running")
         private const val MENTION_WINDOW = 20
         private val MENTION = Regex("""(?<![\w&])#(\d{1,7})\b""")
     }

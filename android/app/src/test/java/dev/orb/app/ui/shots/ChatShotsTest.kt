@@ -21,7 +21,9 @@ import dev.orb.app.ui.chats.OrbeChatScreen
 import dev.orb.app.ui.chats.OrbeChatViewModel
 import dev.orb.app.ui.chats.PendingMessage
 import dev.orb.app.ui.chats.PendingState
-import dev.orb.app.ui.chats.QueuedMsg
+import dev.orb.app.ui.chats.OrbeQueued
+import dev.orb.app.ui.chats.TaskStat
+import dev.orb.app.ui.tasks.TaskAction
 import dev.orb.app.ui.chats.TaskDetail
 import dev.orb.app.ui.chats.row
 import dev.orb.app.ui.offline.LocalOffline
@@ -80,13 +82,13 @@ class ChatShotsTest {
     /** One picture of the screen per mode; [after] runs once it is up (a tap, some text...). */
     private fun shoot(
         name: String, palette: OrbPaletteChoice, suffix: String, vm: OrbeChatViewModel, info: OfflineInfo? = null,
-        queued: List<QueuedMsg> = emptyList(), after: () -> Unit = {},
+        after: () -> Unit = {},
     ) {
         var dark by mutableStateOf(false)
         rule.setContent {
             ShotFrame(palette, dark) {
                 CompositionLocalProvider(LocalOffline provides info) {
-                    OrbeChatScreen(vm, onBack = {}, liveRefreshMs = 0, queued = queued, onEditQueued = { _, _ -> }, onRemoveQueued = {})
+                    OrbeChatScreen(vm, onBack = {}, liveRefreshMs = 0)
                 }
             }
         }
@@ -95,13 +97,13 @@ class ChatShotsTest {
         rule.waitForIdle()
         Shots.save(rule.activity, "$name-${palette.key}-claro$suffix")
         dark = true
-        rule.waitForIdle()
+        if (rule.mainClock.autoAdvance) rule.waitForIdle() else repeat(4) { rule.mainClock.advanceTimeByFrame() }
         Shots.save(rule.activity, "$name-${palette.key}-oscuro$suffix")
     }
 
     private fun vm(b: FakeOrbeChatBackend) = OrbeChatViewModel(b, 7, dispatcher = Dispatchers.Unconfined)
 
-    private val quoted = listOf(QueuedMsg(1, "y luego súbelo a la rama dev", 0))
+    private val quoted = listOf(OrbeQueued("q1", "y luego súbelo a la rama dev", 1_000L))
 
     // ---- 13 · Chat con Orbe ----
 
@@ -112,8 +114,9 @@ class ChatShotsTest {
         val b = backend(thread13(), "Versión 2.0 de la app", "app-movil")
         b.liveOnPc = listOf(LiveTask(42, "Registro de notificaciones", "codex", "Leyendo src/push.ts", null, false))
         val vm = vm(b)
+        b.queueOnPc = quoted
         working(b, queued = 1)
-        shoot("13-chat", palette, suffix, vm, queued = quoted)
+        shoot("13-chat", palette, suffix, vm)
     }
 
     @Test fun working() = working13(OrbPaletteChoice.Grafito)
@@ -131,7 +134,7 @@ class ChatShotsTest {
         Shots.assumeEnabled()
         val rows = thread13() + line(3, "system", "La tarea #42 terminó", at(13, 58), """{"kind":"attention","task":42}""")
         val b = backend(rows, "Versión 2.0 de la app", "app-movil")
-        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "done", "codex", "C:/app-movil", emptyList(), null)
+        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "done", "codex", "C:/app-movil", emptyList(), null, actions = emptySet())
         val vm = vm(b)
         shoot("13-chat", OrbPaletteChoice.Grafito, "-reposo", vm, after = {
             rule.onNode(hasSetTextAction()).performTextInput("Gracias, súbelo a la rama dev")
@@ -141,18 +144,108 @@ class ChatShotsTest {
     @Test fun editingTheQueue() {
         Shots.assumeEnabled()
         val b = backend(thread13(), "Versión 2.0 de la app", "app-movil")
+        b.queueOnPc = quoted
         val vm = vm(b)
         working(b, queued = 1)
-        shoot("13-chat", OrbPaletteChoice.Grafito, "-cola", vm, queued = quoted, after = { rule.onNodeWithText("Editar").performClick() })
+        shoot("13-chat", OrbPaletteChoice.Grafito, "-cola", vm, after = { rule.onNodeWithText("Editar").performClick() })
+    }
+
+    @Test fun theQueueAsAList() {
+        Shots.assumeEnabled()
+        val b = backend(thread13(), "Versión 2.0 de la app", "app-movil")
+        b.queueOnPc = quoted + OrbeQueued("q2", "avísame cuando acabe", 2_000L)
+        val vm = vm(b)
+        working(b, queued = 2)
+        shoot("13-chat", OrbPaletteChoice.Grafito, "-cola-lista", vm, after = { rule.onNodeWithText("Editar").performClick() })
     }
 
     @Test fun waitingForApproval() {
         Shots.assumeEnabled()
         val rows = thread13() + line(3, "system", "La tarea #42 espera tu OK: toca la red", at(13, 56), """{"kind":"attention","task":42}""")
         val b = backend(rows, "Versión 2.0 de la app", "app-movil")
-        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "awaiting_approval", "codex", "C:/app-movil", listOf("red"), "h1")
+        b.taskDetail = TaskDetail(42, "Registro de notificaciones", "awaiting_approval", "codex", "C:/app-movil", listOf("red"), "h1", actions = setOf(TaskAction.Approve))
         shoot("13-chat", OrbPaletteChoice.Grafito, "-aprobar", vm(b))
     }
+
+    // ---- 14 · Aprobaciones y deshacer ----
+
+    private val task42 = TaskDetail(
+        42, "Registro de notificaciones", "done", "codex", "C:/app-movil", emptyList(), null, reviewAgent = "claude",
+        actions = setOf(TaskAction.SeeChanges, TaskAction.UndoHeld, TaskAction.AcceptHeld),
+    )
+    private val task43 = TaskDetail(
+        43, "Borrar build/ y reinstalar dependencias", "awaiting_approval", "codex", "C:/app-movil", listOf("destructive"), "h43",
+        actions = setOf(TaskAction.Approve),
+    )
+    private val task44 = TaskDetail(44, "Instalar dependencias", "running", "codex", "C:/app-movil", emptyList(), "h44", autonomy = "auto", approvalRequired = false)
+
+    private fun thread14(auto: Boolean = false, question: Boolean = false): List<String> {
+        val rows = ArrayList<String>()
+        if (question) {
+            val meta = """{"kind":"question","header":null,"question":"¿Uso Room o DataStore para guardar el registro?","multi":false,"status":"pending","answer":null,"options":[{"label":"Room"},{"label":"DataStore"}]}"""
+            rows += line(1, "orb", "¿Uso Room o DataStore para guardar el registro?", at(13, 57), meta)
+        } else {
+            rows += line(1, "system", "La tarea #42 terminó", at(13, 57), """{"kind":"task-end","task":42,"status":"done"}""")
+            rows += line(2, "orb", "La #42 está lista. La #43 borra muchos archivos: ¿la apruebas?", at(13, 58))
+        }
+        if (auto) rows += line(3, "system", "Tarea #44 creada", at(13, 59), """{"kind":"attention","task":44}""")
+        rows += line(4, "system", "⚠️ La tarea #43 espera tu OK", at(14, 0), """{"kind":"attention","task":43}""")
+        return rows
+    }
+
+    private fun backend14(auto: Boolean = false, question: Boolean = false) =
+        backend(thread14(auto, question), "Versión 2.0 de la app", "app-movil").apply {
+            modeOnPc = if (auto) "auto" else "preguntar"
+            detailsOnPc[42] = task42
+            detailsOnPc[43] = task43
+            detailsOnPc[44] = task44
+            statOnPc = TaskStat(3, 42, 7)
+        }
+
+    /** The snackbar lives four seconds: the clock stops so a picture can catch it. */
+    private fun holdClock() { rule.mainClock.autoAdvance = false }
+    private fun settle() {
+        repeat(2) { org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle(); rule.mainClock.advanceTimeBy(300) }
+    }
+
+    private fun approvals(palette: OrbPaletteChoice, suffix: String = "", auto: Boolean = false, question: Boolean = false, setup: (FakeOrbeChatBackend) -> Unit = {}, after: () -> Unit = {}) {
+        Shots.assumeEnabled()
+        val b = backend14(auto, question)
+        setup(b)
+        shoot("14-aprobaciones", palette, suffix, vm(b), after = after)
+    }
+
+    @Test fun approvalsAsk() = approvals(OrbPaletteChoice.Grafito)
+    @Test fun approvalsAskOceano() = approvals(OrbPaletteChoice.Oceano)
+    @Test fun approvalsAuto() = approvals(OrbPaletteChoice.Grafito, "-auto", auto = true)
+
+    @Test fun approvalsApproved() = approvals(
+        OrbPaletteChoice.Grafito, "-aprobada",
+        setup = { b -> b.onAction = { if (it == "task 43 true") b.detailsOnPc[43] = task43.copy(status = "running", actions = emptySet(), decision = "approved") } },
+        after = { holdClock(); rule.onNodeWithText("Aprobar").performClick(); settle() },
+    )
+
+    @Test fun approvalsRejected() = approvals(
+        OrbPaletteChoice.Grafito, "-rechazada",
+        setup = { b -> b.onAction = { if (it == "task 43 false") b.detailsOnPc[43] = task43.copy(status = "cancelled", actions = emptySet(), decision = "rejected") } },
+        after = { rule.onNodeWithText("Rechazar").performClick(); rule.onNodeWithText("Rechazar y cancelar").performClick() },
+    )
+
+    @Test fun approvalsAccepted() = approvals(
+        OrbPaletteChoice.Grafito, "-aceptada",
+        setup = { b -> b.onAction = { if (it == "taskaccept 42") b.detailsOnPc[42] = task42.copy(accepted = true, actions = setOf(TaskAction.SeeChanges, TaskAction.UndoHeld)) } },
+        after = { rule.onNodeWithText("Aceptar").performClick() },
+    )
+
+    @Test fun approvalsConfirmUndo() = approvals(OrbPaletteChoice.Grafito, "-deshacer", after = { rule.onNodeWithText("Deshacer").performClick() })
+
+    @Test fun approvalsUndone() = approvals(
+        OrbPaletteChoice.Grafito, "-deshecho",
+        setup = { b -> b.onAction = { if (it == "undo 42") b.detailsOnPc[42] = task42.copy(undone = true, actions = emptySet()) } },
+        after = { rule.onNodeWithText("Deshacer").performClick(); rule.waitForIdle(); holdClock(); rule.onNodeWithText("Deshacer esta tarea").performClick(); settle() },
+    )
+
+    @Test fun approvalsAgentQuestion() = approvals(OrbPaletteChoice.Grafito, "-pregunta", question = true)
 
     // ---- 28 · Sin conexión dentro de un chat ----
 

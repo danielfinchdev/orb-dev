@@ -25,6 +25,7 @@ private fun circle(cx: Float, cy: Float, r: Float) = "M${cx - r} $cy a$r $r 0 1 
 object OrbIcons {
     val Circle by lazy { lucide("circle", circle(12f, 12f, 10f)) }
     val CircleCheck by lazy { lucide("circle-check", circle(12f, 12f, 10f), "m9 12 2 2 4-4") }
+    val CircleX by lazy { lucide("circle-x", circle(12f, 12f, 10f), "m15 9-6 6", "m9 9 6 6") }
     val CircleDot by lazy { lucide("circle-dot", circle(12f, 12f, 10f), circle(12f, 12f, 1f)) }
     val Bot by lazy {
         lucide("bot", "M12 8V4H8", "M6 8h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z", "M2 14h2", "M20 14h2", "M15 13v2", "M9 13v2")
