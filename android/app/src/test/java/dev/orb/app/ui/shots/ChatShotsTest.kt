@@ -236,13 +236,6 @@ class ChatShotsTest {
     @Test fun approvalsAskOceano() = approvals(OrbPaletteChoice.Oceano)
     @Test fun approvalsAuto() = approvals(OrbPaletteChoice.Grafito, "-auto", auto = true)
 
-    @Test fun approvalsApproved() = approvals(
-        OrbPaletteChoice.Grafito, "-aprobada",
-        setup = { b -> b.onAction = { if (it == "task 43 true") b.detailsOnPc[43] = task43.copy(status = "running", actions = emptySet(), decision = "approved") } },
-        // The card only opens the task: the OK of this picture is given the one way the chat still has, its dialog.
-        afterWith = { vm -> vm.askApproval(43); rule.waitForIdle(); holdClock(); rule.onNodeWithText("Aprobar").performClick(); settle() },
-    )
-
     @Test fun approvalsRejected() = approvals(
         OrbPaletteChoice.Grafito, "-rechazada",
         setup = { b -> b.onAction = { if (it == "task 43 false") b.detailsOnPc[43] = task43.copy(status = "cancelled", actions = emptySet(), decision = "rejected") } },

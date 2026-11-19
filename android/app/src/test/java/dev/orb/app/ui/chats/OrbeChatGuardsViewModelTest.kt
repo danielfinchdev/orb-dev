@@ -281,21 +281,17 @@ class OrbeChatGuardsViewModelTest {
         val moved = waiting(""","folderMoved":true""")
         assertTrue(moved.folderMoved == true && moved.folderChanged)
         assertFalse(moved.approvable)
-        assertFalse(moved.approvableFromCard)
-        assertTrue(waiting(""","folderMoved":false""").approvableFromCard)
+        assertTrue(waiting(""","folderMoved":false""").approvable)
     }
 
     @Test fun twoFoldersWithTheSameLastNameAreAMoveWhenThePcSaysSo() {
         val d = waiting(""","folderMoved":true""").copy(project = "D:/otros/tienda", folderNow = "C:/orb/tienda")
         assertTrue(d.folderChanged)
-        assertFalse(d.approvableFromCard)
         // Without the PC's word the old comparison of the two names stands: it warns, and the hash covers the folder shown.
         val old = waiting("").copy(project = "D:/otros/tienda", folderNow = "C:/orb/tienda")
         assertNull(old.folderMoved)
         assertTrue(old.folderChanged)
         assertTrue(old.approvable)
-        // Without the PC saying whether the folder moved, the card does not approve directly: the dialog or the task's screen does.
-        assertFalse(old.approvableFromCard)
     }
 
     @Test fun theGuardParametersOfAcceptOnlyGoToAPcThatChecksThem() {
@@ -309,31 +305,12 @@ class OrbeChatGuardsViewModelTest {
         val d = waiting(""","folderOutside":true""")
         assertTrue(d.folderOutside)
         assertFalse(d.approvable)
-        assertFalse(d.approvableFromCard)
     }
 
-    @Test fun aCutDescriptionNeedsTheDialogButCanBeApprovedThere() {
+    @Test fun aCutDescriptionIsFlaggedButStillReadWholeOnTheTasksScreen() {
         val d = waiting(""","descriptionCut":true""")
         assertTrue(d.descriptionCut)
         assertTrue(d.approvable)
-        assertFalse(d.approvableFromCard)
-    }
-
-    @Test fun aMovedOrOutsideFolderIsNotApprovedFromTheDialogEitherAndOpensTheTask() = runTest(dispatcher) {
-        for (extra in listOf(""","folderMoved":true""", ""","folderOutside":true""")) {
-            val b = FakeOrbeChatBackend(two + attention(5, 42))
-            b.taskDetail = waiting(extra).copy(actions = setOf(TaskAction.Approve))
-            val vm = vm(b)
-            val opened = ArrayList<Long>()
-            backgroundScope.launch { vm.openTask.collect { opened += it } }
-            vm.watchTask(42)
-            runCurrent()
-            vm.askApproval(42)
-            runCurrent()
-            assertTrue(extra, b.calls.none { it.startsWith("task 42") })
-            assertNull(extra, vm.state.value.approval)
-            assertEquals(extra, listOf(42L), opened)
-        }
     }
 
     @Test fun aPcThatSaysNothingNewStillApprovesAsBefore() {
@@ -342,6 +319,5 @@ class OrbeChatGuardsViewModelTest {
         assertFalse(d.folderOutside || d.descriptionCut)
         assertNull(d.checkpointId)
         assertTrue(d.approvable)
-        assertFalse(d.approvableFromCard)
     }
 }

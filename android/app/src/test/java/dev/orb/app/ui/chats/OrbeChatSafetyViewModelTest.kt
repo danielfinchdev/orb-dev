@@ -46,40 +46,25 @@ class OrbeChatSafetyViewModelTest {
         return out
     }
 
-    @Test fun twoTapsOnApproveSendOneApproval() = runTest(dispatcher) {
+    @Test fun anOldReadThatArrivesAfterTheRejectionDoesNotBringTheButtonBack() = runTest(dispatcher) {
         val b = FakeOrbeChatBackend(two + attention)
+        val cancelled = b.taskDetail.copy(status = "cancelled", actions = emptySet(), decision = "rejected")
+        b.onAction = { if (it == "task 42 false") b.detailsOnPc[42] = cancelled }
         val vm = vm(b)
         vm.watchTask(42)
-        runCurrent()
-        vm.askApproval(42)
-        runCurrent()
-        vm.confirmApproval()
-        vm.confirmApproval()
-        runCurrent()
-        assertEquals(1, b.calls.count { it.startsWith("task 42 true") })
-    }
-
-    @Test fun anOldReadThatArrivesAfterTheOkDoesNotBringTheButtonBack() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two + attention)
-        val running = b.taskDetail.copy(status = "running", actions = emptySet(), decision = "approved")
-        b.onAction = { if (it == "task 42 true") b.detailsOnPc[42] = running }
-        val vm = vm(b)
-        vm.watchTask(42)
-        runCurrent()
-        vm.askApproval(42)
         runCurrent()
         // A read leaves the PC while the task still waits and is slow to arrive.
         val late = CompletableDeferred<Unit>()
         b.staleNext = late
         b.events.tryEmit(LinkEvent("board:changed", json("""{}""")))
         runCurrent()
-        vm.confirmApproval()
+        vm.rejectTask(42)
         runCurrent()
-        assertEquals("running", vm.state.value.taskInfo[42]?.status)
+        assertEquals("cancelled", vm.state.value.taskInfo[42]?.status)
         late.complete(Unit)
         runCurrent()
-        assertEquals("running", vm.state.value.taskInfo[42]?.status)
-        assertEquals("approved", vm.state.value.taskInfo[42]?.decision)
+        assertEquals("cancelled", vm.state.value.taskInfo[42]?.status)
+        assertEquals("rejected", vm.state.value.taskInfo[42]?.decision)
         assertTrue(TaskAction.Approve !in vm.state.value.taskInfo[42]!!.actions)
     }
 

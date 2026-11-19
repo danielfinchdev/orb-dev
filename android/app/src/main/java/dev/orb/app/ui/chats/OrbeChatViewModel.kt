@@ -46,10 +46,6 @@ sealed interface ChatItem {
     }
 }
 
-/** A task the person is about to approve: the PC's own description, shown before the OK. */
-@Immutable
-data class ApprovalAsk(val detail: TaskDetail)
-
 /**
  * «Deshacer esta tarea» waiting for the person's yes; [files] is how many files it changed, when the PC said. [checkpoint] is
  * the point of return the dialog was opened on: it goes back with the yes, so a task that ran again meanwhile is not undone.
@@ -88,7 +84,6 @@ data class OrbeChatState(
     val busyCards: Set<Long> = emptySet(),
     /** Status of the tasks behind `attention` cards (`awaiting_approval`, `running`…). */
     val taskStatus: Map<Long, String> = emptyMap(),
-    val approval: ApprovalAsk? = null,
     /** How this conversation thinks, as the PC says it (`chat.settings`); null when it does not say. */
     val brain: BrainInfo? = null,
     /** Tasks of this conversation that are running now, with what each is doing (`tasks.live`). */
@@ -149,7 +144,6 @@ class OrbeChatViewModel(
     private val canLoadMore = MutableStateFlow(false)
     private val loadingOlder = MutableStateFlow(false)
     private val taskStatus = MutableStateFlow<Map<Long, String>>(emptyMap())
-    private val approval = MutableStateFlow<ApprovalAsk?>(null)
     private val brain = MutableStateFlow<BrainInfo?>(null)
     private val runningTasks = MutableStateFlow<List<LiveTask>>(emptyList())
     private val taskInfo = MutableStateFlow<Map<Long, TaskDetail>>(emptyMap())
@@ -160,11 +154,6 @@ class OrbeChatViewModel(
     private val queueRequests = Channel<Unit>(Channel.CONFLATED)
     private val taskRefreshes = Channel<Unit>(Channel.CONFLATED)
     private var lastQueued = 0
-
-    private val _opens = Channel<Long>(Channel.BUFFERED)
-
-    /** Tasks the person must see on their own screen (a card that cannot show what it asks to approve). */
-    val openTask = _opens.receiveAsFlow()
 
     private val _undone = Channel<Long>(Channel.BUFFERED)
 
@@ -198,7 +187,7 @@ class OrbeChatViewModel(
 
         val listFlow = combine(saved, fresh, provisional, overrides) { s, f, p, o -> Lines(s, f, p, o) }
         val pendingFlow = combine(backend.pending(conversation), ghosts) { q, g -> q to g }
-        val statusFlow = combine(backend.connection, mode, busyCards, taskStatus, approval) { c, m, b, t, a -> Status(c, m, b, t, a) }
+        val statusFlow = combine(backend.connection, mode, busyCards, taskStatus) { c, m, b, t -> Status(c, m, b, t) }
         val flagsFlow = combine(deleted, loadFailed, loadedOnce, canLoadMore, loadingOlder) { d, f, l, c, o -> Flags(d, f, l, c, o) }
 
         val bitsFlow = combine(queueItems, queueEditor, undoAsk) { q, e, u -> Bits(q, e, u) }
@@ -262,7 +251,7 @@ class OrbeChatViewModel(
     private data class Lines(val saved: List<ChatMessage>, val fresh: Map<Long, ChatMessage>, val provisional: List<ChatMessage>, val overrides: Map<Long, MsgCard>)
     private data class Bits(val queue: List<OrbeQueued>, val editor: QueueEditor?, val undo: UndoAsk?)
     private data class Extra(val brain: BrainInfo?, val running: List<LiveTask>, val info: Map<Long, TaskDetail>, val stat: Map<Long, TaskStat>, val bits: Bits)
-    private data class Status(val c: ConnectionState, val mode: String?, val busy: Set<Long>, val tasks: Map<Long, String>, val approval: ApprovalAsk?)
+    private data class Status(val c: ConnectionState, val mode: String?, val busy: Set<Long>, val tasks: Map<Long, String>)
     private data class Flags(val deleted: Boolean, val failed: Boolean, val loaded: Boolean, val more: Boolean, val older: Boolean)
 
 
@@ -293,7 +282,7 @@ class OrbeChatViewModel(
             loaded = fl.loaded || real.isNotEmpty() || items.isNotEmpty(), deleted = fl.deleted, canRestore = backend.available(ApiMethods.CONVERSATIONS_RESTORE), online = online, connection = st.c,
             canLoadMore = fl.more, loadingOlder = fl.older, loadFailed = fl.failed, mode = st.mode,
             canSetMode = backend.available(ApiMethods.PERMISSIONS_SET_MODE), canCompact = backend.available(ApiMethods.CHAT_COMPACT),
-            busyCards = st.busy, taskStatus = st.tasks, approval = st.approval, brain = extra.brain, taskInfo = extra.info,
+            busyCards = st.busy, taskStatus = st.tasks, brain = extra.brain, taskInfo = extra.info,
             taskStat = extra.stat, attentionTasks = real.mapNotNull { (it.card as? MsgCard.TaskAttention)?.task }.toSet(),
             queue = extra.bits.queue, canEditQueue = canEditQueue(), queueEditor = extra.bits.editor, undoAsk = extra.bits.undo,
             liveTasks = referencedTasks(real).let { ids -> extra.running.filter { it.id in ids }.sortedBy { it.id } },
@@ -586,46 +575,8 @@ class OrbeChatViewModel(
         }.sortedWith(compareByDescending<Long> { rank[it] ?: 0L }.thenByDescending { it }).take(MAX_REFRESH)
     }
 
-    /**
-     * The PC's description in a dialog, read now, to approve with the fingerprint of the text it shows; a task that is still not
-     * describable opens its own screen instead. A task's card never calls this: «Ver y aprobar» only opens the task.
-     */
-    fun askApproval(task: Long) {
-        val key = taskKey(task)
-        if (key in busyCards.value) return
-        busyCards.update { it + key }
-        viewModelScope.launch {
-            val read = issueRead(task)
-            backend.taskDetail(task).fold(
-                {
-                    if (isLatest(task, read)) {
-                        taskInfo.update { m -> m + (task to it) }
-                        // The dialog shows the whole description (it scrolls), so a long one is still approved from it.
-                        if (it.approvable && TaskAction.Approve in it.actions) approval.value = ApprovalAsk(it) else _opens.trySend(task)
-                    }
-                },
-                { say(it) },
-            )
-            busyCards.update { it - key }
-        }
-    }
-
     /** Task cards share `busyCards` with message cards; the negative id keeps the two ranges apart. */
     private fun taskKey(task: Long) = -task
-
-    fun dismissApproval() { approval.value = null }
-
-    fun confirmApproval() {
-        val ask = approval.value ?: return
-        val key = taskKey(ask.detail.id)
-        if (key in busyCards.value) return
-        approval.value = null
-        busyCards.update { it + key }
-        viewModelScope.launch {
-            decideTask(ask.detail.id, true, ask.detail.hash)
-            busyCards.update { it - key }
-        }
-    }
 
     /** Called after the person confirmed the rejection. */
     fun rejectTask(task: Long) {
@@ -633,22 +584,22 @@ class OrbeChatViewModel(
         if (key in busyCards.value) return
         busyCards.update { it + key }
         viewModelScope.launch {
-            backend.taskDetail(task).fold({ decideTask(task, false, it.hash) }, { say(it) })
+            backend.taskDetail(task).fold({ rejectDecided(task, it.hash) }, { say(it) })
             busyCards.update { it - key }
         }
     }
 
-    private suspend fun decideTask(task: Long, approve: Boolean, hash: String?) {
-        backend.decideTask(task, approve, hash).fold(
+    /** Approving is only done on the task's own screen; the chat can only reject, with the fingerprint of the task it just read. */
+    private suspend fun rejectDecided(task: Long, hash: String?) {
+        backend.decideTask(task, false, hash).fold(
             onSuccess = {
                 // Reads still on their way were asked before this decision: whatever they say is old.
                 issueRead(task)
-                taskStatus.update { it + (task to if (approve) "queued" else "cancelled") }
+                taskStatus.update { it + (task to "cancelled") }
                 // The card folds at once; the PC's own answer replaces this right after.
                 taskInfo.update { m ->
-                    m[task]?.let { d -> m + (task to d.copy(status = if (approve) "queued" else "cancelled", decision = if (approve) "approved" else "rejected", actions = emptySet())) } ?: m
+                    m[task]?.let { d -> m + (task to d.copy(status = "cancelled", decision = "rejected", actions = emptySet())) } ?: m
                 }
-                if (approve) _messages.trySend(ChatTexts.APPROVED_SNACK)
                 refreshTask(task); reloads.trySend(Unit)
             },
             onFailure = { say(it); refreshTask(task) },

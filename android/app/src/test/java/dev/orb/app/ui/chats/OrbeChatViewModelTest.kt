@@ -258,28 +258,11 @@ class OrbeChatViewModelTest {
         assertTrue(b.calls.containsAll(listOf("stop", "compact")))
     }
 
-    @Test fun approvingATaskShowsItsDetailFirst() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two)
-        val vm = vm(b)
-        vm.askApproval(42)
-        runCurrent()
-        assertEquals("Guardar el carrito", vm.state.value.approval!!.detail.title)
-        assertFalse(b.calls.any { it.startsWith("task") })
-        vm.confirmApproval()
-        runCurrent()
-        assertTrue(b.calls.contains("task 42 true h1"))
-        assertNull(vm.state.value.approval)
-        vm.rejectTask(42)
-        runCurrent()
-        assertTrue(b.calls.contains("task 42 false h1"))
-    }
-
     @Test fun aSecondTapOnATaskWhileTheFirstIsPendingIsIgnored() = runTest(dispatcher) {
         val b = FakeOrbeChatBackend(two)
         val vm = vm(b)
         b.detailGate = kotlinx.coroutines.CompletableDeferred()
-        vm.askApproval(42)
-        vm.askApproval(42)
+        vm.rejectTask(42)
         vm.rejectTask(42)
         runCurrent()
         assertEquals(1, b.calls.count { it.startsWith("detail") })
@@ -287,11 +270,7 @@ class OrbeChatViewModelTest {
         b.detailGate!!.complete(Unit)
         runCurrent()
         assertFalse(-42L in vm.state.value.busyCards)
-        vm.confirmApproval()
-        vm.confirmApproval()
-        runCurrent()
-        assertEquals(1, b.calls.count { it.startsWith("task 42 true") })
-        assertFalse(-42L in vm.state.value.busyCards)
+        assertEquals(1, b.calls.count { it.startsWith("task 42 false") })
     }
 
     @Test fun theApprovalDetailCarriesTheModelAndReadableReasons() {
@@ -408,96 +387,9 @@ class OrbeChatViewModelTest {
         return out
     }
 
-    private fun TestScope.opened(vm: OrbeChatViewModel): MutableList<Long> {
-        val out = ArrayList<Long>()
-        backgroundScope.launch { vm.openTask.collect { out += it } }
-        return out
-    }
-
-    @Test fun theDialogApprovesWithTheFingerprintOfTheTextItShows() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two + attention)
-        val vm = vm(b)
-        vm.watchTask(42)
-        runCurrent()
-        assertTrue(vm.state.value.taskInfo[42]!!.approvable)
-        vm.askApproval(42)
-        runCurrent()
-        assertEquals("h1", vm.state.value.approval!!.detail.hash)
-        assertTrue(b.calls.none { it.startsWith("task ") })
-        vm.confirmApproval()
-        runCurrent()
-        assertEquals(1, b.calls.count { it.startsWith("task 42 true") })
-        assertTrue(b.calls.contains("task 42 true h1"))
-    }
-
-    @Test fun theViewModelHasNoWayToApproveFromACard() {
-        // A card only opens the task: the entry point that approved with the fingerprint a card had drawn is gone.
-        assertTrue(OrbeChatViewModel::class.java.methods.none { it.name == "approveFromCard" })
-    }
-
-    @Test fun aTaskWithoutAFingerprintIsNotApprovedFromTheDialogAndOpensTheTask() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two + attention)
-        b.taskDetail = b.taskDetail.copy(hash = null)
-        val vm = vm(b)
-        val opened = opened(vm)
-        vm.watchTask(42)
-        runCurrent()
-        assertFalse(vm.state.value.taskInfo[42]!!.approvable)
-        vm.askApproval(42)
-        runCurrent()
-        assertNull(vm.state.value.approval)
-        assertTrue(b.calls.none { it.startsWith("task ") })
-        assertEquals(listOf(42L), opened)
-    }
-
-    @Test fun aTaskThatCannotBeDescribedIsNotApprovedFromTheDialog() = runTest(dispatcher) {
-        for (broken in listOf(
-            FakeOrbeChatBackend(two).taskDetail.copy(agent = null),
-            FakeOrbeChatBackend(two).taskDetail.copy(title = ""),
-            FakeOrbeChatBackend(two).taskDetail.copy(actions = emptySet()),
-        )) {
-            val b = FakeOrbeChatBackend(two + attention)
-            b.taskDetail = broken
-            val vm = vm(b)
-            val opened = opened(vm)
-            vm.watchTask(42)
-            runCurrent()
-            vm.askApproval(42)
-            runCurrent()
-            assertTrue(b.calls.none { it.startsWith("task ") })
-            assertEquals(listOf(42L), opened)
-        }
-    }
-
-    @Test fun aTaskNobodyHasReadYetShowsTheDescriptionBeforeAnyOk() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two + attention)
-        val vm = vm(b)
-        // No watchTask: nothing was read, so the dialog reads the task and approves what it shows.
-        vm.askApproval(42)
-        runCurrent()
-        assertEquals("h1", vm.state.value.approval!!.detail.hash)
-        assertTrue(b.calls.none { it.startsWith("task ") })
-        vm.confirmApproval()
-        runCurrent()
-        assertTrue(b.calls.contains("task 42 true h1"))
-    }
-
-    @Test fun ifTheAppDidNotKnowYetThePcRefusesTheOldFingerprintAndTheTaskIsReadAgain() = runTest(dispatcher) {
-        val b = FakeOrbeChatBackend(two + attention)
-        val vm = vm(b)
-        val said = said(vm)
-        vm.watchTask(42)
-        runCurrent()
-        vm.askApproval(42)
-        runCurrent()
-        b.detailsOnPc[42] = b.taskDetail.copy(hash = "h2")
-        b.actionResult = refused("La tarea #42 cambió desde que la viste.")
-        vm.confirmApproval()
-        runCurrent()
-        assertTrue(b.calls.contains("task 42 true h1"))
-        assertEquals("h2", vm.state.value.taskInfo[42]!!.hash)
-        assertEquals(1, said.size)
-        assertFalse(-42L in vm.state.value.busyCards)
+    @Test fun theViewModelHasNoWayToApprove() {
+        // Approving is only done on the task's own screen: the chat can look and reject, nothing else.
+        assertTrue(OrbeChatViewModel::class.java.methods.none { it.name in setOf("approveFromCard", "askApproval", "confirmApproval") })
     }
 
     @Test fun rejectingFromTheCardSendsTheHashOfTheTask() = runTest(dispatcher) {
@@ -511,21 +403,19 @@ class OrbeChatViewModelTest {
         assertEquals("rejected", folded.decision)
     }
 
-    @Test fun approvingFoldsTheCardAndSaysSo() = runTest(dispatcher) {
+    @Test fun ifThePcRefusesARejectionTheRefusalIsSaidAndTheTaskIsLeftAsItWas() = runTest(dispatcher) {
         val b = FakeOrbeChatBackend(two + attention)
         val vm = vm(b)
         val said = said(vm)
         vm.watchTask(42)
         runCurrent()
-        vm.askApproval(42)
+        b.actionResult = refused("La tarea #42 cambió desde que la viste.")
+        vm.rejectTask(42)
         runCurrent()
-        // What the PC answers once it approved: queued, with the approval in its history.
-        b.detailsOnPc[42] = b.taskDetail.copy(status = "queued", actions = emptySet(), decision = "approved")
-        vm.confirmApproval()
-        runCurrent()
-        assertEquals("approved", vm.state.value.taskInfo[42]!!.decision)
-        assertEquals("queued", vm.state.value.taskStatus[42])
-        assertEquals(listOf(ChatTexts.APPROVED_SNACK), said)
+        assertTrue(b.calls.contains("task 42 false h1"))
+        assertEquals(1, said.size)
+        assertFalse(-42L in vm.state.value.busyCards)
+        assertEquals("awaiting_approval", vm.state.value.taskInfo[42]!!.status)
     }
 
     @Test fun undoAsksFirstAndOnlyTouchesThePcAfterTheYes() = runTest(dispatcher) {

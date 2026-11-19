@@ -83,33 +83,11 @@ data class TaskDetail(
     val folderKnown: Boolean get() = !folderNow.isNullOrBlank() && "ruta_cambiada" !in reasons
 
     /**
-     * Whether a card or dialog can show everything the OK is about. Anything the hash covers that the answer does not carry
-     * (the current folder of a task whose folder moved, what the person's message asked for) sends the person to the task's own
-     * screen instead of approving from here. A folder the PC says moved, or that lies outside Orb's own, is never approved from a
-     * card either: the phone cannot show it whole. A cut description can still be approved from the dialog, which says so.
+     * Whether the answer carries everything the OK is about. Anything the hash covers that it does not (the current folder of a
+     * task whose folder moved, what the person's message asked for) cannot be read whole from here.
      */
     val approvable: Boolean get() = title.isNotBlank() && !agent.isNullOrBlank() && !hash.isNullOrBlank() && status == "awaiting_approval" &&
         !description.isNullOrBlank() && folderKnown && userAsked.isEmpty() && folderMoved != true && !folderOutside
-
-    /** A card approves directly only when it shows the whole text the fingerprint covers. */
-    val approvableFromCard: Boolean get() = approvable && fitsCard && !descriptionCut && folderMoved != null
-
-    /** The whole description fits the card; longer ones are cut there, so the card cannot approve them. */
-    val fitsCard: Boolean get() = description.orEmpty().let { it.length <= CARD_DESCRIPTION_CHARS && it.count { c -> c == '\n' } < CARD_DESCRIPTION_LINES }
-
-    /** The description as a card draws it: whole when it [fitsCard], else its beginning and «…». */
-    fun descriptionPreview(): String {
-        val d = description.orEmpty().trim()
-        if (fitsCard) return d
-        val lines = d.lineSequence().take(CARD_DESCRIPTION_LINES).joinToString("\n")
-        return lines.take(CARD_DESCRIPTION_CHARS).trimEnd() + "…"
-    }
-
-    companion object {
-        /** A description longer than this is not approved from a card: it would not be read whole. */
-        const val CARD_DESCRIPTION_CHARS = 600
-        const val CARD_DESCRIPTION_LINES = 12
-    }
 }
 
 /**

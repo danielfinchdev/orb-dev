@@ -126,10 +126,10 @@ class OrbeChatSafetyScreenTest {
         assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
-    @Test fun aLongDescriptionOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(description = "x".repeat(TaskDetail.CARD_DESCRIPTION_CHARS + 1)) })
+    @Test fun aLongDescriptionOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(description = "x".repeat(601)) })
 
     @Test fun aDescriptionOfManyShortLinesOnlyOpensTheTask() =
-        assertOnlyOpensTheTask(waiting { copy(description = (1..TaskDetail.CARD_DESCRIPTION_LINES + 1).joinToString("\n") { "paso $it" }) })
+        assertOnlyOpensTheTask(waiting { copy(description = (1..13).joinToString("\n") { "paso $it" }) })
 
     @Test fun aTaskWhoseFolderMovedOnlyOpensTheTask() = assertOnlyOpensTheTask(waiting { copy(reasons = listOf("ruta_cambiada")) })
 
@@ -153,17 +153,6 @@ class OrbeChatSafetyScreenTest {
         screen(b)
         rule.onNodeWithText("Codex · app-movil · elimina datos").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Claude", substring = true).fetchSemanticsNodes().size)
-    }
-
-    @Test fun theDialogSaysTheDescriptionIsAbbreviatedToo() {
-        rule.setContent {
-            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
-                ApprovalDialog(ApprovalAsk(waiting { copy(descriptionCut = true, folderOutside = true) }), onConfirm = {}, onDismiss = {})
-            }
-        }
-        rule.waitForIdle()
-        assertTrue(rule.onAllNodesWithText(ChatTexts.DESCRIPTION_CUT_NOTE).fetchSemanticsNodes().isNotEmpty())
-        assertTrue(rule.onAllNodesWithText(ChatTexts.FOLDER_OUTSIDE_NOTE).fetchSemanticsNodes().isNotEmpty())
     }
 
     // ---------- a card without data ----------

@@ -103,7 +103,6 @@ fun OrbeChatScreen(
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
     val openTask by rememberUpdatedState(onOpenTask)
-    LaunchedEffect(vm) { vm.openTask.collect { openTask(it) } }
     LaunchedEffect(vm) {
         vm.undone.collect { id ->
             if (snackbar.showSnackbar(ChatTexts.TASK_UNDONE_SNACK, actionLabel = ChatTexts.TASK_SEE) == SnackbarResult.ActionPerformed) openTask(id)
@@ -171,11 +170,10 @@ fun OrbeChatScreen(
         // Floats over the box with some air, as the mockup's `.snack`.
         OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(bottom = 128.dp, start = 16.dp, end = 16.dp))
     }
-    state.approval?.let { ApprovalDialog(it, onConfirm = vm::confirmApproval, onDismiss = vm::dismissApproval) }
     rejectAsk?.let { task ->
         OrbDialog(
             onDismiss = { rejectAsk = null }, title = ChatTexts.rejectAskTitle(task), text = ChatTexts.rejectAskBody(state.taskInfo[task]?.title),
-            confirm = OrbDialogAction(ChatTexts.REJECT_CONFIRM, { rejectAsk = null; vm.rejectTask(task) }, danger = true),
+            confirm = OrbDialogAction(ChatTexts.REJECT_CONFIRM, { rejectAsk = null; vm.rejectTask(task) }),
             dismiss = OrbDialogAction(ChatTexts.REJECT_BACK, { rejectAsk = null }),
         )
     }

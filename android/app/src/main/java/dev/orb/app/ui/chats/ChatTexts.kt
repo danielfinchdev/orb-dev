@@ -268,9 +268,7 @@ object ChatTexts {
     const val ASKED_BY_ORBE = "Orbe te pregunta"
     const val ACCEPT_REPORT = "Aceptar"
     const val REPORT_ACCEPTED = "Aceptado"
-    const val APPROVE = "Aprobar"
     const val REJECT = "Rechazar"
-    const val APPROVE_TASK_TITLE = "Aprobar la tarea"
     const val DENY = "Denegar"
     const val SEE_DETAILS = "Ver detalles"
     const val HIDE_DETAILS = "Ocultar detalles"
@@ -280,7 +278,6 @@ object ChatTexts {
     const val DENIED = "Denegado"
     const val EXPIRED = "Ya no está activa"
     const val TASK_WAITING_OK = "Espera tu aprobación"
-    const val ON_PC_NOTE = "Se hace en el PC."
 
     // Direct chat with an agent
     const val TOOL_RESULT = "Resultado"
@@ -428,7 +425,6 @@ object ChatTexts {
     const val TASK_REJECTED_BADGE = "Rechazada"
     const val TASK_SENSITIVE = "Delicado: pide tu OK"
     const val TASK_AUTO_PASSED = "Aprobada sola por Auto: es lo normal"
-    const val APPROVED_SNACK = "Aprobada"
     const val TASK_ACCEPTED = "Aceptada"
     const val TASK_CHANGED = "La tarea ha cambiado desde que la viste: revisa lo nuevo antes de aprobar."
     const val TASK_UNDONE_SNACK = "Deshecho"

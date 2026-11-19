@@ -610,12 +610,12 @@ private fun TaskCard(m: ChatMessage, task: Long, state: OrbeChatState, actions: 
 
 /**
  * Everything the OK is about, none of it cut: why it asks first, then what the task will do, who runs it and where. These are
- * the fields the PC's fingerprint covers; [preview] false (the dialog) shows the whole description however long.
+ * the fields the PC's fingerprint covers; the task's own screen is the only place that draws them, so nothing is shortened.
  */
 @Composable
-internal fun ApprovalFacts(d: TaskDetail, preview: Boolean) {
+internal fun ApprovalFacts(d: TaskDetail) {
     if (d.reasons.isNotEmpty()) Text(ChatTexts.asksBecause(d.reasons), color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
-    if (!d.description.isNullOrBlank()) Text(if (preview) d.descriptionPreview() else d.description.trim(), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
+    if (!d.description.isNullOrBlank()) Text(d.description.trim(), color = OrbKit.foreground, fontSize = 13.sp, lineHeight = 18.sp)
     // The phone shortens the paths of Orb's own folder in the text it gets, so what is read here is not letter for letter what the OK covers.
     if (d.descriptionCut) Text(ChatTexts.DESCRIPTION_CUT_NOTE, color = OrbKit.warning, fontSize = 13.sp, lineHeight = 18.sp, fontWeight = FontWeight.SemiBold)
     if (d.userAsked.isNotEmpty()) {
@@ -763,22 +763,4 @@ fun LiveTaskCard(t: LiveTask, modifier: Modifier = Modifier) {
         modifier = modifier, agent = t.agent, working = !t.waiting,
         line = ChatTexts.taskLiveLine(agentName(t.agent) ?: t.agent, t.doing, t.percent).ifEmpty { null },
     )
-}
-
-/** What the PC's own window shows before approving a task: why it asks, what it will do, who runs it and where; nothing is cut. */
-@Composable
-fun ApprovalDialog(ask: ApprovalAsk, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    val d = ask.detail
-    OrbDialog(
-        onDismiss = onDismiss, title = "${ChatTexts.APPROVE_TASK_TITLE} #${d.id}",
-        confirm = OrbDialogAction(ChatTexts.APPROVE, onConfirm),
-        dismiss = OrbDialogAction(ChatTexts.CANCEL, onDismiss),
-    ) {
-        // A long brief scrolls inside the dialog instead of being cut, so the person can read all of it before «Aprobar».
-        Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(d.title, color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
-            ApprovalFacts(d, preview = false)
-            Text(ChatTexts.ON_PC_NOTE, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
-        }
-    }
 }

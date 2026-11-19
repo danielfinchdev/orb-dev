@@ -332,23 +332,6 @@ class OrbeChatScreenTest {
         assertTrue(b.calls.toString(), b.calls.none { it.startsWith("task ") })
     }
 
-    @Test fun afterTheOkTheCardFoldsToOneLine() {
-        val b = FakeOrbeChatBackend(thread + attention)
-        b.taskDetail = waiting42
-        // The PC answers «approved» only once it has been asked to approve.
-        b.onAction = { if (it == "task 42 true") b.detailsOnPc[42] = waiting42.copy(status = "running", actions = emptySet(), decision = "approved") }
-        val vm = screen(b)
-        // The dialog is the only place of the chat that approves, with the fingerprint of the text it shows.
-        vm.askApproval(42)
-        rule.waitForIdle()
-        rule.onNodeWithText("Aprobar").performClick()
-        rule.waitForIdle()
-        assertTrue(b.calls.toString(), b.calls.contains("task 42 true h1"))
-        rule.onNodeWithText("#42 Aprobada").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
-        rule.onNodeWithText("En curso").assertIsDisplayed()
-    }
-
     @Test fun aCardWithoutAFingerprintOnlyOpensTheTask() {
         val b = FakeOrbeChatBackend(thread + attention)
         b.taskDetail = waiting42.copy(hash = null)
