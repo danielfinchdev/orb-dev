@@ -75,6 +75,11 @@ export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
 export function shapeResult(method, result) {
   // The whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
   if (method === 'whiteboard.load' && result) return { ...result, attachments: withoutPaths(result.attachments) };
+  // The phone approves the fingerprint of the full description: say when the folder cut above changed the text it shows.
+  if (method === 'tasks.get' && result && typeof result.description === 'string') {
+    const re = homePattern();
+    return { ...withoutPaths(result), descriptionCut: re ? cutHome(result.description, re) !== result.description : false };
+  }
   if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
   const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;

@@ -1,5 +1,7 @@
 // Window actions of models, tasks, direct sessions and schedules.
 import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
@@ -20,6 +22,21 @@ import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
+
+// Folders compared as the engine writes them: either separator, any case, no trailing separator.
+const folderKey = (p) => path.resolve(String(p)).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+const sameFolder = (a, b) => folderKey(a) === folderKey(b);
+// true when the folder is outside the assistant's folder: there a phone sees only its last name, so two folders look alike.
+function outsideHome(folder) {
+  if (!folder || !ctx.home) return false;
+  const rel = path.relative(folderKey(ctx.home), folderKey(folder)).replace(/\\/g, '/');
+  return rel === '..' || rel.startsWith('../') || path.isAbsolute(rel);
+}
+// Which run's undo point a task has now: changes when it runs again, so a stale «Deshacer» dialog can be refused.
+function checkpointIdOf(cp) {
+  const before = cp?.before; if (!before) return null;
+  return createHash('sha1').update(JSON.stringify([before.kind, before.commit ?? before.copy ?? null, cp.after?.commit ?? null])).digest('hex').slice(0, 16);
+}
 
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -71,7 +88,9 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // account that ran it by the name the user gave it («Codex Pro»).
       // folderNow: the folder previewHash covers; it differs from project_path when the project moved after the task was created.
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
-      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      const now = board.projectPathNow(d) ?? null;
+      const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board.settingJson(`checkpoint:${d.id}`)), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -90,7 +109,12 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
-    'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
+    // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
+    'tasks.undo': ({ id, checkpoint }) => {
+      const tid = int(id, 'tarea');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board.settingJson(`checkpoint:${tid}`))) fail('la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla');
+      return scheduler.undo(tid);
+    },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
     // stat: true → only the line counts per file, no patch, and nothing else is done (read only, no recheck of held files).
@@ -125,8 +149,15 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     },
     // a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
     // to its report does.
-    'tasks.accept': ({ id }) => {
+    // unheld: true (the phone, which may hold stale data) refuses a task the guard holds or that is no longer awaiting
+    // acceptance, so a re-run that Orb held meanwhile is never accepted blind. Without it the PC's window accepts after showing the diff.
+    'tasks.accept': ({ id, unheld }) => {
       const tid = int(id, 'tarea');
+      if (unheld === true) {
+        const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
+        if (board.heldInfo(t)) fail('la tarea está retenida por la guardia; revisa sus cambios en el PC antes de aceptarla');
+        if (t.status !== 'done') fail('la tarea ya no se puede aceptar: su estado ha cambiado; ábrela de nuevo');
+      }
       if (board.heldInfo(board.task(tid))) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       return accept([tid]);
     },
