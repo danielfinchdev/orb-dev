@@ -51,6 +51,9 @@ android {
         unitTests.isReturnDefaultValues = true
         // Robolectric runs the Compose UI tests on the JVM and needs the merged resources and manifest.
         unitTests.isIncludeAndroidResources = true
+        // A test worker gets 512 MB by default, which the Robolectric sandboxes of the UI tests outgrew (OutOfMemoryError on an
+        // unrelated test); the whole suite runs in one worker, so the heap is sized for it.
+        unitTests.all { test -> test.maxHeapSize = "2g" }
     }
 
     buildFeatures {
