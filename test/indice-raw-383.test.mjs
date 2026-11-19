@@ -13,7 +13,7 @@ import { Scheduler } from '../src/engine/scheduler/index.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
 import { git } from '../src/platform/git.mjs';
-import { takeCheckpoint, snapshotCommit, changedBetween, fullSnapshot } from '../src/domain/tasks/checkpoints.mjs';
+import { takeCheckpoint, snapshotCommit, changedBetween, fullSnapshot, missedBy } from '../src/domain/tasks/checkpoints.mjs';
 
 let t; let board; let api; let sessions; let orchestrator; let n = 0;
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
@@ -124,4 +124,20 @@ test('Deshacer se ve en la conversación de la tarea y Orbe lo sabe en su siguie
   const note = orchestrator.takeNotes(conv.id);
   assert.match(note, new RegExp(`«Deshacer» en la tarea #${task.id} `));
   assert.equal(orchestrator.takeNotes(conv.id), '', 'una sola vez');
+});
+
+test('a change date in the future is not trusted: the file counts as changed, while an honest later date is skipped', async () => {
+  const { repo, task } = hiddenTask();
+  await new Promise((r) => setTimeout(r, 30));
+  fs.writeFileSync(path.join(repo, 'c.txt'), 'TRES (copiado después)\n'); fs.utimesSync(path.join(repo, 'c.txt'), OLD, OLD);
+  const { after: snap } = board.settingJson(`checkpoint:${task.id}`);
+  const full = await fullSnapshot(repo, { message: 'full' });
+  const later = [];
+  assert.ok(!missedBy(repo, snap, full, later).some((c) => c.path === 'c.txt'));
+  assert.deepEqual(later, ['c.txt']);
+  // a "now" before the file's change date stands for a change date set in the future
+  const future = [];
+  const missed = missedBy(repo, snap, full, future, snap.at - 60_000);
+  assert.ok(missed.some((c) => c.path === 'c.txt'), JSON.stringify(missed));
+  assert.deepEqual(future, []);
 });

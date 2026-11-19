@@ -180,14 +180,16 @@ export async function fullSnapshot(repo, { message }) {
 // The date of a file's last write can be set back (by the task, or by a copy or an unzip the user made later, which keep the
 // source's date), but its change date (ctime) cannot: one newer than the snapshot means somebody touched the file after the
 // task ended, so it is not counted as hidden. Those paths go to `later` (when given): left as they are and reported.
-export function missedBy(repo, after, full, later = []) {
+// A change date in the future is no proof of a later edit (a task may set it so, to hide a change): it is trusted only up to
+// `now` (plus a little slack for clock jitter), and beyond it the file counts as changed by the task.
+export function missedBy(repo, after, full, later = [], now = Date.now()) {
   const at = after.at ?? Number(git(repo, 'show', '-s', '--format=%ct', after.commit).stdout.trim()) * 1000;
   return changedBetween(repo, after.commit, full.commit).filter((c) => {
     if (isSecretPath(c.path)) return false;
     try {
       const st = fs.statSync(path.join(repo, c.path)); // gone: git always sees that
       if (st.mtimeMs >= at) return false;
-      if (Math.floor(st.ctimeMs) > at) { later.push(c.path); return false; } // whole ms: `at` is one, so a write in that same ms is the task's
+      if (Math.floor(st.ctimeMs) > at && st.ctimeMs <= now + 2000) { later.push(c.path); return false; } // whole ms: `at` is one, so a write in that same ms is the task's
       return true;
     } catch { return false; }
   });
