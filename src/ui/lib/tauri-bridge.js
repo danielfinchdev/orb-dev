@@ -92,6 +92,7 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     openTerminal: (folder) => engine('app.openTerminal', { dir: folder ?? null }),
     editors: () => engine('app.editors'),
     openIn: (which, folder, unlock) => engine('app.openIn', { which, dir: folder, unlock: text(unlock) }),
+    openFileIn: (which, folder, file, line) => engine('app.openFileIn', { which, dir: folder, file, line: line ?? null }),
     runAction: (action) => engine('app.runAction', action ?? {}),
     feedback: { capture, images: () => invoke('app_feedback_images'), send: (data) => engine('app.feedbackSend', data ?? {}) },
     moreApps: () => engine('app.moreApps'),

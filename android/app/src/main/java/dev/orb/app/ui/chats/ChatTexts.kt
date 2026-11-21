@@ -11,17 +11,13 @@ object ChatTexts {
     const val MENU = "Menú"
     const val MENU_APPEARANCE = "Apariencia"
     const val MENU_LINK_TEST = "Prueba de conexión"
-    const val MENU_UNLINK = "Desenlazar este móvil"
-    const val UNLINK_TITLE = "¿Desenlazar este móvil?"
-    const val UNLINK_BODY = "Se borrarán la copia guardada y los mensajes sin enviar. Tendrás que enlazar de nuevo con el PC."
-    const val UNLINK_CONFIRM = "Desenlazar"
     const val CANCEL = "Cancelar"
     const val SOON_TASKS = "Las tareas llegan al móvil pronto"
     const val SOON_PROJECTS = "Los proyectos llegan al móvil pronto"
     const val SOON_HINT = "Pronto en el móvil; mientras, en el PC."
 
     // List
-    const val SEARCH = "Buscar chats, mensajes y proyectos"
+    const val SEARCH = "Buscar chats y proyectos"
     const val FILTER_GROUP = "Filtrar chats"
     const val FILTER_ALL = "Todos"
     const val FILTER_UNREAD = "No leídos"
@@ -31,8 +27,22 @@ object ChatTexts {
     const val NO_PROJECT = "Sin proyecto"
     const val NEW_CHAT = "Nuevo chat"
     const val WORKING = "Trabajando"
-    const val WAITING_PERMISSION = "Espera permiso"
+    const val WAITING_PERMISSION = "Esperando tu aprobación"
     const val ASKING = "Te pregunta"
+    const val MORE_OPTIONS = "Más opciones"
+    const val ORDER_PRIORITY = "Ordenar por prioridad"
+    const val ORDER_PRIORITY_ON = "Activado"
+    const val ORDER_PRIORITY_OFF = "Desactivado"
+    const val DAY_SUMMARY = "Resumen del día"
+    const val NO_DIGEST = "No hay nada registrado de ayer."
+    const val ARCHIVED_SNACK = "Chat archivado"
+    const val UNARCHIVE_FAILED = "No se pudo deshacer en el PC"
+    const val MARK_READ_SWIPE = "Leído"
+    const val FOLDED = "Plegado"
+    const val UNFOLDED = "Desplegado"
+    const val SHOW_ALL = "Ver todos"
+    const val RESTORE_CHAT = "Restaurar"
+    const val DONE_LABEL = "Hecha"
     const val PAUSED = "En pausa"
     const val MUTED = "Silenciado"
     const val SNOOZED = "Pospuesto"
@@ -51,16 +61,24 @@ object ChatTexts {
     const val PIN = "Fijar arriba"
     const val UNPIN = "Quitar de fijados"
     const val MARK_READ = "Marcar como leído"
+    const val MARK_UNREAD = "Marcar como no leído"
     const val MUTE = "Silenciar"
-    const val UNMUTE = "Dejar de silenciar"
-    const val MUTE_HINT = "No avisa de mensajes nuevos"
+    const val MUTE_META = "1 h · 8 h · siempre"
+    const val MUTE_TITLE = "Silenciar este chat"
+    const val MUTE_1H = "1 hora"
+    const val MUTE_8H = "8 horas"
+    const val MUTE_ALWAYS = "Siempre"
+    const val UNMUTE = "Quitar el silencio"
+    const val UNMUTE_FOREVER = "Silenciado siempre"
     const val SNOOZE = "Posponer"
+    const val SNOOZE_TITLE = "Posponer: vuelve a avisarte"
     const val UNSNOOZE = "Quitar el aplazamiento"
-    const val SNOOZE_1H = "Dentro de 1 hora"
-    const val SNOOZE_3H = "Dentro de 3 horas"
-    const val SNOOZE_TOMORROW = "Mañana por la mañana"
-    const val MOVE_SECTION = "Mover a sección…"
-    const val OUT_OF_SECTION = "Quitar de la sección"
+    const val SNOOZE_1H = "En 1 hora"
+    const val SNOOZE_AFTERNOON = "Esta tarde"
+    const val SNOOZE_TOMORROW = "Mañana"
+    const val MOVE_SECTION = "Mover a sección"
+    const val NO_SECTION = "Sin sección"
+    const val CURRENT = "Actual"
     const val NEW_SECTION = "Nueva sección…"
     const val SECTION_NAME = "Nombre de la sección"
     const val RENAME = "Renombrar"
@@ -78,8 +96,12 @@ object ChatTexts {
     const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
 
     // Search
-    const val SEARCH_PLACEHOLDER = "Buscar en chats, mensajes, tareas y proyectos"
-    const val SEARCH_HINT_SHORT = "Escribe al menos 2 letras. La búsqueda la hace el PC."
+    const val SEARCH_PLACEHOLDER = "Buscar chats, mensajes, tareas y proyectos"
+    const val SEARCH_TITLE = "Buscar"
+    const val SEARCH_SUBTITLE = "Chats, mensajes, tareas y proyectos"
+    const val SEARCH_HINT_BODY = "Busca por contenido en chats, mensajes, tareas y proyectos."
+    const val GROUP_IN_MESSAGES = "En mensajes"
+    const val SEARCH_HINT_SHORT = "Escribe al menos 2 letras"
     const val SCOPE_ALL = "Todo"
     const val GROUP_CHATS = "Chats"
     const val GROUP_MESSAGES = "Mensajes"
@@ -89,36 +111,64 @@ object ChatTexts {
     const val SEARCH_ERROR = "No se pudo buscar en el PC."
     const val SEARCH_OFFLINE = "Sin conexión con el PC: se busca solo en los chats guardados en el móvil."
     const val SEARCHING = "Buscando en el PC…"
+    fun searchNothing(q: String) = "No hay nada con «${q.trim()}»."
+    fun projectLine(chats: Int, tasks: Int?) = chatsOf(chats) + (if (tasks != null && tasks > 0) " · " + tasksOf(tasks) else "")
+    fun tasksOf(n: Int) = if (n == 1) "1 tarea" else "$n tareas"
+    fun completed(n: Int) = "Completados · $n"
+    fun taskLine(project: String?, status: String?) = listOfNotNull(project?.takeIf { it.isNotBlank() }, status?.let(::taskStatus)?.takeIf { it.isNotBlank() }).joinToString(" · ")
+
+    /** The line under the wordmark: which PC and how the link is. */
+    fun linkLine(s: dev.orb.app.link.net.ConnectionState): String = when (s) {
+        is dev.orb.app.link.net.ConnectionState.Online -> "${s.pcName?.takeIf { it.isNotBlank() } ?: "El PC"} · conectado"
+        dev.orb.app.link.net.ConnectionState.Connecting -> "Conectando…"
+        is dev.orb.app.link.net.ConnectionState.Offline -> "Sin conexión"
+        else -> dev.orb.app.ui.connectionText(s)
+    }
     const val BACK = "Volver"
     const val CLEAR = "Borrar texto"
     const val PROJECT_ON_PC = "Proyecto en el PC"
 
     // Placeholders of routes other pieces fill in
+
     // New chat
-    const val NEW_CHAT_SUBTITLE = "Se crea en el PC"
-    const val NEW_CHAT_WITH = "¿Con quién quieres hablar?"
-    const val NEW_CHAT_ORBE_HINT = "Reparte el trabajo entre los agentes"
-    const val NEW_CHAT_AGENT_HINT = "Hablas directo con el agente"
+    const val NEW_CHAT_ORBE = "Con Orbe"
+    const val NEW_CHAT_ORBE_HINT = "Lo divide en tareas y elige agentes"
+    const val NEW_CHAT_DIRECT = "Directo con un agente"
+    const val NEW_CHAT_DIRECT_HINT_NONE = "Hablas con un agente en una carpeta"
+    const val NEW_CHAT_AGENT = "Agente"
+    const val NEW_CHAT_FOLDER = "Carpeta"
+    const val NEW_CHAT_FOLDER_PROJECT = "la del proyecto"
+    const val NEW_CHAT_FOLDER_NONE = "Sin carpeta"
+    const val NEW_CHAT_FOLDER_READ_ONLY = "el agente solo puede leer"
     const val NEW_CHAT_RECOMMENDED = "Recomendado"
-    const val NEW_CHAT_WHERE = "Dónde y con qué"
     const val NEW_CHAT_PROJECT = "Proyecto"
-    const val NEW_CHAT_PROJECT_ACTIVE = "El activo en el PC"
-    const val NEW_CHAT_PROJECT_ACTIVE_SHORT = "activo en el PC"
+    const val NEW_CHAT_NEW_PROJECT = "Nuevo"
     const val NEW_CHAT_BRAIN = "Cerebro"
     const val NEW_CHAT_BRAIN_AUTO = "El que usa el PC"
+    const val NEW_CHAT_BRAIN_AGENT = "Con quién piensa"
     const val NEW_CHAT_MODEL = "Modelo"
-    const val NEW_CHAT_EFFORT = "Esfuerzo"
+    const val NEW_CHAT_EFFORT = "Razonamiento"
     const val NEW_CHAT_MODEL_DEFAULT = "El del PC"
-    const val NEW_CHAT_NOTE = "El chat, el proyecto y el cerebro viven en el PC. Aquí solo los eliges. ¿Proyecto nuevo? Se crea en el PC desde Proyectos."
-    const val NEW_CHAT_FIRST = "Primer mensaje"
-    const val NEW_CHAT_FIRST_HINT = "Escribe lo que quieres pedir"
-    const val NEW_CHAT_CREATE = "Crear el chat en el PC"
-    const val NEW_CHAT_CREATING = "Creando en el PC…"
-    const val NEW_CHAT_FAILED = "No se pudo crear el chat en el PC"
-    const val NEW_CHAT_OPTIONS_FAILED = "No se pudo leer lo que ofrece el PC. Puedes hablar con Orbe igualmente."
-    const val NEW_CHAT_CLOSE = "Cerrar"
-    const val NEW_CHAT_PICK = "Elegir"
+    const val NEW_CHAT_MODEL_DEFAULT_ROW = "modelo por defecto"
     const val NEW_CHAT_USE_PC_CHOICE = "Dejar la elección del PC"
+    const val NEW_CHAT_ACCOUNT = "La cuenta la elige el PC."
+    const val NEW_CHAT_DONE = "Listo"
+    const val NEW_CHAT_START = "Empezar"
+    const val NEW_CHAT_STARTING = "Creando…"
+    const val NEW_CHAT_CANCEL = "Cancelar"
+    const val NEW_CHAT_FAILED = "No se pudo crear el chat en el PC"
+    const val NEW_CHAT_LOADING = "Leyendo lo que ofrece el PC…"
+    const val NEW_CHAT_OPTIONS_FAILED = "No se pudo leer lo que ofrece el PC. Puedes hablar con Orbe igualmente."
+    const val NEW_CHAT_OLD_PC = "Este PC tiene una versión antigua de Orb: actualízala para elegir agente y cerebro. Puedes hablar con Orbe igualmente."
+    const val NEW_CHAT_NO_AGENTS = "El PC no tiene ningún agente listo para hablar directo."
+    const val NEW_CHAT_OFFLINE = "Sin conexión con el PC. Para empezar un chat hace falta conexión."
+    const val NEW_CHAT_PROJECT_TITLE = "Nuevo proyecto"
+    const val NEW_CHAT_PROJECT_NAME = "Nombre del proyecto"
+    const val NEW_CHAT_PROJECT_CREATE = "Crear"
+    const val NEW_CHAT_PROJECT_OFFLINE = "Sin conexión con el PC: no se ha creado el proyecto."
+    const val DRAFT_HINT = "Escribe lo primero que necesitas. El chat se crea en el PC al enviarlo."
+    const val DRAFT_OFFLINE = "Sin conexión con el PC. Para enviar el primer mensaje hace falta conexión."
+
 
     // Delete in the PC
     const val DELETE_TITLE = "¿Eliminar este chat en el PC?"
@@ -134,7 +184,7 @@ object ChatTexts {
     const val CHAT_SOON = "El chat se abre aquí en el siguiente paso."
 
     // Orbe chat
-    const val MESSAGE_FIELD = "Mensaje para Orbe"
+    const val MESSAGE_FIELD = "Escribe a Orbe…"
     const val SEND = "Enviar"
     const val STOP = "Parar"
     const val STOP_HINT = "Para el turno de Orbe en el PC"
@@ -159,9 +209,14 @@ object ChatTexts {
 
     // Pending messages
     const val PENDING_SENDING = "Enviando…"
-    const val PENDING_WAITING = "En espera, sale al volver la conexión"
-    const val PENDING_FAILED = "No se envió"
+    const val PENDING_WAITING = "Se enviará al volver"
+    const val PENDING_UPDATE_PC = "No saldrá hasta actualizar Orb en el PC"
+    const val PENDING_UPDATE_APP = "No saldrá hasta actualizar la app"
+    const val PENDING_UNLINKED = "No saldrá: el móvil ya no está enlazado"
+    const val PENDING_ATTENTION = "Saldrá cuando el PC esté listo"
+    const val PENDING_FAILED = "No enviado"
     const val PENDING_DISCARD = "Descartar"
+    const val SEND_FAILED_SNACK = "No se pudo enviar."
     const val PENDING_KEPT = "Tu mensaje sigue en este móvil y no se ha perdido."
     const val REMOVE = "Quitar"
 
@@ -171,21 +226,50 @@ object ChatTexts {
     const val MODE_AUTO_HINT = "El PC decide solo lo que es seguro"
     const val MODE_ASK_HINT = "El PC te pregunta antes de lo delicado"
     const val MODE_MENU = "Permisos en el PC"
+    const val MODE_UNKNOWN = "Permisos"
+
+    // Writing box
+    const val BRAIN_UNKNOWN = "El del PC"
+    const val BRAIN_DESC = "Cerebro de este chat"
+    const val MIC = "Dictar por voz"
+    const val MIC_NONE = "Este móvil no tiene dictado por voz"
+    const val MENTION_TITLE = "Mencionar"
+    const val COMMANDS_TITLE = "Comandos"
+    const val COMPACT_COMMAND = "/compact"
+    const val COMPACT_COMMAND_HINT = "Resume la conversación para liberar contexto"
+    const val ATTACH_CLOSE = "Cerrar adjuntos"
+    fun suggestionCount(title: String, n: Int) = if (n == 1) "$title, 1 resultado" else "$title, $n resultados"
+    const val STATE_WORKING = "Orbe trabajando"
+    const val STATE_WAITING = "Orbe espera su turno"
+    const val STATE_IDLE = "al día"
+    const val STATE_RECONNECTING = "Reconectando…"
+    const val TASK_RUNNING = "En curso"
+    const val TASK_WAITING_PERMISSION = "Espera un permiso"
+    const val TASK_EDIT_QUEUED = "Editar mensaje en cola"
+    const val TASK_EDIT = "Editar"
+    const val QUEUED_REMOVE = "Quitar"
+    const val QUEUED_SAVE = "Guardar"
+    fun chatLine(project: String?, state: String) = if (project.isNullOrBlank()) state.replaceFirstChar { it.uppercase() } else "$project · $state"
+    fun queuedLine(n: Int, first: String?) = if (first.isNullOrBlank()) queuedTurns(n) else "${queuedTurns(n)}: «$first»"
+    fun taskTitle(id: Long, title: String?) = if (title.isNullOrBlank()) "Tarea #$id" else "#$id $title"
+    fun taskLiveLine(agent: String?, doing: String?, percent: Int?): String =
+        listOfNotNull(agent?.takeIf { it.isNotBlank() }, doing?.takeIf { it.isNotBlank() }, percent?.let { "$it %" }).joinToString(" · ")
 
     // Cards
-    const val ANSWER_PICK = "Elige una opción o escribe otra. Responde al agente en el PC."
-    const val ANSWER_PICK_MANY = "Elige hasta 4 opciones o escribe otra. Responde al agente en el PC."
     const val ANSWER_OTHER = "Otra respuesta"
-    const val ANSWER_SEND = "Responder"
-    const val ANSWER_SKIP = "Saltar"
+    const val ANSWER_OTHER_CHIP = "Otra respuesta…"
+    /** In the card's «⋯»: skipping is a real action of the PC, kept off the card itself. */
+    const val ANSWER_SKIP = "Saltar esta pregunta"
+    fun asks(name: String) = "$name pregunta"
+    fun answerField(name: String) = "Responde a $name…"
+    fun answeringBar(name: String) = "Respondiendo a $name"
+    const val ANSWER_MANY_HINT = "Elige hasta 4 opciones y envía, o escribe otra respuesta."
     const val ANSWERED = "Respondida"
     const val SKIPPED = "Saltada"
     const val ASKED_BY_ORBE = "Orbe te pregunta"
     const val ACCEPT_REPORT = "Aceptar"
     const val REPORT_ACCEPTED = "Aceptado"
-    const val APPROVE = "Aprobar"
     const val REJECT = "Rechazar"
-    const val APPROVE_TASK_TITLE = "Aprobar la tarea"
     const val DENY = "Denegar"
     const val SEE_DETAILS = "Ver detalles"
     const val HIDE_DETAILS = "Ocultar detalles"
@@ -195,7 +279,6 @@ object ChatTexts {
     const val DENIED = "Denegado"
     const val EXPIRED = "Ya no está activa"
     const val TASK_WAITING_OK = "Espera tu aprobación"
-    const val ON_PC_NOTE = "Se hace en el PC."
 
     // Direct chat with an agent
     const val TOOL_RESULT = "Resultado"
@@ -242,7 +325,7 @@ object ChatTexts {
     const val PLAN = "Plan"
     const val AGENT_FALLBACK = "El agente"
 
-    fun directField(agent: String?) = "Mensaje para ${agent ?: "el agente"}"
+    fun directField(agent: String?) = "Escribe a ${agent ?: "el agente"}…"
     fun emptyDirect(agent: String?) = "Conversación con ${agent ?: "el agente"}. Lo que escribas lo hace el agente en el PC."
     fun queueTitle(n: Int) = "En cola ($n)"
     fun agentWorking(agent: String?) = "${agent ?: "El agente"} está trabajando…"
@@ -256,17 +339,43 @@ object ChatTexts {
     }
 
     // Deleted chat
-    const val DELETED_TITLE = "Este chat se borró en el PC"
-    const val DELETED_BODY = "Ya no está en el PC y se quitará de lo guardado en este móvil. Si ha sido un error, el borrado se puede deshacer en el PC."
-    const val BACK_TO_CHATS = "Volver a Chats"
+    const val DELETED_TITLE = "Este chat ya no existe"
+    const val DELETED_BODY = "Se borró en el PC."
+    const val BACK_TO_CHATS = "Ir a Chats"
 
     fun reportAccepted(ids: List<Long>) = "Aceptado · tareas " + ids.joinToString(", ") { "#$it" }
     fun reportTasks(ids: List<Long>) = "Tareas " + ids.joinToString(", ") { "#$it" }
     fun queuedTurns(n: Int) = "$n en cola"
-    fun pendingFailed(reason: String?) = if (reason.isNullOrBlank()) PENDING_FAILED else "$PENDING_FAILED: $reason"
+    /** What a queued message says, never promising a send the link cannot make. */
+    fun pendingLine(c: dev.orb.app.link.net.ConnectionState?): String = when (c) {
+        dev.orb.app.link.net.ConnectionState.UpdatePc -> PENDING_UPDATE_PC
+        dev.orb.app.link.net.ConnectionState.UpdateApp -> PENDING_UPDATE_APP
+        dev.orb.app.link.net.ConnectionState.Unlinked -> PENDING_UNLINKED
+        is dev.orb.app.link.net.ConnectionState.Attention -> PENDING_ATTENTION
+        else -> PENDING_WAITING
+    }
+    /** The outbox keeps a technical word for why a send failed; the screen says it in plain Spanish and leaves the word to the screen reader. */
+    fun pendingFailed(reason: String?): String {
+        val plain = failedPlain(reason)
+        return if (plain == null) PENDING_FAILED else "$PENDING_FAILED: $plain"
+    }
+
+    fun failedPlain(reason: String?): String? = when {
+        reason.isNullOrBlank() -> null
+        reason.startsWith("refused") -> "el PC lo rechazó"
+        reason == "not linked" -> "este móvil ya no está enlazado"
+        reason == "bad answer" -> "no se entiende la respuesta del PC"
+        reason.startsWith("unsupported") -> "esta versión del PC no lo admite"
+        reason.startsWith("not retried") -> "pasó demasiado tiempo y puede que ya haya llegado"
+        else -> null
+    }
+
+    fun pendingFailedSpoken(reason: String?): String =
+        if (reason.isNullOrBlank()) pendingFailed(reason) else "${pendingFailed(reason)}. Motivo técnico: $reason"
 
     fun unread(n: Int) = if (n == 1) "1 sin leer" else "$n sin leer"
     fun chatsOf(n: Int) = if (n == 1) "1 chat" else "$n chats"
+    fun files(n: Int) = if (n == 1) "1 archivo" else "$n archivos"
     fun withOrbe(project: String?) = if (project == null) "con Orbe" else "$project · con Orbe"
     fun withAgent(project: String?, agent: String?) = (project?.let { "$it · " } ?: "") + "con ${agent ?: "un agente"}"
 
@@ -285,6 +394,79 @@ object ChatTexts {
         "ruta_cambiada" -> "carpeta modificada"
         else -> code
     }
+
+    // Permissions selector under the header
+    const val MODE_SELECTOR = "Permisos de las tareas"
+    const val MODE_NOTE_ASK = "Preguntar: te pido el OK antes de cada cambio."
+    const val MODE_NOTE_AUTO = "Auto: Orb aprueba lo normal y te pregunta lo delicado."
+    fun modeLabel(mode: String?) = when (mode) { "auto" -> MODE_AUTO; "preguntar" -> MODE_ASK; else -> MODE_UNKNOWN }
+
+    // Task cards
+    const val SEE_AND_APPROVE = "Ver y aprobar"
+    /** What the OK is about, on one line: who runs it, with which model, where, and why it asks. */
+    fun approvalLine(agent: String?, model: String?, project: String?, reasons: List<String>): String = listOfNotNull(
+        agent?.takeIf { it.isNotBlank() }?.let { agentWithModel(it, model) },
+        project?.takeIf { it.isNotBlank() },
+        reasons.joinToString(", ") { reason(it) }.ifBlank { null },
+    ).joinToString(" · ")
+    /** Who runs it and how, in the words of everything the PC's fingerprint covers besides the description, folder and reasons. */
+    fun approvalWho(agent: String, model: String?, reasoning: String?, fast: Boolean, mode: String?, readonly: Boolean, autonomy: String?): String = listOfNotNull(
+        agentWithModel(agent, model),
+        reasoning?.takeIf { it.isNotBlank() }?.let { reasoningText(it) },
+        if (fast) "modo rápido" else null,
+        if (mode == "aislada") "en una copia aislada" else null,
+        if (readonly) "solo lectura" else null,
+        if (autonomy == "preguntar") "permiso: Preguntar" else null,
+    ).joinToString(" · ")
+    fun asksBecause(reasons: List<String>) = "Pide tu OK porque: " + reasons.joinToString(", ") { reason(it) }
+    const val AGENT_ANY = "Automático"
+    const val FOLDER_CHANGED_NOTE = "La carpeta del proyecto ha cambiado desde que se creó la tarea."
+    const val FOLDER_OUTSIDE_NOTE = "Fuera de la carpeta de Orb: el móvil solo ve el último nombre de la carpeta."
+    const val DESCRIPTION_CUT_NOTE = "Este texto nombra carpetas de tu PC que el móvil abrevia."
+    const val USER_ASKED_LABEL = "Lo que pidió tu mensaje:"
+    const val ACCEPT_CHANGED = "La tarea ha cambiado; revísala antes de aceptar."
+    const val ACCEPT_UNAVAILABLE = "Esa tarea ha cambiado en el PC y ya no se puede aceptar desde aquí: no se ha tocado nada."
+    const val UNDO_CHANGED = "Esa tarea se ha vuelto a ejecutar: ábrela de nuevo para revisarla. No se ha deshecho nada."
+    const val QUEUE_CHANGED_REMOVE = "Ese mensaje ha cambiado en el PC: no se ha quitado. Revísalo y quítalo de nuevo si quieres."
+    const val TASK_HELD_BADGE = "Retenida"
+    const val TASK_SEE_CHANGES = "Ver cambios"
+    const val TASK_SEE_TASK = "Ver la tarea"
+    const val TASK_ENDED_BADGE = "Terminada"
+    const val UNDO_UNAVAILABLE = "Esa tarea ha cambiado en el PC y ya no se puede deshacer desde aquí: no se ha tocado nada."
+    const val QUEUE_CHANGED = "Este mensaje ha cambiado en el PC. Se ha cargado el texto nuevo: revísalo y guarda otra vez si quieres cambiarlo."
+    const val TASK_CHANGES = "Cambios"
+    const val TASK_UNDO = "Deshacer"
+    const val TASK_ACCEPT = "Aceptar"
+    const val TASK_DONE = "Hecha"
+    const val TASK_ACCEPTED_BADGE = "Completada"
+    const val TASK_UNDONE_BADGE = "Deshecha"
+    const val TASK_REJECTED_BADGE = "Rechazada"
+    const val TASK_SENSITIVE = "Delicado: pide tu OK"
+    const val TASK_AUTO_PASSED = "Aprobada sola por Auto: es lo normal"
+    const val TASK_ACCEPTED = "Aceptada"
+    const val TASK_CHANGED = "La tarea ha cambiado desde que la viste: revisa lo nuevo antes de aprobar."
+    const val TASK_UNDONE_SNACK = "Deshecho"
+    const val TASK_SEE = "Ver"
+    fun taskApproved(id: Long) = "#$id Aprobada"
+    fun taskRejected(id: Long) = "#$id Rechazada"
+    fun taskAccepted(id: Long) = "#$id Aceptada"
+    fun reviewedBy(who: String) = "revisada por $who"
+    fun taskFiles(n: Int) = if (n == 1) "1 archivo" else "$n archivos"
+    fun undoAskTitle(id: Long) = "¿Deshacer la tarea #$id?"
+    fun undoAskBody(files: Int?) =
+        (if (files == null) "Se revierten los archivos que cambió." else "Se revierten los ${taskFiles(files)} que cambió.") + " Los cambios posteriores se conservan."
+    const val UNDO_CONFIRM = "Deshacer esta tarea"
+    fun rejectAskTitle(id: Long) = "¿Rechazar la tarea #$id?"
+    fun rejectAskBody(title: String?) = (title?.takeIf { it.isNotBlank() }?.let { "«$it». " } ?: "") + "Rechazarla cancela la tarea."
+    const val REJECT_CONFIRM = "Rechazar y cancelar"
+    const val REJECT_BACK = "Volver"
+
+    // Queue of messages behind the running turn
+    const val QUEUE_STARTED = "Ese mensaje ya salió de la cola: no se pudo cambiar."
+    const val QUEUE_EMPTY = "El mensaje no puede quedar vacío."
+    const val QUEUE_CLOSE = "Cerrar"
+    const val QUEUE_LIST_TITLE = "Mensajes en cola"
+    const val QUEUE_SAVING = "Guardando…"
 
     fun taskStatus(s: String?): String = when (s) {
         "running" -> "Trabajando"

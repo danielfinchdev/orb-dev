@@ -111,6 +111,10 @@ export class SideChats {
     this.push(e);
     return { ok: true };
   }
+  // The side chats whose agent process is open on this account, and closing just those processes (the chats stay; the next
+  // question starts a new process).
+  processesOf(account) { return [...this.map.values()].filter((e) => e.live && e.account === account); }
+  closeProcessesOf(account) { for (const e of this.processesOf(account)) { try { e.live.close(); } catch { /* gone */ } e.live = null; } }
   closeFor(parent) { for (const e of [...this.map.values()]) if (e.parent === parent) this.close(e.id); }
   closeAll() { clearInterval(this.sweeper); for (const id of [...this.map.keys()]) this.close(id); }
   sweep() { for (const e of [...this.map.values()]) if (e.status !== 'running' && Date.now() > e.expiresAt) this.close(e.id); }

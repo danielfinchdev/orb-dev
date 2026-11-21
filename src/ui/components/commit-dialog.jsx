@@ -1,8 +1,8 @@
-// «Hacer commit…» in the chat's header: the project's changed files, the message Orb proposes (editable) and two buttons,
+// «Hacer commit…» (in the chat's ⋯ menu): the project's changed files, the message Orb proposes (editable) and two buttons,
 // «Commit» and «Commit y push». The push is the engine's (never forced, nothing key-shaped leaves); only this PC's window.
 import { useEffect, useRef, useState } from 'react';
 import { GitCommitHorizontal, RefreshCw } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, BubbleTip, Checkbox } from '@/components/ui/overlay.jsx';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DropdownMenuItem, BubbleTip, Checkbox } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { call } from '@/lib/store.js';
@@ -81,19 +81,23 @@ function CommitBody({ project, session, onClose }) {
   );
 }
 
-// The button for the chat's header; the dialog loads its files only while it is open.
-export function CommitButton({ project, session }) {
+// «Hacer commit…» is the first item of the chat's ⋯ menu; its dialog lives outside the menu (the menu unmounts when it
+// closes), so the chat keeps the open state and renders both.
+export function CommitMenuItem({ onOpen }) {
   const t = useT();
-  const [open, setOpen] = useState(false);
+  return (
+    <BubbleTip title={t('commit.button')} text={t('commit.tip')} side="left">
+      <DropdownMenuItem onSelect={onOpen} data-testid="commit-open"><GitCommitHorizontal />{t('commit.button')}</DropdownMenuItem>
+    </BubbleTip>
+  );
+}
+
+// The dialog loads its files only while it is open.
+export function CommitDialog({ project, session, open, onOpenChange }) {
   if (!project) return null;
   return (
-    <>
-      <BubbleTip title={t('commit.button')} text={t('commit.tip')}>
-        <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)} data-testid="commit-open"><GitCommitHorizontal />{t('commit.button')}</Button>
-      </BubbleTip>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-xl">{open ? <CommitBody project={project} session={session} onClose={() => setOpen(false)} /> : null}</DialogContent>
-      </Dialog>
-    </>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-xl">{open ? <CommitBody project={project} session={session} onClose={() => onOpenChange(false)} /> : null}</DialogContent>
+    </Dialog>
   );
 }

@@ -1,6 +1,6 @@
 // The activity of Orb read on demand: the engine's own logs, the agents' events, what the user did and the app's stderr.
-// Nothing here runs by itself: no timers, no watchers, no caches. A call reads each log from its end in blocks, only as far
-// as it needs to fill one page, and hands back a cursor to go on.
+// Nothing here runs by itself: no timers, no watchers; the only memory is the small cache of
+// the counters. A call reads each log from its end in blocks, only as far as it needs to fill one page, and hands back a cursor to go on.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx } from '../../platform/context.mjs';
@@ -37,6 +37,15 @@ const levelOf = (text, explicit) => {
   return ERROR_RE.test(text) ? 'error' : WARN_RE.test(text) ? 'warn' : 'info';
 };
 const FAIL_KIND = /(fail|error|problem|conflict|missed)/i;
+
+// Who an event belongs to, for the source filter and its counters. What the user did is «usuario»; what an agent did or
+// reported is «subagentes» (even when Orb is the one writing the line down); the rest is Orb's own work as the conductor.
+const AGENT_KINDS = new Set(['agent.reply', 'agent.problem', 'files.changed', 'files.given', 'task.usage', 'review.verdict', 'task.delegated', 'task.claimed', 'task.problem']);
+export function sourceOf(actor, kind) {
+  if (actor === 'usuario') return 'usuario';
+  if (AGENT_KINDS.has(kind)) return 'subagentes';
+  return actor === 'orb' ? 'orb' : 'subagentes';
+}
 const clip = (s, n = TEXT_MAX) => { const r = redactSecrets(typeof s === 'string' ? s : s == null ? '' : JSON.stringify(s)); return r.length > n ? `${r.slice(0, n)}…` : r; };
 const ms = (v) => {
   if (v == null || v === '') return null;
@@ -184,6 +193,71 @@ function matcher(p) {
   };
 }
 
+// A page of the agents' events, newest first, each with the task it belongs to (a task that was deleted leaves no id).
+function eventRows(board, before) {
+  const select = 'SELECT e.id, e.actor, e.kind, e.detail, e.at, t.id AS task, t.title, t.project FROM events e LEFT JOIN tasks t ON t.id = e.task_id';
+  try {
+    return before == null ? board.all(`${select} ORDER BY e.id DESC LIMIT 500`) : board.all(`${select} WHERE e.id < ? ORDER BY e.id DESC LIMIT 500`, before);
+  } catch { return []; }
+}
+function eventItem(e) {
+  const detail = eventText(e.detail);
+  const failed = FAIL_KIND.test(e.kind) || (e.kind === 'task.updated' && /^failed$/i.test(String(e.detail)));
+  const text = clip(`${e.actor}${e.title ? ` · ${e.title}` : ''}${detail ? ` · ${detail}` : ''}`);
+  return { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: sourceOf(e.actor, e.kind), level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, actor: e.actor, title: e.title ?? null, detail: clip(detail ?? ''), stream: 'events', pos: e.id, ...(e.task != null ? { task: e.task } : {}) };
+}
+
+// → how many lines each source and each level hold under the other filters: a source's number follows the level, project,
+// dates and text; a level's number follows the sources picked, project, dates and text. Reads every log from its end up to
+// the same bytes per stream and events as a page of the list; `partial` says a stream held more than that. The answer is kept
+// per (filters, size and mtime of every log, last event id), so asking again changes nothing until a log or the events move.
+export const COUNT_CAP = READ_CAP;
+const COUNT_CACHE_MAX = 20;
+const countCache = new Map();
+function countKey(board, params) {
+  const picked = Array.isArray(params.sources) ? params.sources.filter((x) => SOURCES.includes(x)) : [];
+  const logs = Object.values(streams()).flatMap((d) => d.files).map((file) => {
+    try { const st = fs.statSync(file); return `${file}:${st.size}:${st.mtimeMs}`; } catch { return `${file}:-`; }
+  });
+  let last = null;
+  try { last = board.all('SELECT MAX(id) AS m FROM events')[0]?.m ?? null; } catch { /* no table: no events */ }
+  return JSON.stringify([[...new Set(picked)].sort(), params.level ?? null, params.project ?? null, String(params.q ?? '').toLowerCase().trim(), params.from ?? null, params.to ?? null, logs, last]);
+}
+export function countActivity(board, params = {}) {
+  const key = countKey(board, params);
+  const hit = countCache.get(key);
+  if (hit) return hit;
+  const out = countFresh(board, params);
+  countCache.set(key, out);
+  while (countCache.size > COUNT_CACHE_MAX) countCache.delete(countCache.keys().next().value);
+  return out;
+}
+function countFresh(board, params) {
+  const want = new Set(Array.isArray(params.sources) && params.sources.length ? params.sources.filter((s) => SOURCES.includes(s)) : SOURCES);
+  const min = Math.max(0, LEVELS.indexOf(params.level));
+  const match = matcher({ ...params, level: 'info' });
+  const sources = Object.fromEntries(SOURCES.map((s) => [s, 0]));
+  const levels = Object.fromEntries(LEVELS.map((l) => [l, 0]));
+  let partial = false;
+  const tally = (it) => {
+    if (!match(it)) return;
+    if (LEVELS.indexOf(it.level) >= min) sources[it.source] += 1;
+    if (want.has(it.source)) levels[it.level] += 1;
+  };
+  for (const [name, def] of Object.entries(streams())) {
+    const r = scanStream({ ...def, name }, undefined, (raw) => { tally({ ...raw, source: def.source }); return true; }, COUNT_CAP);
+    if (r.end) partial = true;
+  }
+  let before = null; let scanned = 0;
+  while (scanned < EVENT_ROWS_CAP) {
+    const rows = eventRows(board, before);
+    for (const e of rows) { scanned += 1; before = e.id; tally(eventItem(e)); }
+    if (rows.length < 500) break;
+    if (scanned >= EVENT_ROWS_CAP) partial = true;
+  }
+  return { sources, levels, ...(partial ? { partial: true } : {}) };
+}
+
 // → { items, next }: newest first, `next` a cursor for the following page (null at the end). `stats` receives the bytes read.
 export function readActivity(board, params = {}, stats = {}) {
   const limit = Math.min(500, Math.max(1, Math.trunc(Number(params.limit)) || 100));
@@ -205,24 +279,17 @@ export function readActivity(board, params = {}, stats = {}) {
     got[name] = { list, end: r.end };
   }
 
-  if (want.has('subagentes') && cursor.events !== DONE) {
+  // events of any of the three sources live in one table: read it when one of them is wanted and keep the ones asked for
+  if ((want.has('subagentes') || want.has('orb') || want.has('usuario')) && cursor.events !== DONE) {
     const list = [];
     let before = Number.isFinite(cursor.events) ? cursor.events : null;
     let end = null; let scanned = 0; let exhausted = false;
     outer: while (scanned < EVENT_ROWS_CAP) {
-      let rows = [];
-      try {
-        rows = before == null
-          ? board.all('SELECT e.id, e.actor, e.kind, e.detail, e.at, t.title, t.project FROM events e LEFT JOIN tasks t ON t.id = e.task_id ORDER BY e.id DESC LIMIT 500')
-          : board.all('SELECT e.id, e.actor, e.kind, e.detail, e.at, t.title, t.project FROM events e LEFT JOIN tasks t ON t.id = e.task_id WHERE e.id < ? ORDER BY e.id DESC LIMIT 500', before);
-      } catch { rows = []; }
+      const rows = eventRows(board, before);
       for (const e of rows) {
         scanned += 1; before = e.id;
-        const detail = eventText(e.detail);
-        const failed = FAIL_KIND.test(e.kind) || (e.kind === 'task.updated' && /^failed$/i.test(String(e.detail)));
-        const text = clip(`${e.actor}${e.title ? ` · ${e.title}` : ''}${detail ? ` · ${detail}` : ''}`);
-        const it = { id: `events:${e.id}`, at: e.at ?? null, sort: ms(e.at) ?? 0, source: 'subagentes', level: failed ? 'error' : levelOf(text, 'info'), project: e.project ?? null, kind: e.kind, text, stream: 'events', pos: e.id };
-        if (match(it)) { list.push(it); if (list.length >= limit) { end = e.id; break outer; } }
+        const it = eventItem(e);
+        if (want.has(it.source) && match(it)) { list.push(it); if (list.length >= limit) { end = e.id; break outer; } }
       }
       // fewer rows than asked: the table is over, so no stale resume point may be kept (a page would repeat)
       if (rows.length < 500) { end = null; exhausted = true; break; }
@@ -250,7 +317,7 @@ export function readActivity(board, params = {}, stats = {}) {
   }
   const more = Object.entries(got).some(([name]) => next[name] !== DONE);
   const publicItems = items.map(({ sort, stream, pos, offset, file, before: b, after: a, ...it }) => ({ ...it, ...(b !== undefined ? { before: clip(b) } : {}), ...(a !== undefined ? { after: clip(a) } : {}) }));
-  return { items: publicItems, next: more ? encodeCursor(next) : null };
+  return { items: publicItems, next: more ? encodeCursor(next) : null, ...(params.counts === true && !params.cursor ? { counts: countActivity(board, params) } : {}) };
 }
 
 // Paths of this PC: the phone gets places, not folders.
@@ -261,6 +328,9 @@ export function hidePcPaths(text) {
   let out = String(text ?? '');
   out = swap(out, home, '<Orb>'); out = swap(out, home.replaceAll(String.fromCharCode(92), '/'), '<Orb>');
   out = swap(out, user, '~'); out = swap(out, user.replaceAll(String.fromCharCode(92), '/'), '~');
+  // the same folders inside a JSON string (before/after of a setting are stored as text) carry doubled backslashes
+  const BS = String.fromCharCode(92);
+  out = swap(out, home.replaceAll(BS, BS + BS), '<Orb>'); out = swap(out, user.replaceAll(BS, BS + BS), '~');
   return out;
 }
 

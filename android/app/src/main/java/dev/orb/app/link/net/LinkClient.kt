@@ -326,9 +326,9 @@ class LinkClient(
         val body = buildJsonObject { put("v", PROTOCOL); put("min", MIN_PROTOCOL); put("client", "android-native") }
         val opened = sealed("me", "/api/me", body, timeouts.me, once = false)
         val result = unwrap(opened.msg) as? JsonObject ?: JsonObject(emptyMap())
-        val versions = PcVersions(result["v"].num()?.toInt(), result["min"].num()?.toInt(), result["version"].str())
+        val versions = PcVersions(result["v"].num()?.toInt(), result["min"].num()?.toInt(), pcVersionOrNull(result["version"].str()))
         val methods = (result["methods"] as? JsonArray)?.mapNotNull { it.str() }?.toSet()
-        val info = PcInfo(result["device"].str(), result["name"].str(), result["pc"].str(), versions, methods, result)
+        val info = PcInfo(result["device"].str(), pcNameOrNull(result["name"].str()), result["pc"].str(), versions, methods, result)
         _info.value = info
         val min = result["min"].num()
         if (min != null && updateNeeded(min) != null) {

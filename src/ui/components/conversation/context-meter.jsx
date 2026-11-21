@@ -75,7 +75,7 @@ export function ContextMeter({ context, className }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" className={cn('hover:bg-accent inline-grid size-7 cursor-pointer place-items-center rounded-full', toneOf(pct), className)} aria-label={t('session.usage.open', { pct })} data-testid="context-meter"><Ring pct={pct} /></button>
+        <button type="button" className={cn('hover:bg-accent inline-flex h-[var(--ctl)] cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control tabular-nums', toneOf(pct), className)} aria-label={t('session.usage.open', { pct })} data-testid="context-meter"><Ring pct={pct} className="size-4" />{pct} %</button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="top" className="w-auto p-0"><UsagePanel context={context} pct={pct} /></DropdownMenuContent>
     </DropdownMenu>

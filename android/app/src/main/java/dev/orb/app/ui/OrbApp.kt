@@ -4,16 +4,25 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbSpinner
 import androidx.compose.material3.Surface
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.orb.app.ui.settings.AppearanceSheet
-import dev.orb.app.ui.theme.OrbBackground
 import dev.orb.app.ui.theme.OrbTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -25,13 +34,22 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.navigation.compose.NavHost
+import androidx.navigation.NavDestination.Companion.hasRoute
+import dev.orb.app.link.net.ConnectionState
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
 import dev.orb.app.AppContainer
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import dev.orb.app.ui.chats.ChatTexts
-import dev.orb.app.ui.chats.NewChatScreen
+import dev.orb.app.ui.chats.Brain
+import dev.orb.app.ui.chats.NewChatOutcome
+import dev.orb.app.ui.chats.NewChatSheet
 import dev.orb.app.ui.chats.NewChatViewModel
+import dev.orb.app.ui.chats.OrbeDraft
+import dev.orb.app.ui.chats.OrbeDraftScreen
+import dev.orb.app.ui.chats.OrbeDraftViewModel
 import dev.orb.app.ui.chats.DirectChatScreen
 import dev.orb.app.ui.chats.DirectChatViewModel
 import dev.orb.app.ui.chats.SearchScreen
@@ -74,10 +92,16 @@ import dev.orb.app.ui.thisphone.RuntimeThisPhoneBackend
 import dev.orb.app.ui.thisphone.ThisPhoneScreen
 import dev.orb.app.ui.thisphone.ThisPhoneViewModel
 import dev.orb.app.ui.usage.UsageViewModel
-import dev.orb.app.ui.shell.UnlinkDialog
 import dev.orb.app.ui.home.HomeViewModel
 import dev.orb.app.ui.linktest.LinkTestScreen
 import dev.orb.app.ui.linktest.LinkTestViewModel
+import dev.orb.app.ui.welcome.AndroidNoticeGate
+import dev.orb.app.ui.scan.AndroidCameraAccess
+import dev.orb.app.ui.scan.ScanHandoff
+import dev.orb.app.ui.scan.ScanScreen
+import dev.orb.app.ui.scan.ScanViewModel
+import dev.orb.app.ui.scan.findActivity
+import dev.orb.app.ui.scan.openScanner
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
 import dev.orb.app.ui.web.GamesScreen
@@ -92,10 +116,15 @@ import dev.orb.app.ui.share.ShareViewModel
 import kotlinx.serialization.Serializable
 
 @Serializable data object Welcome
+@Serializable data object ScanRoute
 @Serializable data object Home
 @Serializable data object LinkTest
 @Serializable data object Search
-@Serializable data object NewChat
+
+/** An Orbe chat that the PC creates with the first message; the choices of the new-chat sheet travel in the route. */
+@Serializable data class OrbeDraftRoute(
+    val setProject: Boolean, val project: String?, val brainAgent: String? = null, val brainModel: String? = null, val brainEffort: String? = null,
+)
 
 /** An Orbe conversation (`kind` = conversation) or a direct chat with an agent (`kind` = session). */
 @Serializable data class ChatRoute(val kind: String, val id: String)
@@ -113,40 +142,119 @@ import kotlinx.serialization.Serializable
 @Serializable data object GamesRoute
 @Serializable data object TutorialsRoute
 @Serializable data object ThisPhoneRoute
+@Serializable data object UpdateRoute
 @Serializable data class ShareRoute(val id: Long)
 
 @Composable
 fun OrbApp(container: AppContainer) {
     val theme by container.themePrefs.settings.collectAsStateWithLifecycle()
     OrbTheme(theme) {
-        // Transparent so Cristal's colour field shows through; Surface still provides the content colour.
-        OrbBackground { Surface(modifier = Modifier.fillMaxSize(), color = Color.Transparent) {
+        Surface(modifier = Modifier.fillMaxSize(), color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
             // The saved link is read off the main thread; until it is known there is nothing to show.
             val linked by produceState<Boolean?>(null, container) { value = container.startup.await() }
             if (linked == null) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { OrbSpinner(size = 28.dp) }
             } else {
                 // Decided once at launch; a restored back stack wins over it after a rotation.
                 val start: Any = remember { if (container.runtime.value != null) Home else Welcome }
                 // Kept above the lock so the person returns to where they were; while locked, no screen is composed at all.
                 val nav = rememberNavController()
+                // Also above the lock: the host below leaves the composition while locked, and an unlink that ends then must still send the person to the welcome page.
+                val wasLinked = rememberSaveable { mutableStateOf(container.runtime.value != null) }
                 androidx.compose.runtime.CompositionLocalProvider(dev.orb.app.ui.offline.LocalOffline provides container.offline) {
                     LockGate(container.lock, Modifier.systemBarsPadding()) {
-                        Box(Modifier.fillMaxSize()) {
-                            OrbNav(container, start, nav)
-                            ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                        PcDownHost(container, nav, wasLinked) {
+                            Box(Modifier.fillMaxSize()) {
+                                OrbNav(container, start, nav)
+                                ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                            }
                         }
                     }
                 }
             }
-        } }
+        }
     }
+}
+
+/** Only the change from linked to unlinked sends the person to the welcome page, and never from the pages that belong to it. */
+internal fun shouldReturnToWelcome(wasLinked: Boolean, linked: Boolean, onWelcomeOrScan: Boolean): Boolean =
+    wasLinked && !linked && !onWelcomeOrScan
+
+/**
+ * Puts «No llego a tu PC» over the app when it opens without a link, and the read-only bar over it when the person chose to look
+ * at what the phone holds. The app stays composed underneath (navigation keeps working) but hidden from touch and screen readers.
+ */
+@Composable
+private fun PcDownHost(container: AppContainer, nav: androidx.navigation.NavHostController, wasLinked: MutableState<Boolean>, content: @Composable () -> Unit) {
+    val gate = container.pcDown
+    val down by gate.state.collectAsStateWithLifecycle()
+    // Back to the welcome page when the local link has been erased (the person unlinked), so a rotation while unlinking cannot
+    // lose the way. The connection state is not used: the PC removing this phone leaves the saved chats and the notice in place.
+    val linked by container.runtime.collectAsStateWithLifecycle()
+    LaunchedEffect(linked != null) {
+        val here = nav.currentDestination
+        if (shouldReturnToWelcome(wasLinked.value, linked != null, here?.hasRoute<Welcome>() == true || here?.hasRoute<ScanRoute>() == true)) {
+            nav.navigate(Welcome) { popUpTo(0) { inclusive = true } }
+        }
+        wasLinked.value = linked != null
+    }
+    // Registered before the navigation host, so a deeper screen's own back step wins and this one only fires on the list.
+    androidx.activity.compose.BackHandler(enabled = down.saved) { gate.closeSaved() }
+    val readOnly = remember(container, gate) { dev.orb.app.ui.offline.ReadOnlyMode(container.offline, gate::closeSaved) }
+    // The tabs (inside Home) draw the read-only note themselves; any screen opened over them gets it here.
+    val outer by nav.currentBackStackEntryAsState()
+    val onHome = outer?.destination?.hasRoute<Home>() == true
+    Column(Modifier.fillMaxSize()) {
+        if (down.saved && !onHome) dev.orb.app.ui.offline.ReadOnlyBar(container.offline, gate::closeSaved)
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.fillMaxSize().then(if (down.full != null) Modifier.clearAndSetSemantics {} else Modifier)) {
+                androidx.compose.runtime.CompositionLocalProvider(dev.orb.app.ui.offline.LocalReadOnly provides readOnly.takeIf { down.saved }) { content() }
+            }
+            val full = down.full
+            if (full != null) {
+                Surface(
+                    Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } },
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.background,
+                ) {
+                    when (full) {
+                        dev.orb.app.ui.offline.DownKind.PcOff -> dev.orb.app.ui.offline.PcOffScreen(
+                            container.offline, onSeeSaved = gate::openSaved,
+                            // Runs on the container's scope: the screen leaves the composition as soon as the link is gone.
+                            onLinkOther = { gate.unlink(container.scope) { container.unlink() } },
+                            unlinking = down.unlinking,
+                        )
+                        dev.orb.app.ui.offline.DownKind.UpdateApp, dev.orb.app.ui.offline.DownKind.UpdatePc ->
+                            dev.orb.app.ui.update.UpdateScreen(container.offline, seeSaved = gate::openSaved)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The new-chat sheet and where it leads; [fixedProject] chooses a project at the start (the project's page does), null leaves the PC's own choice. */
+@Composable
+private fun NewChatHost(container: AppContainer, nav: androidx.navigation.NavHostController, key: String, fixedProject: String?, onDismiss: () -> Unit) {
+    val newChatBackend = remember { container.newChatBackend() } ?: return
+    val vm = viewModel<NewChatViewModel>(key = key, factory = viewModelFactory { initializer { NewChatViewModel(newChatBackend) } })
+    // Picked before the PC's options arrive, so they keep it instead of the active project.
+    LaunchedEffect(vm, fixedProject) { if (fixedProject != null) vm.pickProject(fixedProject) }
+    NewChatSheet(
+        vm, onDismiss = onDismiss,
+        onOutcome = { outcome ->
+            onDismiss()
+            when (outcome) {
+                is NewChatOutcome.Session -> nav.navigate(ChatRoute("session", outcome.id))
+                is NewChatOutcome.Draft -> with(outcome.draft) {
+                    nav.navigate(OrbeDraftRoute(setProject, project, brain?.agent, brain?.model, brain?.reasoning))
+                }
+            }
+        },
+    )
 }
 
 @Composable
 private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation.NavHostController) {
-    var appearance by rememberSaveable { mutableStateOf(false) }
-    if (appearance) AppearanceSheet(container.themePrefs, onDismiss = { appearance = false })
     OpenFromNotice(container, nav)
     OpenShare(container, nav)
     NavHost(
@@ -157,17 +265,54 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
         popEnterTransition = { slideInHorizontally(OrbMotion.standard(OrbMotion.Medium)) { -it / 8 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
         popExitTransition = { slideOutHorizontally(OrbMotion.standard(OrbMotion.Medium)) { it / 5 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
     ) {
-        composable<Welcome> {
+        composable<Welcome> { entry ->
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
-                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith) }
+                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess)) }
             })
-            WelcomeScreen(vm, onLinked = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } })
+            // What the scanner left for this page (it may have been recreated meanwhile): used once, then erased.
+            val handle = entry.savedStateHandle
+            val fromScanner by handle.getStateFlow<String?>(ScanHandoff.KEY, null).collectAsStateWithLifecycle()
+            val pasteFromScanner by handle.getStateFlow<Boolean>(ScanHandoff.PASTE_KEY, false).collectAsStateWithLifecycle()
+            val codeFromScanner by handle.getStateFlow<Boolean>(ScanHandoff.CODE_KEY, false).collectAsStateWithLifecycle()
+            LaunchedEffect(fromScanner, pasteFromScanner, codeFromScanner) {
+                ScanHandoff.take(handle)?.let(vm::scanned)
+                if (ScanHandoff.takePaste(handle)) vm.openLinkSheet()
+                if (ScanHandoff.takeCode(handle)) vm.openSheet()
+            }
+            val noticesOn by container.notificationAccess.enabled.collectAsStateWithLifecycle()
+            val toChats = { nav.navigate(Home) { popUpTo(Welcome) { inclusive = true } } }
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val access = remember(context) { AndroidCameraAccess(context) }
+            WelcomeScreen(
+                vm, onDone = { toChats() }, noticesEnabled = noticesOn,
+                onOpenThisPhone = { toChats(); nav.navigate(ThisPhoneRoute) },
+                onScan = { openScanner(access.hasCamera, { nav.navigate(ScanRoute) }, vm::openSheet) },
+            )
+        }
+        composable<ScanRoute> {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val access = remember(context) { AndroidCameraAccess(context) }
+            val vm = viewModel<ScanViewModel>(factory = viewModelFactory { initializer { ScanViewModel(access) } })
+            // The view model keeps the first access across a recreation, so the current Activity goes to that one.
+            DisposableEffect(vm, context) {
+                vm.attachActivity(context.findActivity())
+                onDispose { vm.attachActivity(null) }
+            }
+            ScanScreen(
+                vm, onBack = { nav.popBackStack() },
+                // The welcome page takes the text from its saved state (see ScanHandoff), as if it had been pasted.
+                onScanned = { text -> ScanHandoff.deliver(nav.previousBackStackEntry?.savedStateHandle, text); nav.popBackStack() },
+                onPaste = { ScanHandoff.deliverPaste(nav.previousBackStackEntry?.savedStateHandle); nav.popBackStack() },
+                onTypeCode = { ScanHandoff.deliverCode(nav.previousBackStackEntry?.savedStateHandle); nav.popBackStack() },
+            )
         }
         composable<Home> {
             val backend = remember { container.chatsBackend() }
             val home = viewModel<HomeViewModel>(factory = viewModelFactory { initializer { HomeViewModel(container) } })
             val homeState by home.state.collectAsStateWithLifecycle()
-            var confirming by rememberSaveable { mutableStateOf(false) }
+            // Each opening of the sheet gets its own view model, so a closed sheet never comes back with old choices.
+            var newChatSheet by rememberSaveable { mutableStateOf(0) }
+            var newChatOpen by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(homeState.unlinked) { if (homeState.unlinked) nav.navigate(Welcome) { popUpTo(Home) { inclusive = true } } }
             if (backend != null) {
                 val tasksBackend = remember { container.tasksBackend() }
@@ -182,14 +327,11 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     )
                 }
                 MainShell(
-                    backend, container.themePrefs,
+                    backend,
                     ShellActions(
                         onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
                         onSearch = { nav.navigate(Search) },
-                        onNewChat = { nav.navigate(NewChat) },
-                        onAppearance = { appearance = true },
-                        onLinkTest = { nav.navigate(LinkTest) },
-                        onUnlink = { confirming = true },
+                        onNewChat = { newChatSheet++; newChatOpen = true },
                         onOpenTask = { nav.navigate(TaskRoute(it)) },
                         onOpenProject = { nav.navigate(ProjectRoute(it)) },
                         onNotices = { nav.navigate(NoticesRoute) },
@@ -205,29 +347,38 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                     tasks = tasksBackend,
                     projects = projectsBackend,
                     notes = notesBackend,
+                    pcName = homeState.pcName,
+                    theme = container.themePrefs,
                 )
             }
-            if (confirming) UnlinkDialog(onConfirm = { confirming = false; home.unlink() }, onDismiss = { confirming = false })
+            if (newChatOpen && backend != null) {
+                NewChatHost(container, nav, key = "newchat:$newChatSheet", fixedProject = null, onDismiss = { newChatOpen = false })
+            }
         }
         composable<Search> {
             val backend = remember { container.chatsBackend() }
             if (backend != null) {
                 val vm = viewModel<SearchViewModel>(factory = viewModelFactory { initializer { SearchViewModel(backend) } })
-                SearchScreen(vm, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) })
+                SearchScreen(
+                    vm, onBack = { nav.popBackStack() }, onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) },
+                    onOpenTask = { nav.navigate(TaskRoute(it)) }, onOpenProject = { nav.navigate(ProjectRoute(it)) },
+                )
             }
         }
-        composable<NewChat>(
-            // A sheet-like screen: it rises from below and goes back down, unlike the side-by-side chat screens.
+        composable<OrbeDraftRoute>(
+            // Sheet-like: it rises from below and goes back down, unlike the side-by-side chat screens.
             enterTransition = { slideInVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeIn(OrbMotion.standard(OrbMotion.Medium)) },
             popExitTransition = { slideOutVertically(OrbMotion.standard(OrbMotion.Medium)) { it / 6 } + fadeOut(OrbMotion.standard(OrbMotion.Short)) },
-        ) {
+        ) { entry ->
+            val route = entry.toRoute<OrbeDraftRoute>()
             val backend = remember { container.newChatBackend() }
             if (backend != null) {
-                val vm = viewModel<NewChatViewModel>(factory = viewModelFactory { initializer { NewChatViewModel(backend) } })
-                NewChatScreen(
-                    vm, onClose = { nav.popBackStack() },
-                    // The new chat takes the place of this screen, so back from it returns to the list.
-                    onCreated = { nav.navigate(ChatRoute(it.kind, it.id)) { popUpTo<NewChat> { inclusive = true } } },
+                val brain = route.brainAgent?.let { Brain(it, route.brainModel, route.brainEffort) }
+                val vm = viewModel<OrbeDraftViewModel>(factory = viewModelFactory { initializer { OrbeDraftViewModel(backend, OrbeDraft(route.setProject, route.project, brain)) } })
+                OrbeDraftScreen(
+                    vm, onBack = { nav.popBackStack() }, mentions = remember { container.mentionSource() },
+                    // The created conversation takes the draft's place, so back from it returns to the list.
+                    onCreated = { nav.navigate(ChatRoute("conversation", it.toString())) { popUpTo<OrbeDraftRoute> { inclusive = true } } },
                 )
             }
         }
@@ -236,15 +387,20 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val conversation = route.id.toLongOrNull()
             val backend = remember { container.orbeChatBackend() }
             if (route.kind == "conversation" && conversation != null && backend != null) {
-                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation) } })
-                OrbeChatScreen(vm, onBack = { nav.popBackStack() })
+                val vm = viewModel<OrbeChatViewModel>(key = "orbe:$conversation", factory = viewModelFactory { initializer { OrbeChatViewModel(backend, conversation, attach = container.attachController()) } })
+                val gone by vm.state.collectAsStateWithLifecycle()
+                ChatGoneFromNotice(container, nav, route.kind, route.id, gone.deleted)
+                OrbeChatScreen(vm, onBack = { nav.popBackStack() }, mentions = remember { container.mentionSource() })
             } else if (route.kind == "session") {
                 val direct = remember { container.directChatBackend() }
                 if (direct != null) {
                     val vm = viewModel<DirectChatViewModel>(key = "session:${route.id}", factory = viewModelFactory { initializer { DirectChatViewModel(direct, route.id, attach = container.attachController()) } })
+                    val gone by vm.state.collectAsStateWithLifecycle()
+                    ChatGoneFromNotice(container, nav, route.kind, route.id, gone.deleted)
                     DirectChatScreen(
                         vm, onBack = { nav.popBackStack() },
                         onOpenChat = { nav.navigate(ChatRoute("session", it)) },
+                        mentions = remember { container.mentionSource() },
                     )
                 }
             } else {
@@ -275,12 +431,15 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.projectsBackend() }
             if (backend != null) {
                 val vm = viewModel<ProjectDetailViewModel>(key = "project:${route.name}", factory = viewModelFactory { initializer { ProjectDetailViewModel(backend, route.name) } })
+                var newChat by rememberSaveable { mutableStateOf(false) }
                 ProjectDetailScreen(
                     vm, onBack = { nav.popBackStack() },
                     onOpenChat = { nav.navigate(ChatRoute(it.kind.wire, it.id)) }, onOpenTask = { nav.navigate(TaskRoute(it)) },
                     onOpenPrs = { nav.navigate(PrListRoute(it)) },
                     onOpenWhiteboard = { nav.navigate(WhiteboardRoute(it)) },
+                    onNewChat = { newChat = true }, onOpenChanges = { nav.navigate(TaskChangesRoute(it)) },
                 )
+                if (newChat) NewChatHost(container, nav, key = "newchat:project:${route.name}", fixedProject = route.name, onDismiss = { newChat = false })
             }
         }
         composable<PrListRoute> { entry ->
@@ -306,11 +465,8 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 NotesScreen(
                     vm, onBack = { nav.popBackStack() },
                     onOpen = { target ->
-                        when (target) {
-                            is NoticeTarget.Chat -> nav.navigate(ChatRoute(target.kind, target.id))
-                            is NoticeTarget.Task -> nav.navigate(TaskRoute(target.id))
-                            NoticeTarget.ChatsTab -> nav.popBackStack()
-                        }
+                        container.noticeChat = target as? NoticeTarget.Chat
+                        if (target == NoticeTarget.ChatsTab) nav.popBackStack() else openNotice(nav, target)
                     },
                 )
             }
@@ -346,11 +502,14 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
                 UsageScreen(vm, onBack = { nav.popBackStack() })
             }
         }
+        composable<UpdateRoute> {
+            dev.orb.app.ui.update.UpdateScreen(container.offline, onBack = { nav.popBackStack() })
+        }
         composable<ThisPhoneRoute> {
             val backend = remember { RuntimeThisPhoneBackend(container) }
             val vm = viewModel<ThisPhoneViewModel>(factory = viewModelFactory { initializer { ThisPhoneViewModel(backend) } })
             ThisPhoneScreen(
-                vm, onBack = { nav.popBackStack() }, onAppearance = { appearance = true },
+                vm, container.themePrefs, onBack = { nav.popBackStack() }, onLinkTest = { nav.navigate(LinkTest) },
                 onUnlinked = { nav.navigate(Welcome) { popUpTo(0) { inclusive = true } } },
             )
         }
@@ -380,8 +539,23 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
             val backend = remember { container.linkTestBackend() }
             if (backend != null) {
                 val vm = viewModel<LinkTestViewModel>(factory = viewModelFactory { initializer { LinkTestViewModel(backend) } })
-                LinkTestScreen(vm)
+                LinkTestScreen(vm, onBack = { nav.popBackStack() })
             }
+        }
+    }
+}
+
+/**
+ * A tapped notice led to a chat the PC no longer has: instead of a dead chat the person is told so, back where they came
+ * from, and the notice leaves the list. Only for a chat opened from a notice; a chat deleted while it is open keeps its screen.
+ */
+@Composable
+private fun ChatGoneFromNotice(container: AppContainer, nav: androidx.navigation.NavHostController, kind: String, id: String, deleted: Boolean) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(deleted) {
+        if (deleted && container.chatGone(kind, id)) {
+            android.widget.Toast.makeText(context, dev.orb.app.ui.notes.NotesTexts.CHAT_GONE, android.widget.Toast.LENGTH_SHORT).show()
+            nav.popBackStack()
         }
     }
 }
@@ -394,12 +568,25 @@ private fun OpenFromNotice(container: AppContainer, nav: androidx.navigation.Nav
         val t = target ?: return@LaunchedEffect
         container.openTarget.value = null
         if (container.runtime.value == null) return@LaunchedEffect
-        when (t) {
-            is NoticeTarget.Chat -> nav.navigate(ChatRoute(t.kind, t.id))
-            is NoticeTarget.Task -> nav.navigate(TaskRoute(t.id))
-            NoticeTarget.ChatsTab -> Unit
-        }
+        openNotice(nav, t)
     }
+}
+
+/**
+ * Where a notice leads; null for the chat list, where the person already is. The announced version opens the update page,
+ * which says with the real state of the link whether there is anything to update.
+ */
+internal fun noticeRoute(t: NoticeTarget): Any? = when (t) {
+    is NoticeTarget.Chat -> ChatRoute(t.kind, t.id)
+    is NoticeTarget.Task -> TaskRoute(t.id)
+    is NoticeTarget.TaskChanges -> TaskChangesRoute(t.id)
+    is NoticeTarget.Account -> UsageRoute
+    is NoticeTarget.Version -> UpdateRoute
+    NoticeTarget.ChatsTab -> null
+}
+
+private fun openNotice(nav: androidx.navigation.NavHostController, t: NoticeTarget) {
+    noticeRoute(t)?.let { nav.navigate(it) }
 }
 
 /** Opens the «Compartir con Orb» screen for content another app shared, once a PC is linked and the app is open. */
@@ -432,7 +619,7 @@ private fun Placeholder(text: String, onBack: () -> Unit) {
     androidx.compose.foundation.layout.Column(
         Modifier.fillMaxSize().padding(24.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(12.dp),
     ) {
-        androidx.compose.material3.TextButton(onClick = onBack) { androidx.compose.material3.Text(ChatTexts.BACK) }
+        OrbButton(ChatTexts.BACK, onBack, kind = OrbButtonKind.Ghost)
         androidx.compose.material3.Text(text)
     }
 }

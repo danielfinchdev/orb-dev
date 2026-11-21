@@ -1,8 +1,8 @@
 // Day / night switch. Saved in the assistant's settings (ui.theme): "claro", "oscuro" or "sistema".
-import { Moon, Sun, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Moon, Sun, PanelLeft } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { Tip } from './ui/overlay.jsx';
-import { call, applyTheme, isDark, act, setState, getState, bridge, setSidebarCollapsed, useDarkOnly } from '@/lib/store.js';
+import { call, applyTheme, isDark, act, setState, getState, bridge, setSidebarCollapsed, useDarkOnly, useLightOnly } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -13,7 +13,7 @@ export function SidebarToggle({ className, collapsed = false }) {
   return (
     <Tip label={label}>
       <Button variant="ghost" size="icon-sm" className={cn('hidden md:inline-flex', className)} onClick={() => setSidebarCollapsed(!collapsed)} aria-label={label} data-testid={collapsed ? 'sidebar-expand' : 'sidebar-collapse'}>
-        {collapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
+        <PanelLeft className="size-4" />
       </Button>
     </Tip>
   );
@@ -22,18 +22,22 @@ export function SidebarToggle({ className, collapsed = false }) {
 export function ThemeToggle({ className }) {
   const t = useT();
   const darkOnly = useDarkOnly();
+  const lightOnly = useLightOnly();
+  // A one-mode theme (Cristal light, Retro dark) has no mode to switch to: the button is not drawn, and Ajustes ›
+  // Apariencia explains why (comp.theme.lightOnly / darkOnly).
+  if (darkOnly || lightOnly) return null;
   const toggle = async () => {
-    if (darkOnly) return;
     const next = isDark() ? 'claro' : 'oscuro';
     applyTheme(next);
     if (bridge.mobile) { try { localStorage.setItem('orb.theme', next); } catch { /* storage unavailable */ } return; } // a phone keeps its own choice
     const config = await act(call('config.save', { patch: { ui: { theme: next } } }));
     if (config) setState({ app: { ...getState().app, config } });
   };
+  // the icon is the mode the click goes to: the moon in light, the sun in dark.
   return (
-    <Tip label={darkOnly ? t('comp.theme.darkOnly') : t('comp.theme.tip')}>
-      <Button variant="ghost" size="icon-sm" className={cn(className, darkOnly && 'cursor-not-allowed opacity-50')} onClick={toggle} aria-label={darkOnly ? t('comp.theme.darkOnly') : t('comp.theme.aria')} aria-disabled={darkOnly || undefined} title={darkOnly ? t('comp.theme.darkOnly') : undefined}>
-        <Sun className="size-4 dark:hidden" /><Moon className="hidden size-4 dark:block" />
+    <Tip label={t('comp.theme.tip')}>
+      <Button variant="ghost" size="icon-sm" className={className} onClick={toggle} aria-label={t('comp.theme.aria')}>
+        <Moon className="size-4 dark:hidden" /><Sun className="hidden size-4 dark:block" />
       </Button>
     </Tip>
   );

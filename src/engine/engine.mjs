@@ -58,6 +58,7 @@ let api = null;
 // where an element pointed at and a recording of the agents' browser go (browser-record.mjs), once the
 // sessions exist.
 let browserFiles = null;
+let sessionsOpen = null; // the open database's conversations, for what the little browser window shows
 let hostBrowser = null; // the agents' browser when the app's pages are driven from here (src/engine/browser/host-browser.mjs)
 let logFile = null;
 const log = (line) => writeTimed(logFile, line);
@@ -100,7 +101,7 @@ const validSecret = (s) => typeof s === 'string' && /^[0-9a-f]{64}$/.test(s);
 const startError = (key, code, detail) => Object.assign(new Error(tr(key)), { code, detail });
 // What the user should know about the keys, said once the database is open (board.notice in run()).
 const keyNotices = [];
-const KEY_NOTICES = { previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed' };
+const KEY_NOTICES = { previousOpens: 'sys.engine.previousOpens', previousBack: 'sys.engine.previousBack', previousNew: 'sys.engine.previousNew', previousFailed: 'sys.engine.previousFailed', newKeyDone: 'sys.engine.newKeyDone', newKeyFailed: 'sys.engine.newKeyFailed' };
 // Whether this start switched keys (the way back): the recovery code made with the other key no longer opens (below).
 let switchedKey = false;
 async function secretFromApp(home, userData, newSecret) {
@@ -115,6 +116,8 @@ async function secretFromApp(home, userData, newSecret) {
         if (code === 'previousOpens' || code === 'previousQuiet') ctx.previousKey = 'anterior';
         if (code === 'newAvailable') ctx.previousKey = 'nueva';
         if (code === 'previousBack' || code === 'previousNew') switchedKey = true;
+        // a new key made on purpose (machine.rs › new_key): the old one is kept aside and can be gone back to
+        if (code === 'newKeyDone') { switchedKey = true; ctx.previousKey = 'anterior'; }
         if (KEY_NOTICES[code] && !keyNotices.includes(KEY_NOTICES[code])) keyNotices.push(KEY_NOTICES[code]);
       }
       return { approval: keys.approval, backup: keys.backup, inVault: true };
@@ -159,8 +162,9 @@ async function start(home, version, secret, browser, keep = null, userData = nul
     const { createHostBrowser } = await import('./browser/host-browser.mjs');
     const AGENTS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor' };
     hostBrowser = createHostBrowser({
-      log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'orb',
+      log: (line) => log(line), language: () => ctx.config?.language ?? 'es', skin: () => ctx.config?.ui?.skin ?? 'predeterminado',
       pipEnabled: () => ctx.config?.ui?.pip !== false && ctx.config?.browser?.enabled !== false,
+      project: (session) => { try { return sessionsOpen?.get(session)?.project || null; } catch { return null; } },
       label: (agent) => (agent === 'orb' ? ctx.config?.assistantName ?? PRODUCT.assistant : AGENTS[agent] ?? agent),
       onPointed: (p) => { browserFiles?.pointed(p).catch((error) => log(`navegador del agente: señalar: ${error.message}`)); },
       saveRecording: (session, avi) => browserFiles?.saveRecording(session, avi) ?? null
@@ -328,6 +332,7 @@ async function run(board, { home, version, restored, repair }) {
   const sessions = new Sessions(board, { emit, log });
   // «Auto» on for an install that had chats already (once, with a notice).
   try { const moved = adoptAuto(board); if (moved) log(`modo Auto: ${moved} chat(s) pasan de «Editar archivos» a «Auto»`); } catch (error) { log(`modo Auto: ${error.message}`); }
+  sessionsOpen = sessions;
   browserFiles = (await import('./browser/browser-record.mjs')).browserSink({ sessions, toWindow, log });
   const { plainAction, looksEnglish } = await import('../domain/security/guard.mjs');
   const { adapter } = await import('../agents/index.mjs');
@@ -372,7 +377,7 @@ async function run(board, { home, version, restored, repair }) {
     autoTitle(board, { agent: c.agent, account: c.account, text }).then((t) => { if (t && board.conversation(c.id)?.title === c.title) board.updateConversation(c.id, { title: t }); }).catch(() => {});
   };
   const orchestrator = new Orchestrator(board, { emit, log, title });
-  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit });
+  const scheduler = new Scheduler(board, sessions, { log, orchestrator, emit, announce: (fact) => remote?.announce(fact) });
   const { createRemote } = await import('./transport/remote.mjs');
   const remoteRef = { current: null };
   // Monitoreo del equipo and Opti Bot are gone: their settings and conversation are tidied once (engine/retired.mjs).
@@ -418,6 +423,9 @@ async function run(board, { home, version, restored, repair }) {
   syncProjects(board);
   // the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
+  // an account that leaves its usage limit tells the phones once (src/engine/transport/notes-center.mjs)
+  const { createLimitWatch } = await import('./transport/notes-center.mjs');
+  const limitWatch = createLimitWatch({ board, announce: (fact) => remote?.announce(fact) });
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
     if (ticking) return; ticking = true;
@@ -425,6 +433,7 @@ async function run(board, { home, version, restored, repair }) {
       // Folders created or deleted by hand in the assistant's folder show up in the app within a few seconds.
       if (Date.now() - lastSync > 5000) {
         lastSync = Date.now();
+        limitWatch.tick(); // two reads per account: the pace of the folder sync, not of the 1.5 s loop
         // core (or its settings or database) gone while Orb runs: everything stops and the engine ends; the app
         // starts it again and the start puts back what is missing from the newest backup (or shows why it cannot).
         if (!coreHealth(home).ok) { coreLost(home, board); return; }

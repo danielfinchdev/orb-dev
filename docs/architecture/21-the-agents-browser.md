@@ -27,3 +27,7 @@ Part of [How Orb works](../ARCHITECTURE.md).
     in flight;
   - the tools in `src/mcp/server.mjs`;
   - `src/engine/browser/browser-key.mjs`.
+- **Live window and its project** (3.8.8): the state the engine sends to the mini window carries the project of the
+  conversation a page belongs to (`project`, `null` when it has none), worked out by `createHostBrowser` in
+  `src/engine/browser/host-browser.mjs` from the session that owns the page. The mini window (`src/ui/pip.jsx`) only shows it as a
+  badge; it decides nothing about the page.

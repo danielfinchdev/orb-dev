@@ -6,24 +6,33 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** How long the app may stay in the background before it asks again. */
+/** How long the app may stay in the background before it asks again; [Immediate] is «Al salir». */
 enum class LockDelay(val key: String, val ms: Long) {
-    Immediate("now", 0), OneMinute("1m", 60_000), FiveMinutes("5m", 5 * 60_000L);
+    Immediate("now", 0), FiveMinutes("5m", 5 * 60_000L), FifteenMinutes("15m", 15 * 60_000L);
 
     companion object {
-        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: OneMinute
+        /** The one-minute choice was dropped: whoever had it moves to the nearest one offered, five minutes. */
+        fun fromKey(key: String?) = entries.firstOrNull { it.key == key } ?: FiveMinutes
     }
 }
 
 /** [autoOff]: the lock turned itself off because the phone lost its PIN and fingerprint; «Este móvil» says so. */
-data class LockSettings(val enabled: Boolean = false, val delay: LockDelay = LockDelay.OneMinute, val autoOff: Boolean = false)
+data class LockSettings(val enabled: Boolean = false, val delay: LockDelay = LockDelay.FiveMinutes, val autoOff: Boolean = false)
 
 /**
  * The only thing kept about the lock: whether it is on and the delay. No secret lives here; the real protection is
  * the system's own authentication (fingerprint, face or the phone's PIN), asked every time the app opens.
  */
 class LockPrefs(private val store: KeyValueStore) {
-    private val _settings = MutableStateFlow(LockSettings(store.getBoolean(ENABLED, false), LockDelay.fromKey(store.getString(DELAY)), store.getBoolean(AUTO_OFF, false)))
+    private val _settings: MutableStateFlow<LockSettings>
+
+    init {
+        val delay = LockDelay.fromKey(store.getString(DELAY))
+        // Saved in its new form so the old key is gone for good.
+        if (store.getString(DELAY) == "1m") store.edit { putString(DELAY, delay.key) }
+        _settings = MutableStateFlow(LockSettings(store.getBoolean(ENABLED, false), delay, store.getBoolean(AUTO_OFF, false)))
+    }
+
     val settings: StateFlow<LockSettings> = _settings.asStateFlow()
 
     /** A deliberate choice of the person: it also clears the note about an automatic switch-off. */
@@ -113,6 +122,9 @@ sealed interface AuthResult {
     /** Too many wrong tries: the system blocks the sensor for a while. Nothing is lost. */
     data object Blocked : AuthResult
     data object Failed : AuthResult
+
+    /** The sensor could not read the finger (or nobody touched it in time): trying again is the whole advice. */
+    data object NotRecognized : AuthResult
     data object NothingSet : AuthResult
 }
 
@@ -125,7 +137,7 @@ interface Authenticator {
 }
 
 /** What the lock screen tells the person after an attempt. */
-enum class LockNotice { Blocked, Failed }
+enum class LockNotice { Blocked, Failed, NotRecognized }
 
 /** Ties the gate to the system authentication. The activity supplies the [authenticator] while it exists. */
 class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
@@ -163,6 +175,7 @@ class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
                 AuthResult.Success -> gate.unlock()
                 AuthResult.Blocked -> _notice.value = LockNotice.Blocked
                 AuthResult.Failed, AuthResult.NothingSet -> _notice.value = LockNotice.Failed
+                AuthResult.NotRecognized -> _notice.value = LockNotice.NotRecognized
                 AuthResult.Cancelled -> Unit
             }
         }
@@ -191,16 +204,20 @@ object LockTexts {
     const val ENABLE_TITLE = "Activar el bloqueo de Orb"
     const val ENABLE_SUBTITLE = "Confirma que eres tú para activarlo"
 
-    const val LOCKED_TITLE = "Orb está bloqueado"
-    const val LOCKED_NOTE = "Bloqueo opcional. Lo activaste en Este móvil › Seguridad y puedes quitarlo cuando quieras."
+    const val LOCKED_TITLE = "Desbloquea para ver tus chats"
+    const val LOCKED_NOTE = "Huella, cara o PIN del móvil"
     const val UNLOCK = "Desbloquear"
-    const val UNLOCK_HINT = "Usa tu huella para ver tus chats y tareas"
+    const val UNLOCK_AGAIN = "Probar otra vez"
+    const val WHERE_TO_CHANGE = "Opcional · Menú › Este móvil › Bloqueo de la app"
+    const val NEVER_MASTER = "Nunca pide la contraseña maestra."
     const val USE_PIN = "Usar PIN del móvil"
-    const val BLOCKED = "Demasiados intentos con la huella. Espera un momento o usa el PIN del móvil. No se ha borrado nada."
+    const val BLOCKED = "Demasiados intentos. Espera un momento o usa el PIN del móvil."
     const val FAILED = "No se pudo comprobar. Inténtalo otra vez o usa el PIN del móvil."
+    const val NOT_RECOGNIZED = "No se reconoció. Prueba otra vez."
 
     fun notice(n: LockNotice) = when (n) {
         LockNotice.Blocked -> BLOCKED
         LockNotice.Failed -> FAILED
+        LockNotice.NotRecognized -> NOT_RECOGNIZED
     }
 }

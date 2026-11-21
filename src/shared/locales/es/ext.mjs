@@ -29,13 +29,13 @@ export default {
   'ext.adoptTitle': '¿Mover {name} a core?',
   'ext.adoptBody': 'La carpeta {path} pasa a la carpeta de servidores MCP de core y deja de ser un proyecto. Sus ajustes en Orb siguen funcionando. Si otros programas usan su ruta, cámbiala después.',
   'ext.adopted': '{name} está ahora en core',
-  'ext.addConnector': 'Añadir conector',
   'ext.toggle': 'Activar o desactivar {name}',
   'ext.turnedOn': 'Se ha activado {name}',
   'ext.turnedOff': 'Se ha desactivado {name}',
   'ext.more': 'Más opciones de {name}',
   'ext.openFolder': 'Abrir carpeta',
   'ext.remove': 'Quitar',
+  'ext.removeNamed': 'Quitar {name}',
   'ext.removeTitle': '¿Quitar {name}?',
   'ext.removeBody': 'Se borra su carpeta de core. Si la necesitas otra vez, tendrás que importarla o restaurar una copia de seguridad.',
   'ext.removeConnectorBody': 'Se quita de Orb, con sus claves. El programa no se desinstala.',
@@ -79,6 +79,9 @@ export default {
   'ext.card.skillUpdate': '{agent} ha preparado una versión nueva de la skill «{name}» y te pide activarla.',
   'ext.card.mcp': '{agent} ha preparado el servidor MCP «{name}» y te pide activarlo.',
   'ext.card.mcpUpdate': '{agent} ha preparado una versión nueva del servidor MCP «{name}» y te pide activarla.',
+  'ext.approvedKeptOff': '«{name}» actualizada. Sigue desactivada: actívala en el proyecto que la usa o en Ajustes.',
+  'ext.err.activateFirst': 'Activa «{name}» antes en Ajustes › Skills y MCP; desde un proyecto solo se añade lo que ya está activado.',
+  'ext.err.scopeOther': 'No se cambia «{name}»: el cambio tocaría algo más de la configuración.',
   'ext.approvedSkill': 'Skill «{name}» activada',
   'ext.approvedMcp': 'Servidor MCP «{name}» activado',
   'ext.err.link': 'Tiene un enlace a otra carpeta ({file}): Orb no lo acepta.',
@@ -129,5 +132,6 @@ export default {
   'ext.keysWaiting': 'Las claves de {names} se activarán cuando desbloquees Orb con tu contraseña maestra.',
   'ext.err.needsInstall': '{name} necesita descargar paquetes antes de activarse.',
   'ext.err.inProgress': 'Ya se está haciendo. Espera a que termine.',
-  'ext.kindAgent': 'un agente'
+  'ext.kindAgent': 'un agente',
+  'ext.scope': 'Solo en: {names}'
 };

@@ -1,71 +1,19 @@
 // The conversation's top bar pieces shared by the chat and an agent's conversation: the clock, the title, pause,
 // «Compactar» and each message's time.
-import { useEffect, useState } from 'react';
-import { Pause, Play, ChevronLeft, ChevronRight, Folder, Shrink } from 'lucide-react';
+import { Pause, Play, Folder, FoldVertical } from 'lucide-react';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Spinner } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { setQueuePaused } from '@/components/task-state.jsx';
-import { BubbleTip, Popover, PopoverTrigger, PopoverContent } from '@/components/ui/overlay.jsx';
+import { BubbleTip } from '@/components/ui/overlay.jsx';
 import { useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { timeZone } from '@/lib/clock.js';
 import { useDay } from '@/lib/use-day.js';
 
-// the system's date and time on the left of the chat's top bar (app.css .bar-clock, in the theme's title type).
-// with the pointer on it, the seconds too; a click opens the month's calendar in a bubble (MonthCalendar).
-export function BarClock() {
-  const t = useT();
-  const locale = useLocale();
-  const [now, setNow] = useState(() => new Date());
-  const [hover, setHover] = useState(false);
-  const [open, setOpen] = useState(false);
-  const seconds = hover || open;
-  useEffect(() => { const id = setInterval(() => setNow(new Date()), seconds ? 1000 : 15_000); setNow(new Date()); return () => clearInterval(id); }, [seconds]);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button type="button" className="bar-clock" data-testid="bar-clock" aria-label={t('chat.calendarOpen')} onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)} onFocus={() => setHover(true)} onBlur={() => setHover(false)}>
-          <span className="bar-clock-time">{now.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}) })}</span>
-          <span className="bar-clock-date">{now.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
-        </button>
-      </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="orb-cal" data-testid="bar-calendar"><MonthCalendar today={now} /></PopoverContent>
-    </Popover>
-  );
-}
-// A month at a glance: the days of the week from the language's first day (Monday in Spanish), today marked, arrows to
-// move between months and a button back to today.
-function MonthCalendar({ today }) {
-  const t = useT();
-  const locale = useLocale();
-  const [shown, setShown] = useState(() => new Date(today.getFullYear(), today.getMonth(), 1));
-  const first = (() => { try { const w = new Intl.Locale(locale).getWeekInfo?.() ?? new Intl.Locale(locale).weekInfo; return (w?.firstDay ?? 1) % 7; } catch { return 1; } })();
-  const year = shown.getFullYear(); const month = shown.getMonth();
-  const lead = (new Date(year, month, 1).getDay() - first + 7) % 7;
-  const days = new Date(year, month + 1, 0).getDate();
-  const cells = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => i + 1)];
-  while (cells.length % 7) cells.push(null);
-  const names = Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 7 + ((first + i) % 7)).toLocaleDateString(locale, { weekday: 'narrow' })); // 7 Jan 2024 was a Sunday
-  const isToday = (d) => d && year === today.getFullYear() && month === today.getMonth() && d === today.getDate();
-  const thisMonth = year === today.getFullYear() && month === today.getMonth();
-  const move = (n) => setShown(new Date(year, month + n, 1));
-  return (
-    <div className="grid gap-2">
-      <div className="flex items-center gap-1">
-        <span className="orb-cal-title flex-1 truncate px-1 text-body font-semibold" aria-live="polite" data-testid="bar-calendar-title">{shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}</span>
-        <button type="button" className="orb-cal-nav" onClick={() => move(-1)} aria-label={t('chat.calendarPrev')}><ChevronLeft className="size-4" /></button>
-        <button type="button" className="orb-cal-nav" onClick={() => move(1)} aria-label={t('chat.calendarNext')} data-testid="bar-calendar-next"><ChevronRight className="size-4" /></button>
-      </div>
-      <div className="grid grid-cols-7 gap-0.5 text-center" role="grid" aria-label={shown.toLocaleDateString(locale, { month: 'long', year: 'numeric' })}>
-        {names.map((n, i) => <span key={`h${i}`} className="orb-cal-head" role="columnheader">{n}</span>)}
-        {cells.map((d, i) => <span key={i} role="gridcell" aria-current={isToday(d) ? 'date' : undefined} className={cn('orb-cal-day', !d && 'invisible', isToday(d) && 'is-today', (first + i) % 7 === 0 || (first + i) % 7 === 6 ? 'is-weekend' : '')}>{d ?? ''}</span>)}
-      </div>
-      {thisMonth ? null : <button type="button" className="orb-cal-today" onClick={() => setShown(new Date(today.getFullYear(), today.getMonth(), 1))}>{t('chat.calendarToday')}</button>}
-    </div>
-  );
-}
+// The clock and its calendar (the left of every header) live in components/bar-clock.jsx.
+export { BarClock } from '@/components/bar-clock.jsx';
 // The time a message was written, small at its bottom right (the day too when it is not today). One formatter per
 // language and time zone (toLocale…String builds one on every call, for every message). The message is memoised: the
 // time follows the day by itself (lib/clock.js: after midnight, today's messages get their day; a new zone, new times).
@@ -112,11 +60,14 @@ export function BarHeading({ title, project, onRename, renameLabel, extra, showP
 // the share of the context at which the composer suggests «Compactar» (DESIGN-SYSTEM §2.2).
 export const COMPACT_AT = 0.7;
 // «Compactar» in the contextual slot: the conversation goes on from a summary; nothing of the history is lost.
-export function CompactButton({ onCompact, busy }) {
+// percent: how full the context is, shown after the name (the chat with the assistant).
+// reason: why it cannot be used now; the button stays in its place, disabled, and its bubble says why.
+export function CompactButton({ onCompact, busy, percent = null, reason = null }) {
   const t = useT();
+  const button = <Button size="xs" variant="ghost" className="text-muted-foreground font-normal" onClick={onCompact} disabled={busy || Boolean(reason)} data-testid="chat-compact">{busy ? <Spinner /> : <FoldVertical />}{busy ? t('compact.busy') : t('compact.button')}{!busy && percent != null ? ` · ${percent} %` : ''}</Button>;
   return (
-    <BubbleTip title={t('compact.title')} text={t('compact.tip')} side="top">
-      <Button size="xs" variant="soft" onClick={onCompact} disabled={busy} data-testid="chat-compact">{busy ? <Spinner /> : <Shrink />}{busy ? t('compact.busy') : t('compact.button')}</Button>
+    <BubbleTip title={t('compact.title')} text={reason ?? t('compact.tip')} side="top">
+      {reason ? <span className="inline-flex">{button}</span> : button}
     </BubbleTip>
   );
 }

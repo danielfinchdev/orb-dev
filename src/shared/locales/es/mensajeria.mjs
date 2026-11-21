@@ -4,6 +4,7 @@ export default {
   // Lista de chats
   'chats.list': 'Chats',
   'chats.new': 'Nuevo',
+  'chats.newHint': 'Chat o proyecto',
   'chats.pinned': 'Fijados',
   'chats.messages': 'Mensajes',
   'chats.noResults': 'No hay resultados.',
@@ -20,6 +21,7 @@ export default {
   'chats.mute': 'Silenciar',
   'chats.unmute': 'Activar avisos',
   'chats.markRead': 'Marcar como leído',
+  'chats.markUnread': 'Marcar como no leído',
   // Conversación
   'chats.backToList': 'Volver a los chats',
   'chats.openInfo': 'Información de {name}',

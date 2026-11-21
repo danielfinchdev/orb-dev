@@ -1,98 +1,25 @@
 // Projects: the folders inside the assistant's folder (plus any linked one), with git and GitHub actions.
 import { useEffect, useState } from 'react';
-import { FolderGit2, FolderPlus, FolderOpen, Pin, MessageSquare, NotebookPen, Unlink, GitBranch, Save, Upload, RefreshCw, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
-import { notifyError, notifyOk } from '@/lib/notify.js';
+import { FolderGit2, FolderPlus, FolderOpen, Pin, MessageSquare, NotebookPen, Unlink, GitBranch, Save, Upload, GitPullRequest, Folder, ScanSearch, ShieldCheck, PencilLine, Ellipsis, CircleCheckBig, Trash2, Undo2 } from 'lucide-react';
+import { notifyOk } from '@/lib/notify.js';
 import { PageHeader, PageBody, BackButton } from '@/components/page.jsx';
-import { confirm, choose, form } from '@/components/dialogs.jsx';
 import { createProjectFlow, linkFolderFlow, cloneRepoFlow, CATEGORIES } from '@/components/project-actions.jsx';
+import { finishFlow, deleteProjectFlow, renameFlow, unlinkFlow, commitFlow, publishFlow, pushFlow } from '@/components/project-flows.jsx';
+import { GithubCard, ContributionGraph } from '@/components/project-github.jsx';
+import { ProjectsPc } from './projects-pc.jsx';
 import { askReview, askSecurityReview } from './tasks.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
-import { Checkbox, BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
-import { useStore, call, act, go, bridge, refresh, phoneLayout } from '@/lib/store.js';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Empty, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { useStore, call, act, go, bridge, refresh, phoneLayout, fullPc } from '@/lib/store.js';
 import { cn, baseName } from '@/lib/utils.js';
 import { usePress } from '@/lib/use-press.js';
-import { unlockCore } from '@/lib/core-access.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
 
-function GithubCard() {
-  const t = useT();
-  const [gh, setGh] = useState(null);
-  const load = () => { setGh(null); call('github.status').then(setGh).catch((e) => setGh({ error: e.message })); };
-  useEffect(load, []);
-  return (
-    // in a narrow window the state and its buttons go under the text (the text was left with a word per line).
-    <Card className="flex-row flex-wrap items-center gap-x-3 gap-y-2 px-5 py-3.5">
-      <GithubIcon className="size-5 shrink-0" />
-      <div className="min-w-[12rem] flex-1">
-        <div className="text-body font-medium">GitHub</div>
-        <div className="text-muted-foreground text-xs">{t('projects.gh.desc')}</div>
-      </div>
-      <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
-        {!gh ? <Spinner /> : !gh.installed ? (<><Badge variant="secondary">{t('projects.gh.notInstalled')}</Badge><Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://cli.github.com/')}>{t('projects.gh.download')}</Button></>)
-          : gh.loggedIn ? <Badge variant="success" className="max-w-full truncate">{t('projects.gh.connected', { user: gh.user ?? '?' })}</Badge>
-            : (<><Badge variant="destructive">{t('projects.gh.noSession')}</Badge><Button size="sm" onClick={() => act(call('github.login'), t('projects.gh.login.done'))}>{t('projects.gh.login')}</Button></>)}
-        <BubbleTip title={t('projects.gh.check')}><Button size="icon-sm" variant="ghost" onClick={load} aria-label={t('projects.gh.check')}><RefreshCw /></Button></BubbleTip>
-      </div>
-    </Card>
-  );
-}
-
-// the green squares of the user's GitHub profile (last year), right under the GitHub card. Real data from GitHub;
-// the day under the pointer is told below the grid (no browser tooltips).
-function ContributionGraph() {
-  const t = useT();
-  const locale = useLocale();
-  const [data, setData] = useState(undefined);
-  const [hover, setHover] = useState(null);
-  useEffect(() => { let alive = true; call('github.contributions').then((d) => alive && setData(d)).catch(() => alive && setData(null)); return () => { alive = false; }; }, []);
-  if (data === undefined) return null;
-  if (!data) return null;
-  const fmt = (d) => new Date(`${d}T12:00:00`).toLocaleDateString(locale, { day: 'numeric', month: 'long', year: 'numeric' });
-  return (
-    <Card className="gap-2 px-5 py-3.5" data-testid="gh-contributions">
-      <div className="flex items-baseline justify-between gap-3 text-xs">
-        <span className="font-medium">{t('projects.gh.contributions', { n: data.total.toLocaleString(locale) })}</span>
-        <span className="text-muted-foreground truncate">{hover ? t('projects.gh.day', { n: hover.count, date: fmt(hover.date) }) : `@${data.user}`}</span>
-      </div>
-      <div className="overflow-x-auto">
-        <div className="gh-graph inline-grid grid-flow-col gap-[3px]" style={{ gridTemplateRows: 'repeat(7, 10px)' }} role="img" aria-label={t('projects.gh.contributions', { n: data.total })} onMouseLeave={() => setHover(null)}>
-          {data.weeks.flatMap((w, wi) => w.map((d) => <span key={d.date} className="gh-cell size-[10px] rounded-[2px]" data-level={d.level} style={wi === 0 ? { gridRowStart: new Date(`${d.date}T12:00:00`).getDay() + 1 } : undefined} onMouseEnter={() => setHover(d)} />))}
-        </div>
-      </div>
-      <div className="text-muted-foreground flex items-center justify-end gap-1 text-micro">{t('projects.gh.less')}{[0, 1, 2, 3, 4].map((l) => <span key={l} className="gh-cell size-[10px] rounded-[2px]" data-level={l} />)}{t('projects.gh.more')}</div>
-    </Card>
-  );
-}
-
-// the end of a project (src/domain/projects/project-close.mjs). Finished: it leaves Orb, its folder stays («Finalizados»
-// brings it back). Deleted: its folder goes to the Recycle Bin (the app), behind the master password, only on the PC.
-// When the Recycle Bin cannot take it: a folder some program is using offers only «Reintentar»; otherwise «Reintentar»
-// or «Borrar para siempre» after a stronger warning. Cancelling gives the project back as it was.
-async function finishFlow(p, t) {
-  if (!(await confirm(t('projects.finish.title'), t('projects.finish.body', { name: p.name }), { ok: t('projects.finish.ok'), danger: true }))) return;
-  if ((await act(call('projects.finish', { name: p.name }), t('projects.finish.done'))) !== undefined) await refresh().catch(quiet);
-}
-export async function deleteProjectFlow(p, t) {
-  if (!(await confirm(t('projects.delete.title'), t('projects.delete.body', { name: p.name, path: p.path }), { ok: t('projects.delete.ok'), danger: true }))) return;
-  const unlock = await unlockCore('deleteProject');
-  if (!unlock) return;
-  try {
-    let r = await bridge.deleteProject(p.name, unlock);
-    while (r && !r.ok) {
-      let step = null;
-      if (r.locked) step = await choose(t('projects.delete.locked.title'), t('projects.delete.locked.body', { path: r.path }), [{ value: 'retry', label: t('projects.delete.retry') }]);
-      else if (r.noTrash) step = await choose(t('projects.delete.noTrash.title'), t('projects.delete.noTrash.body', { path: r.path }), [{ value: 'forever', label: t('projects.delete.noTrash.ok'), variant: 'destructive' }, { value: 'retry', label: t('projects.delete.retry') }]);
-      if (!step) { await bridge.deleteProject(p.name, null, 'cancel'); return; }
-      r = await bridge.deleteProject(p.name, null, step);
-      if (r?.ok) { notifyOk(t(step === 'forever' ? 'projects.delete.doneForever' : 'projects.delete.done')); return; }
-    }
-    if (r?.ok) notifyOk(t('projects.delete.done'));
-  } catch (error) { notifyError(error); }
-  finally { await refresh().catch(quiet); }
-}
+// extensions.jsx deletes a project's copy of an MCP server with the same flow.
+export { deleteProjectFlow };
 
 // Right click (or a long press on the phone, or its «…»): what can be done with the whole project. Deleting is the PC's
 // and only for a folder inside a category (a linked one is «Desvincular», in its card).
@@ -120,11 +47,11 @@ function ProjectRow({ p, selected, phone, onOpen }) { // selected: the name of t
   return (
     <div className={cn('group/row flex items-center border-b transition-colors hover:bg-accent/50', !phone && selected === p.name && 'bg-accent')} {...press}>
       <button type="button" onClick={() => onOpen(p.name)} className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-4 py-3 text-left" data-testid="project-row">
-        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary' : 'text-muted-foreground')} />
+        <Folder className={cn('size-4 shrink-0', p.active ? 'text-primary-text' : 'text-muted-foreground')} />
         {/* The phone: the name only (the category is the group's title); the PC also shows the folder. */}
         <div className="grid min-w-0 flex-1"><div className="truncate">{p.name}</div>{bridge.mobile ? null : <PathText path={p.path} className="text-muted-foreground text-micro" />}</div>
         {p.open ? <Badge variant="info">{t(p.open === 1 ? 'projects.openOne' : 'projects.openOther', { n: p.open })}</Badge> : null}
-        {p.active ? <Pin className="text-primary size-3.5" /> : null}
+        {p.active ? <Pin className="text-primary-text size-3.5" /> : null}
       </button>
       <ProjectMenu p={p} open={menu} setOpen={setMenu} phone={phone} />
     </div>
@@ -151,31 +78,15 @@ function FinishedList({ list, onReopened }) {
 function ProjectDetail({ p, onRenamed }) {
   const t = useT();
   const [info, setInfo] = useState(null);
-  // a new name for the project (and its folder, when it is one of Orb's), only with nothing working in it.
-  const rename = async () => {
-    const r = await form(t('projects.rename.title'), { description: p.inHome ? t('projects.rename.desc') : t('projects.rename.descLinked'), initial: { name: p.name },
-      body: (v, set) => <Field label={t('projects.rename.label')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} maxLength={60} /></Field>,
-      ok: t('projects.rename.ok'), onOk: (v) => call('projects.rename', { name: p.name, to: v.name.trim() }) });
-    if (r) { notifyOk(t('projects.rename.done', { name: r.name })); await refresh().catch(quiet); onRenamed?.(r.name); }
-  };
+  const rename = () => renameFlow(p, t, onRenamed);
   const load = () => { setInfo(null); call('projects.info', { name: p.name }).then(setInfo).catch((e) => setInfo({ git: false, error: e.message })); };
   useEffect(load, [p.name]); // eslint-disable-line react-hooks/exhaustive-deps
-  const commit = async () => {
-    const r = await form(t('projects.commit.title'), { description: t('projects.commit.desc'), initial: { message: '' },
-      body: (v, set) => <Field label={t('projects.commit.message')}><Input autoFocus value={v.message} onChange={(e) => set({ message: e.target.value })} maxLength={200} placeholder={t('projects.commit.ph')} /></Field>,
-      ok: t('projects.commit.ok'), onOk: (v) => call('projects.commit', { name: p.name, message: v.message }) });
-    if (r) { notifyOk(t('projects.commit.done', { files: r.files })); load(); }
-  };
-  const publish = async () => {
-    const r = await form(t('projects.publish.title'), { description: t('projects.publish.desc'), initial: { repo: p.name.replace(/[^\w.-]+/g, '-'), isPrivate: true },
-      body: (v, set) => (<><Field label={t('projects.publish.repo')}><Input value={v.repo} onChange={(e) => set({ repo: e.target.value })} /></Field><label className="flex cursor-pointer items-center gap-2 text-sm"><Checkbox checked={v.isPrivate} onCheckedChange={(c) => set({ isPrivate: c === true })} />{t('projects.publish.private')}</label></>),
-      ok: t('projects.publish.ok'), onOk: (v) => call('projects.createRepo', { name: p.name, repo: v.repo.trim(), isPrivate: v.isPrivate }) });
-    if (r) { notifyOk(t('projects.publish.done', { url: r.url })); load(); }
-  };
+  const commit = () => commitFlow(p, t, load);
+  const publish = () => publishFlow(p, t, load);
   return (
     <Card className="gap-5">
       <CardHeader className="flex-row items-start gap-3">
-        <Folder className="text-primary mt-0.5 size-5 shrink-0" />
+        <Folder className="text-primary-text mt-0.5 size-5 shrink-0" />
         {/* the phone shows where it is in Orb's words (category › folder), never the PC's path. */}
         <div className="min-w-0 flex-1"><CardTitle className="flex items-center gap-2 text-title">{p.name}</CardTitle>{bridge.mobile ? <CardDescription className="mt-1 text-xs break-words">{t(`comp.projects.category.${p.category ?? 'other'}`)} › {baseName(p.path)}</CardDescription> : <CardDescription className="mt-1 font-mono text-xs break-all">{p.path}</CardDescription>}</div>
         {p.active ? <Badge><Pin />{t('projects.workProject')}</Badge> : null}
@@ -188,7 +99,7 @@ function ProjectDetail({ p, onRenamed }) {
         <BubbleTip title={t('projects.security')} text={t('projects.securityTip')}><Button size="sm" variant="outline" onClick={() => askSecurityReview({ project: p.name })} data-testid="project-security"><ShieldCheck />{t('projects.security')}</Button></BubbleTip>
         <Button size="sm" variant="outline" onClick={() => go({ view: 'logs', name: p.name })}><NotebookPen />{t('projects.log')}</Button>
         <BubbleTip title={t('projects.rename.title')} text={p.open ? t('projects.rename.busy') : undefined}><span><Button size="sm" variant="outline" disabled={Boolean(p.open)} onClick={rename} data-testid="project-rename"><PencilLine />{t('projects.rename.title')}</Button></span></BubbleTip>
-        {!p.inHome ? <Button size="sm" variant="danger" onClick={async () => { if (await confirm(t('projects.unlink.title'), t('projects.unlink.body', { name: p.name }), { ok: t('projects.unlink.ok'), danger: true })) act(call('projects.remove', { name: p.name }), t('projects.unlink.done')); }}><Unlink />{t('projects.unlink.ok')}</Button> : null}
+        {!p.inHome ? <Button size="sm" variant="danger" onClick={() => unlinkFlow(p, t)}><Unlink />{t('projects.unlink.ok')}</Button> : null}
       </CardContent>
       {p.notes ? <CardContent className="text-muted-foreground text-sm">{p.notes}</CardContent> : null}
       <CardContent className="grid gap-3">
@@ -202,7 +113,7 @@ function ProjectDetail({ p, onRenamed }) {
           </dl>
           <div className="flex flex-wrap gap-2">
             {info.changes ? <Button size="sm" variant="outline" onClick={commit}><Save />{t('projects.commitBtn')}</Button> : null}
-            {info.remote ? <Button size="sm" variant="outline" onClick={async () => { if (await confirm(t('projects.push.title'), t('projects.push.body', { branch: info.branch, remote: info.remote }), { ok: t('projects.push.ok'), danger: true })) { await act(call('projects.push', { name: p.name, branch: info.branch }), t('projects.push.done')); load(); } }}><Upload />{t('projects.pushBtn')}</Button>
+            {info.remote ? <Button size="sm" variant="outline" onClick={() => pushFlow(p, info, t, load)}><Upload />{t('projects.pushBtn')}</Button>
               : <Button size="sm" variant="outline" onClick={publish}><GithubIcon />{t('projects.publish.title')}</Button>}
           </div>
           {info.branches?.length > 1 ? <div className="flex flex-wrap gap-1.5">{info.branches.map((b) => <Badge key={b} variant="secondary" className="font-mono font-normal">{b}</Badge>)}</div> : null}
@@ -213,7 +124,12 @@ function ProjectDetail({ p, onRenamed }) {
   );
 }
 
+// The PC app has the mock-up's list and page; the phone and a computer's browser linked with an Orb keep the card layout.
 export function ProjectsView({ route }) {
+  return fullPc() ? <ProjectsPc route={route} /> : <ProjectsLegacy route={route} />;
+}
+
+function ProjectsLegacy({ route }) {
   const t = useT();
   const projects = useStore((s) => s.projects);
   const app = useStore((s) => s.app);
@@ -237,7 +153,7 @@ export function ProjectsView({ route }) {
   );
   return (
     <>
-      <PageHeader icon={<FolderGit2 className="text-primary size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
+      <PageHeader icon={<FolderGit2 className="text-primary-text size-5" />} title={t('projects.title')} meta={app.home && !bridge.mobile ? t('projects.meta', { home: app.home }) : t('projects.metaRemote')}>
         {bridge.mobile ? null : <><Button size="sm" variant="ghost" onClick={async () => pick(await cloneRepoFlow())}><GithubIcon />{t('projects.clone')}</Button>
         <Button size="sm" variant="ghost" onClick={async () => pick(await linkFolderFlow())}><FolderOpen />{t('projects.link')}</Button></>}
         <Button size="sm" onClick={async () => pick(await createProjectFlow())}><FolderPlus />{t('projects.create')}</Button>

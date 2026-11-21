@@ -27,4 +27,17 @@ class ScheduleWhenTest {
         assertEquals("2026-03-29", ScheduleWhen.dateFromPicker(ms))
         assertNull(ScheduleWhen.pickerFromDate(""))
     }
+
+    @Test fun aSingleRunSplitsIntoItsDayAndItsHour() {
+        assertEquals("", ScheduleWhen.datePart("09:00"))
+        assertEquals("", ScheduleWhen.timePart("2026-11-16"))
+        assertEquals("", ScheduleWhen.timePart("2026-11-16T25:00"))
+        assertEquals("", ScheduleWhen.dateTime("2026-11-16", "9:00"))
+    }
+
+    @Test fun anInvalidTimeFallsBackToNineAndMidnightIsValid() {
+        assertEquals(9 to 0, ScheduleWhen.hourMinute("24:00"))
+        assertTrue(ScheduleWhen.isTime("00:00"))
+        assertFalse(ScheduleWhen.isTime("9:00"))
+    }
 }

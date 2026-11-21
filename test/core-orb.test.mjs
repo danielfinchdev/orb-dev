@@ -104,7 +104,7 @@ test('Cursor: las reglas del guardia y las herramientas de Orb solo durante el t
 test('el reloj de una tarea no cuenta el rato que espera tu permiso', () => {
   const stopped = [];
   const run = { startedAt: Date.now() - 10 * 60_000, waitMs: 0, pausedAt: Date.now() - 8 * 60_000 };
-  const self = { running: new Map([['s', run]]), approvals: new Map(), pendingApprovals: () => ['x'], addItem: () => {}, stop: (id) => stopped.push(id), lives: new Map(), board: {} };
+  const self = { running: new Map([['s', run]]), approvals: new Map(), pendingApprovals: () => ['x'], addItem: () => {}, tellStop: () => {}, stop: (id) => stopped.push(id), lives: new Map(), board: {} };
   // 10 min since it started, 8 of them waiting for a permission: 2 min of work, under a 5 min limit.
   Sessions.prototype.watchRun.call(self, 's', run, { timeoutMs: 5 * 60_000 });
   assert.deepEqual(stopped, []);

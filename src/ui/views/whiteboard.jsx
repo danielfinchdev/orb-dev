@@ -1,16 +1,24 @@
 // the Pizarra: an Excalidraw canvas per project to draw, write and point at things, and a panel on the right for
 // attachments (photos, videos, documents) with a note each. Everything is saved in <project>/pizarra as it changes, and
 // the assistant reads it (PIZARRA.md and the drawing as a picture) when it plans the project's work.
+// The PC app draws the mock-up's layout (docked panel, project picker and canvas menu in the bar); the phone and a
+// computer's browser linked with an Orb keep the floating panel.
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { notifyError } from '@/lib/notify.js';
-import { Presentation, Paperclip, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload } from 'lucide-react';
+import { Presentation, Paperclip, Keyboard, FolderOpen, Trash2, FileText, Film, Music, PanelRightClose, PanelRightOpen, Check, CloudUpload, FolderX, Download, Maximize, Eraser, Image as ImageIcon, X, Lock, Library, Frame, Globe, Pointer, PaintBucket } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
+import { ProjectIcon } from '@/components/project-icon.jsx';
+import { ChatPanel } from '@/components/chat-panel.jsx';
+import { WbToolbar, CanvasNote } from '@/components/wb-controls.jsx';
+import { NotificationBell } from '@/components/notification-center.jsx';
+import { BarPause } from '@/components/conversation/bar.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Empty, Spinner } from '@/components/ui/basic.jsx';
-import { BubbleTip } from '@/components/ui/overlay.jsx';
+import { Badge, Empty, Input, Spinner } from '@/components/ui/basic.jsx';
+import { BubbleTip, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/overlay.jsx';
+import { IconButton, MoreButton } from '@/components/ui/primitives.jsx';
 import { confirm } from '@/components/dialogs.jsx';
-import { useStore, call, act, bridge, isDark } from '@/lib/store.js';
+import { useStore, call, act, bridge, isDark, fullPc } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -19,6 +27,7 @@ const Board = lazy(() => import('@/components/excalidraw-board.jsx'));
 
 const size = (n) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 const ICON = { video: Film, audio: Music, file: FileText };
+const NONE = '__none';
 
 // Follows the app's day / night while the Pizarra is open.
 function useDark() {
@@ -27,44 +36,34 @@ function useDark() {
   return dark;
 }
 
-// The Pizarra of the project in use: changing project (here or anywhere) changes the Pizarra.
-export function WhiteboardView() {
-  const t = useT();
-  const app = useStore((s) => s.app);
-  const projects = useStore((s) => s.projects);
-  const project = projects.find((p) => p.name === app.activeProject?.name) ?? null;
-  return (
-    <>
-      <PageHeader icon={<Presentation className="text-primary size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
-        <ProjectPicker />
-      </PageHeader>
-      {project ? <Whiteboard key={project.name} project={project.name} /> : <Empty icon={Presentation} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
-    </>
-  );
+// Whether the attachments panel is open (remembered on this PC).
+function usePanel() {
+  const [panel, setPanel] = useState(() => { try { return localStorage.getItem('orb.wb.panel') !== '0'; } catch { return true; } });
+  useEffect(() => { try { localStorage.setItem('orb.wb.panel', panel ? '1' : '0'); } catch { /* storage unavailable */ } }, [panel]);
+  return [panel, setPanel];
 }
 
-function Whiteboard({ project }) {
+// Everything the Pizarra of one project does (load, save as it changes, attachments), whatever layout draws it.
+function useBoard(project) {
   const t = useT();
-  const dark = useDark();
-  const lang = useStore((s) => s.app.config.language);
-  const assistant = useStore((s) => s.app.config.assistantName);
   const [data, setData] = useState(null);
   const [attachments, setAttachments] = useState([]);
-  const [panel, setPanel] = useState(() => { try { return localStorage.getItem('orb.wb.panel') !== '0'; } catch { return true; } });
   const [saving, setSaving] = useState('saved'); // saved | pending | saving
   const [dropping, setDropping] = useState(false);
+  const [canvasNote, setNoteText] = useState('');
+  const [noteState, setNoteState] = useState('saved'); // saved | pending | saving
   const latest = useRef(null); const savedFiles = useRef(new Set()); const timers = useRef({}); const lastPng = useRef(0);
   useEffect(() => {
+    if (!project) return undefined;
     let alive = true;
-    call('whiteboard.load', { project }).then((d) => { if (!alive) return; savedFiles.current = new Set(Object.keys(d.files ?? {})); setAttachments(d.attachments ?? []); setData(d); })
+    call('whiteboard.load', { project }).then((d) => { if (!alive) return; savedFiles.current = new Set(Object.keys(d.files ?? {})); setAttachments(d.attachments ?? []); setNoteText(d.note ?? ''); setData(d); })
       .catch((e) => { if (alive) { notifyError(e); setData({ elements: [], appState: {}, files: {}, attachments: [] }); } });
     return () => { alive = false; };
   }, [project]);
-  useEffect(() => { try { localStorage.setItem('orb.wb.panel', panel ? '1' : '0'); } catch { /* storage unavailable */ } }, [panel]);
 
   // Saved a moment after each change; its picture (for the assistant) at most every 8 s, and always when leaving.
   const save = useCallback(async ({ withPng = false } = {}) => {
-    const cur = latest.current; if (!cur) return;
+    const cur = latest.current; if (!cur || !project) return;
     const { elements, appState, files } = cur;
     const fresh = Object.fromEntries(Object.entries(files ?? {}).filter(([id]) => !savedFiles.current.has(id)).map(([id, f]) => [id, { mimeType: f.mimeType, dataURL: f.dataURL }]));
     let png;
@@ -91,6 +90,18 @@ function Whiteboard({ project }) {
   }, [save]);
   useEffect(() => () => { clearTimeout(timers.current.save); if (latest.current) save({ withPng: true }); }, [save]);
 
+  // The general note of the canvas: saved a moment after the last key, and when leaving.
+  const pendingNote = useRef(null);
+  const flushNote = useCallback(async () => {
+    clearTimeout(timers.current.note);
+    const value = pendingNote.current; if (value == null || !project) return;
+    pendingNote.current = null; setNoteState('saving');
+    try { await call('whiteboard.canvasNote', { project, note: value }); setNoteState(pendingNote.current == null ? 'saved' : 'pending'); }
+    catch (e) { pendingNote.current ??= value; setNoteState('pending'); notifyError(e); }
+  }, [project]);
+  const editNote = (value) => { setNoteText(value); pendingNote.current = value; setNoteState('pending'); clearTimeout(timers.current.note); timers.current.note = setTimeout(flushNote, 1200); };
+  useEffect(() => () => { flushNote(); }, [flushNote]);
+
   const attach = async (paths) => {
     const list = (paths ?? []).filter(Boolean); if (!list.length) return;
     const r = await act(call('whiteboard.attach', { project, paths: list }), t('wb.attached', { n: list.length }));
@@ -107,14 +118,149 @@ function Whiteboard({ project }) {
   // Files dropped on the panel (from the Explorer) are attached; on the canvas, Excalidraw places pictures itself.
   // Their real paths (a promise).
   const drop = (e) => { e.preventDefault(); setDropping(false); Promise.all([...(e.dataTransfer?.files ?? [])].map((f) => bridge.pathForFile?.(f))).then(attach); };
+  return { data, attachments, saving: saving === 'saved' && noteState === 'saved' ? 'saved' : saving === 'saved' ? noteState : saving, canvasNote, editNote, dropping, setDropping, onChange, attach, pick, note, remove, openFolder, drop };
+}
 
-  const menu = null;
+// The Pizarra of the project in use: changing project (here or anywhere) changes the Pizarra.
+export function WhiteboardView() {
+  const t = useT();
+  const app = useStore((s) => s.app);
+  const projects = useStore((s) => s.projects);
+  const project = projects.find((p) => p.name === app.activeProject?.name) ?? null;
+  if (fullPc()) return <WhiteboardPc key={project?.name ?? NONE} project={project?.name ?? null} />;
   return (
-    <PageBody className="relative flex overflow-hidden p-0" data-testid="whiteboard">
+    <>
+      <PageHeader icon={<Presentation className="text-primary-text size-5" />} title={t('wb.title')} meta={project ? t('wb.meta', { project: project.name, assistant: app.config.assistantName }) : t('wb.metaNone')}>
+        <ProjectPicker />
+      </PageHeader>
+      {project ? <Whiteboard key={project.name} project={project.name} /> : <Empty icon={Presentation} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
+    </>
+  );
+}
+
+// ---- the PC app: the mock-up's layout
+const setActive = (name) => act(call('projects.setActive', { name }));
+
+function WhiteboardPc({ project }) {
+  const t = useT();
+  const dark = useDark();
+  const projects = useStore((s) => s.projects);
+  const lang = useStore((s) => s.app.config.language);
+  const assistant = useStore((s) => s.app.config.assistantName);
+  const [panel, setPanel] = usePanel();
+  const b = useBoard(project);
+  const api = useRef(null);
+  const [tool, setTool] = useState('selection');
+  // The canvas menu is Excalidraw's own: its export dialog, its fit to content and its reset.
+  const exportDrawing = () => api.current?.updateScene({ appState: { openDialog: { name: 'imageExport' } } });
+  const fit = () => { const els = api.current?.getSceneElements() ?? []; if (els.length) api.current.scrollToContent(els, { fitToContent: true, animate: true }); };
+  const clear = async () => { if (await confirm(t('wb.clear.title'), t('wb.clear.body'), { ok: t('wb.clear.ok'), danger: true })) api.current?.resetScene(); };
+  // What the toolbar no longer draws (lock, library, the extra tools, the background) is reached from the same menu.
+  const toggleLock = () => { const a = api.current; const tool = a?.getAppState().activeTool; if (tool) a.setActiveTool({ type: tool.type, locked: !tool.locked }); };
+  const shortcuts = () => api.current?.updateScene({ appState: { openDialog: { name: 'help' } } });
+  const library = () => api.current?.toggleSidebar({ name: 'default', tab: 'library' });
+  const useTool = (type) => () => api.current?.setActiveTool({ type });
+  const BACKGROUNDS = ['#ffffff', '#f8f9fa', '#f5faff', '#fffce8', '#fdf8f6'];
+  const nextBackground = () => { const a = api.current; if (!a) return; const now = a.getAppState().viewBackgroundColor; a.updateScene({ appState: { viewBackgroundColor: BACKGROUNDS[(BACKGROUNDS.indexOf(now) + 1) % BACKGROUNDS.length] } }); };
+  const ready = Boolean(project && b.data);
+  const pj = (p) => <ProjectIcon name={p} small />;
+  return (
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <PageHeader title={t('wb.title')}
+          meta={project ? <span className="inline-flex items-center gap-1.5">{pj(project)}{project}<span aria-hidden="true">·</span>{t('wb.saveHint')}</span> : t('wb.metaNone')}>
+          {project ? <BubbleTip title={t('wb.attachments')} text={t('wb.togglePanel')}><IconButton label={t('wb.attachments')} active={panel} onClick={() => setPanel(!panel)} data-testid={panel ? 'whiteboard-toggle-panel' : 'whiteboard-show-panel'}><Paperclip /></IconButton></BubbleTip> : null}
+          <BarPause />
+          <NotificationBell />
+          <DropdownMenu modal={false}>
+            <BubbleTip title={t('wb.canvasMenu')}><DropdownMenuTrigger asChild><MoreButton label={t('wb.canvasMenu')} data-testid="whiteboard-more" /></DropdownMenuTrigger></BubbleTip>
+            <DropdownMenuContent align="end" className="w-[230px]">
+              {/* the mock-up's header names the project but has no picker: switching lives here */}
+              <DropdownMenuLabel data-testid="project-picker">{t('wb.project')}</DropdownMenuLabel>
+              {projects.map((p) => <DropdownMenuItem key={p.name} onSelect={() => setActive(p.name)}>{pj(p.name)}<span className="flex-1 truncate">{p.name}</span>{p.name === project ? <Check className="text-primary-text!" /> : null}</DropdownMenuItem>)}
+              <DropdownMenuItem onSelect={() => setActive('')}><FolderX /><span className="flex-1 truncate">{t('nav.loose')}</span>{project ? null : <Check className="text-primary-text!" />}</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!project} onSelect={b.openFolder} data-testid="whiteboard-menu-folder"><FolderOpen />{t('wb.openFolder')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={exportDrawing} data-testid="whiteboard-menu-export"><Download />{t('wb.export')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={fit} data-testid="whiteboard-menu-fit"><Maximize />{t('wb.fit')}</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem disabled={!ready} onSelect={toggleLock} data-testid="whiteboard-menu-lock"><Lock />{t('wb.lock')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={library} data-testid="whiteboard-menu-library"><Library />{t('wb.library')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={useTool('frame')} data-testid="whiteboard-menu-frame"><Frame />{t('wb.toolFrame')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={useTool('embeddable')} data-testid="whiteboard-menu-embed"><Globe />{t('wb.toolEmbed')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={useTool('laser')} data-testid="whiteboard-menu-laser"><Pointer />{t('wb.toolLaser')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={shortcuts} data-testid="whiteboard-menu-shortcuts"><Keyboard />{t('wb.shortcuts')}</DropdownMenuItem>
+              <DropdownMenuItem disabled={!ready} onSelect={nextBackground} data-testid="whiteboard-menu-background"><PaintBucket />{t('wb.background')}</DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" disabled={!ready} onSelect={clear} data-testid="whiteboard-menu-clear"><Eraser />{t('wb.clear')}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </PageHeader>
+        {project ? (
+          <PageBody className="relative flex overflow-hidden p-0 [scrollbar-gutter:auto]" data-testid="whiteboard">
+            <div className="wb-canvas wb-pc relative min-w-0 flex-1" data-testid="whiteboard-canvas">
+              {b.data ? (
+                <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
+                  <Board initial={b.data} dark={dark} lang={lang} onChange={b.onChange} onTool={setTool} onApi={(a) => { api.current = a ?? null; }} />
+                </Suspense>
+              ) : <div className="grid h-full place-items-center"><Spinner /></div>}
+              {b.data ? <WbToolbar api={api} tool={tool} /> : null}
+              <div className="absolute right-3.5 bottom-3.5 z-10 flex items-center gap-1.5">
+                <span className="pointer-events-none" data-testid="whiteboard-status">
+                  {b.saving === 'saved' ? <Badge variant="success"><Check />{t('wb.saved')}</Badge> : <Badge variant="secondary"><CloudUpload />{t('wb.saving')}</Badge>}
+                </span>
+                {b.data ? <CanvasNote value={b.canvasNote} onChange={b.editNote} assistant={assistant} /> : null}
+              </div>
+            </div>
+          </PageBody>
+        ) : <Empty icon={Presentation} title={t('wb.pickTitle')} className="m-auto">{t('wb.pickBody')}</Empty>}
+      </div>
+      <ChatPanel open={Boolean(project) && panel} tab="att" onTab={() => {}} onClose={() => setPanel(false)} widthKey="orb.anchoPizarra" defaultWidth={360}
+        tabs={[{ value: 'att', icon: Paperclip, label: t('wb.attachments'), testid: 'whiteboard-tab' }]} label={t('wb.attachments')} closeLabel={t('wb.hidePanel')} closeTestId="whiteboard-hide-panel">
+        <div className={cn('grid gap-3 rounded-card', b.dropping && 'ring-ring ring-2 ring-offset-4')} onDragOver={(e) => { e.preventDefault(); b.setDropping(true); }} onDragLeave={() => b.setDropping(false)} onDrop={b.drop} data-testid="whiteboard-panel">
+          <Button className="w-full" onClick={b.pick} disabled={!bridge.pickFiles} data-testid="whiteboard-attach"><Paperclip />{t('wb.attach')}</Button>
+          <div className="border-border text-muted-foreground rounded-card border border-dashed p-3.5 text-center text-caption">{t('wb.attachHint')}</div>
+          {b.attachments.length ? (
+            <div>
+              {b.attachments.map((a) => {
+                const Icon = ICON[a.kind] ?? (a.thumb ? ImageIcon : FileText);
+                return (
+                  <div key={a.name} className="border-border flex items-start gap-2.5 border-t py-2.5 first:border-t-0" data-testid="whiteboard-item">
+                    {a.thumb ? <img src={a.thumb} alt="" className="border-border size-10 shrink-0 rounded-ctl border object-cover" /> : <span className="bg-secondary text-muted-foreground grid size-10 shrink-0 place-items-center rounded-ctl"><Icon className="size-4" /></span>}
+                    <div className="flex min-w-0 flex-1 flex-col gap-1">
+                      <b className="truncate text-control font-medium">{a.name}</b>
+                      <span className="text-muted-foreground text-caption">{size(a.size)}</span>
+                      <Input defaultValue={a.note} maxLength={2000} placeholder={t('wb.noteShort', { assistant })} aria-label={t('wb.noteFor', { assistant, name: a.name })} onBlur={(e) => { if (e.target.value !== a.note) b.note(a.name, e.target.value); }}
+                        className="h-(--ctl-sm) text-caption" />
+                    </div>
+                    <BubbleTip title={t('wb.remove')}><IconButton small label={t('wb.remove')} onClick={() => b.remove(a.name)} data-testid="whiteboard-remove"><X /></IconButton></BubbleTip>
+                  </div>
+                );
+              })}
+            </div>
+          ) : <Empty icon={Paperclip} title={t('wb.noAttTitle')} className="px-2 py-6">{t('wb.noAttBody', { assistant })}</Empty>}
+          <div className="flex justify-end"><Button variant="outline" onClick={b.openFolder} data-testid="whiteboard-open-folder"><FolderOpen />{t('wb.openFolder')}</Button></div>
+        </div>
+      </ChatPanel>
+    </div>
+  );
+}
+
+// ---- the phone and a linked browser: the floating panel
+function Whiteboard({ project }) {
+  const t = useT();
+  const dark = useDark();
+  const lang = useStore((s) => s.app.config.language);
+  const assistant = useStore((s) => s.app.config.assistantName);
+  const [panel, setPanel] = usePanel();
+  const { data, attachments, saving, dropping, setDropping, onChange, pick, note, remove, openFolder, drop } = useBoard(project);
+
+  return (
+    <PageBody className="relative flex overflow-hidden p-0 [scrollbar-gutter:auto]" data-testid="whiteboard">
       <div className="wb-canvas relative min-w-0 flex-1" data-testid="whiteboard-canvas">
         {data ? (
           <Suspense fallback={<div className="grid h-full place-items-center"><Spinner /></div>}>
-            <Board initial={data} dark={dark} lang={lang} onChange={onChange} menu={menu} />
+            <Board initial={data} dark={dark} lang={lang} onChange={onChange} />
           </Suspense>
         ) : <div className="grid h-full place-items-center"><Spinner /></div>}
         <div className="wb-status pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-micro" data-testid="whiteboard-status">
@@ -124,9 +270,9 @@ function Whiteboard({ project }) {
       {panel ? (
         // Floating over the canvas (as Excalidraw's own sidebar does), so the canvas keeps the whole width: below 730 px
         // Excalidraw switches to its phone tools.
-        <aside className={cn('wb-panel absolute top-16 right-3 bottom-16 z-20 flex w-72 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border', dropping && 'ring-primary ring-2 ring-inset')} onDragOver={(e) => { e.preventDefault(); setDropping(true); }} onDragLeave={() => setDropping(false)} onDrop={drop} data-testid="whiteboard-panel">
+        <aside className={cn('wb-panel absolute top-16 right-3 bottom-16 z-20 flex w-72 max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-2xl border', dropping && 'ring-ring ring-2 ring-inset')} onDragOver={(e) => { e.preventDefault(); setDropping(true); }} onDragLeave={() => setDropping(false)} onDrop={drop} data-testid="whiteboard-panel">
           <div className="flex items-center gap-2 border-b px-3 py-2.5">
-            <Paperclip className="text-primary size-4" /><span className="flex-1 text-control font-semibold">{t('wb.attachments')}</span>
+            <Paperclip className="text-primary-text size-4" /><span className="flex-1 text-control font-semibold">{t('wb.attachments')}</span>
             <BubbleTip title={t('wb.hidePanel')}><Button size="icon-xs" variant="ghost" onClick={() => setPanel(false)} aria-label={t('wb.hidePanel')}><PanelRightClose /></Button></BubbleTip>
           </div>
           <div className="grid gap-2 border-b p-3">

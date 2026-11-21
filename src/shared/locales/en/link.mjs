@@ -28,6 +28,8 @@ export default {
   'link.kind.phone': 'Phone',
   'link.kind.browser': 'Browser',
   'link.fp': 'This PC’s fingerprint: {fp}',
+  'link.fpLabel': 'This PC’s fingerprint',
+  'link.fpHint': 'To check that you are linking with the right PC.',
   'link.httpBrowserWarn': 'A browser can’t link over the local network. Use Tailscale or the Android app.',
   "link.forWhat": "What are you linking?",
   'link.for.phone': 'Phone',

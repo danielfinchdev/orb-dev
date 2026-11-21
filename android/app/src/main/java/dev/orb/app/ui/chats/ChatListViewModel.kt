@@ -32,15 +32,24 @@ enum class ChatFilter { All, Unread, Working, Direct }
 /** «Recientes» (projects, most recent first) or «Prioridad» (what needs the person first, one flat list). */
 enum class ChatOrder { Recent, Priority }
 
-enum class SnoozeOption { OneHour, ThreeHours, Tomorrow, Clear }
+enum class SnoozeOption { OneHour, ThisAfternoon, Tomorrow, Clear }
+
+enum class MuteOption { OneHour, EightHours, Forever, Clear }
 
 sealed interface ListEntry {
     val key: String
     val contentType: String
 }
 
+enum class HeaderKind { Pinned, Section, Project, NoProject, Done }
+
+/** A group heading. [count] is the number of rows the group holds (null: the heading shows none); [collapsed] hides them. */
 @Immutable
-data class HeaderEntry(val title: String, val pin: Boolean, override val key: String) : ListEntry {
+data class HeaderEntry(
+    val title: String, val pin: Boolean, override val key: String,
+    val kind: HeaderKind = if (pin) HeaderKind.Pinned else HeaderKind.Project,
+    val count: Int? = null, val collapsed: Boolean = false,
+) : ListEntry {
     override val contentType get() = "header"
 }
 
@@ -68,10 +77,17 @@ data class ChatListState(
     val order: ChatOrder = ChatOrder.Recent,
     /** The summary of the day, when the PC says this phone has not shown it today. */
     val digest: DayDigest? = null,
+    /** The PC can give the summary of the day, so the menu offers it on demand. */
+    val canDigest: Boolean = false,
+    /** Chats marked as done (the «Completados» group), whatever their folding. */
+    val doneChats: Int = 0,
 )
 
-/** Groups what the list shows: pinned first, then the person's sections, then projects (most recent first). */
+/** Groups what the list shows: pinned first, then the person's sections, then projects (most recent first), then «Completados». */
 object ChatGrouping {
+    /** The key of the «Completados» heading; it starts folded. */
+    const val DONE_KEY = "h:done"
+
     fun matches(r: ChatRow, f: ChatFilter) = when (f) {
         ChatFilter.All -> true
         ChatFilter.Unread -> r.unread > 0
@@ -106,28 +122,37 @@ object ChatGrouping {
 
     fun build(
         rows: List<ChatRow>, sections: List<ChatSection>, filter: ChatFilter,
-        order: ChatOrder = ChatOrder.Recent, frozen: List<String>? = null,
+        order: ChatOrder = ChatOrder.Recent, frozen: List<String>? = null, collapsed: Set<String> = setOf(DONE_KEY),
     ): List<ListEntry> {
         val visible = rows.filter { !it.done && matches(it, filter) }
         val recent = compareByDescending<ChatRow> { it.at ?: "" }.thenBy { it.key }
         val out = ArrayList<ListEntry>()
-        val pinned = visible.filter { it.pinned }.sortedWith(compareBy<ChatRow> { it.pinOrder ?: Int.MAX_VALUE }.then(recent))
-        if (pinned.isNotEmpty()) {
-            out += HeaderEntry(ChatTexts.PINNED, true, "h:pinned")
-            pinned.mapTo(out) { RowEntry(it) }
+        // A folded group keeps its heading and drops its rows.
+        fun group(h: HeaderEntry, list: List<ChatRow>) {
+            // «Fijados» never folds, even when an older version saved its key as folded
+            val folded = h.key in collapsed && h.kind != HeaderKind.Pinned
+            out += h.copy(collapsed = folded)
+            if (!folded) list.mapTo(out) { RowEntry(it) }
         }
+        fun completed() {
+            val done = rows.filter { it.done && matches(it, filter) }.sortedWith(recent)
+            if (done.isEmpty()) return
+            group(HeaderEntry(ChatTexts.completed(done.size), false, DONE_KEY, HeaderKind.Done, done.size), done)
+        }
+        val pinned = visible.filter { it.pinned }.sortedWith(compareBy<ChatRow> { it.pinOrder ?: Int.MAX_VALUE }.then(recent))
+        if (pinned.isNotEmpty()) group(HeaderEntry(ChatTexts.PINNED, true, "h:pinned"), pinned)
         val rest = visible.filter { !it.pinned }
         if (order == ChatOrder.Priority) {
             // One flat group, like the PC: no project or section heads, the pinned ones stay on top.
             inFrozenOrder(rest, frozen).mapTo(out) { RowEntry(it) }
+            completed()
             return out
         }
         val known = sections.map { it.id }.toSet()
         for (s in sections) {
             val inSection = rest.filter { it.section == s.id }.sortedWith(recent)
             if (inSection.isEmpty()) continue
-            out += HeaderEntry(s.name, false, "h:section:${s.id}")
-            inSection.mapTo(out) { RowEntry(it) }
+            group(HeaderEntry(s.name, false, "h:section:${s.id}", HeaderKind.Section, inSection.size), inSection)
         }
         val byProject = rest.filter { it.section == null || it.section !in known }.groupBy { it.project }
         val order = byProject.entries.sortedWith(
@@ -136,9 +161,15 @@ object ChatGrouping {
                 .thenBy { it.key ?: "" },
         )
         for ((project, list) in order) {
-            out += HeaderEntry(project ?: ChatTexts.NO_PROJECT, false, "h:project:${project ?: ""}")
-            list.sortedWith(recent).mapTo(out) { RowEntry(it) }
+            group(
+                HeaderEntry(
+                    project ?: ChatTexts.NO_PROJECT, false, "h:project:${project ?: ""}",
+                    if (project == null) HeaderKind.NoProject else HeaderKind.Project, if (project == null) null else list.size,
+                ),
+                list.sortedWith(recent),
+            )
         }
+        completed()
         return out
     }
 }
@@ -169,6 +200,9 @@ class ChatListViewModel(
     private val reloads = Channel<Unit>(Channel.CONFLATED)
     // Chats the person deleted: gone from the list at once, whatever the cache still says until the PC confirms.
     private val hidden = MutableStateFlow<Set<String>>(emptySet())
+    // Headings the person folded; «Completados» starts folded until the person says otherwise.
+    private val collapsed = MutableStateFlow(backend.collapsedGroups() ?: setOf(ChatGrouping.DONE_KEY))
+    private val _archived = Channel<ChatRef>(Channel.BUFFERED)
     private val _undo = Channel<ChatRef>(Channel.BUFFERED)
     private val _messages = Channel<String>(Channel.BUFFERED)
 
@@ -180,20 +214,26 @@ class ChatListViewModel(
     /** A chat was deleted on the PC and can still be brought back: the screen shows «Deshacer» for it. */
     val undoOffers = _undo.receiveAsFlow()
 
+    /** A chat was archived and can be brought back: the screen shows «Deshacer» for it. */
+    val archiveOffers = _archived.receiveAsFlow()
+
+    private class View(val order: ChatOrder, val frozen: List<String>?, val digest: DayDigest?, val collapsed: Set<String>)
+
     private val data = combine(backend.inbox(), patches, hidden) { inbox, p, gone ->
         if (p.isEmpty() && gone.isEmpty()) inbox
         else inbox.copy(rows = inbox.rows.filter { it.key !in gone }.map { r -> p[r.key]?.apply?.invoke(r) ?: r })
     }
 
-    private val view = combine(order, frozen, digest) { o, fr, d -> Triple(o, fr, d) }
+    private val view = combine(order, frozen, digest, collapsed) { o, fr, d, c -> View(o, fr, d, c) }
 
     val state: StateFlow<ChatListState> = combine(data, filter, backend.connection, status, view) { inbox, f, c, st, v ->
         val rows = inbox.rows.filter { !it.done }
         ChatListState(
-            entries = ChatGrouping.build(inbox.rows, inbox.sections, f, v.first, v.second), order = v.first, digest = v.third, sections = inbox.sections, filter = f,
+            entries = ChatGrouping.build(inbox.rows, inbox.sections, f, v.order, v.frozen, v.collapsed), order = v.order, digest = v.digest,
+            canDigest = backend.available(ApiMethods.INBOX_DIGEST), doneChats = inbox.rows.count { it.done }, sections = inbox.sections, filter = f,
             unreadChats = rows.count { it.unread > 0 }, workingChats = rows.count { it.state == ChatState.Working },
             total = rows.size, connection = c, online = c is ConnectionState.Online,
-            loaded = rows.isNotEmpty() || st.answered, refreshing = st.refreshing, loadFailed = st.failed,
+            loaded = inbox.rows.isNotEmpty() || st.answered, refreshing = st.refreshing, loadFailed = st.failed,
         )
     }.flowOn(dispatcher).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ChatListState())
 
@@ -235,6 +275,20 @@ class ChatListViewModel(
         backend.digest().onSuccess { digestAsked = true; digest.value = DayDigests.parse(it) }
     }
 
+    /** «Resumen del día» from the menu: asks the PC for yesterday's summary whether or not the morning card was shown already. */
+    fun showDigest() {
+        if (!backend.available(ApiMethods.INBOX_DIGEST)) return
+        viewModelScope.launch {
+            backend.digest().fold(
+                onSuccess = { r ->
+                    val d = DayDigests.parse(r, ignoreDue = true)
+                    if (d == null) _messages.trySend(ChatTexts.NO_DIGEST) else digest.value = d
+                },
+                onFailure = { _messages.trySend("${ChatTexts.ACTION_FAILED}. ${linkErrorText(it)}") },
+            )
+        }
+    }
+
     /** Closing the card tells the PC it was shown, so it does not come back today. */
     fun closeDigest() {
         digest.value = null
@@ -260,22 +314,48 @@ class ChatListViewModel(
     /** Deleting needs the PC to offer the trash; it is also the PC that can bring the chat back. */
     fun canUndoDelete(kind: ChatKind) = backend.available(if (kind == ChatKind.Orbe) ApiMethods.CONVERSATIONS_RESTORE else ApiMethods.SESSIONS_RESTORE)
 
+    /** Folds or unfolds a group and keeps the choice on this phone. */
+    fun toggleGroup(key: String) {
+        collapsed.update { if (key in it) it - key else it + key }
+        backend.saveCollapsedGroups(collapsed.value)
+    }
+
     fun togglePin(row: ChatRow) = act(row.ref, { it.copy(pinned = !row.pinned, pinOrder = null) }) { backend.pin(row.ref, !row.pinned) }
+
+    /** True when the request went out; false when there is no PC to take it (the row does not change). */
     fun markRead(row: ChatRow) = act(row.ref, { it.copy(unread = 0) }) { backend.markRead(row.ref) }
-    fun toggleMute(row: ChatRow) = act(row.ref, { it.copy(muted = !row.muted) }) { backend.mute(row.ref, !row.muted) }
+    fun mute(row: ChatRow, option: MuteOption) {
+        val until = when (option) {
+            MuteOption.OneHour -> ChatTime.iso(clock() + 3_600_000L)
+            MuteOption.EightHours -> ChatTime.iso(clock() + 8 * 3_600_000L)
+            MuteOption.Forever, MuteOption.Clear -> null
+        }
+        val on = option != MuteOption.Clear
+        act(row.ref, { it.copy(muted = on, mutedUntil = until) }) { backend.mute(row.ref, on, until) }
+    }
+
+    /** The PC marks the chat as having one unread line until it is opened again. */
+    fun markUnread(row: ChatRow) = act(row.ref, { it.copy(unread = maxOf(1, it.unread)) }) { backend.markUnread(row.ref) }
+
+    /** Whether the PC takes a by-hand «unread» and a mute with an end: both came in the same version. */
+    fun canMarkUnread() = backend.available(ApiMethods.INBOX_MARK_UNREAD)
     fun rename(row: ChatRow, title: String) {
         val t = title.trim()
         if (t.isEmpty() || t == row.title) return
         act(row.ref, { it.copy(title = t) }) { backend.rename(row.ref, t) }
     }
 
-    fun archive(row: ChatRow) = act(row.ref, { it.copy(done = true) }) { backend.archive(row.ref) }
+    /** The row goes to «Completados» at once; once the PC agrees the screen offers «Deshacer». */
+    fun archive(row: ChatRow) = act(row.ref, { it.copy(done = true) }, onDone = { _archived.trySend(row.ref) }) { backend.archive(row.ref) }
+
+    /** «Deshacer» of an archive: the PC marks the chat as not done again. */
+    fun unarchive(ref: ChatRef) = act(ref, { it.copy(done = false) }) { backend.unarchive(ref) }
 
     fun snooze(row: ChatRow, option: SnoozeOption) {
         val now = clock()
         val until = when (option) {
             SnoozeOption.OneHour -> ChatTime.iso(now + 3_600_000L)
-            SnoozeOption.ThreeHours -> ChatTime.iso(now + 3 * 3_600_000L)
+            SnoozeOption.ThisAfternoon -> ChatTime.thisAfternoon(now)
             SnoozeOption.Tomorrow -> ChatTime.tomorrowMorning(now)
             SnoozeOption.Clear -> null
         }
@@ -329,20 +409,21 @@ class ChatListViewModel(
         }
     }
 
-    private fun act(ref: ChatRef, patch: (ChatRow) -> ChatRow, call: suspend () -> Result<Unit>) {
+    private fun act(ref: ChatRef, patch: (ChatRow) -> ChatRow, onDone: (() -> Unit)? = null, call: suspend () -> Result<Unit>): Boolean {
         if (backend.connection.value !is ConnectionState.Online) {
             _messages.trySend(ChatTexts.ACTION_OFFLINE)
-            return
+            return false
         }
         viewModelScope.launch {
             val id = ++patchSeq
             patches.update { it + (ref.key to Patch(id, patch)) }
             val r = call()
-            if (r.isSuccess) reload()
+            if (r.isSuccess) { onDone?.invoke(); reload() }
             // Only the patch this action put there goes: a newer one on the same chat stays.
             patches.update { if (it[ref.key]?.id == id) it - ref.key else it }
             r.exceptionOrNull()?.let { _messages.trySend("${ChatTexts.ACTION_FAILED}. ${linkErrorText(it)}") }
         }
+        return true
     }
 
     private companion object {

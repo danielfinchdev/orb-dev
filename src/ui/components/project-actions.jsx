@@ -4,7 +4,7 @@ import { notifyOk } from '@/lib/notify.js';
 import { form } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select } from './ui/overlay.jsx';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select, Switch } from './ui/overlay.jsx';
 import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
@@ -17,8 +17,9 @@ const home = () => getState().app?.home ?? '';
 const sep = () => (home().includes('\\') ? '\\' : '/');
 // Projects of Orb's folder live in one of its categories (windows, linux, ios, android, web, multi: src/shared/layout.mjs).
 export { CATEGORIES };
-const CategoryField = ({ v, set }) => (
-  <Field label={t('comp.projects.category')} hint={t('comp.projects.categoryHint')}>
+// hint: the dialog that makes the folder shows where it will go instead of the generic line.
+const CategoryField = ({ v, set, hint = t('comp.projects.categoryHint') }) => (
+  <Field label={t('comp.projects.category')} hint={hint}>
     <Select className="w-full" value={v.category} onValueChange={(category) => set({ category })} options={CATEGORIES.map((value) => ({ value, label: t(`comp.projects.category.${value}`) }))} data-testid="project-category" />
   </Field>
 );
@@ -37,20 +38,35 @@ const PlatformsField = ({ v, set }) => (
 );
 // On a phone (no folder of the PC is sent to it) the path starts at the category.
 const folderOf = (v) => [home(), v.category, v.name.trim().replace(/[<>:"/\\|?*]/g, '')].filter(Boolean).join(sep());
-const folderHint = (v) => (v.category === MULTI ? t('comp.projects.multiFolderHint', { path: folderOf(v), list: [...v.platforms, SHARED_DIR].join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v) }));
+// «Plantilla y git» off: the folder is made empty (no git, no platform subfolders).
+const TemplateField = ({ v, set }) => (
+  <div className="flex items-center justify-between gap-3">
+    <div className="grid min-w-0 gap-0.5">
+      <span id="project-template-label" className="text-control font-medium">{t('comp.projects.template')}</span>
+      <span id="project-template-hint" className="text-muted-foreground text-caption">{t('comp.projects.templateHint')}</span>
+    </div>
+    <Switch checked={v.template !== false} onCheckedChange={(on) => set({ template: on === true })} aria-labelledby="project-template-label" aria-describedby="project-template-hint" data-testid="project-template" />
+  </div>
+);
+const folderHint = (v) => (v.template === false ? t('comp.projects.emptyFolderHint', { path: folderOf(v) }) : v.category === MULTI ? t('comp.projects.multiFolderHint', { path: folderOf(v), list: [...v.platforms, SHARED_DIR].join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v) }));
 
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {
-    description: t('comp.projects.newDesc'),
-    initial: { name: '', notes: '', category: DEFAULT_CATEGORY, platforms: ['android', 'web'] },
+    initial: { name: '', notes: '', category: DEFAULT_CATEGORY, platforms: ['android', 'web'], template: true },
     body: (v, set) => (<>
-      <CategoryField v={v} set={set} />
+      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
+      <CategoryField v={v} set={set} hint={folderHint(v)} />
       {v.category === MULTI ? <PlatformsField v={v} set={set} /> : null}
-      <Field label={t('comp.projects.name')} hint={v.name.trim() && projectNameProblem(v.name) ? <span className="text-destructive">{t(projectNameProblem(v.name), { name: v.name.trim() })}</span> : v.name.trim() ? folderHint(v) : null}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="webviaproject" maxLength={60} /></Field>
-      <Field label={t('comp.projects.about')} hint={t('comp.projects.aboutHint')}><Textarea value={v.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} /></Field>
+      <TemplateField v={v} set={set} />
+      <details className="border-border rounded-(--r-md) border px-3 py-2" data-testid="project-more-options">
+        <summary className="text-muted-foreground cursor-pointer text-control">{t('comp.projects.moreOptions')}</summary>
+        <div className="mt-2">
+        <Field label={t('comp.projects.about')} hint={t('comp.projects.aboutHint')}><Textarea value={v.notes} onChange={(e) => set({ notes: e.target.value })} rows={3} /></Field>
+        </div>
+      </details>
     </>),
     ok: t('comp.projects.create'),
-    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category, ...(v.category === MULTI ? { platforms: v.platforms } : {}) })
+    onOk: (v) => call('projects.create', { name: v.name.trim(), notes: v.notes.trim(), category: v.category, ...(v.category === MULTI ? { platforms: v.platforms } : {}), ...(v.template ? {} : { template: false }) })
   });
   if (p) { notifyOk(t('comp.projects.created', { name: p.name })); await refresh().catch(quiet); }
   return p;
@@ -110,12 +126,12 @@ export function ProjectPicker({ conversation = null }) {
           <DropdownMenuLabel>{t('comp.projects.inFolder')}</DropdownMenuLabel>
           {projects.length ? projects.map((p) => (
             <DropdownMenuItem key={p.name} onSelect={() => setActive(p.name)}>
-              <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary!" /> : null}
+              <Folder /><span className="flex-1 truncate">{p.name}</span>{active?.name === p.name ? <Check className="text-primary-text!" /> : null}
             </DropdownMenuItem>
           )) : <div className="text-muted-foreground px-2 py-1.5 text-xs">{t('comp.projects.none')}</div>}
           {/* without a folder. */}
           <DropdownMenuItem onSelect={() => setActive('')} data-testid="project-none">
-            <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary!" /> : null}
+            <FolderX /><span className="grid flex-1 leading-tight"><span className="truncate">{t('nav.loose')}</span><span className="text-muted-foreground text-xs">{t('comp.projects.noneHint')}</span></span>{!active ? <Check className="text-primary-text!" /> : null}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={async () => { const p = await createProjectFlow(); if (p) setActive(p.name); }}><FolderPlus />{t('comp.projects.newTitle')}</DropdownMenuItem>

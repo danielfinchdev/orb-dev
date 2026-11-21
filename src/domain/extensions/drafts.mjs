@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { CATEGORIES } from '../../shared/layout.mjs';
 import { ExtensionError, MANIFESTS, MCP_NAME, SKILL_FILE, SKILL_NAME, SKIP, TOOL_CONFIG, exists, extensionPaths, installDeps, isDir, isLink, needsDeps, norm, startCommand } from './basics.mjs';
 import { carrySecrets, checkMcp, checkSkill, cleanGitConfig, copyTree, fingerprint, holdsKeys, privateTest, secretTest, skillAsks, walkTree } from './checks.mjs';
-import { mcpWith, placeInCore, quarantineFor, realFolder, reuseDeps, sameQuarantine, skillsWith } from './catalog.mjs';
+import { keepsState, mcpWith, placeInCore, quarantineFor, realFolder, reuseDeps, sameQuarantine, skillsWith } from './catalog.mjs';
 
 // The dependencies of a new version: the ones of core when its package.json and lock did not change (no download), else
 // installed now (in the quarantine, before it moves). → 'reuse', 'installed' or null
@@ -128,8 +128,14 @@ export async function activateRequest(core, config, request, { tr = null, instal
     if (deps === 'reuse') reuseDeps(core, request.name, to);
   }
   try { if (typeof request.dir === 'string' && norm(path.dirname(request.dir)) === norm(P.staging)) fs.rmSync(request.dir, { recursive: true, force: true }); } catch { /* left in core\preparacion */ }
-  if (request.kind === 'skill') return { to, patch: { skills: skillsWith(config, request.name, { enabled: true, source: request.update ? (config.skills ?? []).find((s) => s.name === request.name)?.source ?? 'creado' : 'creado' }) } };
-  return { to, patch: { mcpServers: refreshStart(core, config, request.name, { enabled: true, source: request.update ? null : 'creado' }) ?? config.mcpServers ?? [] } };
+  // An improvement of something scoped to projects (or that was, and was turned off by taking its last project away) keeps
+  // its state: approving it never turns it on for every project. Anything without a scope is turned on, as it always was.
+  const prev = request.update ? (request.kind === 'skill' ? config.skills ?? [] : config.mcpServers ?? []).find((s) => s.name === request.name) : null;
+  const keep = keepsState(prev);
+  const enabled = keep ? (request.kind === 'skill' ? prev.enabled === true : prev.enabled !== false) : true;
+  const keptOff = keep && !enabled;
+  if (request.kind === 'skill') return { to, keptOff, patch: { skills: skillsWith(config, request.name, { enabled, source: request.update ? prev?.source ?? 'creado' : 'creado' }) } };
+  return { to, keptOff, patch: { mcpServers: refreshStart(core, config, request.name, { enabled, source: request.update ? null : 'creado' }) ?? config.mcpServers ?? [] } };
 }
 
 // at every start, what nothing points to any more goes: folders of core\preparacion and of the

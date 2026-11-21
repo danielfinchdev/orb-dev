@@ -125,3 +125,17 @@ agents' MCP server, «Ordenar carpetas» and the tests use it); `src/engine/api/
   `--strict-mcp-config`, so it only loads the ones Orb passes and not all of the user's. This saves tokens.
 - Backups (section 36) carry `core\mcp` and `core\skills` without dependencies, `.activas` or `.anterior`. A server's own
   files (e.g. OAuth tokens of `gmail-multi-mcp`) go with it into every backup, which is always encrypted.
+- **Per project** (3.8.8): an installed skill or connector can be kept for some projects only. The entry in `orb.json`
+  (`skills` or `mcpServers`) carries a `projects` list: with a non-empty list it reaches only the chats and tasks of those
+  projects, and with none (or an empty list) it reaches every project, as before; a value that is not understood (a text,
+  an object) reaches nobody, so it never widens (`src/domain/extensions/catalog.mjs`: `isScoped`, `reaches`).
+  - **Delivery:** the unscoped skills make the usual plugin (`core\skills\.activas`). A project that also receives scoped
+    skills gets its own plugin folder for that exact set, `core\skills\.ambitos\<hash of the names>` (`SCOPED_DIR` in
+    `src/domain/extensions/basics.mjs`), beside the usual one, so the folder every other project loads never holds a skill
+    that is not theirs; scoped copies are pruned as soon as they are turned off.
+  - **Changing a scope:** `extensions.scope` (this PC's window only, like `toggle`; the card is in the project's page,
+    `src/ui/components/project-extensions.jsx`). Adding a project turns an installed entry on for that project alone;
+    taking the last project out turns it off and never makes it «every project». Nothing is installed or created there, and
+    of the whole connector list only that entry's `projects` and `enabled` can change.
+  - **A project that leaves Orb** (removed, finished, deleted) leaves every scope, so a new one with the same name
+    inherits nothing; a renamed one keeps its scopes only while it is the same record.

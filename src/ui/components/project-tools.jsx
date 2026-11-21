@@ -2,13 +2,13 @@
 // (commands of the user's own, such as «npm test», run in a terminal window from the bar or with their shortcut, with an
 // optional preview of a page of this PC).
 import { useEffect, useState } from 'react';
-import { ChevronDown, FolderOpen, Play, Plus, Pencil, Trash2, Zap, Code2, MousePointer2 } from 'lucide-react';
+import { ChevronDown, ExternalLink, FolderOpen, Play, Plus, Pencil, Trash2, Zap, Code2, MousePointer2, SquareTerminal } from 'lucide-react';
 import { notifyInfo } from '@/lib/notify.js';
 import { Button } from './ui/button.jsx';
 import { Input, Textarea, Field } from './ui/basic.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Switch } from './ui/overlay.jsx';
 import { form, confirm } from './dialogs.jsx';
-import { useStore, call, act, bridge } from '@/lib/store.js';
+import { useStore, call, act, bridge, openTerminal } from '@/lib/store.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
 // The order the main button picks from (the first one installed); the menu lists the installed ones in it.
@@ -42,6 +42,56 @@ export function OpenInMenu({ project, labelClassName }) {
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
+  );
+}
+
+// The same places as lines of someone else's menu (the «⋯» of a task's changed file): the project's folder in each installed
+// editor and in the file manager.
+export function OpenInItems({ project }) {
+  const t = useT();
+  const editors = useEditors();
+  if (!project?.path || !bridge.openIn) return null;
+  const NAME = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files') };
+  return (<>
+    <DropdownMenuLabel>{t('tools.openFolderIn')}</DropdownMenuLabel>
+    {[...EDITOR_ORDER, 'explorer'].filter((w) => w === 'explorer' || editors[w]).map((w) => <DropdownMenuItem key={w} onSelect={() => act(bridge.openIn(w, project.path))} data-testid={`open-folder-${w}`}>{w === 'explorer' ? <FolderOpen /> : <Code2 />}{NAME[w]}</DropdownMenuItem>)}
+  </>);
+}
+
+// «Abrir en el editor» of one file (and its line): the first installed editor, the same one OpenInMenu's main button uses.
+// Nothing when no editor is installed (the file manager cannot open a file at a line).
+export function OpenFileButton({ project, file, line }) {
+  const t = useT();
+  const editors = useEditors();
+  const first = EDITOR_ORDER.find((w) => editors[w]);
+  if (!project?.path || !bridge.openFileIn || !first || !file) return null;
+  const NAME = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains' };
+  const label = t('tools.openFileIn', { app: NAME[first] });
+  return <Button size="xs" variant="ghost" onClick={() => act(bridge.openFileIn(first, project.path, file, line))} aria-label={label} title={label} data-testid="open-file-in"><ExternalLink />{t('tools.openIn', { app: NAME[first] })}</Button>;
+}
+
+// «Abrir en…» of the projects' list and page: one menu with the editors installed, the file manager and a terminal.
+// `page`: the header's button (with its icon, VS Code first); otherwise the row's compact one.
+export function ProjectOpenMenu({ project, page = false }) {
+  const t = useT();
+  const editors = useEditors();
+  if (!project?.path || !bridge.openIn) return null;
+  const order = page ? ['vscode', 'cursor', 'windsurf', 'zed', 'jetbrains'] : EDITOR_ORDER;
+  const ICON = { cursor: MousePointer2, vscode: Code2, windsurf: Code2, zed: Code2, jetbrains: Code2, explorer: FolderOpen, terminal: SquareTerminal };
+  const LABEL = { cursor: 'Cursor', vscode: 'VS Code', windsurf: 'Windsurf', zed: 'Zed', jetbrains: 'JetBrains', explorer: t(!window.orb?.platform || window.orb.platform === 'win32' ? 'tools.explorer' : 'tools.files'), terminal: 'Terminal' };
+  const ids = [...order.filter((w) => editors[w]), 'explorer', ...(bridge.openTerminal ? ['terminal'] : [])];
+  const open = (which) => (which === 'terminal' ? openTerminal(project.path) : act(bridge.openIn(which, project.path)));
+  return (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size={page ? 'default' : 'xs'} aria-label={t('projects.openIn')} data-testid="project-open-in">
+          {page ? <ExternalLink /> : null}{page ? t('projects.openInShort') : t('projects.openIn')}<ChevronDown />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52" data-testid="project-open-in-list">
+        {ids.map((w) => { const I = ICON[w]; return <DropdownMenuItem key={w} onSelect={() => open(w)}><I />{LABEL[w]}</DropdownMenuItem>; })}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -102,7 +152,9 @@ function useProjectActions(name) {
   return actions;
 }
 
-export function ActionsMenu({ project, labelClassName }) {
+// onRun(action): where a click on an action goes (God mode's terminal); without it the action runs in a window of its own.
+// The hover button of a line always offers that window.
+export function ActionsMenu({ project, labelClassName, onRun }) {
   const t = useT();
   const actions = useProjectActions(project?.name);
   if (!project || !bridge.runAction) return null;
@@ -113,10 +165,11 @@ export function ActionsMenu({ project, labelClassName }) {
       <DropdownMenuContent align="end" className="w-72">
         {actions.length ? <DropdownMenuLabel>{t('tools.actionsOf', { name: project.name })}</DropdownMenuLabel> : null}
         {actions.map((a) => (
-          <DropdownMenuItem key={a.id} onSelect={() => runProjectAction(project, a)} className="group/act" data-testid={`action-${a.id}`}>
+          <DropdownMenuItem key={a.id} onSelect={() => (onRun ? onRun(a) : runProjectAction(project, a))} className="group/act" data-testid={`action-${a.id}`}>
             <Play /><span className="min-w-0 flex-1 truncate">{a.name}</span>
             {a.shortcut ? <kbd className="text-muted-foreground rounded border px-1 text-micro group-hover/act:hidden">{a.shortcut}</kbd> : null}
             <span className="hidden items-center gap-0.5 group-hover/act:flex">
+              {onRun ? <button type="button" className="hover:bg-accent grid size-6 place-items-center rounded" aria-label={t('tools.runInWindow')} title={t('tools.runInWindow')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); runProjectAction(project, a); }} data-testid={`action-window-${a.id}`}><ExternalLink className="size-3.5" /></button> : null}
               <button type="button" className="hover:bg-accent grid size-6 place-items-center rounded" aria-label={t('tools.editAction')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); editAction(project, a); }}><Pencil className="size-3.5" /></button>
               <button type="button" className="hover:bg-accent text-destructive grid size-6 place-items-center rounded" aria-label={t('tools.removeAction')} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); remove(a); }}><Trash2 className="size-3.5" /></button>
             </span>

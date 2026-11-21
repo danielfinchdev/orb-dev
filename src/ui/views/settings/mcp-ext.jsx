@@ -4,13 +4,15 @@
 import { useEffect, useState } from 'react';
 import { Copy, Trash2, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input } from '@/components/ui/basic.jsx';
+import { Field, Input } from '@/components/ui/basic.jsx';
+import { ListRow } from '@/components/ui/primitives.jsx';
 import { Switch } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { notifyInfo } from '@/lib/notify.js';
 import { useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
+import { Block, Panel, Setting, Stack, CardFoot, Hint } from './rows.jsx';
 
 // the project choice of a token (a form body): one check per project of Orb
 function Projects({ all, value, set }) {
@@ -81,30 +83,27 @@ export function McpExtCard() {
   const state = (tk) => (tk.revoked ? t('mcpext.revoked') : tk.expired ? t('mcpext.expired') : t('mcpext.until', { date: when(tk.expires) }));
 
   return (
-    <Card data-testid="mcpext-card">
-      <CardHeader><CardTitle>{t('mcpext.title')}</CardTitle><CardDescription>{t('mcpext.desc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-3">
-        <div className="flex items-center gap-3">
-          <div className="grid flex-1 text-sm"><span>{st.enabled ? t('mcpext.on') : t('mcpext.off')}</span>{st.running ? <code className="text-muted-foreground text-xs" data-testid="mcpext-url">{st.url}</code> : null}</div>
+    <Block title={t('mcpext.title')} note={t('mcpext.desc')} data-testid="mcpext-card">
+      <Panel>
+        <Setting label={st.enabled ? t('mcpext.on') : t('mcpext.off')} hint={st.running ? <code data-testid="mcpext-url">{st.url}</code> : null}>
           <Switch checked={st.enabled} onCheckedChange={toggle} aria-label={t('mcpext.title')} data-testid="mcpext-switch" />
-        </div>
+        </Setting>
         {st.enabled ? (
           <>
-            {!st.tokens.length ? <p className="text-muted-foreground text-sm">{t('mcpext.noTokens')}</p> : st.tokens.map((tk) => (
-              <div key={tk.id} className="flex min-w-0 items-center gap-2 rounded-md border p-2" data-testid="mcpext-token">
-                <div className="grid min-w-0 flex-1">
-                  <span className="truncate text-sm">{tk.name}</span>
-                  <span className="text-muted-foreground truncate text-xs">{state(tk)} · {tk.projects.join(', ')}</span>
-                </div>
-                {!tk.revoked && !tk.expired ? <Button size="sm" variant="ghost" onClick={() => projectsOf(tk)}>{t('mcpext.projectsBtn')}</Button> : null}
-                {!tk.revoked ? <Button size="icon-sm" variant="ghost" onClick={() => revoke(tk)} aria-label={t('mcpext.revoke')}><Ban /></Button> : null}
-                <Button size="icon-sm" variant="ghost" onClick={() => remove(tk)} aria-label={t('mcpext.remove')}><Trash2 /></Button>
-              </div>
+            {!st.tokens.length ? <Stack className="border-border border-t"><Hint>{t('mcpext.noTokens')}</Hint></Stack> : st.tokens.map((tk) => (
+              <ListRow key={tk.id} className="border-border rounded-none border-t" data-testid="mcpext-token" title={tk.name} meta={`${state(tk)} · ${tk.projects.join(', ')}`}
+                trailing={(
+                  <div className="flex items-center gap-1.5">
+                    {!tk.revoked && !tk.expired ? <Button size="xs" variant="outline" onClick={() => projectsOf(tk)}>{t('mcpext.projectsBtn')}</Button> : null}
+                    {!tk.revoked ? <Button size="icon-xs" variant="ghost" onClick={() => revoke(tk)} aria-label={t('mcpext.revoke')}><Ban /></Button> : null}
+                    <Button size="icon-xs" variant="ghost" onClick={() => remove(tk)} aria-label={t('mcpext.remove')}><Trash2 /></Button>
+                  </div>
+                )} />
             ))}
-            <div><Button size="sm" variant="outline" onClick={create} data-testid="mcpext-create"><Copy />{t('mcpext.new')}</Button></div>
+            <CardFoot><Button size="sm" variant="outline" onClick={create} data-testid="mcpext-create"><Copy />{t('mcpext.new')}</Button></CardFoot>
           </>
         ) : null}
-      </CardContent>
-    </Card>
+      </Panel>
+    </Block>
   );
 }

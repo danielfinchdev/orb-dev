@@ -1,6 +1,5 @@
 package dev.orb.app.ui.schedules
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,31 +8,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,283 +25,173 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.semantics.onLongClick
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
-import dev.orb.app.ui.shell.ScreenBar
+import dev.orb.app.ui.kit.OrbBadge
+import dev.orb.app.ui.kit.OrbBadgeKind
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbEmpty
+import dev.orb.app.ui.kit.OrbFab
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbKit
+import dev.orb.app.ui.kit.OrbNote
+import dev.orb.app.ui.kit.OrbRow
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSpinner
+import dev.orb.app.ui.kit.OrbSwitch
+import dev.orb.app.ui.kit.OrbTopBar
 import dev.orb.app.ui.offline.OfflineStrip
-import dev.orb.app.ui.theme.OrbTheme
+import java.util.TimeZone
 
+/**
+ * Screen 20, «Programadas»: the schedules of the PC, each with when it runs next and how the last run went. A long press
+ * on a row (or its «⋯») opens the sheet of what can be done with it; everything runs on the PC.
+ * [clock] and [zone] are the phone's own and only change in a test.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SchedulesScreen(vm: SchedulesViewModel, onBack: () -> Unit, modifier: Modifier = Modifier) {
+fun SchedulesScreen(
+    vm: SchedulesViewModel, onBack: () -> Unit, modifier: Modifier = Modifier,
+    clock: () -> Long = System::currentTimeMillis, zone: TimeZone = TimeZone.getDefault(),
+) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(vm) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    var menuFor by rememberSaveable { mutableStateOf<Long?>(null) }
     var running by rememberSaveable { mutableStateOf<Long?>(null) }
     var disabling by rememberSaveable { mutableStateOf<Long?>(null) }
     val enabled = state.online && !state.busy
+    val now = remember(state.items) { clock() }
 
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            ScreenBar(SchedulesTexts.TITLE, onBack, SchedulesTexts.BACK)
-            if (!state.online && state.loaded) {
-                OfflineStrip()
-            }
-            Text(
-                SchedulesTexts.META, Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2,
+            OrbTopBar(
+                SchedulesTexts.TITLE, sub = if (state.loaded) SchedulesTexts.count(state.items.size) else null, sideWidth = 56.dp,
+                leading = { OrbIconButton(OrbIcons.ArrowLeft, SchedulesTexts.BACK, onBack) },
             )
+            if (!state.online && state.loaded) OfflineStrip()
             PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = vm::refresh, modifier = Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    !state.loaded && state.loadFailed -> Message(SchedulesTexts.LOAD_ERROR, action = SchedulesTexts.RETRY, onAction = vm::refresh)
-                    !state.loaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-                    state.items.isEmpty() -> Message(SchedulesTexts.EMPTY, SchedulesTexts.EMPTY_HINT)
-                    else -> LazyColumn(
-                        Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                    ) {
+                    !state.loaded && state.loadFailed -> Centered {
+                        OrbEmpty(
+                            SchedulesTexts.LOAD_ERROR, icon = OrbIcons.CalendarClock,
+                            actions = { OrbButton(SchedulesTexts.RETRY, vm::refresh) },
+                        )
+                    }
+                    !state.loaded -> Centered { OrbSpinner(size = 28.dp) }
+                    // The empty note sits at the top, as in the mockup.
+                    state.items.isEmpty() -> Column(Modifier.fillMaxSize()) {
+                        OrbEmpty(
+                            SchedulesTexts.EMPTY, text = SchedulesTexts.EMPTY_HINT, icon = OrbIcons.CalendarClock,
+                            actions = if (state.canCreate) ({ OrbButton(SchedulesTexts.NEW, vm::openNew, kind = OrbButtonKind.Primary, enabled = enabled) }) else null,
+                        )
+                    }
+                    else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(top = 8.dp, bottom = 110.dp)) {
                         items(state.items, key = { it.id }) { s ->
-                            ScheduleCard(
-                                s, state, enabled,
+                            ScheduleRow(
+                                s, state, enabled, now, zone,
+                                onMenu = { menuFor = s.id },
                                 onToggle = { on -> if (on) vm.setEnabled(s, true) else disabling = s.id },
-                                onEdit = { vm.openEdit(s) }, onRun = { running = s.id }, onApprove = { vm.approve(s) },
                             )
                         }
+                        item { OrbNote(SchedulesTexts.ROWS_HINT, Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) }
                     }
                 }
             }
         }
-        if (state.canCreate) {
-            ExtendedFloatingActionButton(
-                onClick = vm::openNew,
-                icon = { Icon(OrbIcons.Plus, null) },
-                text = { Text(SchedulesTexts.NEW, fontWeight = FontWeight.SemiBold) },
-                modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp),
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-            )
+        if (state.canCreate && state.loaded && state.items.isNotEmpty()) {
+            OrbFab(SchedulesTexts.NEW, OrbIcons.Plus, vm::openNew, Modifier.align(Alignment.BottomEnd).padding(16.dp), lifted = snackbar.currentSnackbarData != null)
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
+    state.items.firstOrNull { it.id == menuFor }?.let { s ->
+        ScheduleActionsSheet(
+            s, canRun = state.canRun, canUpdate = state.canUpdate, enabled = enabled,
+            onRun = { menuFor = null; running = s.id },
+            onEdit = { menuFor = null; vm.openEdit(s) },
+            onToggle = { menuFor = null; if (s.enabled) disabling = s.id else vm.setEnabled(s, true) },
+            onApprove = { menuFor = null; vm.openApproval(s) },
+            onDismiss = { menuFor = null },
+        )
+    } ?: run { if (menuFor != null) menuFor = null }
+
     state.items.firstOrNull { it.id == running }?.let { s ->
-        AlertDialog(
-            onDismissRequest = { running = null },
-            title = { Text(SchedulesTexts.RUN_TITLE) },
-            text = { Text(SchedulesTexts.runBody(s.title)) },
-            confirmButton = { TextButton(onClick = { running = null; vm.run(s) }) { Text(SchedulesTexts.RUN_NOW) } },
-            dismissButton = { TextButton(onClick = { running = null }) { Text(SchedulesTexts.CANCEL) } },
+        OrbDialog(
+            onDismiss = { running = null }, title = SchedulesTexts.RUN_TITLE, text = SchedulesTexts.runBody(s.title),
+            confirm = OrbDialogAction(SchedulesTexts.RUN_NOW, { running = null; vm.run(s) }),
+            dismiss = OrbDialogAction(SchedulesTexts.CANCEL, { running = null }),
         )
     } ?: run { if (running != null) running = null }
 
     state.items.firstOrNull { it.id == disabling }?.let { s ->
-        AlertDialog(
-            onDismissRequest = { disabling = null },
-            title = { Text(SchedulesTexts.DISABLE_TITLE) },
-            text = { Text(SchedulesTexts.disableBody(s.title)) },
-            confirmButton = { TextButton(onClick = { disabling = null; vm.setEnabled(s, false) }) { Text(SchedulesTexts.DISABLE_CONFIRM) } },
-            dismissButton = { TextButton(onClick = { disabling = null }) { Text(SchedulesTexts.CANCEL) } },
+        OrbDialog(
+            onDismiss = { disabling = null }, title = SchedulesTexts.DISABLE_TITLE, text = SchedulesTexts.disableBody(s.title),
+            confirm = OrbDialogAction(SchedulesTexts.DISABLE_CONFIRM, { disabling = null; vm.setEnabled(s, false) }),
+            dismiss = OrbDialogAction(SchedulesTexts.CANCEL, { disabling = null }),
         )
     } ?: run { if (disabling != null) disabling = null }
 
-    state.form?.let { f ->
-        val editing = f.editing
-        if (editing != null) EditDialog(f, editing, vm::saveEdit, vm::closeForm)
-        else NewDialog(f, vm::create, vm::closeForm)
+    state.approval?.let { a ->
+        ScheduleApprovalDialog(a, enabled = state.online && !state.busy, phone = zone, onApprove = vm::confirmApproval, onDismiss = vm::closeApproval)
     }
+
+    state.form?.let { f -> ScheduleSheet(f, state.pcFields, vm::create, vm::saveEdit, vm::closeForm) }
 }
 
 @Composable
-private fun ScheduleCard(
-    s: ScheduleItem, state: SchedulesState, enabled: Boolean,
-    onToggle: (Boolean) -> Unit, onEdit: () -> Unit, onRun: () -> Unit, onApprove: () -> Unit,
+private fun Centered(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) { content() }
+}
+
+@Composable
+private fun ScheduleRow(
+    s: ScheduleItem, state: SchedulesState, enabled: Boolean, now: Long, zone: TimeZone, onMenu: () -> Unit, onToggle: (Boolean) -> Unit,
 ) {
-    var menu by remember { mutableStateOf(false) }
     val needsApproval = !s.approved
-    Surface(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), color = MaterialTheme.colorScheme.surfaceContainerLow) {
-        Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    s.title, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold,
-                    maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-                if (state.canUpdate) Switch(checked = s.enabled, onCheckedChange = onToggle, enabled = enabled && !needsApproval)
-                if (state.canUpdate || state.canRun) Box {
-                    IconButton(onClick = { menu = true }) { Icon(OrbIcons.MoreVertical, SchedulesTexts.MORE) }
-                    DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                        if (state.canUpdate) DropdownMenuItem(text = { Text(SchedulesTexts.EDIT) }, enabled = enabled, onClick = { menu = false; onEdit() })
-                        if (state.canRun) DropdownMenuItem(text = { Text(SchedulesTexts.RUN_NOW) }, enabled = enabled && !needsApproval, onClick = { menu = false; onRun() })
-                        if (state.canUpdate && needsApproval) DropdownMenuItem(text = { Text(SchedulesTexts.APPROVE) }, enabled = enabled, onClick = { menu = false; onApprove() })
-                    }
-                }
-            }
-            Text(
-                SchedulesTexts.nextLine(s.whenText, s.project, s.nextRun.takeIf { s.enabled }),
-                style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2,
-            )
-            val badges = listOfNotNull(
-                SchedulesTexts.AWAITING.takeIf { needsApproval },
-                SchedulesTexts.READONLY_BADGE.takeIf { s.readonly },
-                SchedulesTexts.PAUSED.takeIf { !s.enabled && !needsApproval },
-            )
-            if (badges.isNotEmpty()) Text(
-                badges.joinToString(" · "), style = MaterialTheme.typography.labelMedium,
-                color = if (needsApproval) OrbTheme.colors.warn else OrbTheme.colors.text3,
-            )
-        }
-    }
-}
-
-@Composable
-private fun EditDialog(f: ScheduleForm, s: ScheduleItem, onSave: (String, String) -> Unit, onDismiss: () -> Unit) {
-    var title by rememberSaveable(s.id) { mutableStateOf(s.title) }
-    var what by rememberSaveable(s.id) { mutableStateOf(s.description) }
-    AlertDialog(
-        onDismissRequest = { if (!f.saving) onDismiss() },
-        title = { Text(SchedulesTexts.EDIT_TITLE) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(SchedulesTexts.FIELD_TITLE) })
-                OutlinedTextField(what, { what = it }, Modifier.fillMaxWidth(), minLines = 3, maxLines = 8, label = { Text(SchedulesTexts.FIELD_WHAT) })
-                f.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+    val project = s.project.takeIf { it.isNotBlank() }
+    val first = listOfNotNull(SchedulesTexts.whenLine(s), project).joinToString(" · ")
+    // A schedule waiting for approval, or paused, has no next run to promise.
+    val next = if (s.enabled && !needsApproval) ScheduleStamps.next(s, now, zone) else null
+    val last = ScheduleStamps.last(s, ScheduleStamps.outcome(s.lastTask?.let(state.outcomes::get)), now, zone)
+    val badges = listOfNotNull(
+        (SchedulesTexts.AWAITING to OrbBadgeKind.Warn).takeIf { needsApproval },
+        (SchedulesTexts.READONLY_BADGE to OrbBadgeKind.Neutral).takeIf { s.readonly },
+        (SchedulesTexts.PAUSED to OrbBadgeKind.Neutral).takeIf { !s.enabled && !needsApproval },
+    )
+    val hasMenu = state.canUpdate || state.canRun
+    OrbRow(
+        title = s.title,
+        // The row opens its actions on a tap or a long press; a screen reader is offered the same, named for what it does.
+        modifier = Modifier.semantics { onLongClick(SchedulesTexts.ROW_ACTIONS) { if (hasMenu) onMenu(); hasMenu } },
+        lead = { Icon(OrbIcons.CalendarClock, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground) },
+        subtitle = {
+            Column(Modifier.weight(1f)) {
+                Line(first)
+                next?.let { Line(it) }
+                last?.let { Line(it) }
             }
         },
-        confirmButton = {
-            TextButton(onClick = { onSave(title, what) }, enabled = !f.saving && title.isNotBlank() && what.isNotBlank()) { Text(SchedulesTexts.EDIT_OK) }
+        actions = if (badges.isEmpty()) null else ({ for ((text, kind) in badges) OrbBadge(text, kind = kind) }),
+        badge = {
+            if (state.canUpdate) OrbSwitch(
+                s.enabled, onToggle, label = "${SchedulesTexts.SWITCH}: ${s.title}", enabled = enabled && !needsApproval,
+            )
         },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !f.saving) { Text(SchedulesTexts.CANCEL) } },
+        onClick = if (hasMenu) onMenu else null,
+        onLongClick = if (hasMenu) onMenu else null,
     )
 }
 
 @Composable
-private fun NewDialog(f: ScheduleForm, onCreate: (NewSchedule) -> Unit, onDismiss: () -> Unit) {
-    var project by rememberSaveable { mutableStateOf<String?>(null) }
-    var title by rememberSaveable { mutableStateOf("") }
-    var what by rememberSaveable { mutableStateOf("") }
-    var every by rememberSaveable { mutableStateOf("daily") }
-    var time by rememberSaveable { mutableStateOf("09:00") }
-    var date by rememberSaveable { mutableStateOf("") }
-    var onceTime by rememberSaveable { mutableStateOf("09:00") }
-    var picking by rememberSaveable { mutableStateOf<String?>(null) }
-    var agent by rememberSaveable { mutableStateOf("any") }
-    var model by rememberSaveable { mutableStateOf<String?>(null) }
-    var hours by rememberSaveable { mutableStateOf("6") }
-    var days by rememberSaveable { mutableStateOf(listOf(1)) }
-    var readonly by rememberSaveable { mutableStateOf(false) }
-    var sameChat by rememberSaveable { mutableStateOf(false) }
-    val chosen = project ?: f.projects.firstOrNull()
-    val at = when (every) { "once" -> ScheduleWhen.dateTime(date, onceTime); "every_hours", "hourly" -> "00:00"; else -> time }
-    val agentOption = f.agents.firstOrNull { it.id == agent }
-    val ready = !f.saving && chosen != null && title.isNotBlank() && what.isNotBlank() && at.isNotEmpty()
-
-    when (picking) {
-        "time" -> ScheduleTimeDialog(time, { time = it; picking = null }, { picking = null })
-        "once-time" -> ScheduleTimeDialog(onceTime, { onceTime = it; picking = null }, { picking = null })
-        "date" -> ScheduleDateDialog(date, { date = it; picking = null }, { picking = null })
-    }
-    AlertDialog(
-        onDismissRequest = { if (!f.saving) onDismiss() },
-        title = { Text(SchedulesTexts.NEW_TITLE) },
-        text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(SchedulesTexts.NEW_DESC, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text2)
-                if (f.projects.isEmpty()) Text(SchedulesTexts.NO_PROJECT, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.warn)
-                Label(SchedulesTexts.FIELD_PROJECT)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (p in f.projects) FilterChip(selected = chosen == p, onClick = { project = p }, label = { Text(p) })
-                }
-                OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text(SchedulesTexts.FIELD_TITLE) }, placeholder = { Text(SchedulesTexts.FIELD_TITLE_PH) })
-                OutlinedTextField(
-                    what, { what = it }, Modifier.fillMaxWidth(), minLines = 3, maxLines = 6,
-                    label = { Text(SchedulesTexts.FIELD_WHAT) }, supportingText = { Text(SchedulesTexts.FIELD_WHAT_HINT) },
-                )
-                Label(SchedulesTexts.FIELD_FREQUENCY)
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for (e in ScheduleEvery) FilterChip(selected = every == e, onClick = { every = e }, label = { Text(SchedulesTexts.everyLabel(e)) })
-                }
-                when (every) {
-                    "once" -> {
-                        PickRow(SchedulesTexts.FIELD_DATE, date.ifEmpty { SchedulesTexts.PICK_PLACEHOLDER }, "pick-date") { picking = "date" }
-                        PickRow(SchedulesTexts.FIELD_TIME, onceTime, "pick-time") { picking = "once-time" }
-                        Text(SchedulesTexts.PC_TIME_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3)
-                    }
-                    "every_hours" -> OutlinedTextField(
-                        hours, { hours = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), singleLine = true,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), label = { Text(SchedulesTexts.FIELD_HOURS) },
-                    )
-                    "daily", "weekly" -> {
-                        PickRow(SchedulesTexts.FIELD_TIME, time, "pick-time") { picking = "time" }
-                        Text(SchedulesTexts.PC_TIME_NOTE, style = MaterialTheme.typography.bodySmall, color = OrbTheme.colors.text3)
-                    }
-                }
-                if (every == "weekly") {
-                    Label(SchedulesTexts.FIELD_DAYS)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        SchedulesTexts.DAYS.forEachIndexed { d, name ->
-                            FilterChip(selected = d in days, onClick = { days = if (d in days) days - d else days + d }, label = { Text(name) })
-                        }
-                    }
-                }
-                if (f.agents.isNotEmpty()) {
-                    Label(SchedulesTexts.FIELD_AGENT)
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = agent == "any", onClick = { agent = "any"; model = null }, label = { Text(SchedulesTexts.ANY_AGENT) })
-                        for (a in f.agents) FilterChip(selected = agent == a.id, onClick = { agent = a.id; model = null }, label = { Text(a.label) })
-                    }
-                    val models = agentOption?.models.orEmpty().filter { it.id.isNotEmpty() }
-                    if (models.isNotEmpty()) {
-                        Label(SchedulesTexts.FIELD_MODEL)
-                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(selected = model == null, onClick = { model = null }, label = { Text(SchedulesTexts.DEFAULT_MODEL) })
-                            for (m in models) FilterChip(selected = model == m.id, onClick = { model = m.id }, label = { Text(m.label) })
-                        }
-                    }
-                }
-                CheckRow(SchedulesTexts.FIELD_READONLY, readonly) { readonly = it }
-                CheckRow(SchedulesTexts.FIELD_SAME_CHAT, sameChat) { sameChat = it }
-                f.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    onCreate(
-                        NewSchedule(
-                            project = chosen.orEmpty(), title = title, description = what, every = every, atTime = at,
-                            weekdays = if (every == "weekly") days.sorted().ifEmpty { listOf(1) } else emptyList(),
-                            hours = (hours.toIntOrNull() ?: 6).coerceIn(1, 168), readonly = readonly, sameChat = sameChat,
-                            agent = agent, model = model.takeIf { agent != "any" },
-                        ),
-                    )
-                },
-                enabled = ready,
-            ) { Text(SchedulesTexts.NEW_OK) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss, enabled = !f.saving) { Text(SchedulesTexts.CANCEL) } },
-    )
-}
-
-@Composable
-private fun PickRow(label: String, value: String, tag: String, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-        OutlinedButton(onClick = onClick, modifier = Modifier.testTag(tag)) { Text(value) }
-    }
-}
-
-@Composable
-private fun Label(text: String) = Text(text, style = MaterialTheme.typography.labelMedium, color = OrbTheme.colors.text2)
-
-@Composable
-private fun CheckRow(text: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked, onChange)
-        Text(text, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-    }
+private fun Line(text: String) {
+    Text(text, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }

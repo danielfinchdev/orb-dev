@@ -55,6 +55,11 @@ test('git: estado, cambios (sin secretos) e historial', async () => {
   assert.equal(byPath['src/app.js'].state, 'cambiado');
   assert.equal(byPath['nuevo.txt'].state, 'nuevo');
   assert.equal(byPath['.env'].secret, true);
+  // numbers of lines added and removed for the tracked files; none for a secret one
+  assert.equal(typeof byPath['src/app.js'].add, 'number');
+  assert.equal(typeof byPath['src/app.js'].del, 'number');
+  assert.equal(byPath['.env'].add, undefined);
+  assert.equal(st.upstream, null, 'no upstream in a repo without a remote');
   const all = (await gitDiff(proj)).diff;
   assert.match(all, /\+console\.log\(2\);/);
   assert.match(all, /\+hola/, 'los archivos nuevos se ven enteros');

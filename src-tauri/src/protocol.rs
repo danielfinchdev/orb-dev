@@ -85,8 +85,8 @@ pub fn translate(texts: &HashMap<String, String>, key: &str, vars: &[(&str, Stri
 }
 
 // Size of the interface on this PC (Ajustes → Interfaz, Ctrl + / Ctrl - / Ctrl 0, Ctrl + wheel), kept in interfaz.json.
-// 1 = «Normal», a bit bigger than WebView2's 100% (the same numbers as Orb 3.8.0).
-pub const ZOOM_BASE: f64 = 1.15;
+// 1 = «Normal» = WebView2's real 100 %; the saved zoom is relative to it.
+pub const ZOOM_BASE: f64 = 1.0;
 const ZOOM_MIN: f64 = 0.6;
 const ZOOM_MAX: f64 = 1.8;
 const ZOOM_STEP: f64 = 0.1;
@@ -176,7 +176,7 @@ pub enum HostRequest {
   OpenPath(PathBuf),
   Screenshot(PathBuf),
   OpenTerminal { dir: PathBuf, choice: String },
-  OpenEditor { which: String, dir: PathBuf },
+  OpenEditor { which: String, dir: PathBuf, file: Option<PathBuf>, line: Option<u32> },
   RunAction { command: String, dir: PathBuf, choice: String },
 }
 
@@ -224,6 +224,26 @@ fn screenshot_path(p: &str, is_dir: &impl Fn(&Path) -> bool) -> Result<PathBuf, 
   Ok(path)
 }
 
+/// A file inside `dir`, given relative to it: plain components only, no drive, stream, root, `.`/`..`, or a name Windows
+/// would trim (trailing space or dot). Joined component by component, so `/` and `\` both separate.
+fn relative_file(dir: &Path, s: &str) -> Option<PathBuf> {
+  if s.is_empty() || s.chars().count() > 1024 || s.chars().any(|c| c.is_control() || c == ':') || s.starts_with(['/', '\\']) {
+    return None;
+  }
+  let mut out = dir.to_path_buf();
+  for part in s.split(['/', '\\']) {
+    if part.is_empty() || part == "." || part == ".." || part.ends_with([' ', '.']) {
+      return None;
+    }
+    // Orb's and git's own folders are never opened from a task's view (second barrier after the engine's check).
+    if [".git", ".orb", ".orb-adjuntos"].iter().any(|r| part.eq_ignore_ascii_case(r)) {
+      return None;
+    }
+    out.push(part);
+  }
+  Some(out)
+}
+
 /// A web page over https, a page of this PC (a project's preview) or Warp's link to open a tab in a folder; existing
 /// folders of this PC only, never a file to run; a terminal, an editor or an action by kind; the secret (64 hex characters
 /// to seal, a base64 blob of at most 16 KB to open). The same rules as src/engine/host/host.mjs › checkHostRequest.
@@ -255,7 +275,21 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
       if !matches!(which.as_str(), "cursor" | "vscode" | "windsurf" | "zed" | "jetbrains") {
         return Err("editor no válido".into());
       }
-      Ok(HostRequest::OpenEditor { which, dir: folder("dir", "carpeta no válida")? })
+      let dir = folder("dir", "carpeta no válida")?;
+      let file = match params.get("file") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) if s.is_empty() => None,
+        Some(Value::String(s)) => Some(relative_file(&dir, s).ok_or("archivo no válido")?),
+        Some(_) => return Err("archivo no válido".into()),
+      };
+      let line = match params.get("line") {
+        Some(v) if file.is_some() && !v.is_null() => match v.as_u64() {
+          Some(n) if (1..=10_000_000).contains(&n) => Some(n as u32),
+          _ => return Err("línea no válida".into()),
+        },
+        _ => None,
+      };
+      Ok(HostRequest::OpenEditor { which, dir, file, line })
     }
     "host.runAction" => {
       let command = text("command");
@@ -384,7 +418,20 @@ mod tests {
       Ok(HostRequest::OpenTerminal { dir: dir.clone(), choice: "cmd".into() })
     );
     assert_eq!(ok("host.openTerminal", json!({"dir": dir, "choice": "otra"})), Ok(HostRequest::OpenTerminal { dir: dir.clone(), choice: "auto".into() }));
-    assert_eq!(ok("host.openEditor", json!({"which": "vscode", "dir": dir})), Ok(HostRequest::OpenEditor { which: "vscode".into(), dir: dir.clone() }));
+    assert_eq!(ok("host.openEditor", json!({"which": "vscode", "dir": dir})), Ok(HostRequest::OpenEditor { which: "vscode".into(), dir: dir.clone(), file: None, line: None }));
+    // A file inside the folder, at a line; anything that could leave it or be reread by Windows is an error.
+    assert_eq!(
+      ok("host.openEditor", json!({"which": "vscode", "dir": dir, "file": "src/a b/c.rs", "line": 12})),
+      Ok(HostRequest::OpenEditor { which: "vscode".into(), dir: dir.clone(), file: Some(dir.join("src").join("a b").join("c.rs")), line: Some(12) })
+    );
+    assert_eq!(ok("host.openEditor", json!({"which": "vscode", "dir": dir, "line": 5})), Ok(HostRequest::OpenEditor { which: "vscode".into(), dir: dir.clone(), file: None, line: None }));
+    let long = "a".repeat(2000);
+    for f in [json!("../x"), json!("a/../../x"), json!("C:\\x"), json!("/x"), json!("\\\\srv\\x"), json!("a.txt:stream"), json!("a\u{0}b"), json!("con. "), json!(long), json!(7), json!("a//b"), json!("./a"), json!(".git/config"), json!("src/.GIT/config"), json!(".orb/x"), json!("a\\.Orb\\x"), json!(".orb-adjuntos/a.png"), json!(".ORB-ADJUNTOS")] {
+      assert!(ok("host.openEditor", json!({"which": "vscode", "dir": dir, "file": f.clone()})).is_err(), "{f}");
+    }
+    for l in [json!(0), json!(-1), json!("3"), json!(1e9), json!(10_000_001), json!(1.5)] {
+      assert!(ok("host.openEditor", json!({"which": "vscode", "dir": dir, "file": "a.rs", "line": l.clone()})).is_err(), "{l}");
+    }
     assert!(ok("host.openEditor", json!({"which": "notepad", "dir": dir})).is_err());
     assert_eq!(
       ok("host.runAction", json!({"command": "npm run dev", "dir": dir, "choice": "wt"})),

@@ -11,10 +11,17 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 
-fun schedule(id: Long, title: String = "Revisar dependencias", enabled: Boolean = true, approved: Boolean = true, readonly: Boolean = false) = ScheduleItem(
-    id = id, project = "app-movil", title = title, description = "Mira las dependencias", agent = "any", readonly = readonly,
-    every = "weekly", atTime = "09:00", weekdays = listOf(1), enabled = enabled, approved = approved,
-    nextRun = "2026-11-16T08:00:00.000Z", lastRun = null, lastTask = null, sameChat = false, whenText = "Cada lunes a las 09:00",
+fun schedule(
+    id: Long, title: String = "Revisar dependencias", enabled: Boolean = true, approved: Boolean = true, readonly: Boolean = false,
+    every: String = "weekly", atTime: String = "09:00", weekdays: List<Int> = listOf(1), whenText: String = "Cada lunes a las 09:00",
+    nextRun: String? = "2026-11-16T08:00:00.000Z", lastRun: String? = null, lastTask: Long? = null, tz: String? = null, monthDay: Int? = null,
+    project: String = "app-movil", agent: String = "any", model: String? = null, autonomy: String? = null, notifyMobile: Boolean? = null,
+    sameChat: Boolean = false,
+) = ScheduleItem(
+    id = id, project = project, title = title, description = "Mira las dependencias", agent = agent, readonly = readonly,
+    every = every, atTime = atTime, weekdays = weekdays, enabled = enabled, approved = approved,
+    nextRun = nextRun, lastRun = lastRun, lastTask = lastTask, sameChat = sameChat, whenText = whenText,
+    tz = tz, monthDay = monthDay, model = model, autonomy = autonomy, notifyMobile = notifyMobile,
 )
 
 class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : SchedulesBackend {
@@ -29,6 +36,9 @@ class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : Schedule
     var unavailable: Set<String> = emptySet()
     var actionResult: Result<Unit> = Result.success(Unit)
     val calls = ArrayList<String>()
+    val patches = ArrayList<SchedulePatch>()
+    val created = ArrayList<NewSchedule>()
+    var outcomeMap: Result<Map<Long, String>> = Result.success(emptyMap())
 
     override fun available(m: ApiMethod) = m.name !in unavailable
     val savedItems = MutableStateFlow<List<ScheduleItem>?>(null)
@@ -46,13 +56,17 @@ class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : Schedule
 
     override suspend fun create(s: NewSchedule): Result<Unit> {
         calls += "create ${s.project}|${s.title}|${s.every}|${s.atTime}|${s.weekdays}|${s.hours}|${s.readonly}|${s.agent}|${s.model}"
+        created += s
         return actionResult
     }
 
-    override suspend fun update(id: Long, enabled: Boolean?, approve: Boolean, title: String?, description: String?): Result<Unit> {
-        calls += "update $id enabled=$enabled approve=$approve title=$title description=$description"
+    override suspend fun update(id: Long, patch: SchedulePatch): Result<Unit> {
+        calls += "update $id enabled=${patch.enabled} approve=${patch.approve} title=${patch.title} description=${patch.description}"
+        patches += patch
         return actionResult
     }
+
+    override suspend fun outcomes() = outcomeMap
 
     override suspend fun run(id: Long): Result<Unit> { calls += "run $id"; return actionResult }
 }

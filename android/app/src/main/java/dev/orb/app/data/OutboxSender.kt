@@ -4,6 +4,7 @@ import dev.orb.app.link.api.OrbApi
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
+import dev.orb.app.link.net.pcMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -110,7 +111,7 @@ class OutboxSender(
 
     /** Never the message text: only what kind of failure it was and what the PC said about it. */
     private fun describe(error: LinkError?): String = when (error) {
-        is LinkError.Refused -> "refused ${error.status}: ${error.reason ?: error.error}"
+        is LinkError.Refused -> "refused ${error.status}: ${error.reason ?: pcMessage(error.error, "")}"
         LinkError.NotLinked -> "not linked"
         LinkError.BadAnswer -> "bad answer"
         is LinkError.Unsupported -> "unsupported ${error.method}"

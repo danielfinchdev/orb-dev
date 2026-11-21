@@ -48,10 +48,28 @@ export function notify(n, { toast: asToast = true, ms, always = false, record = 
   toast.dismiss();
   setState({ popup: entry.id });
   if (asToast) {
-    const show = toast[tone] ?? toast.info;
-    show(n.title ?? body, { id: entry.id, duration, description: n.title ? body : undefined, action: n.action, onDismiss: () => popupClosed(entry.id) });
+    const pop = () => {
+      current = { id: entry.id, level, until: Date.now() + duration };
+      const show = toast[tone] ?? toast.info;
+      show(n.title ?? body, { id: entry.id, duration, description: n.title ? body : undefined, action: n.action, onDismiss: () => popupClosed(entry.id) });
+    };
+    // one line fits in the window's corner under any dialog; a taller one would cover the dialog's controls
+    const tall = Boolean(n.title) || Boolean(n.action) || body.length > 60;
+    // (held back, nothing is on screen: it must not keep later notices away)
+    if (held && tall) { waiting = { pop, at: now, duration }; current = { ...current, until: 0 }; } else { waiting = null; pop(); }
   }
   return { show: true, id: entry.id };
+}
+
+// A dialog that leaves no room around it holds the tall notices back (main.jsx › useToastInsets says when): they are in the
+// bell meanwhile, and the latest one shows when the dialog closes (unless a newer notice has shown since).
+let held = false;
+let waiting = null;
+export function holdNotices(on) {
+  if (held === on) return;
+  held = on;
+  // one that waited longer than it would have stayed on screen is old news: it stays in the bell only
+  if (!on && waiting) { const w = waiting; waiting = null; if (Date.now() - w.at <= w.duration * 4) w.pop(); }
 }
 
 // The popup closed before its time (its X, or the user went where it pointed): the next one may show.

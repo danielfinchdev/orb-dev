@@ -45,8 +45,8 @@ test('mermaid strict, libraries loaded lazily, no eval, also in the CSP', () => 
   assert.match(csp, /script-src 'self';/); assert.doesNotMatch(csp, /unsafe-eval|wasm-unsafe-eval/);
 });
 
-// 3.8.3: the music (src/ui/lib/music.js) and the audio/video viewer play from blob: URLs. Without media-src the CSP fell
-// back to default-src 'self', play() failed and the music never sounded. Only blob: is added, in both CSPs, nothing else.
+// The audio/video viewer plays attachments from blob: URLs. Without media-src the CSP falls back to
+// default-src 'self' and play() fails. Only blob: is added, in both CSPs, nothing else.
 test('media plays from blob: URLs only, in the app CSP and the page meta', () => {
   const app = JSON.parse(fs.readFileSync(path.join(ROOT, 'src-tauri/tauri.conf.json'), 'utf8')).app.security.csp;
   const meta = /Content-Security-Policy" content="([^"]+)"/.exec(fs.readFileSync(path.join(ROOT, 'src/ui/index.html'), 'utf8'))[1];
@@ -55,8 +55,9 @@ test('media plays from blob: URLs only, in the app CSP and the page meta', () =>
     assert.deepEqual(media, ['media-src blob:'], csp);
     assert.match(csp, /default-src 'self';/);
   }
-  const music = fs.readFileSync(path.join(ROOT, 'src/ui/lib/music.js'), 'utf8');
-  assert.match(music, /URL\.createObjectURL/, 'the music is a blob: URL');
+  const viewer = fs.readFileSync(path.join(ROOT, 'src/ui/components/file-viewer.jsx'), 'utf8');
+  assert.match(viewer, /URL\.createObjectURL/, 'attached media is a blob: URL');
+  assert.match(viewer, /<audio src=\{state\.media\.url\}/); assert.match(viewer, /<video src=\{state\.media\.url\}/);
 });
 
 let t; let board; let api; let sessions;

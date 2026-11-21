@@ -173,3 +173,50 @@ the wire, a passive observer unable to check a guess, a wrong password failing a
 the global wait, an app of 3.7, a fake PC with the code; change, forgot with the recovery code (new data key), start
 from scratch; phones of before 3.8 unlinked once; the guard with environment variables), `test/remote.test.mjs`,
 `test/android.test.mjs`, `test/seguridad-351.test.mjs` and `test/copias.test.mjs`.
+
+## What 3.8.8 changes on the lock screen and the keys
+
+- **The lock says when and why.** `master.lock` takes a `reason` (`idle`, `hand`, `windows`, `sleep`; `LOCK_REASONS` in
+  `src/engine/api/master.mjs`) and, when it turns the screen lock on, keeps the time and the cause in the engine's memory
+  (`lockedAt`, `lockReason`). `master.state` returns them only while the screen is locked and only to this PC's window. The
+  first lock keeps its time and cause: a second one (Windows locks while Orb already shows the lock screen) does not
+  rewrite them. Who sends the reason: the window for `idle` (`watchIdle` in `src/ui/lib/idle-lock.js`, called from `main.jsx`) and «Bloquear ahora» (`hand`), and
+  the app for Windows' lock and sleep (`src-tauri/src/power.rs › lock_master`: `windows` or `sleep`). The card
+  (`MasterLocked` in `src/ui/views/master.jsx`) turns the cause into its sentence («Locked at 10:32 after being idle»).
+- **The real wait.** When a wrong password still has free tries, the vault says how long the wait will be once they are gone:
+  `nextWait` (seconds) in its answer (`src-tauri/vault/src/vault.rs`, `Tried::Wrong`; `src/engine/api/master.mjs` passes it
+  on, and it is absent from an older vault). The window says that number instead of a generic text; once the wait has
+  begun the answer carries `until`.
+- **The app is not mounted under the lock.** The lock screen is drawn instead of the app (`phase === 'unlock'` in
+  `src/ui/main.jsx`): behind the veil there is `LockBackdrop`, a drawing of the app's outline made of empty shapes, `inert`
+  and `aria-hidden`, with no text and no data, never a copy of what was on screen. The shown password hides again on blur,
+  on submit, on a new lock, after 30 seconds (`REVEAL_MS`) and when a dialog opens over the card.
+- **The recovery code from the lock screen.** The card can switch to the backups' recovery code. It goes through the same
+  path as «He olvidado la contraseña» (`master.forgot`): the secrets stay (a new data key), the user sets a new password
+  and every linked phone and browser is unlinked; the card says so before it is used.
+- **The recovery code when the password is made.** `MasterCreate` asks for the code right after `master.create`: it calls
+  `backup.recovery` with the unlock that `master.create` returned (`src/ui/views/master.jsx`), shows the code once, and
+  keeps an existing one as it is (`backup.status › recovery`). If it could not be made, the card says so and offers to
+  retry, so the warning about forgetting the password is true from the first day.
+- **«Empezar con una clave nueva» from Settings › Data.** Before, only the start-up screen offered it, when Windows could not
+  open the key. Now `backup.newKey` (`src/engine/api/data.mjs`, this PC's window only) can be asked for with the key opening
+  fine. It always asks for the master password (`FRESH_UNLOCK`: a token for this action alone, action `newKey` in
+  `src/ui/lib/core-access.js`) and changes nothing now: it writes a one-use signal file, `clave-nueva.json`, in
+  `core\datos`, and the window asks to restart Orb. `backup.cancelKey` removes whichever signal is waiting
+  (`clave-nueva.json` or `clave-volver.json`, the way back) and needs no password because removing a signal changes no
+  key. `backup.status` reports it as `pendingKey` (`'nueva'` or `'volver'`) and `previousKey` says which key a way back
+  leads to.
+- **What the vault does at the next start** (`src-tauri/vault/src/machine.rs › new_key`): the signal is acted on only when
+  this start has a key that opens, no start-up «clave nueva» came first and no way back is waiting (with both signals the
+  way back is served, since the user's last wish is not known). The key in use is never deleted: the new key is sealed
+  and checked first, then both files (`clave2.enc` and its copy outside the workspace) are copied aside
+  (`*.anterior.enc`), then the record `clave-anterior.json` is written, then the files are replaced, then the signal goes.
+  The record lists every key set aside so far (the newest first), so the way back still works after several changes. A cut
+  at any point loses no key and does not repeat the change: before the replacement the same key and the signal remain and the
+  next start repeats it; after it, the record carries the signal's time and the SHA-256 of the file installed (a fingerprint
+  of the file, not of the key), so the next start sees the change is done, says so and removes the signal. A step that fails
+  restores the previous record, removes the signal and keeps the key in use.
+- **Notices.** The engine turns the vault's warnings into notices (`KEY_NOTICES` in `src/engine/engine.mjs`):
+  `newKeyDone` («Orb has started with a new key. The old one is kept…») and `newKeyFailed` join the existing
+  `previousOpens`, `previousBack`, `previousNew` and `previousFailed`. A recovery code made with the key that is no longer
+  in use stops opening backups (`switchedKey`); a notice (`sys.engine.recoveryOtherKey`) says so.

@@ -30,7 +30,8 @@ const HIDE_AFTER_MS = 20_000; // after a turn ends the little window keeps its l
 const sessionOf = (tab) => String(tab?.key ?? '').split(':').pop();
 
 // call: hostCall (the tests pass their own). pipEnabled(), label(agent), language(), skin(): from the settings.
-export function createHostBrowser({ call = hostCall, language = () => 'es', skin = () => 'orb', label = (a) => a, pipEnabled = () => true, log = () => {}, idleMs, onPointed = () => {}, saveRecording = async () => null, now = () => Date.now() } = {}) {
+// project(session): the project of the conversation a page belongs to (null when it has none), only for the little window.
+export function createHostBrowser({ call = hostCall, language = () => 'es', skin = () => 'orb', label = (a) => a, project = () => null, pipEnabled = () => true, log = () => {}, idleMs, onPointed = () => {}, saveRecording = async () => null, now = () => Date.now() } = {}) {
   const pages = new Map(); // page id -> listeners (method -> Set)
   const windows = {
     async open() {
@@ -55,7 +56,7 @@ export function createHostBrowser({ call = hostCall, language = () => 'es', skin
   let recording = null; // { tab, frames: [{ at, data }], bytes, started, timer }
   const state = () => {
     const t = pipTab;
-    return { mode, agent: t ? label(t.agent) : null, task: t?.task || null, url: t?.url ?? '', title: t?.title ?? '', loading: Boolean(t?.loading), tabs: browser.tabs().length, action: t?.action ?? '', language: language(), skin: skin(), recording: Boolean(recording && recording.tab === t) };
+    return { mode, agent: t ? label(t.agent) : null, task: t?.task || null, project: t ? project(sessionOf(t)) || null : null, url: t?.url ?? '', title: t?.title ?? '', loading: Boolean(t?.loading), tabs: browser.tabs().length, action: t?.action ?? '', language: language(), skin: skin(), recording: Boolean(recording && recording.tab === t) };
   };
   const sendState = () => { call('host.pip.state', { state: state() }).catch(() => {}); };
   // Pictures only of the page on show, only while the little window shows it.

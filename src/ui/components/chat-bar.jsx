@@ -1,24 +1,31 @@
-// the bar of a conversation (views/chat.jsx): (phone: the back arrow) the header pill, which opens the
-// chat's info, and its buttons on the right.
+// the bar of a conversation (views/chat.jsx): its title block, which opens the chat's info, and its buttons on the right.
 import { ChevronLeft } from 'lucide-react';
 import { Button } from './ui/button.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
-import { BandArt } from './page.jsx';
+import { AppBar } from './page.jsx';
+import { BarClock } from './bar-clock.jsx';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
-import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
-export function ChatBar({ back, title, children, testid = 'chat-bar', className }) {
+// The header of a conversation: the common one (clock · title block · actions) on the PC; on the phone the back arrow,
+// the title and the buttons in a row.
+// `inner`: the conversation lives inside another screen, which already has the clock and the window's buttons.
+export function ChatBar({ back, title, children, testid = 'chat-bar', className, inner = false }) {
   const phone = phoneLayout();
   const folded = useStore((s) => s.sidebarCollapsed);
+  if (!phone) {
+    return (
+      <AppBar inner={inner} className={cn('chat-bar', className)} data-testid={testid} lead={inner ? null : <>{back}{folded ? <SidebarToggle collapsed className="-ml-1" /> : null}</>} left={inner ? null : <BarClock />} center={title}>
+        {children}
+      </AppBar>
+    );
+  }
   return (
-    <header className={cn('relative topbar chat-bar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 items-center gap-2 border-b px-3 py-1.5 backdrop-blur sm:px-4', className)} data-testid={testid}>
-      {back}{folded && !phone ? <SidebarToggle collapsed className="-ml-1" /> : null}
+    <header className={cn('relative topbar chat-bar theme-band app-titlebar bg-background/80 flex min-h-14 shrink-0 items-center gap-2 border-b px-3 py-1.5 backdrop-blur sm:px-4', className)} data-testid={testid}>
+      {back}
       <div className="no-drag flex min-w-0 flex-1 items-center">{title}</div>
       <div className="no-drag flex shrink-0 items-center gap-1">{children}</div>
-      <BandArt />
-      <WindowControlsSlot />
     </header>
   );
 }

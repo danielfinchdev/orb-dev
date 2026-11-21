@@ -183,6 +183,7 @@ pub async fn check(app: &AppHandle) -> State {
     Ok(Some(update)) => {
       let version = update.version.clone();
       *app.state::<Updates>().found.lock().unwrap() = Some(update);
+      announce_to_phones(app, &version);
       set(app, |s| {
         s.state = "available";
         s.version = Some(version);
@@ -255,6 +256,17 @@ pub async fn download(app: &AppHandle) -> State {
   }
 }
 
+/// Tells the linked phones a new Orb is there; apart from the check, so a slow or absent engine never delays it.
+fn announce_to_phones(app: &AppHandle, version: &str) {
+  let app = app.clone();
+  let version = version.to_string();
+  tauri::async_runtime::spawn(async move {
+    let engine = crate::engine::get(&app);
+    if let Err(e) = engine.call("app.updateFound", json!({ "version": version }), Duration::from_secs(10)).await {
+      engine.log_line(&format!("actualizar: no se pudo avisar a los móviles de la {version}: {}", short(e)));
+    }
+  });
+}
 /// Starts the backup before installing `version` unless it was already started for it (under way, made or failed: a
 /// failed one is not tried again, the update never waits twice).
 fn start_backup(app: &AppHandle, version: &str) {

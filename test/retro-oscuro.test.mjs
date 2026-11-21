@@ -19,21 +19,22 @@ test('darkOnlySkin: only retro is dark only', () => {
 
 test('applyTheme forces .dark for a dark-only theme and keeps the saved choice', () => {
   const store = read('src', 'ui', 'lib', 'store.js');
-  assert.match(store, /const dark = darkOnlySkin\(currentSkin\) \|\| theme === 'oscuro'/);
+  assert.match(store, /const dark = darkOnlySkin\(currentSkin\) \|\| \(!lightOnlySkin\(currentSkin\) && \(theme === 'oscuro'/);
   assert.match(store, /currentSkin = skin;/);
   // applyAppearance re-evaluates the mode, so changing theme neither leaves Retro light nor Orb stuck dark
-  assert.match(store, /root\.motion = [^\n]*\n[\s\S]*?\n\s*applyTheme\(\);/);
+  assert.match(store, /put\('motion',[^\n]*\n\s*applyTheme\(\);/);
   // the system-theme listener goes through the same function, with no argument
   assert.match(store, /media\.addEventListener\('change', \(\) => applyTheme\(\)\)/);
 });
 
 test('the day / night controls explain why they are disabled', () => {
-  for (const f of ['theme-toggle.jsx', 'mobile-menu.jsx']) {
-    const src = read('src', 'ui', 'components', f);
-    assert.match(src, /useDarkOnly\(\)/, f);
-    assert.match(src, /comp\.theme\.darkOnly/, f);
-  }
-  assert.match(read('src', 'ui', 'components', 'theme-toggle.jsx'), /aria-disabled/);
+  const menu = read('src', 'ui', 'components', 'mobile-menu.jsx');
+  assert.match(menu, /useDarkOnly\(\)/);
+  assert.match(menu, /comp\.theme\.darkOnly/);
+  // the sidebar's button is not drawn at all in a one-mode theme
+  const toggle = read('src', 'ui', 'components', 'theme-toggle.jsx');
+  assert.match(toggle, /useDarkOnly\(\)/);
+  assert.match(toggle, /if \(darkOnly \|\| lightOnly\) return null;/);
   assert.match(read('src', 'ui', 'views', 'settings', 'general.jsx'), /darkOnly/);
   assert.ok(es['comp.theme.darkOnly'] && en['comp.theme.darkOnly']);
 });
@@ -44,9 +45,9 @@ test('the tour and the animation meter skip Retro by day', () => {
 });
 
 // ---- Contrast (WCAG AA). oklch → sRGB with the chroma reduced until it fits the gamut, as CSS does for colours the screen cannot show. ----
-const skins = read('src', 'ui', 'themes', 'skins.css');
-const block = (() => { const i = skins.indexOf('html[data-skin="retro"] {'); return skins.slice(i, skins.indexOf('\n}', i)); })();
-const tok = Object.fromEntries([...block.matchAll(/--([a-z0-9-]+): (oklch\([^)]+\))/g)].map((m) => [m[1], m[2]]));
+// Retro always wears .dark: the browser sees the dark base tokens with the Retro block over them.
+const declsOf = (css, selector) => { const i = css.indexOf(selector); const body = css.slice(css.indexOf('{', i) + 1, css.indexOf('}', i)); return [...body.matchAll(/--([a-z0-9-]+)\s*:\s*(oklch\([^)]*\))/g)].map((m) => [m[1], m[2]]); };
+const tok = Object.fromEntries([...declsOf(read('src', 'ui', 'tokens.css'), '.dark {'), ...declsOf(read('src', 'ui', 'themes', 'skins.css'), 'html[data-skin="retro"]{')]);
 function toRgb(L, C, H) {
   const lin = (c) => { const h = (H * Math.PI) / 180, a = c * Math.cos(h), b = c * Math.sin(h);
     const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3, m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3, s = (L - 0.0894841775 * a - 1.291485548 * b) ** 3;
@@ -80,37 +81,23 @@ test('Retro: field borders, the focus ring and the empty chart bars are visible'
 });
 
 test('Retro: the chat text reads over the brightest piece of the backdrop', () => {
-  // a column of invaders (opacity 0.15 of the phosphor) under the 24 % veil of the page colour
+  // the phosphor at its brightest under the part of the page colour that the veil lets through
   const brightest = mix(C('background'), mix(C('primary'), C('background'), 0.22), 0.24);
   assert.ok(ratio(C('foreground'), brightest) >= 4.5, ratio(C('foreground'), brightest).toFixed(2));
   assert.ok(ratio(C('muted-foreground'), brightest) >= 4.5, ratio(C('muted-foreground'), brightest).toFixed(2));
-  const scene = read('src', 'ui', 'themes', 'scene-retro.css');
-  assert.match(scene, /--frost-tint: 24%/);
-  for (const [, o] of scene.matchAll(/\.rt-(?:column|crab|rocket)[^{]*\{[^}]*?opacity: ([\d.]+)/g)) assert.ok(+o <= 0.22, `invader opacity ${o}`);
 });
 
 test('Retro tokens are on html[data-skin] alone: .dark changes nothing, and no light variant remains', () => {
-  const all = ['skins', 'scene', 'scene-retro', 'scene-nube'].map((n) => read('src', 'ui', 'themes', `${n}.css`)).join('') + read('src', 'ui', 'app.css');
+  const all = ['skins'].map((n) => read('src', 'ui', 'themes', `${n}.css`)).join('') + read('src', 'ui', 'app.css');
   assert.doesNotMatch(all, /html:not\(\.dark\)[^{]*\[data-skin="retro"\]|html\[data-skin="retro"\]:not\(\.dark\)/);
   assert.doesNotMatch(all, /html\.dark\[data-skin="retro"\] \{\s*--/);
   assert.doesNotMatch(read('src', 'ui', 'tokens.css'), /html\[data-skin\]:not\(/, 'every theme has its own soft / faint tokens now');
 });
 
-test('Retro keeps R11: no backdrop-filter, no filter on moving layers, nothing but transform / opacity animated', () => {
-  const scene = read('src', 'ui', 'themes', 'scene-retro.css');
-  assert.doesNotMatch(scene, /backdrop-filter: (?!none)/);
-  assert.doesNotMatch(scene.replace(/\.orb-img \{[^}]*\}/, ''), /[^-]filter:/);
-  const frames = [...scene.matchAll(/@keyframes (rt-[\w-]+) \{([\s\S]*?\})\s*\}/g)];
-  assert.ok(frames.length > 0, 'Retro defines rt-* keyframes');
-  for (const [, name, body] of frames) {
-    const props = [...body.matchAll(/([a-z-]+)\s*:/g)].map((m) => m[1]);
-    assert.ok(props.every((x) => x === 'transform' || x === 'opacity'), `${name} animates only transform / opacity: ${props}`);
-  }
-  assert.match(scene, /html\[data-skin="retro"\] \[data-slot="composer"\] \{[^}]*backdrop-filter: none/);
-});
-
-test('Retro buttons are written between brackets without changing the accessible text', () => {
-  const scene = read('src', 'ui', 'themes', 'scene-retro.css');
-  assert.match(scene, /content: "\[" \/ ""/);
-  assert.match(scene, /content: "\]" \/ ""/);
+test('Retro: the CRT glass takes no clicks and the phosphor is a text-shadow, not a filter', () => {
+  const skins = read('src', 'ui', 'themes', 'skins.css');
+  assert.match(skins, /^\.crt \{[^}]*pointer-events: none/m);
+  assert.match(skins, /html\[data-skin="retro"\] body \{ text-shadow: 0 0 6px/);
+  assert.doesNotMatch(skins, /html\[data-skin="retro"\][^{]*\{[^}]*[^-]filter:/);
+  assert.match(read('src', 'ui', 'components', 'scene.jsx'), /skin === 'retro' \? <div className="crt"/);
 });

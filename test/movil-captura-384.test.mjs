@@ -174,6 +174,9 @@ test('Settings › Mobile › screenshot: on by default, off refuses the phone, 
   assert.equal(fs.readdirSync(t.home, { recursive: true }).filter((f) => String(f).includes('capturas-movil') && String(f).endsWith('.jpg')).length, before, 'no picture is taken while it is off');
   const on = await A.call('remote.configure', { screenshot: true });
   assert.equal(on.screenshot, true);
-  // past the switch again: the only thing in the way now is the 5 s limit of the shot taken earlier in this file
-  await assert.rejects(phone.call(a.id, 'pc.screenshot', {}), /Espera un momento/);
+  // past the switch again: it is no longer refused as off. Depending on how long the machine took since the shot
+  // taken earlier in this file, the 5 s gap has either passed or still blocks it; neither is the off refusal.
+  const again = await phone.call(a.id, 'pc.screenshot', {}).then(() => null, (e) => e);
+  // (once the gap has passed the real host runner may fail without an app, so only «desactivada» is excluded)
+  if (again) assert.doesNotMatch(again.message, /desactivada/);
 });

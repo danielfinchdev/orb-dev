@@ -7,7 +7,7 @@ import androidx.compose.ui.test.performClick
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.resetMain
@@ -34,7 +34,7 @@ class PrScreensTest {
         val b = FakeProjectsBackend()
         b.prList = Result.success(listOf(PrRow(4, "Arreglar el pie", "dev", "main", false, "ana", null, null, null)))
         var opened = 0
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { PrListScreen(PrListViewModel(b, "app"), {}, { opened = it }) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { PrListScreen(PrListViewModel(b, "app"), {}, { opened = it }) } }
         rule.waitForIdle()
         rule.onNodeWithText("#4 Arreglar el pie").performClick()
         assertEquals(4, opened)
@@ -43,7 +43,7 @@ class PrScreensTest {
     @Test fun listShowsThePcErrorWithRetry() {
         val b = FakeProjectsBackend()
         b.prList = Result.failure(LinkException(LinkError.Refused(500, "gh no está instalado", null)))
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { PrListScreen(PrListViewModel(b, "app"), {}, {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { PrListScreen(PrListViewModel(b, "app"), {}, {}) } }
         rule.waitForIdle()
         rule.onNodeWithText("gh no está instalado").assertIsDisplayed()
         rule.onNodeWithText("Reintentar").assertIsDisplayed()
@@ -52,7 +52,7 @@ class PrScreensTest {
     @Test fun detailShowsStateBranchAndChecks() {
         val b = FakeProjectsBackend()
         b.prResults[4] = Result.success(prDetail(4, checks = listOf(PrCheck("build", "COMPLETED", "SUCCESS"), PrCheck("lint", "COMPLETED", "FAILURE"))))
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { PrDetailScreen(PrDetailViewModel(b, "app", 4), {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { PrDetailScreen(PrDetailViewModel(b, "app", 4), {}) } }
         rule.waitForIdle()
         rule.onNodeWithText("Abierta").assertIsDisplayed()
         rule.onNodeWithText("dev → main").assertIsDisplayed()

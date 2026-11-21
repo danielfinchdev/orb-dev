@@ -29,15 +29,18 @@ enum class LinkKind {
 }
 
 /**
- * When the «Mantener conectado» service should run. It runs while the setting is on and a PC is linked, and it steps
- * aside once the PC has been out of sight for [graceMs] (away from home without a way to reach it), so the phone is
- * not kept busy for nothing. A change of network gives the PC a new chance.
+ * When the «Mantener conectado» service should run. It runs while the setting is on and a PC is linked. Once the PC has
+ * been out of sight for [graceMs] (away from home without a way to reach it) the link stops retrying ([Decision.Park]) so
+ * the phone is not kept busy for nothing, but the service stays: Android 12+ does not let an app in the background start a
+ * foreground service, so one stopped here could not come back when the network does. A change of network gives the PC a
+ * new chance ([Decision.Resume]).
  */
 class KeepAlivePolicy(private val clock: () -> Long, private val graceMs: Long = 10 * 60_000L) {
-    enum class Decision { Start, Stop, None }
+    enum class Decision { Start, Stop, Park, Resume, None }
 
     private var running = false
     private var parked = false
+    private var resumePending = false
     private var offlineSince: Long? = null
 
     fun evaluate(enabled: Boolean, kind: LinkKind): Decision {
@@ -45,29 +48,37 @@ class KeepAlivePolicy(private val clock: () -> Long, private val graceMs: Long =
         if (!wanted) {
             offlineSince = null
             parked = false
+            resumePending = false
             return stopIfRunning()
         }
+        if (!running) {
+            running = true
+            return Decision.Start
+        }
+        if (resumePending) {
+            resumePending = false
+            return Decision.Resume
+        }
         when (kind) {
-            LinkKind.Online -> { offlineSince = null; parked = false }
+            LinkKind.Online -> {
+                offlineSince = null
+                if (parked) { parked = false; return Decision.Resume }
+            }
             LinkKind.Offline -> {
                 val since = offlineSince ?: clock().also { offlineSince = it }
-                if (running && clock() - since >= graceMs) {
+                if (!parked && clock() - since >= graceMs) {
                     parked = true
-                    return stopIfRunning()
+                    return Decision.Park
                 }
             }
             else -> Unit
         }
-        if (!running && !parked) {
-            running = true
-            return Decision.Start
-        }
         return Decision.None
     }
 
-    /** The network changed: the PC may be reachable now, so a parked service gets a fresh window. */
+    /** The network changed: the PC may be reachable now, so a parked link gets a fresh window. */
     fun networkChanged() {
-        parked = false
+        if (parked) { parked = false; resumePending = true }
         offlineSince = null
     }
 
@@ -76,10 +87,10 @@ class KeepAlivePolicy(private val clock: () -> Long, private val graceMs: Long =
         running = false
     }
 
-    /** Milliseconds until the PC has been out of sight long enough to step aside, or null when no wait is pending. */
+    /** Milliseconds until the PC has been out of sight long enough to park the link, or null when no wait is pending. */
     fun recheckInMs(): Long? {
         val since = offlineSince ?: return null
-        if (!running) return null
+        if (!running || parked) return null
         return (since + graceMs - clock()).coerceAtLeast(1)
     }
 
@@ -109,10 +120,14 @@ class KeepAliveController(
     private val network: NetworkWatcher,
     private val launcher: ServiceLauncher,
     private val log: (String) -> Unit = {},
+    // True: the PC stayed out of sight and the link stops retrying; false: it may try again.
+    private val park: (Boolean) -> Unit = {},
+    // The network changed: a link that is not up gets another try at once instead of waiting out its pause.
+    private val onNetwork: () -> Unit = {},
 ) {
     fun start(scope: CoroutineScope): Job = scope.launch {
         val tick = MutableStateFlow(0)
-        val watch = network.watch { policy.networkChanged(); tick.update { it + 1 } }
+        val watch = network.watch { policy.networkChanged(); onNetwork(); tick.update { it + 1 } }
         try {
             combine(enabled, kind, tick) { e, k, _ -> e to k }.collectLatest { (e, k) ->
                 apply(policy.evaluate(e, k))
@@ -131,6 +146,8 @@ class KeepAliveController(
         when (d) {
             KeepAlivePolicy.Decision.Start -> if (launcher.start()) log("servicio activado") else { policy.startFailed(); log("servicio no permitido ahora") }
             KeepAlivePolicy.Decision.Stop -> { launcher.stop(); log("servicio parado") }
+            KeepAlivePolicy.Decision.Park -> { park(true); log("enlace en pausa") }
+            KeepAlivePolicy.Decision.Resume -> { park(false); log("enlace reanudado") }
             KeepAlivePolicy.Decision.None -> Unit
         }
     }

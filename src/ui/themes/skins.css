@@ -1,639 +1,140 @@
-/* Per-theme tokens and touches: Vaporwave, Retro, Profesional, Cristal and Nube. Imported in order by ../themes.css. */
-/* ================================================================================================================
-   VAPORWAVE — Órbita Vaporwave: a Windows-95 desktop in pastel by day, neon glass by night, over a
-   sunset with a striped sun and a grid ground. Space Grotesk to read, Tiny5 and Silkscreen by day and Orbitron by night for titles.
-   ================================================================================================================ */
-html[data-skin="vaporwave"] {
-  --radius: 0px;
-  --background: oklch(0.9 0.045 320);
-  --foreground: oklch(0.22 0.06 300);
-  --card: oklch(0.885 0.028 300);
-  --card-foreground: oklch(0.22 0.06 300);
-  --popover: oklch(0.885 0.028 300);
-  --popover-foreground: oklch(0.22 0.06 300);
-  --primary: oklch(0.5 0.21 345);
-  --primary-foreground: oklch(0.99 0.01 330);
-  --primary-soft: oklch(0.93 0.055 345);
-  --primary-text: oklch(0.44 0.2 345);
-  --secondary: oklch(0.86 0.032 300);
-  --secondary-foreground: oklch(0.22 0.06 300);
-  --muted: oklch(0.86 0.032 300);
-  --muted-foreground: oklch(0.35 0.07 300);
-  --faint-foreground: oklch(0.4 0.07 300);
-  --accent: oklch(0.83 0.042 300);
-  --accent-foreground: oklch(0.22 0.06 300);
-  --destructive: oklch(0.5 0.2 22);
-  --destructive-soft: oklch(0.95 0.035 22);
-  --success: oklch(0.45 0.11 170);
-  --success-soft: oklch(0.93 0.05 170);
-  --warning: oklch(0.47 0.12 55);
-  --warning-ink: oklch(0.45 0.12 55);
-  --warning-soft: oklch(0.95 0.06 85);
-  --warning-foreground: oklch(0.99 0 0);
-  --info: oklch(0.46 0.13 235);
-  --border: oklch(0.66 0.05 300);
-  --input: oklch(0.5 0.07 300);
-  --ring: oklch(0.45 0.2 300);
-  --sidebar: oklch(0.885 0.028 300);
-  /* The user's message is a pastel pink Win95 panel with dark text, not a saturated block. */
-  --bubble: oklch(0.9 0.07 345);
-  --bubble-foreground: oklch(0.22 0.06 300);
-  --chart-empty: oklch(0.72 0.06 300);
-  /* the welcome backdrop (.brand-sky): sunset, striped sun and grid */
-  --vw-sky: linear-gradient(180deg, oklch(0.9 0.07 340) 0%, oklch(0.86 0.08 305) 26%, oklch(0.84 0.08 265) 44%, oklch(0.83 0.11 350) 56%, oklch(0.87 0.1 40) 62%, oklch(0.9 0.06 330) 62%, oklch(0.93 0.04 310) 100%);
-  --vw-glow: oklch(0.8 0.15 350 / 0.4);
-  --vw-sun: linear-gradient(180deg, oklch(0.95 0.13 100) 0%, oklch(0.82 0.13 40) 55%, oklch(0.7 0.2 350) 100%);
-  --vw-line: oklch(0.62 0.2 345 / 0.5);
-}
-html.dark[data-skin="vaporwave"] {
-  --background: oklch(0.15 0.05 290);
-  --foreground: oklch(0.96 0.02 320);
-  --card: oklch(0.19 0.06 292);
-  --card-foreground: oklch(0.96 0.02 320);
-  --popover: oklch(0.2 0.06 292);
-  --popover-foreground: oklch(0.96 0.02 320);
-  --primary: oklch(0.75 0.19 350);
-  --primary-foreground: oklch(0.16 0.05 290);
-  --primary-soft: oklch(0.31 0.11 340);
-  --primary-text: oklch(0.83 0.15 350);
-  --secondary: oklch(0.24 0.07 292);
-  --secondary-foreground: oklch(0.96 0.02 320);
-  --muted: oklch(0.24 0.07 292);
-  --muted-foreground: oklch(0.86 0.05 315);
-  --faint-foreground: oklch(0.79 0.06 310);
-  --accent: oklch(0.29 0.08 290);
-  --accent-foreground: oklch(0.96 0.02 320);
-  --destructive: oklch(0.74 0.18 18);
-  --destructive-soft: oklch(0.3 0.09 18);
-  --success: oklch(0.82 0.15 170);
-  --success-soft: oklch(0.29 0.07 170);
-  --warning: oklch(0.85 0.14 85);
-  --warning-ink: oklch(0.85 0.14 85);
-  --warning-soft: oklch(0.3 0.07 70);
-  --warning-foreground: oklch(0.2 0.04 70);
-  --info: oklch(0.82 0.12 205);
-  --border: oklch(0.38 0.1 300);
-  --input: oklch(0.62 0.15 320);
-  --ring: oklch(0.82 0.13 205);
-  /* almost the page colour: the sidebar and the night sky meet without a seam (its neon edge is thin and violet) */
-  --sidebar: oklch(0.16 0.05 290);
-  /* a dusky magenta: neon on a big block tires the eyes at night */
-  --bubble: oklch(0.38 0.13 335);
-  --bubble-foreground: oklch(0.97 0.012 330);
-  /* the empty boxes of the charts: a violet that shows on the dark card */
-  --chart-empty: oklch(0.42 0.1 295);
-  --vw-sky: linear-gradient(180deg, oklch(0.13 0.05 285) 0%, oklch(0.2 0.1 300) 28%, oklch(0.33 0.17 330) 46%, oklch(0.5 0.22 355) 56%, oklch(0.62 0.2 20) 62%, oklch(0.12 0.06 295) 62%, oklch(0.1 0.05 290) 100%);
-  --vw-glow: oklch(0.7 0.25 345 / 0.5);
-  --vw-sun: linear-gradient(180deg, oklch(0.93 0.16 95) 0%, oklch(0.75 0.19 30) 50%, oklch(0.65 0.26 350) 100%);
-  --vw-line: oklch(0.72 0.24 345 / 0.75);
-}
-/* The welcome backdrop: sky, the sun on the horizon (62 %) and the grid of the ground, which fades into the distance. */
-html[data-skin="vaporwave"] .brand-sky { position: relative; isolation: isolate; background: radial-gradient(70vmin 42vmin at 50% 62%, var(--vw-glow), transparent 70%), var(--vw-sky); }
-html[data-skin="vaporwave"] .brand-sky::after {
-  content: ""; position: absolute; z-index: -1; left: 50%; bottom: 38%; translate: -50% 0;
-  width: min(84vmin, 620px); aspect-ratio: 2 / 1; border-radius: 999px 999px 0 0; pointer-events: none; background: var(--vw-sun);
-  mask-image: linear-gradient(to bottom, #000 0 50%, transparent 50% 56%, #000 56% 66%, transparent 66% 73%, #000 73% 81%, transparent 81% 89%, #000 89% 94%, transparent 94%);
-}
-html[data-skin="vaporwave"] .brand-sky::before {
-  content: ""; position: absolute; z-index: -1; left: 0; right: 0; bottom: 0; height: 38%; pointer-events: none;
-  background:
-    linear-gradient(to bottom, var(--vw-line) 0 2px, transparent 2px 4%, var(--vw-line) 4% calc(4% + 2px), transparent calc(4% + 2px) 9%,
-      var(--vw-line) 9% calc(9% + 2px), transparent calc(9% + 2px) 15%, var(--vw-line) 15% calc(15% + 2px), transparent calc(15% + 2px) 23%,
-      var(--vw-line) 23% calc(23% + 2px), transparent calc(23% + 2px) 33%, var(--vw-line) 33% calc(33% + 2px), transparent calc(33% + 2px) 46%,
-      var(--vw-line) 46% calc(46% + 2px), transparent calc(46% + 2px) 62%, var(--vw-line) 62% calc(62% + 2px), transparent calc(62% + 2px) 81%,
-      var(--vw-line) 81% calc(81% + 2px), transparent calc(81% + 2px) 100%),
-    repeating-conic-gradient(from 89.8deg at 50% 0%, var(--vw-line) 0deg 0.4deg, transparent 0.4deg 6deg);
-  mask-image: linear-gradient(to bottom, transparent 0%, #000 45%);
-}
+/* Orb UI 2.0 themes and palettes, after desarrollo/orb-ui-2.0/base/temas.css. The base tokens (Grafito, light and dark) are
+   in ../tokens.css. A theme only restates tokens (colours, type, radii, translucency) and a few pieces.
+   <html data-skin="predeterminado|cristal|orb|vaporwave|candy|retro"> (predeterminado is the base: no rules),
+   <html data-palette="oceano|bosque|uva|rubi|arena"> (only with predeterminado and cristal; grafito is the base) and
+   <html class="dark"> for the night. Retro is always dark and Cristal never: lib/store.js forces both.
+   A light block outranks the base .dark tokens, so every token it sets is set again by its .dark block.
+   These rules are outside any layer on purpose: they win over Tailwind's utilities without !important. */
 
-/* ================================================================================================================
-   RETRO — a green-phosphor terminal (Windows cmd, VT100): black glass, P1 green text, amber for warnings, inverse
-   video for what is chosen. Dark only: the tokens sit on html[data-skin="retro"] with no .dark variant, so an instant
-   without .dark never looks light (lib/store.js › applyTheme forces .dark for it). VT323 for the text and Press Start 2P
-   for the few titles. The scene and the components are in scene-retro.css.
-   ================================================================================================================ */
-html[data-skin="retro"] {
-  --radius: 0px;
-  --background: oklch(0.1 0.01 150);
-  --foreground: oklch(0.9 0.2 145);
-  --card: oklch(0.12 0.014 150);
-  --card-foreground: oklch(0.9 0.2 145);
-  --popover: oklch(0.13 0.016 150);
-  --popover-foreground: oklch(0.9 0.2 145);
-  --primary: oklch(0.86 0.21 145);
-  --primary-foreground: oklch(0.11 0.012 150);
-  --primary-soft: oklch(0.26 0.07 145);
-  --primary-text: oklch(0.88 0.2 145);
-  --secondary: oklch(0.18 0.03 150);
-  --secondary-foreground: oklch(0.9 0.2 145);
-  --muted: oklch(0.18 0.03 150);
-  --muted-foreground: oklch(0.82 0.19 145);
-  --faint-foreground: oklch(0.74 0.17 145);
-  --accent: oklch(0.22 0.04 150);
-  --accent-foreground: oklch(0.9 0.2 145);
-  --destructive: oklch(0.74 0.19 28);
-  --destructive-soft: oklch(0.24 0.06 28);
-  --success: oklch(0.86 0.21 145);
-  --success-soft: oklch(0.24 0.06 145);
-  --warning: oklch(0.84 0.16 75);
-  --warning-ink: oklch(0.84 0.16 75);
-  --warning-soft: oklch(0.24 0.05 75);
-  --warning-foreground: oklch(0.11 0.012 150);
-  --info: oklch(0.84 0.12 205);
-  --border: oklch(0.52 0.13 145);
-  --input: oklch(0.72 0.18 145);
-  --ring: oklch(0.84 0.16 75);
-  --sidebar: oklch(0.11 0.012 150);
-  --bubble: oklch(0.2 0.045 150);
-  --bubble-foreground: oklch(0.92 0.17 145);
-  --chart-empty: oklch(0.32 0.06 150);
-  --rt-ink: var(--primary);
-  --rt-glow: 0 0 5px oklch(0.86 0.21 145 / 0.45);
-  --rt-scan: rgb(0 0 0 / 0.28);
-  --rt-star: rgb(150 255 150 / 0.3);
-  --rt-invaders: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 60 16' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.5' d='M4 4h1v1h-1zM10 4h1v1h-1zM5 5h1v1h-1zM9 5h1v1h-1zM4 6h7v1h-7zM3 7h2v1h-2zM6 7h3v1h-3zM10 7h2v1h-2zM2 8h11v1h-11zM2 9h1v1h-1zM4 9h7v1h-7zM12 9h1v1h-1zM2 10h1v1h-1zM4 10h1v1h-1zM10 10h1v1h-1zM12 10h1v1h-1zM5 11h2v1h-2zM8 11h2v1h-2zM27 4h2v1h-2zM26 5h4v1h-4zM25 6h6v1h-6zM24 7h2v1h-2zM27 7h2v1h-2zM30 7h2v1h-2zM24 8h8v1h-8zM26 9h1v1h-1zM29 9h1v1h-1zM25 10h1v1h-1zM27 10h2v1h-2zM30 10h1v1h-1zM24 11h1v1h-1zM26 11h1v1h-1zM29 11h1v1h-1zM31 11h1v1h-1zM46 4h4v1h-4zM43 5h10v1h-10zM42 6h12v1h-12zM42 7h3v1h-3zM47 7h2v1h-2zM51 7h3v1h-3zM42 8h12v1h-12zM45 9h2v1h-2zM49 9h2v1h-2zM44 10h2v1h-2zM47 10h2v1h-2zM50 10h2v1h-2zM42 11h2v1h-2zM52 11h2v1h-2z'/%3E%3C/svg%3E");
-  --rt-ship: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 11 6' shape-rendering='crispEdges'%3E%3Cpath fill='%2339ff14' fill-opacity='0.7' d='M5 0h1v1h-1zM4 1h3v1h-3zM4 2h3v1h-3zM1 3h9v1h-9zM0 4h11v1h-11zM0 5h11v1h-11z'/%3E%3C/svg%3E");
-}
-/* The welcome backdrop: scanlines, two rows of invaders that step sideways (two poses swapped by opacity, the same
-   keyframes as the chat bar's), stars, the ground line and the player's cannon. */
-html[data-skin="retro"] .brand-sky {
-  position: relative; isolation: isolate;
-  background:
-    repeating-linear-gradient(to bottom, transparent 0 2px, var(--rt-scan) 2px 3px),
-    radial-gradient(ellipse at 50% 45%, transparent 55%, rgb(0 0 0 / 0.5)),
-    var(--rt-ship) 50% calc(100% - 26px) / 44px 24px no-repeat,
-    linear-gradient(var(--rt-star), var(--rt-star)) 0 calc(100% - 18px) / 100% 3px no-repeat,
-    radial-gradient(circle at 30px 40px, var(--rt-star) 0 1.5px, transparent 2px) 0 0 / 170px 130px,
-    radial-gradient(circle at 110px 95px, var(--rt-star) 0 1px, transparent 1.5px) 0 0 / 230px 170px,
-    var(--background);
-}
-html[data-skin="retro"] .brand-sky::before, html[data-skin="retro"] .brand-sky::after {
-  content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
-  background: var(--rt-invaders) 0 9% / 240px 64px repeat-x, var(--rt-invaders) 120px calc(9% + 76px) / 240px 64px repeat-x;
-}
-html[data-skin="retro"] .brand-sky::after { background-position: 16px 9%, 136px calc(9% + 76px); opacity: 0; }
-@media (prefers-reduced-motion: no-preference) {
-  html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky::before { animation: rt-band-a 2.4s steps(1, end) infinite; }
-  html[data-skin="retro"]:not([data-motion="minima"]) .brand-sky::after { animation: rt-band-b 2.4s steps(1, end) infinite; }
-}
-html[data-skin="retro"] .brand-sky .shadow-2xl { box-shadow: 0 0 0 1px var(--primary), 0 0 22px -6px oklch(0.86 0.21 145 / 0.5); }
+/* ======================================================= fonts
+   The theme's type applies while the user has not picked another in Ajustes (data-font / data-code-font): the body in the
+   system's UI font, code in JetBrains Mono, titles in --title (a theme may restate it). */
+html[data-font="outfit"] { --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
+html[data-code-font="geist-mono"] { --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace; }
+html[data-skin="retro"][data-font="outfit"] { --font-sans: var(--font-mono); }
 
-/* ================================================================================================================
-   PROFESIONAL: plain and sober, like a developer tool in the line of Linear and VS Code. Zinc greys, one indigo accent
-   (the main action, focus and the selection), 1 px lines, radii of 4 to 6 px, no shadows, Inter at 13 px a little
-   tight and Geist Mono for the times, counts and figures. No robot (components/orb-mark.jsx shows the app icon
-   instead, companion.jsx hides the floating one), no sounds (lib/sounds.js), no backdrop, no band and no decorative
-   animation; loading spinners, pulsing status dots and progress bars stay.
-   ================================================================================================================ */
-html[data-skin="profesional"] {
-  --radius: 0.375rem;
-  --background: oklch(0.985 0.001 286);
-  --foreground: oklch(0.2 0.006 286);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.006 286);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.2 0.006 286);
-  --primary: oklch(0.5 0.17 275);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.955 0.02 275);
-  --primary-text: oklch(0.47 0.17 275);
-  --secondary: oklch(0.963 0.002 286);
-  --secondary-foreground: oklch(0.2 0.006 286);
-  --muted: oklch(0.963 0.002 286);
-  --muted-foreground: oklch(0.42 0.01 286);
-  --faint-foreground: oklch(0.5 0.012 286);
-  --accent: oklch(0.943 0.003 286);
-  --accent-foreground: oklch(0.2 0.006 286);
-  --destructive: oklch(0.52 0.2 27);
-  --destructive-soft: oklch(0.963 0.022 25);
-  --success: oklch(0.5 0.12 155);
-  --success-soft: oklch(0.962 0.03 155);
-  --warning: oklch(0.5 0.11 65);
-  --warning-ink: oklch(0.46 0.11 65);
-  --warning-soft: oklch(0.967 0.04 85);
-  --warning-foreground: oklch(1 0 0);
-  --info: oklch(0.5 0.13 245);
-  --border: oklch(0.918 0.004 286);
-  --input: oklch(0.6 0.01 286);
-  --ring: oklch(0.58 0.17 275);
-  --sidebar: oklch(0.981 0.001 286);
-  --bubble: oklch(0.963 0.002 286);
-  --bubble-foreground: oklch(0.2 0.006 286);
-  --chart-empty: oklch(0.915 0.004 286);
-}
-html.dark[data-skin="profesional"] {
-  --background: oklch(0.15 0.003 286);
-  --foreground: oklch(0.95 0.002 286);
-  --card: oklch(0.172 0.004 286);
-  --card-foreground: oklch(0.95 0.002 286);
-  --popover: oklch(0.2 0.005 286);
-  --popover-foreground: oklch(0.95 0.002 286);
-  --primary: oklch(0.56 0.16 276);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.26 0.045 276);
-  --primary-text: oklch(0.79 0.1 276);
-  --secondary: oklch(0.215 0.005 286);
-  --secondary-foreground: oklch(0.95 0.002 286);
-  --muted: oklch(0.215 0.005 286);
-  --muted-foreground: oklch(0.79 0.006 286);
-  --faint-foreground: oklch(0.69 0.009 286);
-  --accent: oklch(0.243 0.006 286);
-  --accent-foreground: oklch(0.95 0.002 286);
-  --destructive: oklch(0.72 0.16 22);
-  --destructive-soft: oklch(0.26 0.05 22);
-  --success: oklch(0.76 0.13 155);
-  --success-soft: oklch(0.25 0.035 155);
-  --warning: oklch(0.82 0.12 80);
-  --warning-ink: oklch(0.82 0.12 80);
-  --warning-soft: oklch(0.26 0.04 70);
-  --warning-foreground: oklch(0.2 0.03 80);
-  --info: oklch(0.74 0.11 245);
-  --border: oklch(0.255 0.005 286);
-  --input: oklch(0.52 0.01 286);
-  --ring: oklch(0.7 0.13 276);
-  --sidebar: oklch(0.158 0.004 286);
-  --bubble: oklch(0.243 0.006 286);
-  --bubble-foreground: oklch(0.95 0.002 286);
-  --chart-empty: oklch(0.285 0.007 286);
-}
-/* At night the destructive colour is light, so the label of a solid destructive button gives way to a dark one. */
-html.dark[data-skin="profesional"] .bg-destructive.text-white { color: oklch(0.2 0.05 22); }
-/* Inter a little tight; the times, counts and figures in Geist Mono (--font-mono follows the code font chosen). */
-html[data-skin="profesional"] body { letter-spacing: -0.006em; }
-html[data-skin="profesional"] :is(time, .tabular-nums) { font-family: var(--font-mono); letter-spacing: 0; }
-/* Flat: no shadows on the controls and panels, a hairline does the work. */
-html[data-skin="profesional"] :is([data-slot="card"], [data-slot="button"], [data-slot="input"], [data-slot="badge"]) { box-shadow: none; }
-html[data-skin="profesional"] [data-slot="card"] { border-radius: calc(var(--radius) + 2px); }
-html[data-skin="profesional"] [data-slot="badge"] { border-radius: calc(var(--radius) - 2px); font-weight: 500; }
-/* Dense controls on a mouse: 30 / 28 / 26 px high (the phone keeps its larger touch targets). */
-@media (pointer: fine) {
-  html[data-skin="profesional"] :is([data-slot="button"], [data-slot="input"]).h-9 { height: 30px; }
-  html[data-skin="profesional"] [data-slot="button"].h-8 { height: 28px; }
-  html[data-skin="profesional"] [data-slot="button"].h-7 { height: 26px; }
-}
-/* The selected place: a soft fill and a thin accent rule on its left, as in Linear's inbox. */
-html[data-skin="profesional"] aside.bg-sidebar [data-testid^="nav-"].bg-accent { box-shadow: inset 2px 0 0 var(--primary); }
-html[data-skin="profesional"] .brand-sky { background: var(--muted); }
-html.dark[data-skin="profesional"] .brand-sky { background: var(--background); }
-html[data-skin="profesional"] .brand-sky .border-white\/40 { border-color: var(--border); }
-html[data-skin="profesional"] .brand-sky :is(.shadow-2xl, .shadow-xl) { box-shadow: 0 1px 3px rgb(0 0 0 / 0.08); }
-html[data-skin="profesional"] :is(.rounded-3xl, .rounded-2xl) { border-radius: calc(var(--radius) + 4px); }
-html[data-skin="profesional"] [data-testid="update-card"] { background-image: none; background-color: oklch(0.27 0.006 286); border: 1px solid oklch(0.38 0.006 286); box-shadow: 0 4px 16px rgb(0 0 0 / 0.18); }
-/* No decorative motion: entrances, slides, hover zooms, the robot. Spinners, pulsing status dots and the bar of a task
-   that does not report its percentage keep moving (they say something is working); progress bars keep their width. */
-html[data-skin="profesional"] *:not(.animate-spin, .animate-pulse, [class*="orb-indeterminate"]),
-html[data-skin="profesional"] *::before, html[data-skin="profesional"] *::after { animation: none !important; }
-html[data-skin="profesional"] *:not([role="progressbar"] *) { transition-duration: 0s !important; }
-html[data-skin="profesional"] *:hover { scale: none; }
+/* ======================================================= palettes (predeterminado and cristal)
+   Grafito is the base. A palette changes the one accent and gives the neutrals a hint of its hue; primary buttons stay
+   neutral (black by day, white at night). .pal-dot is the sample of a palette in Ajustes: it takes that palette's accent. */
+.pal-dot { display: inline-block; width: 0.75rem; height: 0.75rem; border-radius: var(--r-full); background: var(--primary-text); flex: none; }
+.pal-dot[data-palette="grafito"] { --primary-text: oklch(0.52 0.17 40); }
+.dark .pal-dot[data-palette="grafito"] { --primary-text: oklch(0.74 0.15 45); }
+html[data-palette="oceano"],.pal-dot[data-palette="oceano"]{--primary-soft:oklch(0.955 0.03 245);--primary-text:oklch(0.5 0.16 252);--ring:oklch(0.6 0.17 252);--background:oklch(0.99 0.003 250);--sidebar:oklch(0.975 0.006 250);--bubble:oklch(0.955 0.008 250)}
+html.dark[data-palette="oceano"],.dark .pal-dot[data-palette="oceano"]{--primary-soft:oklch(0.28 0.05 250);--primary-text:oklch(0.75 0.12 245);--ring:oklch(0.68 0.15 250);--background:oklch(0.165 0.008 255);--sidebar:oklch(0.145 0.01 255);--bubble:oklch(0.225 0.012 255);--card:oklch(0.18 0.008 255)}
+html[data-palette="bosque"],.pal-dot[data-palette="bosque"]{--primary-soft:oklch(0.958 0.03 155);--primary-text:oklch(0.5 0.12 155);--ring:oklch(0.6 0.13 155);--background:oklch(0.99 0.003 150);--sidebar:oklch(0.975 0.006 150);--bubble:oklch(0.955 0.008 150)}
+html.dark[data-palette="bosque"],.dark .pal-dot[data-palette="bosque"]{--primary-soft:oklch(0.27 0.04 155);--primary-text:oklch(0.78 0.13 155);--ring:oklch(0.7 0.14 155);--background:oklch(0.165 0.008 160);--sidebar:oklch(0.145 0.01 160);--bubble:oklch(0.225 0.012 160);--card:oklch(0.18 0.008 160)}
+html[data-palette="uva"],.pal-dot[data-palette="uva"]{--primary-soft:oklch(0.958 0.03 300);--primary-text:oklch(0.52 0.18 300);--ring:oklch(0.6 0.18 300);--background:oklch(0.99 0.003 300);--sidebar:oklch(0.975 0.007 300);--bubble:oklch(0.955 0.009 300)}
+html.dark[data-palette="uva"],.dark .pal-dot[data-palette="uva"]{--primary-soft:oklch(0.28 0.06 300);--primary-text:oklch(0.76 0.13 300);--ring:oklch(0.68 0.16 300);--background:oklch(0.165 0.01 300);--sidebar:oklch(0.145 0.012 300);--bubble:oklch(0.225 0.014 300);--card:oklch(0.18 0.01 300)}
+html[data-palette="rubi"],.pal-dot[data-palette="rubi"]{--primary-soft:oklch(0.958 0.025 10);--primary-text:oklch(0.53 0.19 15);--ring:oklch(0.6 0.19 15);--background:oklch(0.99 0.003 10);--sidebar:oklch(0.975 0.006 10);--bubble:oklch(0.955 0.008 10)}
+html.dark[data-palette="rubi"],.dark .pal-dot[data-palette="rubi"]{--primary-soft:oklch(0.28 0.06 15);--primary-text:oklch(0.76 0.14 12);--ring:oklch(0.68 0.17 15);--background:oklch(0.165 0.008 15);--sidebar:oklch(0.145 0.01 15);--bubble:oklch(0.225 0.012 15);--card:oklch(0.18 0.008 15)}
+html[data-palette="arena"],.pal-dot[data-palette="arena"]{--primary-soft:oklch(0.958 0.03 75);--primary-text:oklch(0.5 0.11 60);--ring:oklch(0.62 0.12 65);--background:oklch(0.988 0.006 85);--sidebar:oklch(0.97 0.012 85);--bubble:oklch(0.95 0.014 85);--border:oklch(0.92 0.01 85)}
+html.dark[data-palette="arena"],.dark .pal-dot[data-palette="arena"]{--primary-soft:oklch(0.28 0.04 70);--primary-text:oklch(0.8 0.11 75);--ring:oklch(0.72 0.12 70);--background:oklch(0.17 0.008 70);--sidebar:oklch(0.15 0.01 70);--bubble:oklch(0.23 0.012 70);--card:oklch(0.185 0.008 70);--border:oklch(0.235 0 0)}
 
+/* ======================================================= themes with a shader behind the window
+   One canvas per window (components/scene.jsx, lib/shaders.js) sits behind the whole app. The columns let it through:
+   the sides blur what is behind them and the centre is lighter. Dialogs, menus and bubbles keep their own opaque surface. */
+html[data-skin="orb"], html[data-skin="vaporwave"], html[data-skin="candy"], html[data-skin="retro"] { --veil: 84%; --veil-side: 76%; }
+html[data-skin="candy"] { --veil: 76%; --veil-side: 68%; }
+.orb-shader { position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; display: block; pointer-events: none; contain: strict; }
+html[data-skin]:not([data-skin="predeterminado"]) main.theme-scene { background: color-mix(in oklab, var(--background) var(--veil), transparent); }
+/* The title bars of the views are tinted and blurred in the predeterminado; here they let the scene through like the rest of the centre
+   (the mock-up's .bar has no fill), so the shapes behind the conversation are not hidden under a strip. */
+html[data-skin]:not([data-skin="predeterminado"]) main.theme-scene .topbar { background-color: transparent; backdrop-filter: none; }
+html[data-skin]:not([data-skin="predeterminado"]):not([data-skin="cristal"]) aside.bg-sidebar { background-color: color-mix(in oklab, var(--sidebar) var(--veil-side), transparent); backdrop-filter: blur(14px) saturate(1.1); }
+html[data-skin]:not([data-skin="predeterminado"]) :is([data-testid="chat-panel"], [data-testid="turn-changes"], [data-testid="chat-tabs"]) { background: color-mix(in oklab, var(--background) var(--veil-side), transparent); backdrop-filter: blur(14px); }
+/* the Cambios tab sits inside the panel, which already has the veil */
+html[data-skin]:not([data-skin="predeterminado"]) [data-testid="chat-panel"] [data-testid="turn-changes"] { background: none; backdrop-filter: none; }
+/* the welcome and start-up screens (.brand-sky) are not redrawn yet: the theme's own colour instead of Orb's sky */
+html:is([data-skin="cristal"], [data-skin="vaporwave"], [data-skin="candy"], [data-skin="retro"]) .brand-sky { background: var(--background); }
 
-/* ================================================================================================================
-   CRISTAL (3.8.2): Profesional made of frosted glass, after the translucent materials of Apple's interfaces. <html>
-   wears data-skin="profesional" too (src/shared/appearance.mjs › SKIN_BASE), so everything above applies: no robot, no
-   sounds, no backdrop scene and no animation. On top: a still colour field painted once on the page (blue, pink and
-   aqua by day, deep tones by night), glass only where one moves around (the sidebar, the chat's top bar, the message
-   box, menus and dialogs), opaque content (cards, messages), capsules for the controls and nested corners (28 / 18 / 12).
-   Performance: backdrop-filter only on a few large surfaces that do not scroll (the sidebar, the chat's top bar, the
-   message box, menus, selects and dialogs); never on cards or list items. Nothing moves, so at rest nothing is drawn again.
-   Contrast: text >= 4.5:1 and input borders >= 3:1 on every surface laid over the brightest and darkest point of the
-   field (test/cristal-382.test.mjs reads these tokens).
-   ================================================================================================================ */
-html[data-material="cristal"] {
-  --radius: 0.75rem;
-  --cr-base: oklch(0.915 0.035 258);
-  --cr-pool-1: oklch(0.73 0.15 252);
-  --cr-pool-2: oklch(0.78 0.135 342);
-  --cr-pool-3: oklch(0.8 0.12 192);
-  --cr-pool-4: oklch(0.87 0.1 68);
-  --background: oklch(0.915 0.035 258);
-  --foreground: oklch(0.2 0.01 262);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.2 0.01 262);
-  --popover: oklch(0.995 0.003 258 / 0.84);
-  --popover-foreground: oklch(0.2 0.01 262);
-  --primary: oklch(0.51 0.2 258);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.925 0.045 255 / 0.92);
-  --primary-text: oklch(0.46 0.19 258);
-  --secondary: oklch(0.955 0.008 258 / 0.72);
-  --secondary-foreground: oklch(0.2 0.01 262);
-  --muted: oklch(0.955 0.008 258 / 0.72);
-  --muted-foreground: oklch(0.34 0.016 262);
-  --faint-foreground: oklch(0.36 0.02 262);
-  --accent: oklch(0.93 0.01 258 / 0.9);
-  --accent-foreground: oklch(0.2 0.01 262);
-  --destructive: oklch(0.52 0.2 25);
-  --destructive-soft: oklch(0.96 0.03 20);
-  --success: oklch(0.47 0.13 150);
-  --success-soft: oklch(0.95 0.05 150);
-  --warning: oklch(0.49 0.12 60);
-  --warning-ink: oklch(0.35 0.09 60);
-  --warning-soft: oklch(0.965 0.045 82);
-  --warning-foreground: oklch(1 0 0);
-  --info: oklch(0.47 0.13 245);
-  --border: oklch(0.3 0.02 262 / 0.12);
-  --input: oklch(0.42 0.03 262);
-  --ring: oklch(0.6 0.2 258);
-  --sidebar: oklch(0.985 0.006 255 / 0.36);
-  --bubble: oklch(0.51 0.2 258);
-  --bubble-foreground: oklch(1 0 0);
-  --chart-empty: oklch(0.945 0.006 260);
-  /* The material: how it blurs what is behind, the light on its edge, its line and its shadow. */
-  --cr-blur: blur(28px) saturate(180%);
-  --cr-bar: oklch(0.985 0.006 262 / 0.6);
-  --cr-edge: inset 0 1px 0 rgb(255 255 255 / 0.85), inset 0 0 0 1px rgb(255 255 255 / 0.35);
-  --cr-line: oklch(0.3 0.02 262 / 0.11);
-  --cr-shadow: 0 1px 2px oklch(0.3 0.04 262 / 0.06), 0 8px 20px -12px oklch(0.3 0.08 262 / 0.28);
-  --cr-shadow-float: 0 18px 44px -18px oklch(0.32 0.09 262 / 0.36), 0 2px 6px -2px oklch(0.32 0.06 262 / 0.12);
-}
-html.dark[data-material="cristal"] {
-  --cr-base: oklch(0.17 0.03 268);
-  --cr-pool-1: oklch(0.36 0.12 258);
-  --cr-pool-2: oklch(0.32 0.11 325);
-  --cr-pool-3: oklch(0.35 0.08 195);
-  --cr-pool-4: oklch(0.3 0.07 60);
-  --background: oklch(0.17 0.03 268);
-  --foreground: oklch(0.97 0.002 265);
-  --card: oklch(0.235 0.008 265);
-  --card-foreground: oklch(0.97 0.002 265);
-  --popover: oklch(0.235 0.008 265 / 0.86);
-  --popover-foreground: oklch(0.97 0.002 265);
-  --primary: oklch(0.52 0.2 257);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.34 0.09 257 / 0.9);
-  --primary-text: oklch(0.83 0.1 250);
-  --secondary: oklch(0.3 0.012 265 / 0.72);
-  --secondary-foreground: oklch(0.97 0.002 265);
-  --muted: oklch(0.3 0.012 265 / 0.72);
-  --muted-foreground: oklch(0.85 0.008 265);
-  --faint-foreground: oklch(0.78 0.01 265);
-  --accent: oklch(0.34 0.012 265 / 0.88);
-  --accent-foreground: oklch(0.97 0.002 265);
-  --destructive: oklch(0.77 0.15 22);
-  --destructive-soft: oklch(0.32 0.08 22);
-  --success: oklch(0.8 0.15 150);
-  --success-soft: oklch(0.31 0.06 150);
-  --warning: oklch(0.85 0.13 80);
-  --warning-ink: oklch(0.85 0.13 80);
-  --warning-soft: oklch(0.32 0.06 70);
-  --warning-foreground: oklch(0.2 0.03 80);
-  --info: oklch(0.76 0.11 245);
-  --border: oklch(1 0 0 / 0.1);
-  --input: oklch(0.67 0.015 265);
-  --ring: oklch(0.75 0.15 252);
-  --sidebar: oklch(0.2 0.018 265 / 0.6);
-  --bubble: oklch(0.52 0.2 257);
-  --bubble-foreground: oklch(1 0 0);
-  --chart-empty: oklch(0.31 0.01 265);
-  --cr-bar: oklch(0.2 0.016 266 / 0.55);
-  --cr-edge: inset 0 1px 0 rgb(255 255 255 / 0.2), inset 0 0 0 1px rgb(255 255 255 / 0.06);
-  --cr-line: oklch(1 0 0 / 0.1);
-  --cr-shadow: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 20px -12px rgb(0 0 0 / 0.55);
-  --cr-shadow-float: 0 18px 44px -16px rgb(0 0 0 / 0.6), 0 2px 6px -2px rgb(0 0 0 / 0.35);
-}
-/* The colour field: painted once, never moves. */
-html[data-material="cristal"] body { background: radial-gradient(40% 52% at 0% 4%, var(--cr-pool-1), transparent 74%), radial-gradient(30% 46% at 4% 100%, var(--cr-pool-2), transparent 72%), radial-gradient(44% 60% at 100% 100%, var(--cr-pool-2), transparent 72%), radial-gradient(40% 50% at 40% 108%, var(--cr-pool-3), transparent 70%), radial-gradient(34% 44% at 96% 6%, var(--cr-pool-4), transparent 70%), radial-gradient(30% 44% at 20% 50%, color-mix(in oklch, var(--cr-pool-3) 85%, transparent), transparent 72%), radial-gradient(34% 46% at 60% 44%, color-mix(in oklch, var(--cr-pool-1) 45%, transparent), transparent 70%), var(--cr-base); letter-spacing: -0.008em; font-feature-settings: "cv05", "ss03"; }
-/* Titles large and bold, like the system's. */
-html[data-material="cristal"] :is(h1, h2, h3, [data-slot="card-title"], .hero-title):not(.prose-chat *) { font-weight: 700; letter-spacing: -0.024em; }
-html[data-material="cristal"] .bar-title-main { font-size: 16px; font-weight: 700; letter-spacing: -0.024em; }
-/* Capsules: buttons, badges, fields and the places of the sidebar. */
-html[data-material="cristal"] :is([data-slot="button"], [data-slot="badge"], [data-slot="input"], aside.bg-sidebar [data-testid^="nav-"]) { border-radius: 999px; }
-html[data-material="cristal"] [data-slot="input"] { padding-inline: 14px; }
-html[data-material="cristal"] [data-slot="button"] { font-weight: 600; }
-html[data-material="cristal"] aside.bg-sidebar [data-testid^="nav-"].bg-accent { box-shadow: var(--cr-edge); }
-/* Nested corners: 28 for the message box and dialogs, 18 for cards and menus, 12 for what sits inside them. */
-html[data-material="cristal"] :is(.rounded-3xl, .rounded-2xl) { border-radius: calc(var(--radius) + 6px); }
-/* The sidebar: the blur sits on a layer of its own behind the content, so the sidebar does not become the containing
-   block of anything fixed inside it. */
-html[data-material="cristal"] aside.bg-sidebar { border-right-color: var(--cr-line); box-shadow: inset -1px 0 0 rgb(255 255 255 / 0.25); }
-html[data-material="cristal"] aside.bg-sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; backdrop-filter: var(--cr-blur); pointer-events: none; }
-/* The chat's top bar and the message box. */
-html[data-material="cristal"] .chat-bar { background-color: var(--cr-bar); backdrop-filter: var(--cr-blur); border-bottom-color: var(--cr-line); }
-html[data-material="cristal"] [data-slot="composer"] { backdrop-filter: var(--cr-blur); border-color: var(--cr-line); border-radius: 1.75rem; box-shadow: var(--cr-edge), var(--cr-shadow-float); }
-html[data-material="cristal"] [data-slot="composer"]:focus-within { box-shadow: var(--cr-edge), var(--cr-shadow-float), 0 0 0 3px color-mix(in oklch, var(--ring) 28%, transparent); }
-/* Cards and the user's bubble: solid content, no blur. */
-html[data-material="cristal"] [data-slot="card"] { border-color: transparent; border-radius: calc(var(--radius) + 6px); box-shadow: var(--cr-shadow); }
-html[data-material="cristal"] .bg-bubble { box-shadow: var(--cr-edge); }
-/* Menus, selects and dialogs float over the content: thick glass. */
-html[data-material="cristal"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"]) { backdrop-filter: var(--cr-blur); border-color: var(--cr-line); box-shadow: var(--cr-edge), var(--cr-shadow-float); }
-html[data-material="cristal"] :is([data-slot="menu-content"], [data-slot="select-content"]) { border-radius: calc(var(--radius) + 6px); }
-html[data-material="cristal"] [data-slot="dialog-content"] { border-radius: 1.75rem; }
-html[data-material="cristal"] [data-slot="dialog-overlay"] { background-color: rgb(10 14 30 / 0.22); }
-/* Buttons with a fill keep a faint light on their top edge. */
-html[data-material="cristal"] [data-slot="button"].bg-primary { box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.3), 0 4px 12px -4px oklch(0.45 0.2 258 / 0.55); }
-/* Less transparency asked by the system: solid surfaces, no blur. */
-@media (prefers-reduced-transparency: reduce) {
-  html[data-material="cristal"] { --popover: var(--card); --secondary: var(--card); --muted: var(--card); --accent: var(--card); --sidebar: var(--background); --cr-bar: var(--background); }
-  html[data-material="cristal"] :is(.chat-bar, [data-slot="composer"], [data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"]),
-  html[data-material="cristal"] aside.bg-sidebar::before { backdrop-filter: none; }
-}
+/* ======================================================= Orb: the robot and Orb's blue */
+html[data-skin="orb"]{
+  --primary:oklch(0.55 0.2 264);--primary-foreground:oklch(0.99 0 0);--primary-soft:oklch(0.95 0.03 264);--primary-text:oklch(0.5 0.2 264);--ring:oklch(0.6 0.2 264);
+  --background:oklch(0.985 0.008 250);--sidebar:oklch(0.97 0.015 250);--card:oklch(0.995 0.004 250);--bubble:oklch(0.95 0.02 255);--border:oklch(0.92 0.015 255);--accent:oklch(0.95 0.015 255);--secondary:oklch(0.955 0.012 255);--muted:oklch(0.955 0.012 255)}
+html.dark[data-skin="orb"]{
+  --primary:oklch(0.68 0.17 264);--primary-foreground:oklch(0.16 0.03 264);--primary-soft:oklch(0.28 0.07 264);--primary-text:oklch(0.76 0.14 260);--ring:oklch(0.7 0.17 264);
+  --background:oklch(0.18 0.03 265);--sidebar:oklch(0.16 0.035 265);--card:oklch(0.2 0.03 265);--bubble:oklch(0.25 0.04 265);--border:oklch(0.28 0.04 265);--accent:oklch(0.25 0.04 265);--secondary:oklch(0.23 0.035 265);--muted:oklch(0.23 0.035 265);--popover:oklch(0.21 0.035 265)}
 
-/* =============================================================================
-   GRAFITO: Profesional in near-monochrome graphite. <html> wears data-skin="profesional" plus data-material="grafito",
-   so Profesional's rules (no robot, no sounds, no decorative motion) apply; this section only swaps tokens and shapes.
-   Neutral buttons, one orange accent, the system font and softer corners. Opaque tokens only: test/grafito-387.test.mjs
-   checks their contrast.
-   ============================================================================= */
-html[data-material="grafito"] {
-  --radius: 0.625rem;
-  --background: oklch(0.991 0 0); --foreground: oklch(0.269 0 0);
-  --card: oklch(1 0 0); --card-foreground: oklch(0.269 0 0);
-  --popover: oklch(1 0 0); --popover-foreground: oklch(0.269 0 0);
-  --primary: oklch(0.205 0 0); --primary-foreground: oklch(0.985 0 0);
-  --primary-soft: oklch(0.962 0.025 40); --primary-text: oklch(0.52 0.17 40);
-  --secondary: oklch(0.967 0 0); --secondary-foreground: oklch(0.269 0 0);
-  --muted: oklch(0.962 0 0); --muted-foreground: oklch(0.5 0 0); --faint-foreground: oklch(0.53 0 0);
-  --accent: oklch(0.958 0 0); --accent-foreground: oklch(0.269 0 0);
-  --destructive: oklch(0.55 0.21 27); --destructive-soft: oklch(0.965 0.02 25);
-  --success: oklch(0.5 0.13 160); --success-soft: oklch(0.962 0.03 160);
-  --warning: oklch(0.5 0.11 65); --warning-ink: oklch(0.46 0.11 65); --warning-soft: oklch(0.967 0.04 85); --warning-foreground: oklch(1 0 0);
-  --info: oklch(0.53 0.17 254);
-  --border: oklch(0.948 0 0); --input: oklch(0.6 0 0); --ring: oklch(0.6 0.18 40);
-  --sidebar: oklch(0.978 0 0);
-  --bubble: oklch(0.958 0 0); --bubble-foreground: oklch(0.269 0 0);
-  --chart-empty: oklch(0.93 0 0);
-}
-html.dark[data-material="grafito"] {
-  --background: oklch(0.164 0 0); --foreground: oklch(0.97 0 0);
-  --card: oklch(0.178 0 0); --card-foreground: oklch(0.97 0 0);
-  --popover: oklch(0.2 0 0); --popover-foreground: oklch(0.97 0 0);
-  --primary: oklch(0.97 0 0); --primary-foreground: oklch(0.205 0 0);
-  --primary-soft: oklch(0.27 0.05 40); --primary-text: oklch(0.76 0.14 48);
-  --secondary: oklch(0.205 0 0); --secondary-foreground: oklch(0.97 0 0);
-  --muted: oklch(0.205 0 0); --muted-foreground: oklch(0.74 0 0); --faint-foreground: oklch(0.68 0 0);
-  --accent: oklch(0.225 0 0); --accent-foreground: oklch(0.97 0 0);
-  --destructive: oklch(0.72 0.17 25); --destructive-soft: oklch(0.26 0.05 22);
-  --success: oklch(0.76 0.14 155); --success-soft: oklch(0.25 0.035 155);
-  --warning: oklch(0.82 0.13 80); --warning-ink: oklch(0.82 0.13 80); --warning-soft: oklch(0.26 0.04 70); --warning-foreground: oklch(0.2 0.03 80);
-  --info: oklch(0.72 0.14 250);
-  --border: oklch(0.215 0 0); --input: oklch(0.5 0 0); --ring: oklch(0.67 0.19 38);
-  --sidebar: oklch(0.145 0 0);
-  --bubble: oklch(0.225 0 0); --bubble-foreground: oklch(0.97 0 0);
-  --chart-empty: oklch(0.27 0 0);
-}
-/* Fonts: the system stack and JetBrains Mono unless the user picked another font. The extra [data-skin] attribute
-   outranks Profesional's Inter overrides (app.css, scene-nube.css) whatever the load order. */
-html[data-skin][data-material="grafito"] body { letter-spacing: normal; }
-html[data-skin][data-material="grafito"][data-font="outfit"] { --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-html[data-skin][data-material="grafito"][data-code-font="geist-mono"] { --font-mono: "JetBrains Mono Variable", "Cascadia Code", Consolas, monospace; }
-html[data-skin][data-material="grafito"] { --font-title: var(--font-sans); }
-html[data-skin][data-material="grafito"] .wordmark { font-family: var(--font-sans); }
-/* Softer corners than Profesional: controls, then cards and big surfaces, then the rows Profesional squares off. */
-html[data-material="grafito"] :is([data-slot="badge"], [data-slot="button"], [data-slot="input"]) { border-radius: calc(var(--radius) - 2px); }
-html[data-material="grafito"] [data-slot="card"] { border-radius: calc(var(--radius) + 2px); }
-html[data-material="grafito"] :is(.rounded-3xl, .rounded-2xl) { border-radius: calc(var(--radius) + 2px); }
-html[data-skin][data-material="grafito"] .bar-project { border-radius: calc(var(--radius) - 2px); }
-html[data-skin][data-material="grafito"] :is(.side-foot-icon, .notice-row) { border-radius: 8px; }
-html[data-skin][data-material="grafito"] :is(.orb-cal-day, .orb-cal-nav, .orb-cal-today) { border-radius: 8px; }
-html[data-skin][data-material="grafito"] .tour-spot { border-radius: 10px; }
-html[data-material="grafito"] .bg-bubble { border-radius: 1rem; }
-/* The composer keeps its structure; only its outline softens. */
-html[data-material="grafito"] [data-slot="composer"] { border-radius: 1.2rem; border-color: color-mix(in oklab, var(--foreground) 9%, transparent); box-shadow: 0 4px 18px -6px color-mix(in oklab, var(--foreground) 7%, transparent); }
-html.dark[data-material="grafito"] [data-slot="composer"] { box-shadow: 0 6px 24px -10px rgb(0 0 0 / 0.3); }
-html[data-material="grafito"] [data-slot="composer"]:focus-within { box-shadow: 0 4px 18px -6px color-mix(in oklab, var(--foreground) 7%, transparent), 0 0 0 3px color-mix(in oklch, var(--ring) 28%, transparent); }
-html.dark[data-material="grafito"] [data-slot="composer"]:focus-within { box-shadow: 0 6px 24px -10px rgb(0 0 0 / 0.3), 0 0 0 3px color-mix(in oklch, var(--ring) 28%, transparent); }
-/* The selected place wears the orange accent instead of Profesional's primary rule. */
-html[data-material="grafito"] aside.bg-sidebar [data-testid^="nav-"].bg-accent { box-shadow: inset 2px 0 0 var(--primary-text); }
+/* ======================================================= Vaporwave: synthwave at night, pastel by day */
+html[data-skin="vaporwave"]{
+  --title:"Orbitron Variable","Orbitron",system-ui,sans-serif;
+  --primary:oklch(0.62 0.22 350);--primary-foreground:oklch(0.99 0 0);--primary-soft:oklch(0.95 0.04 340);--primary-text:oklch(0.55 0.22 350);--ring:oklch(0.65 0.2 200);
+  --background:oklch(0.97 0.025 320);--sidebar:oklch(0.95 0.04 310);--card:oklch(0.985 0.015 320);--bubble:oklch(0.93 0.05 200);--border:oklch(0.88 0.05 320);--accent:oklch(0.93 0.04 320);--secondary:oklch(0.94 0.035 320);--muted:oklch(0.94 0.035 320);
+  --info:oklch(0.55 0.15 220);--muted-foreground:oklch(0.47 0.06 320);--faint-foreground:oklch(0.55 0.05 320);
+  --wm-grad:linear-gradient(180deg,oklch(0.75 0.14 200) 20%,oklch(0.65 0.2 340) 80%);--wm-dot:oklch(0.8 0.18 345);}
+html.dark[data-skin="vaporwave"]{
+  --primary:oklch(0.72 0.21 350);--primary-foreground:oklch(0.15 0.05 300);--primary-soft:oklch(0.3 0.1 340);--primary-text:oklch(0.78 0.18 350);--ring:oklch(0.82 0.14 200);
+  --foreground:oklch(0.96 0.02 330);--background:oklch(0.17 0.07 295);--sidebar:oklch(0.14 0.06 290);--card:oklch(0.2 0.08 295);--popover:oklch(0.21 0.08 295);--bubble:oklch(0.28 0.09 300);--border:oklch(0.33 0.1 310);--accent:oklch(0.26 0.09 300);--secondary:oklch(0.24 0.08 300);--muted:oklch(0.24 0.08 300);
+  --info:oklch(0.83 0.13 200);--muted-foreground:oklch(0.78 0.06 320);--faint-foreground:oklch(0.68 0.07 320);--success:oklch(0.82 0.16 165);
+  --wm-grad:linear-gradient(180deg,oklch(0.98 0.02 210) 20%,oklch(0.82 0.14 205) 50%,oklch(0.8 0.18 345) 52%,oklch(0.95 0.06 345))}
+html[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main, .bar-center .name) { letter-spacing: 0.04em; }
+html.dark[data-skin="vaporwave"] :is(.bar-clock-time, .bar-title-main, .bar-center .name) { text-shadow: 0 0 12px color-mix(in oklch, var(--primary) 55%, transparent); }
+/* ======================================================= Candy: a game, softened */
+html[data-skin="candy"]{
+  --title:"Fredoka Variable","Fredoka",system-ui,sans-serif;--radius:14px;--r-ctl:12px;--r-card:18px;--r-big:24px;
+  --primary:oklch(0.66 0.2 350);--primary-foreground:oklch(0.99 0 0);--primary-soft:oklch(0.95 0.035 350);--primary-text:oklch(0.56 0.2 350);--ring:oklch(0.7 0.16 175);
+  --background:oklch(0.985 0.015 350);--sidebar:oklch(0.965 0.03 340);--card:oklch(0.995 0.008 350);--bubble:oklch(0.94 0.05 175);--border:oklch(0.92 0.035 345);--accent:oklch(0.95 0.035 345);--secondary:oklch(0.955 0.03 345);--muted:oklch(0.955 0.03 345);
+  --info:oklch(0.58 0.15 255);--success:oklch(0.55 0.14 165);--muted-foreground:oklch(0.48 0.05 340);--faint-foreground:oklch(0.56 0.04 340);--wm-dot:oklch(0.78 0.14 175)}
+html.dark[data-skin="candy"]{
+  --primary:oklch(0.76 0.16 350);--primary-foreground:oklch(0.2 0.05 340);--primary-soft:oklch(0.3 0.08 345);--primary-text:oklch(0.8 0.14 350);--ring:oklch(0.8 0.12 175);
+  --foreground:oklch(0.96 0.02 340);--background:oklch(0.2 0.045 335);--sidebar:oklch(0.17 0.045 330);--card:oklch(0.23 0.05 335);--popover:oklch(0.24 0.05 335);--bubble:oklch(0.3 0.06 200);--border:oklch(0.32 0.06 340);--accent:oklch(0.28 0.06 340);--secondary:oklch(0.26 0.05 340);--muted:oklch(0.26 0.05 340);
+  --info:oklch(0.78 0.12 240);--success:oklch(0.8 0.14 165);--muted-foreground:oklch(0.78 0.05 340);--faint-foreground:oklch(0.68 0.05 340)}
 
-/* =============================================================================
-   PALETAS: Profesional painted from three seeds (surface, ink, accent). <html> wears data-skin="profesional" plus
-   data-material="paletas"; the ~35 colour tokens are computed by ui/lib/theme-seeds.js and written into <style id="orb-palette">
-   (lib/store.js), so only the shapes live here. Same softer corners as Grafito, system font, no motion.
-   ============================================================================= */
-html[data-material="paletas"] { --radius: 0.625rem; }
-html[data-skin][data-material="paletas"] body { letter-spacing: normal; }
-html[data-skin][data-material="paletas"][data-font="outfit"] { --font-sans: "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, sans-serif; }
-html[data-skin][data-material="paletas"] { --font-title: var(--font-sans); }
-html[data-skin][data-material="paletas"] .wordmark { font-family: var(--font-sans); }
-html[data-material="paletas"] :is([data-slot="badge"], [data-slot="button"], [data-slot="input"]) { border-radius: calc(var(--radius) - 2px); }
-html[data-material="paletas"] [data-slot="card"] { border-radius: calc(var(--radius) + 2px); }
-html[data-material="paletas"] :is(.rounded-3xl, .rounded-2xl) { border-radius: calc(var(--radius) + 2px); }
-html[data-material="paletas"] .bg-bubble { border-radius: 1rem; }
-html[data-material="paletas"] aside.bg-sidebar [data-testid^="nav-"].bg-accent { box-shadow: inset 2px 0 0 var(--primary-text); }
-
-/* =============================================================================
-   NUBE = Órbita Candy (the id stays «nube»): a chunky game UI in the spirit of Duolingo, Switch menus and Candy Crush.
-   Keys with a 3 px hard bottom edge that sink when pressed, 1.5 px outlines in a darker tone, hard soft shadows, pills,
-   colour-coded places, Fredoka for titles/buttons/labels and Nunito for the text. Night: plum with neon glints.
-   The character on the components is in scene-nube.css (loaded last); the backdrop is there too.
-   ============================================================================= */
-html[data-skin="nube"] {
-  --radius: 1.25rem;
-  --background: oklch(0.955 0.03 330);
-  --foreground: oklch(0.27 0.08 320);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.27 0.08 320);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.27 0.08 320);
-  --primary: oklch(0.56 0.183 355);
-  --primary-foreground: oklch(1 0 0);
-  --primary-soft: oklch(0.94 0.045 350);
-  --primary-text: oklch(0.47 0.19 355);
-  --secondary: oklch(0.95 0.03 335);
-  --secondary-foreground: oklch(0.27 0.08 320);
-  --muted: oklch(0.95 0.03 335);
-  --muted-foreground: oklch(0.4 0.08 325);
-  --faint-foreground: oklch(0.46 0.08 330);
-  --accent: oklch(0.925 0.045 338);
-  --accent-foreground: oklch(0.27 0.08 320);
-  --destructive: oklch(0.52 0.2 22);
-  --destructive-soft: oklch(0.96 0.03 20);
-  --success: oklch(0.47 0.12 150);
-  --success-soft: oklch(0.95 0.06 145);
-  --warning: oklch(0.49 0.11 60);
-  --warning-ink: oklch(0.47 0.11 60);
-  --warning-soft: oklch(0.96 0.06 90);
-  --warning-foreground: oklch(1 0 0);
-  --info: oklch(0.5 0.12 240);
-  --border: oklch(0.88 0.05 335);
-  --input: oklch(0.6 0.12 345);
-  --ring: oklch(0.6 0.2 355);
-  --sidebar: oklch(0.975 0.018 335);
-  --bubble: oklch(0.56 0.183 355);
-  --bubble-foreground: oklch(1 0 0);
-  --chart-empty: oklch(0.9 0.05 338);
-  /* Candy material: card rim, hard drop edge, the primary key's edge, the red counter. */
-  --cd-rim: oklch(0.87 0.055 335); --cd-drop: oklch(0.82 0.07 335); --cd-key: oklch(0.42 0.17 355);
-  --cd-red: oklch(0.55 0.183 25); --cd-red-edge: oklch(0.42 0.17 25);
-  /* The four places: fill, edge and ink (the ink is dark so the label passes on the bright fill). */
-  --cd-green: oklch(0.83 0.148 140); --cd-green-edge: oklch(0.6 0.16 145); --cd-green-ink: oklch(0.3 0.09 148);
-  --cd-blue: oklch(0.82 0.087 232); --cd-blue-edge: oklch(0.56 0.14 245); --cd-blue-ink: oklch(0.29 0.09 252);
-  --cd-orange: oklch(0.84 0.113 68); --cd-orange-edge: oklch(0.63 0.15 52); --cd-orange-ink: oklch(0.32 0.09 45);
-  --cd-purple: oklch(0.8 0.096 302); --cd-purple-edge: oklch(0.55 0.16 302); --cd-purple-ink: oklch(0.3 0.1 302);
-  --cd-lemon: oklch(0.95 0.1 100); --cd-lemon-rim: oklch(0.62 0.13 72);
-  --cd-bar: oklch(0.58 0.148 148); --cd-bar-track: oklch(0.94 0.025 335);
+/* ======================================================= Retro: a green phosphor terminal, only dark */
+html[data-skin="retro"]{
+  color-scheme:dark;--title:"VT323",var(--font-mono);--radius:0px;--r-ctl:0px;--r-card:0px;--r-big:0px;--r-full:0px;
+  --foreground:oklch(0.88 0.2 145);--background:oklch(0.13 0.025 150);--sidebar:oklch(0.11 0.02 150);--card:oklch(0.15 0.03 150);--popover:oklch(0.15 0.035 150);--bubble:oklch(0.2 0.05 150);
+  --primary:oklch(0.86 0.21 145);--primary-foreground:oklch(0.12 0.03 150);--primary-soft:oklch(0.22 0.06 150);--primary-text:oklch(0.9 0.19 125);--ring:oklch(0.86 0.21 145);
+  --secondary:oklch(0.18 0.04 150);--muted:oklch(0.18 0.04 150);--accent:oklch(0.21 0.05 150);--border:oklch(0.36 0.09 148);--input:oklch(0.55 0.13 148);
+  --muted-foreground:oklch(0.74 0.15 145);--faint-foreground:oklch(0.64 0.12 145);--info:oklch(0.86 0.13 190);--success:oklch(0.86 0.21 145);--warning:oklch(0.86 0.16 95);--warning-ink:oklch(0.86 0.16 95);--warning-soft:oklch(0.24 0.05 95);--destructive:oklch(0.72 0.19 30);--success-soft:oklch(0.22 0.06 150);
+  --shadow:none;
 }
-html.dark[data-skin="nube"] {
-  --background: oklch(0.19 0.05 315);
-  --foreground: oklch(0.97 0.015 330);
-  --card: oklch(0.255 0.06 318);
-  --card-foreground: oklch(0.97 0.015 330);
-  --popover: oklch(0.255 0.06 318);
-  --popover-foreground: oklch(0.97 0.015 330);
-  --primary: oklch(0.76 0.157 352);
-  --primary-foreground: oklch(0.2 0.06 330);
-  --primary-soft: oklch(0.37 0.1 350);
-  --primary-text: oklch(0.85 0.12 352);
-  --secondary: oklch(0.3 0.065 320);
-  --secondary-foreground: oklch(0.97 0.015 330);
-  --muted: oklch(0.3 0.065 320);
-  --muted-foreground: oklch(0.88 0.04 330);
-  --faint-foreground: oklch(0.81 0.05 330);
-  --accent: oklch(0.335 0.07 322);
-  --accent-foreground: oklch(0.97 0.015 330);
-  --destructive: oklch(0.77 0.16 18);
-  --destructive-soft: oklch(0.33 0.08 18);
-  --success: oklch(0.82 0.16 150);
-  --success-soft: oklch(0.32 0.06 150);
-  --warning: oklch(0.86 0.13 85);
-  --warning-ink: oklch(0.86 0.13 85);
-  --warning-soft: oklch(0.33 0.06 65);
-  --warning-foreground: oklch(0.22 0.04 70);
-  --info: oklch(0.82 0.09 235);
-  --border: oklch(0.38 0.07 322);
-  --input: oklch(0.68 0.12 340);
-  --ring: oklch(0.8 0.16 352);
-  /* Almost the page colour: the sidebar and the backdrop meet without a visible seam (its edge is softened below). */
-  --sidebar: oklch(0.205 0.05 316);
-  /* A dusky pink, not the neon primary: a big block of the bright one tires the eyes at night. */
-  --bubble: oklch(0.46 0.12 352);
-  --bubble-foreground: oklch(0.98 0.01 330);
-  --chart-empty: oklch(0.4 0.07 322);
-  --cd-rim: oklch(0.4 0.08 322); --cd-drop: oklch(0.14 0.045 315); --cd-key: oklch(0.52 0.17 352);
-  --cd-red: oklch(0.72 0.157 22); --cd-red-edge: oklch(0.5 0.17 22);
-  --cd-green: oklch(0.8 0.174 142); --cd-green-edge: oklch(0.5 0.15 148); --cd-green-ink: oklch(0.24 0.08 148);
-  --cd-blue: oklch(0.78 0.113 228); --cd-blue-edge: oklch(0.48 0.13 245); --cd-blue-ink: oklch(0.23 0.08 252);
-  --cd-orange: oklch(0.8 0.131 62); --cd-orange-edge: oklch(0.52 0.14 50); --cd-orange-ink: oklch(0.25 0.08 45);
-  --cd-purple: oklch(0.76 0.122 305); --cd-purple-edge: oklch(0.47 0.15 302); --cd-purple-ink: oklch(0.23 0.09 302);
-  --cd-lemon: oklch(0.32 0.07 75); --cd-lemon-rim: oklch(0.86 0.15 92);
-  --cd-bar: oklch(0.8 0.174 145); --cd-bar-track: oklch(0.2 0.05 316);
-}
-/* The welcome backdrop: still polka dots, pastel blobs and sweets' colours baked into gradients (nothing moves here). */
-html[data-skin="nube"] .brand-sky {
-  background:
-    radial-gradient(circle, rgb(255 255 255 / 0.7) 2px, transparent 2.7px) 0 0 / 38px 38px,
-    radial-gradient(circle, rgb(255 140 190 / 0.3) 2px, transparent 2.7px) 19px 19px / 38px 38px,
-    radial-gradient(46% 56% at 8% 6%, #ffc4dc 0, transparent 70%), radial-gradient(44% 52% at 94% 12%, #ffe9a8 0, transparent 68%),
-    radial-gradient(52% 60% at 6% 96%, #bdeedd 0, transparent 70%), radial-gradient(50% 58% at 96% 94%, #c6e3ff 0, transparent 70%),
-    linear-gradient(160deg, #ffd9ec 0%, #ecd9ff 55%, #d9e4ff 100%);
-}
-html.dark[data-skin="nube"] .brand-sky {
-  background:
-    radial-gradient(circle, rgb(255 255 255 / 0.08) 2px, transparent 2.7px) 0 0 / 38px 38px,
-    radial-gradient(circle, rgb(255 110 200 / 0.16) 2px, transparent 2.7px) 19px 19px / 38px 38px,
-    radial-gradient(44% 54% at 8% 8%, rgb(255 60 190 / 0.34) 0, transparent 70%), radial-gradient(42% 50% at 94% 14%, rgb(120 90 255 / 0.3) 0, transparent 68%),
-    radial-gradient(50% 58% at 96% 94%, rgb(40 220 235 / 0.22) 0, transparent 70%), radial-gradient(44% 52% at 6% 96%, rgb(255 180 60 / 0.16) 0, transparent 70%),
-    linear-gradient(160deg, #2c1638 0%, #231640 55%, #1a1a3c 100%);
-}
-/* Dark: the sidebar shares the page's colour almost exactly, so its edge is softened to keep the seam quiet. */
-html.dark[data-skin="nube"] aside.bg-sidebar { border-right-color: color-mix(in oklch, var(--border) 55%, transparent); }
+html[data-skin="retro"] :is(.bar-clock-time, .bar-title-main, .bar-center .name, .orb-cal-h) { font-size: 22px; font-weight: 400; letter-spacing: 0.04em; }
+html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 0; background: var(--primary); }
+html[data-skin="retro"] { --tip-border: var(--input); --tip-shadow: none; }
+html[data-skin="retro"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="composer"]) { box-shadow: none; border-color: var(--input); }
+/* the phosphor glow on the text, as in the design; solid buttons and counters keep their text plain */
+html[data-skin="retro"] body { text-shadow: 0 0 6px oklch(0.86 0.21 145 / 0.45); }
+html[data-skin="retro"] :is([data-slot="button"]:is(.bg-primary, .bg-destructive), [data-testid="nav-tasks-count"], .bg-warning) { text-shadow: none; }
+/* the CRT glass over the whole window: scanlines and a soft vignette, never taking a click (components/scene.jsx) */
+.crt { position: absolute; inset: 0; z-index: 7; pointer-events: none; contain: strict; mix-blend-mode: multiply;
+  background: repeating-linear-gradient(to bottom, rgb(0 0 0 / 0.22) 0 1px, transparent 1px 3px), radial-gradient(ellipse at center, transparent 60%, rgb(0 0 0 / 0.45)); }
 
-/* Every new theme, at night: the little yellow counters (pending approvals) carry dark text, white on yellow is unreadable. */
-html.dark:not([data-skin="orb"]) .bg-warning.text-white { color: oklch(0.2 0.03 80); }
-/* Orb at night: the destructive colour is light, so the white label of a solid destructive button gives way to a dark one. */
-html.dark[data-skin="orb"] .bg-destructive.text-white { color: oklch(0.2 0.05 22); }
+/* ======================================================= Cristal: the predeterminado (with its palettes) made of glass, only light
+   The shader of Cristal is its background (lib/shaders.js). Until the glass of steps 3 and 4 exists, the panes that already have a class of their own: the sidebar, the chat bar, the
+   message box, cards and floating layers. Blur is only on the few that float over what moves; cards and rows have none. */
+html[data-skin="cristal"]{
+  color-scheme:light;--veil:34%;--veil-side:26%;--radius:12px;--r-ctl:10px;--r-card:18px;--r-big:26px;
+  --g-fill:oklch(1 0 0 / .26);--g-fill-strong:oklch(1 0 0 / .62);
+  --g-rim:oklch(1 0 0 / .95);--g-rim-low:oklch(1 0 0 / .12);--g-line:oklch(1 0 0 / .5);
+  --g-shadow:oklch(0.4 0.04 265 / .2);--g-shadow-near:oklch(0.4 0.04 265 / .1);
+  --border:oklch(1 0 0 / .55);--accent:oklch(1 0 0 / .45);--secondary:oklch(1 0 0 / .35);--muted:oklch(1 0 0 / .35);--bubble:oklch(1 0 0 / .5);
+  --muted-foreground:oklch(0.42 0.015 265);--faint-foreground:oklch(0.5 0.015 265);
+  /* the colour left if the shader cannot run (no WebGL) */
+  --g-base:oklch(0.97 0.012 262);}
+html[data-skin="cristal"] body { background: var(--g-base); }
+html[data-skin="cristal"] aside.bg-sidebar { background-color: color-mix(in oklab, var(--sidebar) var(--veil-side), transparent); border-right-color: var(--g-line); box-shadow: inset -1px 0 0 var(--g-rim-low); }
+html[data-skin="cristal"] aside.bg-sidebar::before { content: ""; position: absolute; inset: 0; z-index: -1; backdrop-filter: blur(40px) saturate(1.6); pointer-events: none; }
+html[data-skin="cristal"] :is(.bar, .tabs-strip, .chat-panel-tabs) { border-bottom-color: var(--g-line); }
+html[data-skin="cristal"] .chat-panel { border-left-color: var(--g-line); backdrop-filter: blur(40px) saturate(1.6); }
+html[data-skin="cristal"] .tabs-strip { backdrop-filter: blur(40px) saturate(1.6); }
+html[data-skin="cristal"] .win-control:not(.win-close):hover { background: oklch(1 0 0 / 0.5); }
+html[data-skin="cristal"] [data-slot="composer"] { background-color: var(--g-fill-strong); backdrop-filter: blur(16px) saturate(1.9); border-color: var(--g-line); border-radius: var(--r-big); box-shadow: inset 0 1px 0 var(--g-rim), 0 22px 46px -18px var(--g-shadow), 0 4px 10px -4px var(--g-shadow-near); }
+html[data-skin="cristal"] [data-slot="card"] { background: linear-gradient(170deg, oklch(1 0 0 / 0.42), oklch(1 0 0 / 0.12) 60%, oklch(1 0 0 / 0.2)), var(--g-fill); border-color: var(--g-line); border-radius: var(--r-card); box-shadow: inset 0 1px 0 var(--g-rim), 0 12px 32px -16px var(--g-shadow), 0 2px 6px -3px var(--g-shadow-near); }
+html[data-skin="cristal"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="dialog-content"]) { background-color: var(--g-fill-strong); background-image: linear-gradient(170deg, oklch(1 0 0 / 0.86), oklch(1 0 0 / 0.68)); backdrop-filter: blur(28px) saturate(1.8); border-color: var(--g-line); box-shadow: inset 0 1px 0 var(--g-rim), 0 24px 50px -16px var(--g-shadow), 0 3px 8px -3px var(--g-shadow-near); }
+html[data-skin="cristal"] [data-slot="dialog-overlay"] { background-color: var(--g-shadow-near); backdrop-filter: blur(8px); }
+/* Cristal is glass whatever the system says about transparency: it was approved as glass, and the other themes are
+   there for who wants none. */
 
+/* ======================================================= every theme at night
+   The little yellow counters (pending approvals) and the solid destructive buttons carry a fixed white label: on the light
+   yellow and red of the night tokens it gives way to the theme's own dark one. */
+html.dark .bg-warning.text-white { color: var(--warning-foreground); }
+html.dark .bg-destructive.text-white { color: var(--background); }
 
-/* Cristal: the footer's icons sit in one glass capsule (a still rim and a tint; the blur stays on the four surfaces). */
-html[data-skin][data-material="cristal"] .side-foot[data-open="false"] .side-foot-row { gap: 2px; padding: 3px; border: 1px solid var(--cr-line); border-radius: 999px; background-color: color-mix(in oklch, var(--card) 72%, transparent); box-shadow: var(--cr-edge); }
-html[data-skin][data-material="cristal"] .side-foot-icon { border-radius: 999px; }
+/* ---- the box and the conversation, per skin (the shared look is in the components) ---- */
+html[data-skin="candy"] [data-slot="composer"] [data-testid="send"] { box-shadow: 0 4px 0 color-mix(in oklab, var(--primary) 55%, black); }
+html[data-skin="retro"] :is(.turn-card, [data-testid="send"]) { box-shadow: none; }
+html[data-skin="retro"] .turn-card { border-color: var(--input); }
+html[data-skin="cristal"] .turn-card { background-color: var(--g-fill); border-color: var(--g-line); backdrop-filter: blur(16px) saturate(1.6); }
+html[data-skin="cristal"] [data-slot="composer"] [data-testid="send"] { box-shadow: inset 0 1px 0 oklch(1 0 0 / .3), 0 6px 16px -6px var(--g-shadow, rgb(0 0 0 / .25)); }

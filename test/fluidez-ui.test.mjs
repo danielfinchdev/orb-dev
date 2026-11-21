@@ -114,42 +114,19 @@ test('el texto del cuadro vive en su borrador: la vista no se redibuja con cada 
   assert.match(fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'conversation', 'composer.jsx'), 'utf8'), /const value = useDraftValue\(draft\)/, 'only the Composer follows the text');
 });
 
-// 3.8.3 (fix C): the moving backdrop and the robot's blinking run on the compositor (transform / opacity only).
-test('las nubes y los ojos del robot se mueven sin repintar: sin filtro por fotograma ni SVG animado', () => {
-  const themes = ['skins', 'scene', 'scene-vaporwave', 'scene-retro', 'scene-nube'].map((n) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes', `${n}.css`), 'utf8')).join('');
+// The robot's blinking runs on the compositor (transform only).
+test('los ojos del robot se mueven sin repintar: sin filtro por fotograma ni SVG animado', () => {
   const app = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'app.css'), 'utf8');
   const orb = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'orb.jsx'), 'utf8');
-  const baked = themes.match(/^\.orb-cloud\.baked \{([^}]*)\}/m)?.[1] ?? '';
-  assert.match(baked, /filter: none/); assert.match(baked, /var\(--orb-cloud-art\)/);
-  assert.match(themes, /^html\.dark \.orb-cloud\.baked \{ background: var\(--orb-cloud-art-dark\) 0 0 \/ 100% 100% no-repeat; \}/m, 'dark: the whole background, not just the image');
-  assert.match(themes, /@keyframes cloud-drift \{ from \{ transform: [^}]*\} to \{ transform: [^}]*\} \}/);
   assert.match(orb, /<span className=\{cn\('orb-eye', i === 1 && 'orb-eye-r'\)\}>/, 'each eye is an HTML box');
   assert.doesNotMatch(orb, /<g className=\{cn\('orb-eye'/);
   assert.match(app, /\.orb:not\(\.still\) \.orb-eye \{ will-change: transform; \}/);
   assert.match(app, /@keyframes orb-talk \{ from \{ transform: scaleY\(1\); \} to \{ transform: scaleY\(\.7\); \} \}/, 'talking stays the same');
 });
 
-// 3.8.3: the bands' moving pieces and the stickers' shadows run on the compositor: no keyframes of background-position
-// (a restyle and a repaint every frame) and no filter on a moving layer (the blur drawn again every frame).
-test('las bandas y las pegatinas se mueven solo con transform y opacity', () => {
-  const themes = ['skins', 'scene', 'scene-vaporwave', 'scene-retro', 'scene-nube'].map((n) => fs.readFileSync(path.join(ROOT, 'src', 'ui', 'themes', `${n}.css`), 'utf8')).join('');
-  for (const [, name, body] of themes.matchAll(/@keyframes ([\w-]+) \{([\s\S]*?\})\s*\}/g)) {
-    if (/^(rt-band|cd-band)/.test(name)) assert.doesNotMatch(body, /background-position/, name);
-  }
-  assert.match(themes, /@keyframes rt-band-a \{ 0%, 100% \{ opacity: 0\.7; \} 50% \{ opacity: 0; \} \}/);
-  assert.match(themes, /@keyframes rt-band-b \{ 0%, 100% \{ opacity: 0; \} 50% \{ opacity: 0\.7; \} \}/);
-  assert.match(themes, /@keyframes cd-band-a \{ to \{ transform: translateX\(190px\); \} \}/, 'one tile of 190 px in 36 s, as before');
-  assert.match(themes, /@keyframes cd-band-b \{ to \{ transform: translateX\(-230px\); \} \}/, 'one tile of 230 px the other way');
-  for (const moving of ['cd-candy', 'vw-sticker']) {
-    const rule = themes.split('\n').find((l) => l.startsWith(`.${moving} {`)) ?? '';
-    assert.match(rule, /animation:/); assert.doesNotMatch(rule, /filter/, `${moving}: its shadow is in its drawing`);
-    assert.match(themes.split('\n').find((l) => l.startsWith(`.${moving} svg {`)) ?? '', /filter: drop-shadow/);
-  }
-  // Every stop and pause rule covers the new pieces too.
-  for (const rule of themes.match(/^.*\.theme-band::before[^{]*\{ animation(-play-state)?: (none|paused) !important; \}.*$/gm) ?? []) {
-    assert.match(rule, /\.theme-band::after/); assert.match(rule, /\.band-art > \*/);
-  }
-  const page = fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'page.jsx'), 'utf8');
-  assert.match(page, /export function BandArt\(\)/);
-  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'ui', 'components', 'chat-bar.jsx'), 'utf8'), /<BandArt \/>/);
+// The old CSS backdrops (clouds, stickers, bands) are gone: the backdrop is one shader canvas (test/temas-388.test.mjs).
+test('the bars have no art layer of their own any more', () => {
+  const ui = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
+  assert.doesNotMatch(ui('components', 'page.jsx'), /BandArt/);
+  assert.doesNotMatch(ui('components', 'chat-bar.jsx'), /BandArt/);
 });

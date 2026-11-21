@@ -15,7 +15,7 @@ import { liveSkills } from './api/extensions.mjs';
 import { orbMcpServer, connectorLauncher } from '../agents/common.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { connectorLaunch } from '../domain/security/connector-secrets.mjs';
-import { connectorSafe } from '../domain/extensions/extensions.mjs';
+import { connectorSafe, reaches } from '../domain/extensions/extensions.mjs';
 import { CURSOR_FILES } from '../agents/cursor.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
@@ -38,6 +38,7 @@ import { ATTACH_DIR, placeAttachments as copyAttachments, prepareAttachments } f
 import { goalAfterTurn, goalFailed, goalSteered, debugOn } from './modes.mjs';
 import { SideChats } from './side.mjs';
 import { Suggester } from './suggest.mjs';
+import { liveStep, activityLine } from '../domain/conversations/live-line.mjs';
 
 export { PERMISSIONS, ATTACH_DIR };
 // a message that asks for a picture (or to change one): Codex gets a short note on how Orb wants it done.
@@ -59,8 +60,10 @@ export const browserOn = () => Boolean(ctx.browser) && ctx.config.browser?.enabl
 // carries only the pipe and a ticket per server, new for every agent process and taken back when it closes
 // (Sessions.closeLive, the coordinator's Lane.closeLive). A worker's tools act only on its task (permissions.mjs ›
 // ownsTask); two direct conversations of one agent are two identities.
+// project: the chat or task's project (none in a chat without one): a connector with a scope of projects is handed over only
+// to those, one without it to every project.
 // Reusable: Cursor's tickets, new every turn (mcpServersEachTurn) and released when the turn ends (.release()).
-export function mcpServersFor(agent, { taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
+export function mcpServersFor(agent, { project = null, taskId = '', orchestrator = false, browser = !orchestrator, session = '', conversation = null, reusable = false } = {}) {
   const who = orchestrator ? 'orb' : agent;
   const sid = session ? String(session) : null;
   const ticketed = (name, base, reply) => {
@@ -77,7 +80,7 @@ export function mcpServersFor(agent, { taskId = '', orchestrator = false, browse
   if (!orchestrator) {
     const taken = new Set(['orb']);
     for (const s of ctx.config.mcpServers ?? []) {
-      if (s.enabled === false || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
+      if (s.enabled === false || !reaches(s, project) || (s.agents?.length && !s.agents.includes(agent)) || taken.has(connectorKey(s.name))) continue;
       // a server of core\mcp whose folder is a link or a junction (or reaches out of core) never starts.
       if (!connectorSafe(ctx.paths.core, s)) continue;
       taken.add(connectorKey(s.name)); // never two servers on one variable name (config checks it too)
@@ -245,6 +248,8 @@ export class Sessions {
   }
 
   isRunning(id) { return this.running.has(id); }
+  // What a running chat does now in one short phrase («Editando styles.css»); null when it is idle or has done nothing yet.
+  liveLine(id) { const step = this.running.get(id)?.step; return step ? activityLine(step.name, step.target) : null; }
   // What a running turn is doing right now (null when it is not running).
   live(id) { const r = this.running.get(id); return r ? { startedAt: r.startedAt, lastAt: r.lastAt, steps: r.steps, last: r.last, waiting: this.pendingApprovals(id).length } : null; }
   runningCount(agent) { return [...this.running.values()].filter((r) => !agent || r.agent === agent).length; }
@@ -291,6 +296,17 @@ export class Sessions {
     this.lives.delete(id);
     try { entry.live.close(); } catch { /* gone */ }
   }
+  // Frees an account of its live processes (conversations and side chats) so its login can be removed: false, and nothing
+  // closed, when any of them is in the middle of a turn; otherwise the ones resting between turns are closed (they open
+  // again on the next message).
+  releaseAccount(accountId) {
+    const mine = [...this.lives].filter(([, e]) => e.account === accountId);
+    const side = this.side.processesOf(accountId);
+    if (mine.some(([id]) => this.running.has(id)) || side.some((e) => e.status === 'running')) return false;
+    for (const [id] of mine) this.closeLive(id);
+    this.side.closeProcessesOf(accountId);
+    return true;
+  }
   closeIdle() {
     for (const [id, entry] of this.lives) if (!this.running.has(id) && Date.now() - entry.lastUsed > IDLE_CLOSE_MS) this.closeLive(id);
     // a direct conversation quiet for a day, with nothing waiting, is done by itself (it opens again when written to).
@@ -320,7 +336,7 @@ export class Sessions {
     // Claude keeps the id the app chooses; the other agents (and forks) report theirs in their first events.
     const newSessionId = !s.cli_session && !forkFrom && s.agent === 'claude' ? crypto.randomUUID() : null;
     if (newSessionId) this.update(s.id, { cli_session: newSessionId });
-    const entry = { key, lastUsed: Date.now(), logFile, live: null };
+    const entry = { key, lastUsed: Date.now(), logFile, live: null, account: acc.id };
     // Long instructions Cursor gets in a file go to the attachments folder (out of git), not among the project's files.
     const promptDir = path.join(s.cwd, ATTACH_DIR);
     if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);
@@ -331,7 +347,7 @@ export class Sessions {
       promptDir, secretValues: Object.values(keyEnv),
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
       resumeId: forkFrom || s.cli_session || null, forkSession: Boolean(forkFrom), newSessionId,
-      mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id }), budgetUsd,
+      mcpServers: mcpServersOf(a, s.agent, { taskId, session: s.id, project: s.project || null }), budgetUsd,
       env: { ...accountEnv(acc), ...keyEnv, ORB_AGENT: s.agent, ...(taskId ? { ORB_TASK_ID: String(taskId) } : {}) },
       internalDir: ctx.paths.internal, lang: ctx.config.language, log: writeLog, cfg: ctx.config.agents[s.agent] ?? {},
       // the project's folder for the guard's inside/outside rules (none in a chat without a project), and what the
@@ -340,7 +356,7 @@ export class Sessions {
       userAsked: () => this.asked.get(s.id) ?? [],
       // read on every action (the owner may take it back at any moment): adb by hand needs it (src/domain/security/guard.mjs).
       android: () => androidAllowed(this.get(s.id)),
-      skills: liveSkills(), // the skills of core that are on (Claude and Codex load them themselves)
+      skills: liveSkills(s.project || null), // the skills of core that are on (Claude and Codex load them themselves)
       onEvent: (ev) => this.onLiveEvent(s.id, ev)
     });
     this.lives.set(s.id, entry);
@@ -361,6 +377,16 @@ export class Sessions {
     this.emit('session:delta', { id, text: d.text });
   }
 
+  // A turn Orb itself ended (the guard caught a command, the working-time limit) is told in the conversation that asked
+  // for the task, as a line with its cause and reason. It only informs: nothing here stops or allows anything.
+  tellStop(id, cause, { why = '', body = '' } = {}) {
+    try {
+      const s = this.get(id);
+      if (s?.kind !== 'task' || !s.task_id || !this.board.conversationOfTask(s.task_id)) return;
+      this.board.addChat('system', body, { kind: 'turn-stopped', cause, task: s.task_id, ...(why ? { why } : {}), agent: s.agent, ...(s.model ? { model: s.model } : {}) });
+    } catch (error) { this.log(`parada de ${id}: ${error.message}`); }
+  }
+
   onLiveEvent(id, ev) {
     const run = this.running.get(id);
     if (run) run.lastAt = Date.now();
@@ -369,7 +395,13 @@ export class Sessions {
     if (ev.type === 'models') { const s = this.get(id); if (s) rememberModels(this.board, s.agent, ev.list, s.account ?? s.agent); return; }
     if (ev.type === 'item') {
       const item = this.addItem(id, ev.role, ev.kind, ev.body);
-      if (run) { const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++; }
+      if (ev.stop) this.tellStop(id, ev.stop.cause, { why: ev.stop.why, body: ev.body });
+      if (run) {
+        const what = describeItem(item); if (what) run.last = what; if (ev.kind === 'tool' || ev.kind === 'file') run.steps++;
+        // the same step kept apart, without paths, for the list rows (liveLine)
+        if (ev.kind === 'tool') run.step = liveStep(ev.body?.name, ev.body?.input);
+        else if (ev.kind === 'file') run.step = liveStep('edit', ev.body?.path);
+      }
       return;
     }
     // something «Auto» let through that «Preguntar» would have asked: one quiet line in the chat (and the task's
@@ -519,7 +551,9 @@ export class Sessions {
     const worked = t - run.startedAt - run.waitMs - (run.pausedAt != null ? t - run.pausedAt : 0);
     if (timeoutMs && worked >= timeoutMs && !run.timedOut) {
       run.timedOut = true;
-      this.addItem(id, 'error', 'text', tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) }));
+      const timeoutText = tr('msg.sessions.timeout', { min: Math.round(timeoutMs / 60000) });
+      this.addItem(id, 'error', 'text', timeoutText);
+      this.tellStop(id, 'time', { body: timeoutText });
       this.stop(id);
       return;
     }
@@ -726,9 +760,16 @@ ${body}`;
   // forks (Claude, Codex) carry their whole history; for the others the copy starts with a summary of what was said.
   // agent: «Continuar con otro agente», the copy goes on with that agent (its own account and default model) and
   // always starts with the summary. Without it, the fork of before.
-  fork(id, { title, agent } = {}) {
+  // from: the id of a text line of this chat; the copy holds the conversation up to and including that line. The agent's
+  // native session also holds what came after, so a cut copy never uses it: it starts with the summary, like «Editar».
+  // Only the conversation is copied; the project's files are not touched.
+  fork(id, { title, agent, from } = {}) {
     const s = this.must(id);
     if (this.running.has(id)) throw new Error(tr('msg.sessions.forkWait'));
+    const cut = from == null ? null : Number(from);
+    // an «Editar» in progress is about to delete lines from this chat: a cut copy could carry them
+    if (cut != null && [s.id, s.cwd].some((k) => this.editing?.has(k))) throw new Error(tr('msg.edit.busy'));
+    if (cut != null && !this.board.one("SELECT id FROM session_items WHERE id = ? AND session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')", cut, s.id)) throw new Error(tr('msg.edit.noMessage'));
     const other = agent && agent !== s.agent ? agent : null;
     const a = adapter(other ?? s.agent);
     if (other && UNGUARDED_AGENTS.includes(other)) requireLevel('leer', AGENT_LABELS[other] ?? other); // the copy never keeps «total»
@@ -736,10 +777,10 @@ ${body}`;
     const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // its title stays (not renamed by its next message)
-    const old = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT 40", s.id).reverse();
+    const old = this.board.all(`SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')${cut != null ? ' AND id <= ?' : ''} ORDER BY id DESC LIMIT 40`, s.id, ...(cut != null ? [cut] : [])).reverse();
     for (const it of old) this.board.run('INSERT INTO session_items (session_id, role, kind, body, at) VALUES (?, ?, ?, ?, ?)', copy.id, it.role, it.kind, it.body, it.at);
     this.addItem(copy.id, 'system', 'status', other ? tr('msg.sessions.switched', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forked', { title: s.title }));
-    if (!other && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
+    if (!other && cut == null && a.caps?.fork && s.cli_session) this.board.settingJson(`fork_pending:${copy.id}`, s.cli_session);
     else if (old.length) this.board.settingJson(`fork_summary:${copy.id}`, old.map((it) => `${it.role === 'user' ? 'Usuario' : 'Agente'}: ${oneLine(bodyText(parseItem(it).body), 400)}`).join('\n'));
     return copy;
   }

@@ -39,9 +39,9 @@ const urlTransform = (url) => (localImagePath(url) ? url : defaultUrlTransform(u
 // there, it is copied.
 function PasteToTerminal({ code }) {
   const t = useT();
-  const paste = () => {
+  const paste = (e) => {
     const line = oneCommand(code);
-    if (pasteToTerminal(line)) return;
+    if (pasteToTerminal(line, e?.currentTarget)) return;
     navigator.clipboard?.writeText(line).then(() => notifyOk(t('terminal.copied'))).catch(() => notifyError(t('app.copyFailed')));
   };
   return <Tip label={t('terminal.paste')}><button type="button" className="text-muted-foreground hover:text-foreground absolute top-1.5 right-1.5 grid size-7 cursor-pointer place-items-center rounded-md opacity-0 transition group-hover:opacity-100 focus-visible:opacity-100 [&_svg]:size-3.5" aria-label={t('terminal.paste')} onClick={paste}><SquareTerminal /></button></Tip>;

@@ -50,7 +50,7 @@ export function DiffLines({ text, headers = true, className, testid, onLine, bel
       {rows.map((r, i) => (
         <div key={i}>
           <div className={cn('group/line relative px-3 whitespace-pre', onLine && 'pl-7', ROW[r.kind])} data-change={r.kind === 'add' || r.kind === 'del' ? '' : undefined}>
-            {onLine && r.line ? <button type="button" className="text-primary absolute top-0 left-1.5 hidden h-full w-5 cursor-pointer items-center justify-center font-bold group-hover/line:flex focus-visible:flex" aria-label={lineLabel} title={lineLabel} onClick={() => onLine({ line: r.line, side: r.side, text: r.code ? '' : '' })} data-testid="diff-comment-add">+</button> : null}
+            {onLine && r.line ? <button type="button" className="text-primary-text absolute top-0 left-1.5 hidden h-full w-5 cursor-pointer items-center justify-center font-bold group-hover/line:flex focus-visible:flex" aria-label={lineLabel} title={lineLabel} onClick={() => onLine({ line: r.line, side: r.side, text: r.code ? '' : '' })} data-testid="diff-comment-add">+</button> : null}
             {r.code ? <><span className="code-sign">{r.sign}</span>{r.code.length ? r.code : (r.sign ? null : ' ')}</> : (r.l || ' ')}
           </div>
           {below && r.line ? below(r) : null}

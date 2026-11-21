@@ -31,7 +31,7 @@ export function ReportDialog({ open, onOpenChange, moment, summary }) {
   const copy = () => navigator.clipboard.writeText(text ?? '').then(() => { notifyOk(t('logbooks.reportCopied')); onOpenChange(false); });
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl" data-testid="activity-report">
+      <DialogContent className="sm:max-w-[640px]" data-testid="activity-report">
         <DialogHeader><DialogTitle>{t('logbooks.report')}</DialogTitle></DialogHeader>
         <div className="grid gap-1">
           <span className="text-muted-foreground text-micro uppercase">{t('logbooks.reportMoment')}</span>
@@ -50,7 +50,7 @@ export function ReportDialog({ open, onOpenChange, moment, summary }) {
         </div>
         <p className="text-muted-foreground flex items-start gap-1.5 text-control"><ShieldCheck className="mt-0.5 size-4 shrink-0" />{t('logbooks.reportPrivacy')}</p>
         <DialogFooter>
-          <DialogClose asChild><Button variant="ghost">{t('logbooks.reportCancel')}</Button></DialogClose>
+          <DialogClose asChild><Button variant="outline">{t('logbooks.reportCancel')}</Button></DialogClose>
           <Button onClick={copy} disabled={!text} data-testid="activity-report-copy"><Copy />{t('logbooks.reportCopy', { n: view.total })}</Button>
         </DialogFooter>
       </DialogContent>

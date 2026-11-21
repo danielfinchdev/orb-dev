@@ -23,27 +23,6 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-enum class TaskFilter { All, Queued, Approve, Running, Problems, Done }
-
-object TaskFiltering {
-    fun matches(t: TaskRow, f: TaskFilter) = when (f) {
-        TaskFilter.All -> true
-        TaskFilter.Queued -> t.status == "queued"
-        TaskFilter.Approve -> t.needsApproval
-        TaskFilter.Running -> t.running
-        TaskFilter.Problems -> t.problem
-        TaskFilter.Done -> t.status == "done" || t.status == "cancelled"
-    }
-
-    /** What the search box matches on the rows already loaded (for when the PC cannot be asked). */
-    fun local(rows: List<TaskRow>, q: String): List<SearchTask> {
-        val needle = q.trim().lowercase()
-        return rows.filter { r ->
-            r.title.lowercase().contains(needle) || r.project?.lowercase()?.contains(needle) == true || r.result?.lowercase()?.contains(needle) == true
-        }.map { SearchTask(it.id, it.title, it.status, it.project, null) }
-    }
-}
-
 @Immutable
 data class NewTaskState(
     val projects: List<String> = emptyList(),
@@ -54,12 +33,16 @@ data class NewTaskState(
 
 @Immutable
 data class TasksState(
-    val tasks: List<TaskRow> = emptyList(),
-    val filter: TaskFilter = TaskFilter.All,
+    /** What the board draws: the sections of the chosen view, each with its rows. */
+    val groups: List<TaskGroup> = emptyList(),
+    val filter: TaskFilter = TaskFilter.Active,
+    /** The chip chosen under the header: only that section is drawn; null draws them all. */
+    val section: TaskSection? = null,
     val queued: Int = 0,
     val approve: Int = 0,
     val running: Int = 0,
     val problems: Int = 0,
+    val done: Int = 0,
     val total: Int = 0,
     val paused: Boolean = false,
     /** Queued tasks that wait because the queue is paused. */
@@ -72,6 +55,10 @@ data class TasksState(
     val loadFailed: Boolean = false,
     val canCreate: Boolean = false,
     val canPause: Boolean = false,
+    /** Whether the PC takes a refusal from here; the OK itself is never given from the list. */
+    val canReject: Boolean = false,
+    /** Tasks whose refusal is under way. */
+    val rejecting: Set<Long> = emptySet(),
     val searching: Boolean = false,
     val query: String = "",
     /** The matches of the search; null while there is nothing to look for yet. */
@@ -90,7 +77,9 @@ class TasksViewModel(
     private val searchDebounceMs: Long = 300,
 ) : ViewModel() {
     private data class Ui(
-        val filter: TaskFilter = TaskFilter.All,
+        val filter: TaskFilter = TaskFilter.Active,
+        val section: TaskSection? = null,
+        val rejecting: Set<Long> = emptySet(),
         val refreshing: Boolean = false,
         val failed: Boolean = false,
         val answered: Boolean = false,
@@ -110,17 +99,23 @@ class TasksViewModel(
     /** Short messages for a snackbar. */
     val messages = _messages.receiveAsFlow()
 
+    // The new state of the queue each time the person changed it here: the screen offers to go back.
+    private val _queueChanges = Channel<Boolean>(Channel.BUFFERED)
+    val queueChanges = _queueChanges.receiveAsFlow()
+
     val state: StateFlow<TasksState> = combine(data, ui, backend.connection) { d, u, c ->
         val all = d.tasks
         TasksState(
-            tasks = all.filter { TaskFiltering.matches(it, u.filter) }, filter = u.filter,
-            queued = all.count { it.status == "queued" }, approve = all.count { it.needsApproval },
-            running = all.count { it.running }, problems = all.count { it.problem }, total = all.size,
+            groups = TaskBoard.groups(all, u.filter, u.section), filter = u.filter, section = u.section,
+            queued = all.count { TaskBoard.sectionOf(it) == TaskSection.Queued }, approve = all.count { it.needsApproval },
+            running = all.count { it.running }, problems = all.count { TaskBoard.sectionOf(it) == TaskSection.Problems },
+            done = all.count { TaskBoard.sectionOf(it) == TaskSection.Done }, total = all.size,
             paused = d.paused, waitingPaused = all.count { it.status == "queued" && it.waiting?.kind == "paused" },
             queueBusy = u.queueBusy, connection = c, online = c is ConnectionState.Online,
             loaded = all.isNotEmpty() || u.answered, refreshing = u.refreshing, loadFailed = u.failed,
             canCreate = backend.available(ApiMethods.TASKS_CREATE),
             canPause = backend.available(ApiMethods.CONTROL_PAUSE) && backend.available(ApiMethods.CONTROL_RESUME),
+            canReject = backend.available(ApiMethods.TASKS_APPROVE), rejecting = u.rejecting,
             searching = u.searching, query = u.query, results = u.results, newTask = u.newTask,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TasksState())
@@ -158,7 +153,10 @@ class TasksViewModel(
         viewModelScope.launch { reload() }
     }
 
-    fun setFilter(f: TaskFilter) = ui.update { it.copy(filter = f) }
+    fun setFilter(f: TaskFilter) = ui.update { it.copy(filter = f, section = null) }
+
+    /** A chip under the header: the same chip again goes back to every section. */
+    fun toggleSection(s: TaskSection) = ui.update { it.copy(section = if (it.section == s) null else s) }
 
     fun openSearch() = ui.update { it.copy(searching = true) }
 
@@ -175,15 +173,15 @@ class TasksViewModel(
     private suspend fun runSearch(q: String) {
         val needle = q.trim()
         if (needle.length < MIN_QUERY || !ui.value.searching) return
-        val local = TaskFiltering.local(data.value.tasks, needle)
+        val local = TaskBoard.local(data.value.tasks, needle)
         val found = if (backend.connection.value is ConnectionState.Online) backend.search(needle).getOrNull() else null
         // A newer search may have replaced this one while the PC answered.
         if (ui.value.query.trim() != needle) return
         ui.update { it.copy(results = found ?: local) }
     }
 
-    /** Pause or resume the whole queue. */
-    fun setPaused(paused: Boolean) {
+    /** Pause or resume the whole queue; [offerUndo] lets the screen offer to go back (not when this already is the going back). */
+    fun setPaused(paused: Boolean, offerUndo: Boolean = true) {
         if (ui.value.queueBusy) return
         if (backend.connection.value !is ConnectionState.Online) {
             _messages.trySend(TaskTexts.ACTION_OFFLINE)
@@ -196,12 +194,37 @@ class TasksViewModel(
             val r = backend.setPaused(paused)
             ui.update { it.copy(queueBusy = false) }
             if (r.isSuccess) {
-                _messages.trySend(if (paused) TaskTexts.QUEUE_PAUSED else TaskTexts.QUEUE_RESUMED)
+                if (offerUndo) _queueChanges.trySend(paused) else _messages.trySend(if (paused) TaskTexts.QUEUE_PAUSED else TaskTexts.QUEUE_RESUMED)
                 reload()
             } else {
                 data.update { it.copy(paused = before) }
                 _messages.trySend("${TaskTexts.ACTION_FAILED}. ${linkErrorText(r.exceptionOrNull()!!)}")
             }
+        }
+    }
+
+    /**
+     * Refuses a task that waits for the OK. A refusal is the safe side, but the PC still wants the fingerprint of the task
+     * as it is now, so the task is read first; if it no longer waits for the OK nothing is sent.
+     */
+    fun reject(id: Long) {
+        if (!backend.available(ApiMethods.TASKS_APPROVE) || id in ui.value.rejecting) return
+        if (backend.connection.value !is ConnectionState.Online) {
+            _messages.trySend(TaskTexts.ACTION_OFFLINE)
+            return
+        }
+        ui.update { it.copy(rejecting = it.rejecting + id) }
+        viewModelScope.launch {
+            val read = backend.get(id)
+            val hash = read.getOrNull()?.takeIf { it.row.status == "awaiting_approval" }?.previewHash
+            val r = if (hash != null) backend.decide(id, false, hash) else read.map { }
+            ui.update { it.copy(rejecting = it.rejecting - id) }
+            when {
+                r.isFailure -> _messages.trySend("${TaskTexts.ACTION_FAILED}. ${linkErrorText(r.exceptionOrNull()!!)}")
+                hash == null -> _messages.trySend(TaskTexts.TASK_CHANGED)
+                else -> _messages.trySend(TaskTexts.REJECTED)
+            }
+            reload()
         }
     }
 

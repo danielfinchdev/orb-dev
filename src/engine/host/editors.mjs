@@ -79,3 +79,15 @@ export async function runAction(command, dir, { choice = 'auto', language = 'es'
   await spawn({ cmd: plan.cmd, args: plan.args, cwd: plan.cwd });
   return true;
 }
+
+// How each editor is told to open one file at a line (Cursor, VS Code and Windsurf take `--goto file:line`, Zed
+// `file:line`, JetBrains `--line N file`), always after the folder so the file opens in that project's window. A list, never
+// a command line: nothing is re-read by a shell. `file` is absolute (so it can never pass for an option) and `line` a
+// positive integer or null. Pure, so it is tested.
+export function fileArgs(which, dir, file, line = null) {
+  if (!EDITOR_IDS.includes(which) || !path.isAbsolute(dir) || !path.isAbsolute(file)) throw new Error('editor file: bad arguments');
+  if (line != null && !(Number.isInteger(line) && line > 0 && line <= 10_000_000)) throw new Error('editor file: bad line');
+  if (which === 'jetbrains') return line ? [dir, '--line', String(line), file] : [dir, file];
+  if (which === 'zed') return [dir, line ? `${file}:${line}` : file];
+  return [dir, '--goto', line ? `${file}:${line}` : file];
+}

@@ -21,7 +21,6 @@ export default {
   'app.linkNoShortCode': "Your Orb does not accept the short code. Scan the QR code or paste its link.",
   'app.scanPreparing': "The QR code reader is being installed. Try again in a few seconds.",
   'app.sharedImage': "Shared picture: {path}",
-  'app.noticeFrom': "{name} · Notification",
   'app.pushDeniedApp': "Orb's notifications are turned off. Turn them on in Android settings.",
   'app.menu': 'Menu',
   'app.window.controls': 'Window',
@@ -69,7 +68,6 @@ export default {
   'update.downloadAgain': 'Download again',
   'update.web': 'Download from the website',
   "app.linkOldOrb": "That Orb is from an older version: update it or scan its QR code.",
-  "app.noticeHidden": "You have a new message",
   "app.pcOffline": "Your PC can't be reached.",
   "app.pcSlow": "Your PC didn't answer in time. Try again.",
   "app.offlineTitle": "Your PC is off or can't be reached",
@@ -87,6 +85,8 @@ export default {
   "app.newSecretRecovery": "Earlier backups will ask for your recovery code. Afterwards, make a new code in Settings › Data: until then, new backups will not carry it and “I forgot the password” cannot check it.",
   "app.newSecretNoRecovery": "You have no recovery code: the backups made until now will no longer open. Afterwards, make one in Settings › Data.",
   "app.newSecretBack": "The old key is kept aside. If Windows can open it again, Orb will offer to go back to it.",
+  "app.newSecretIntroKept": "Orb will make a new key for this PC. Approvals will be asked again.",
+  "app.newSecretBackReadable": "The current key is kept aside and not deleted: from Settings › Data you will be able to go back to it.",
   "app.newSecretWord": "START",
   "app.newSecretType": "Type {word} to confirm",
   "app.newSecretWrong": "Type {word} to confirm.",
@@ -110,6 +110,11 @@ export default {
   "app.loadOfflineTitle": "No connection",
   "app.loadOfflineBody": "This screen could not be loaded. Check the connection and try again.",
   "app.loadOfflineToast": "Could not open: no connection.",
+  // errorHint: a screen failed while drawing (error-boundary.jsx > CrashCard); the engine is alive, so it keeps working.
+  // crashHint: the engine did not start (main.jsx > StartError); nothing runs underneath, F5 only reloads the window.
+  "app.errorHint": "Press F5 to reload the window. Orb keeps running underneath.",
+  "app.crashHint": "F5 reloads the window.",
+  "app.loadOfflineNote": "The screen you were on is kept. After two failed tries, “Try again” reloads the page.",
   'app.linkOfflineWifi': 'Couldn’t connect to your Orb over the local network. On the PC, allow Orb through Windows Firewall for private networks.',
   "app.copyFailed": "Could not copy.",
 };

@@ -246,7 +246,8 @@ export function createLive(o) {
       // reach the guard. One the guard would deny (reading core, the owner's keys, another project's .env) stops the
       // turn at once, before a next step can send what it read out (in «Auto» Codex has the network).
       const why = p.item?.type === 'commandExecution' ? deniedRun(p.item.command, o) : null;
-      if (why) { onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('msg.sessions.autoStopped', { why }) }); live.interrupt?.(); }
+      // `stop` only tells the conversation why the turn ended; it changes nothing about when the turn is stopped.
+      if (why) { onEvent({ type: 'item', role: 'system', kind: 'status', body: tr('msg.sessions.autoStopped', { why }), stop: { cause: 'guard', why } }); live.interrupt?.(); }
       return;
     }
     // the end of a compaction (thread/compact/start): the item of the summary or the thread's own notice. The

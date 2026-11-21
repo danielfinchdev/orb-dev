@@ -168,7 +168,8 @@ test('the turn waits for the attachments, and Orb\'s ffmpeg is read-only for age
 
 test('«Adjuntar» in the composer: any file, drop and paste too', () => {
   const session = ui('views', 'session.jsx');
-  assert.match(session, /<Tip label=\{t\('session\.attach'\)\}><Button [^>]*onClick=\{async \(\) => addImages\(await bridge\.pickAttachments\(\)\)\} data-testid="attach"/);
+  assert.match(session, /<AttachMenu onAttach=\{async \(\) => addImages\(await bridge\.pickAttachments\(\)\)\}/);
+  assert.match(ui('components', 'conversation', 'attach-menu.jsx'), /<Button [^>]*onClick=\{onAttach\} data-testid="attach"/);
   assert.match(session, /filter\(\(f\) => !bridge\.mobile \|\| \/\^image\\\/\/\.test\(f\.type\)\)/);
   assert.match(session, /onPaste=\{\(e\) => \{ fromTransfer\(e\.clipboardData\)/);
   assert.match(session, /onDrop=\{\(e\) => \{ fromTransfer\(e\.dataTransfer\)/);

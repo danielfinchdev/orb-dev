@@ -9,6 +9,8 @@
 // attention server), remote-web.mjs (service worker, headers).
 import { isMuted, itemOfConversation } from '../../domain/conversations/inbox.mjs';
 import { buildNote, actionRoute } from '../../shared/notes.mjs';
+import { noticeNote, targetOfNote } from './notes-center.mjs';
+import { recordNote } from '../../domain/notes/recent.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -505,6 +507,30 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const built = buildNote({ chat, line, preview: pushPreview(ctx.config), muted, assistantName: ctx.config.assistantName ?? 'Orb', words: noteWords() });
     const n = built ? dress(built) : null;
     if (!n) return false;
+    return pushNote(n, conversation);
+  }
+  // The notices that are not a chat line (a task done and reviewed, one held, a new version, a limit gone): same
+  // delivery, no chat and no mute (a global switch does not exist beyond the preview and the access itself).
+  function announce(fact) {
+    const once = fact?.kind === 'update' ? `note_update:${String(fact.version ?? '').slice(0, 30)}` : null;
+    if (once && board.setting(once)) return false; // once per version
+    const built = noticeNote(fact, { preview: pushPreview(ctx.config), assistantName: ctx.config.assistantName ?? 'Orb' });
+    const delivered = built ? pushNote(dress(built), null) : false;
+    // a version nobody was told about (no phone linked yet) is still news the day a phone links
+    if (once && delivered) board.setting(once, '1');
+    return delivered;
+  }
+  // What was kept for the phones goes when the last phone is unlinked (a new link starts with a clean list).
+  const clearNotes = () => { try { board.run('DELETE FROM mobile_notes'); } catch (error) { log(`avisos: ${error.message}`); } };
+  // The note goes out (sealed event to the open apps, Web Push to the others) and is kept in the short list a phone reads
+  // back with notes.list. What is kept has no actions, no card and no token.
+  function pushNote(note, conversation) {
+    // Nothing is kept while no phone is linked: the first one to link must not read notices from before it existed.
+    if (!board.all('SELECT * FROM devices WHERE public_key IS NOT NULL').some(validDevice)) return false;
+    // The saved row's id (the `id` notes.list gives) travels as `nid`, so a phone tells two notices with the same text apart.
+    // The row is written before the delivery; if it cannot be written the notice goes out without `nid`.
+    let n = note;
+    try { n = { ...note, nid: recordNote(board, { key: n.key, kind: n.kind, title: n.title, body: n.body, hidden: n.hidden, route: n.route, line: n.line, target: targetOfNote(n) }, { conversation }) }; } catch (error) { log(`avisos: ${error.message}`); }
     const openNow = new Set();
     for (const c of clients) {
       openNow.add(c.device);
@@ -513,7 +539,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     for (const d of board.all('SELECT * FROM devices WHERE push IS NOT NULL')) {
       if (openNow.has(d.id) || !validDevice(d)) continue;
       let sub; try { sub = JSON.parse(d.push); } catch { continue; }
-      const data = { title: n.title, body: n.body, hidden: n.hidden, tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
+      const data = { title: n.title, body: n.body, hidden: n.hidden, ...(n.nid != null ? { nid: n.nid } : {}), tag: `orb-${n.key}`, icon: n.icon, url: '/', route: n.route, kind: n.kind,
         actions: n.actions.map(({ id, title, open: o }) => ({ id, title, ...(o ? { open: true } : {}) })), card: n.card ?? null, acts: mintActs(d.id, n) };
       sendPush(sub, data, own().vapid)
         .then((r) => { if (r === 'gone') board.run('UPDATE devices SET push = NULL WHERE id = ?', d.id); })
@@ -640,6 +666,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   }
 
   const remote = {
+    announce,
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
     broadcast(event, payload) {
       if (event === 'chat:new') notify(payload);
@@ -711,6 +738,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     revoke(id) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
+      if (!board.one('SELECT 1 AS x FROM devices WHERE public_key IS NOT NULL')) clearNotes();
       keys.delete(d.id); seen.delete(d.id);
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
       board.event(null, 'usuario', 'device.revoked', d.name);
@@ -724,6 +752,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     revokeAll() {
       const list = board.all('SELECT id, name FROM devices');
       board.run('DELETE FROM devices');
+      clearNotes();
       keys.clear(); seen.clear(); pairing = null; ownKeys = null;
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
       clients.clear();

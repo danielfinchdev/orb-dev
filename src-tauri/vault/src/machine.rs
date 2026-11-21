@@ -25,6 +25,8 @@ const MAX_BLOB: usize = 16 * 1024;
 /// user is offered to go back to it (Ajustes › Datos writes BACK_FILE: src/engine/api/data.mjs › backup.previousKey).
 pub const PREVIOUS_FILE: &str = "clave-anterior.json";
 pub const BACK_FILE: &str = "clave-volver.json";
+/// A new key on purpose while this one opens (Ajustes › Datos writes it: src/engine/api/data.mjs › backup.newKey); used once.
+pub const NEW_FILE: &str = "clave-nueva.json";
 
 /// How this PC's secret is sealed: Windows' DPAPI in Orb.exe, a fake in the tests' vault.
 pub trait Sealer: Send + Sync {
@@ -355,11 +357,30 @@ fn previous_key(dir: &Path, files: [&Path; 2], hex: Locked, s: &dyn Sealer, warn
     let _ = fs::remove_file(&back);
     return hex;
   }
-  let old = listed.iter().find_map(|f| match try_open(f, s) {
-    Open::Hex(h) if !crypto::same(h.as_slice(), hex.as_slice()) => Some(h),
-    _ => None,
-  });
-  let Some(old) = old else {
+  // The most recent listed key that opens and is not the one in use. A file that is busy right now (not unreadable, not
+  // gone) stops the search: going on to an older key behind its back could switch to the wrong one without a word.
+  let mut found: Option<(Locked, &PathBuf)> = None;
+  let mut busy = false;
+  for f in &listed {
+    match try_open(f, s) {
+      Open::Hex(h) if !crypto::same(h.as_slice(), hex.as_slice()) => {
+        found = Some((h, f));
+        break;
+      }
+      Open::Busy(_) => {
+        busy = true;
+        break;
+      }
+      _ => {}
+    }
+  }
+  if busy {
+    if back.exists() {
+      warns.push(("previousFailed", "clave ocupada".into()));
+    }
+    return hex;
+  }
+  let Some((old, chosen)) = found else {
     let _ = fs::remove_file(&back);
     return hex;
   };
@@ -390,12 +411,95 @@ fn previous_key(dir: &Path, files: [&Path; 2], hex: Locked, s: &dyn Sealer, warn
     }
   }
   let _ = fs::remove_file(&back);
+  // The older keys stay pointed at (after the ones kept now), except the file this goes back to: it is the key in use.
+  for f in listed.iter().filter(|f| *f != chosen && f.exists()) {
+    if !kept.contains(f) {
+      kept.push(f.clone());
+    }
+  }
   let note = json!({ "files": kept, "at": iso_now(), "back": !to_new, "quiet": true });
   if write_whole(&record, note.to_string().as_bytes()).is_err() {
     let _ = fs::remove_file(&record);
   }
   warns.push((if to_new { "previousNew" } else { "previousBack" }, (if to_new { "clave nueva" } else { "clave anterior" }).into()));
   old
+}
+
+/// «Empezar con una clave nueva» chosen with the key opening fine (NEW_FILE). The key in use is never deleted: it is kept
+/// aside and PREVIOUS_FILE points at it (the new asides first, then what the record already listed), so previous_key
+/// offers the way back. Order, so that a cut at any point loses no key and does not repeat the change at every start:
+///   1. the new key is sealed and checked; 2. both files are copied aside; 3. PREVIOUS_FILE is written (with the signal's
+///   time and the SHA-256 of the clave2.enc being replaced: a fingerprint of the file, not of the key); 4. clave2.enc is
+///   replaced; 5. its copy is replaced; 6. the signal goes.
+/// A cut before 4 leaves the same clave2.enc and the signal: the next start repeats from 1. A cut after 4 leaves the
+/// signal, but the record carries the same time and the fingerprint of the file installed, and clave2.enc is exactly that: the
+/// change is done (nothing is opened to know it): «newKeyDone» is said, the signal goes, and load() puts the copy right. A step that fails ends it with
+/// the previous record put back as it was, the signal removed and the key in use unchanged («newKeyFailed»). Done: «newKeyDone».
+fn new_key(dir: &Path, files: [&Path; 2], hex: Locked, s: &dyn Sealer, warns: &mut Vec<(&'static str, String)>) -> Locked {
+  let signal = dir.join(NEW_FILE);
+  let at = fs::read(&signal).ok().and_then(|b| serde_json::from_slice::<Value>(&b).ok()).and_then(|v| v.get("at").and_then(Value::as_str).map(String::from)).unwrap_or_default();
+  let record = dir.join(PREVIOUS_FILE);
+  let before = fs::read(&record).ok();
+  let saved = before.as_ref().and_then(|b| serde_json::from_slice::<Value>(b).ok());
+  let print = |f: &Path| fs::read(f).ok().map(|b| crypto::sha256_b64(&b));
+  let current = print(files[0]);
+  let done = saved.as_ref().is_some_and(|v| v.get("newKeyAt").and_then(Value::as_str) == Some(at.as_str()) && v.get("installed").and_then(Value::as_str).is_some_and(|i| current.as_deref() == Some(i)));
+  if done {
+    let _ = fs::remove_file(&signal);
+    warns.push(("newKeyDone", "clave nueva".into()));
+    return hex;
+  }
+  let restore = || match &before {
+    Some(b) => {
+      let _ = write_whole(&record, b);
+    }
+    None => {
+      let _ = fs::remove_file(&record);
+    }
+  };
+  let fail = |why: String, warns: &mut Vec<(&'static str, String)>| {
+    let _ = fs::remove_file(&signal);
+    warns.push(("newKeyFailed", why));
+  };
+  let fresh_hex = crypto::hex_of(crypto::random(32).as_slice());
+  let Some(sealed) = s.seal(fresh_hex.as_slice()).ok().filter(|b| s.unseal(b).is_ok_and(|t| crypto::same(t.as_slice(), fresh_hex.as_slice()))) else {
+    fail("no se pudo sellar".into(), warns);
+    return hex;
+  };
+  let Some(replaced) = current else {
+    fail("no se pudo leer la clave".into(), warns);
+    return hex;
+  };
+  let mut kept = vec![];
+  for (i, file) in files.iter().enumerate().filter(|(_, f)| f.exists()) {
+    match keep_aside(file, "anterior") {
+      Ok(to) => kept.push(to),
+      Err(e) if i == 0 => {
+        fail(e.to_string(), warns);
+        return hex;
+      }
+      Err(_) => {}
+    }
+  }
+  // what the record listed before stays after the new asides (the most recent first), without repeating
+  let older: Vec<PathBuf> = saved.as_ref().and_then(|v| v.get("files")).and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(PathBuf::from).filter(|f| f.exists() && !kept.contains(f)).collect()).unwrap_or_default();
+  kept.extend(older);
+  let note = json!({ "files": kept, "at": iso_now(), "quiet": true, "newKeyAt": at, "replaced": replaced, "installed": crypto::sha256_b64(&sealed) });
+  if write_whole(&record, note.to_string().as_bytes()).is_err() {
+    restore();
+    fail("no se pudo guardar el registro".into(), warns);
+    return hex;
+  }
+  if write_whole(files[0], &sealed).is_err() {
+    restore();
+    fail("no se pudo guardar la clave".into(), warns);
+    return hex;
+  }
+  let _ = write_whole(files[1], &sealed);
+  let _ = fs::remove_file(dir.join(BACK_FILE));
+  let _ = fs::remove_file(&signal);
+  warns.push(("newKeyDone", "clave nueva".into()));
+  fresh_hex
 }
 
 /// The ORB2 copy outside the workspace beside 3.8.0's name: claves\<key>.enc → claves\<key>.v2.enc.
@@ -485,10 +589,19 @@ pub fn load(dir: &Path, copy: &Path, s: &dyn Sealer, allow_new: bool) -> Result<
   if kept && from_bin {
     let _ = fs::remove_file(&plain);
   }
+  // The signal never outlives a start, except one cut half-way (new_key tells). It is acted on only when this start has a key
+  // that opens, no start-up «clave nueva» came first and no way back is waiting: with both signals the way back is served
+  // (the user's last wish is not known, and no new key is made without being sure of it).
+  let make_new = found && !allow_new && dir.join(NEW_FILE).exists() && !dir.join(BACK_FILE).exists();
+  if !make_new {
+    let _ = fs::remove_file(dir.join(NEW_FILE));
+  }
   let hex = if !lost.is_empty() && kept {
     let note = json!({ "files": lost, "at": iso_now() });
     let _ = write_whole(&dir.join(PREVIOUS_FILE), note.to_string().as_bytes());
     hex
+  } else if make_new {
+    new_key(dir, [&enc2, &copy2], hex, s, &mut warns)
   } else if found && !allow_new {
     previous_key(dir, [&enc2, &copy2], hex, s, &mut warns)
   } else {
@@ -660,6 +773,179 @@ mod tests {
     assert_eq!((hex(&w), w.warns[0].0), (fresh.clone(), "previousNew"));
     let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
     assert_eq!((hex(&w), w.warns[0].0), (fresh, "previousQuiet"));
+  }
+
+  #[test]
+  fn a_new_key_on_purpose_keeps_the_old_one_aside_once_and_the_way_back_works() {
+    let k = K::new("nueva");
+    let old = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"2026-01-01T00:00:00Z"}"#).unwrap();
+    let n = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    let fresh = hex(&n);
+    assert_ne!(fresh, old);
+    assert_eq!(read(&k.enc2()), format!("ORB2{fresh}"));
+    assert_eq!(read(&k.copy2()), format!("ORB2{fresh}"));
+    assert!(!k.dir.join(NEW_FILE).exists(), "the signal is used up");
+    let aside: Vec<String> = k.files().into_iter().filter(|f| f.ends_with(".anterior.enc")).collect();
+    assert!(!aside.is_empty());
+    assert!(aside.iter().any(|f| read(&k.dir.join(f)) == format!("ORB2{old}")), "the old key is kept, not deleted");
+    assert!(read(&k.dir.join(PREVIOUS_FILE)).contains("newKeyAt"));
+    // A second start does not change it again; the old one is offered quietly.
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns.iter().map(|w| w.0).collect::<Vec<_>>()), (fresh.clone(), vec!["previousQuiet"]));
+    // The way back goes to the old key.
+    fs::write(k.dir.join(BACK_FILE), "{}").unwrap();
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (old.clone(), "previousBack"));
+    assert_eq!(read(&k.enc2()), format!("ORB2{old}"));
+    assert!(!k.dir.join(BACK_FILE).exists());
+  }
+
+  #[test]
+  fn a_cut_new_key_neither_loses_a_key_nor_repeats() {
+    let k = K::new("nueva-corte");
+    let old = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    // A start that cannot seal: the key stays, the signal goes, nothing is repeated.
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"t1"}"#).unwrap();
+    let w = load(&k.dir, &k.copy, &Fake { seal: Some("fail"), ..ok() }, false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (old.clone(), "newKeyFailed"));
+    assert!(!k.dir.join(NEW_FILE).exists());
+    assert_eq!(read(&k.enc2()), format!("ORB2{old}"));
+    // Cut after the key was replaced but before the signal went: the signal is only removed.
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"t2"}"#).unwrap();
+    let fresh = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    assert_ne!(fresh, old);
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"t2"}"#).unwrap();
+    assert_eq!(hex(&load(&k.dir, &k.copy, &ok(), false).unwrap()), fresh, "the same signal does not change the key again");
+    assert!(!k.dir.join(NEW_FILE).exists());
+    // Cut before the key was replaced (the record points at the same key): the change is made.
+    let before = fresh.clone();
+    fs::write(k.dir.join(PREVIOUS_FILE), json!({ "files": [k.enc2()], "at": "x", "quiet": true, "newKeyAt": "t3" }).to_string()).unwrap();
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"t3"}"#).unwrap();
+    let again = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    assert_ne!(again, before);
+    assert!(k.files().iter().any(|f| f.ends_with(".anterior.enc") && read(&k.dir.join(f)) == format!("ORB2{before}")));
+  }
+
+  #[test]
+  fn new_key_signals_never_outlive_a_start_and_two_signals_serve_the_way_back() {
+    let k = K::new("nueva-señales");
+    let old = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    // done now: said once, and the record fingerprints the replaced file (not a key)
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"a1"}"#).unwrap();
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    let fresh = hex(&w);
+    assert_eq!(w.warns.iter().map(|w| w.0).collect::<Vec<_>>(), vec!["newKeyDone"]);
+    assert!(read(&k.dir.join(PREVIOUS_FILE)).contains("\"replaced\""));
+    // both signals: the way back is served, no new key, the new-key signal is consumed
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"a2"}"#).unwrap();
+    fs::write(k.dir.join(BACK_FILE), "{}").unwrap();
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (old.clone(), "previousBack"));
+    assert!(!k.dir.join(NEW_FILE).exists() && !k.dir.join(BACK_FILE).exists());
+    assert_ne!(old, fresh);
+    // a signal found while the start-up makes a new key (nothing opens) does not survive to make another one
+    let k2 = K::new("nueva-arranque");
+    let first = hex(&load(&k2.dir, &k2.copy, &ok(), false).unwrap());
+    fs::write(k2.enc2(), "ORB2basura").unwrap();
+    fs::write(k2.copy2(), "ORB2basura").unwrap();
+    fs::write(k2.dir.join(NEW_FILE), r#"{"at":"b1"}"#).unwrap();
+    let made = hex(&load(&k2.dir, &k2.copy, &ok(), true).unwrap());
+    assert_ne!(made, first);
+    assert!(!k2.dir.join(NEW_FILE).exists());
+    let w = load(&k2.dir, &k2.copy, &ok(), false).unwrap();
+    assert_eq!(hex(&w), made, "no second key");
+    assert!(!w.warns.iter().any(|w| w.0 == "newKeyDone"));
+  }
+
+  #[test]
+  fn a_second_new_key_keeps_what_the_record_listed_and_a_cut_before_the_copy_is_put_right() {
+    let k = K::new("nueva-dos");
+    let first = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"c1"}"#).unwrap();
+    let second = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    let listed = |k: &K| -> Vec<String> { serde_json::from_str::<Value>(&read(&k.dir.join(PREVIOUS_FILE))).unwrap()["files"].as_array().unwrap().iter().map(|f| f.as_str().unwrap().to_string()).collect() };
+    let one = listed(&k);
+    std::thread::sleep(Duration::from_millis(5));
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"c2"}"#).unwrap();
+    let third = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    let two = listed(&k);
+    assert!(two.len() > one.len() && one.iter().all(|f| two.contains(f)), "the earlier asides are still listed");
+    assert_eq!(two.iter().filter(|f| two.iter().filter(|g| g == f).count() > 1).count(), 0, "no repeats");
+    // the most recent aside (the second key) comes first, so the way back goes to it
+    assert_eq!(read(Path::new(&two[0])), format!("ORB2{second}"));
+    fs::write(k.dir.join(BACK_FILE), "{}").unwrap();
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (second.clone(), "previousBack"));
+    assert_ne!(first, second);
+    assert_ne!(second, third);
+    // cut between clave2.enc and its copy: the copy still holds the key before, the signal is still there
+    let k3 = K::new("nueva-corte-copia");
+    let old = hex(&load(&k3.dir, &k3.copy, &ok(), false).unwrap());
+    fs::write(k3.dir.join(NEW_FILE), r#"{"at":"d1"}"#).unwrap();
+    let fresh = hex(&load(&k3.dir, &k3.copy, &ok(), false).unwrap());
+    fs::write(k3.copy2(), format!("ORB2{old}")).unwrap();
+    fs::write(k3.dir.join(NEW_FILE), r#"{"at":"d1"}"#).unwrap();
+    let w = load(&k3.dir, &k3.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns.iter().any(|w| w.0 == "newKeyDone")), (fresh.clone(), true), "a start after the cut still says it");
+    assert_eq!(read(&k3.copy2()), format!("ORB2{fresh}"));
+    assert!(!k3.dir.join(NEW_FILE).exists());
+  }
+
+  #[test]
+  fn going_back_keeps_the_older_keys_pointed_at_and_a_busy_file_stops_it() {
+    let k = K::new("tres");
+    let k1 = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"e1"}"#).unwrap();
+    let k2 = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    std::thread::sleep(Duration::from_millis(5));
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"e2"}"#).unwrap();
+    let k3 = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    assert!(k1 != k2 && k2 != k3 && k1 != k3);
+    fs::write(k.dir.join(BACK_FILE), "{}").unwrap();
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (k2.clone(), "previousBack"));
+    let listed: Vec<String> = serde_json::from_str::<Value>(&read(&k.dir.join(PREVIOUS_FILE))).unwrap()["files"].as_array().unwrap().iter().map(|f| read(Path::new(f.as_str().unwrap()))).collect();
+    assert!(listed.contains(&format!("ORB2{k3}")), "the key left is pointed at");
+    assert!(listed.contains(&format!("ORB2{k1}")), "the oldest key is still pointed at");
+    // …and going back to the new key works from there, still keeping the oldest
+    fs::write(k.dir.join(BACK_FILE), "{}").unwrap();
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (k3.clone(), "previousNew"));
+    let listed: Vec<String> = serde_json::from_str::<Value>(&read(&k.dir.join(PREVIOUS_FILE))).unwrap()["files"].as_array().unwrap().iter().map(|f| read(Path::new(f.as_str().unwrap()))).collect();
+    assert!(listed.contains(&format!("ORB2{k1}")));
+  }
+
+  /// Every key that is not the one in use is busy (a file of another app), as the sealer sees it.
+  struct BusyExcept(String);
+  impl Sealer for BusyExcept {
+    fn seal(&self, text: &[u8]) -> Result<Vec<u8>, String> {
+      Fake::default().seal(text)
+    }
+    fn unseal(&self, blob: &[u8]) -> Result<Locked, &'static str> {
+      let t = Fake::default().unseal(blob)?;
+      if t.as_slice() == self.0.as_bytes() {
+        Ok(t)
+      } else {
+        Err("io")
+      }
+    }
+  }
+
+  #[test]
+  fn a_busy_listed_key_stops_the_way_back_instead_of_choosing_an_older_one() {
+    let k = K::new("ocupada");
+    let k1 = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    fs::write(k.dir.join(NEW_FILE), r#"{"at":"f1"}"#).unwrap();
+    let k2 = hex(&load(&k.dir, &k.copy, &ok(), false).unwrap());
+    fs::write(k.dir.join(BACK_FILE), "{}").unwrap();
+    // the key in use opens; the listed one is busy: nothing changes, it is said, the signal waits for another start
+    let w = load(&k.dir, &k.copy, &BusyExcept(k2.clone()), false).unwrap();
+    assert_eq!((hex(&w), w.warns.iter().map(|w| w.0).collect::<Vec<_>>()), (k2.clone(), vec!["previousFailed"]));
+    assert_eq!(read(&k.enc2()), format!("ORB2{k2}"));
+    assert!(k.dir.join(BACK_FILE).exists());
+    let w = load(&k.dir, &k.copy, &ok(), false).unwrap();
+    assert_eq!((hex(&w), w.warns[0].0), (k1, "previousBack"));
   }
 
   /// For the way-back test: the files holding this secret do not open (DPAPI), the rest do.

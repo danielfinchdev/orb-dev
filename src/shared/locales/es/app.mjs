@@ -21,7 +21,6 @@ export default {
   'app.linkNoShortCode': "Tu Orb no admite el código corto. Escanea el código QR o pega su enlace.",
   'app.scanPreparing': "Se está instalando el lector de códigos QR. Vuelve a intentarlo en unos segundos.",
   'app.sharedImage': "Imagen compartida: {path}",
-  'app.noticeFrom': "{name} · Notificación",
   'app.pushDeniedApp': "Las notificaciones de Orb están desactivadas. Actívalas en los ajustes de Android.",
   'app.menu': 'Menú',
   'app.window.controls': 'Ventana',
@@ -69,7 +68,6 @@ export default {
   'update.downloadAgain': 'Descargar de nuevo',
   'update.web': 'Descargar desde la web',
   "app.linkOldOrb": "Ese Orb es de una versión anterior: actualízalo o escanea su código QR.",
-  "app.noticeHidden": "Tienes un mensaje nuevo",
   "app.pcOffline": "No se puede alcanzar tu PC.",
   "app.pcSlow": "Tu PC no ha respondido a tiempo. Inténtalo de nuevo.",
   "app.offlineTitle": "Tu PC está apagado o no se puede alcanzar",
@@ -87,6 +85,8 @@ export default {
   "app.newSecretRecovery": "Las copias de seguridad anteriores pedirán tu código de recuperación. Después, crea un código nuevo en Ajustes › Datos: hasta entonces, las copias nuevas no lo llevarán y «He olvidado la contraseña» no podrá comprobarlo.",
   "app.newSecretNoRecovery": "No tienes código de recuperación: las copias de seguridad hechas hasta ahora ya no se podrán abrir. Después, crea uno en Ajustes › Datos.",
   "app.newSecretBack": "La clave anterior se guarda aparte. Si Windows vuelve a poder abrirla, Orb te ofrecerá volver a ella.",
+  "app.newSecretIntroKept": "Orb creará una clave nueva para este PC. Se volverán a pedir las aprobaciones.",
+  "app.newSecretBackReadable": "La clave actual se guarda aparte y no se borra: desde Ajustes › Datos podrás volver a ella.",
   "app.newSecretWord": "EMPEZAR",
   "app.newSecretType": "Escribe {word} para confirmar",
   "app.newSecretWrong": "Escribe {word} para confirmar.",
@@ -110,6 +110,11 @@ export default {
   "app.loadOfflineTitle": "Sin conexión",
   "app.loadOfflineBody": "No se pudo cargar esta pantalla. Comprueba la conexión y vuelve a intentarlo.",
   "app.loadOfflineToast": "No se pudo abrir: sin conexión.",
+  // errorHint: a screen failed while drawing (error-boundary.jsx > CrashCard); the engine is alive, so it keeps working.
+  // crashHint: the engine did not start (main.jsx > StartError); nothing runs underneath, F5 only reloads the window.
+  "app.errorHint": "Pulsa F5 para volver a cargar la ventana. Orb sigue funcionando por debajo.",
+  "app.crashHint": "Con F5 se vuelve a cargar la ventana.",
+  "app.loadOfflineNote": "Se guarda la pantalla en la que estabas. Tras dos intentos que fallan, «Reintentar» recarga la página.",
   'app.linkOfflineWifi': 'No se pudo conectar con tu Orb por la red local. En el PC, permite Orb en el firewall de Windows para redes privadas.',
   "app.copyFailed": "No se pudo copiar.",
 };

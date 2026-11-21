@@ -40,7 +40,7 @@ export function SubagentList({ blocks, sessionId, renderBlock }) {
               <span className="font-medium">{a.name ?? t('session.subagent')}</span>
               <span className="text-muted-foreground min-w-0 flex-1 truncate text-xs">{a.description ?? ''}</span>
               <span className="text-muted-foreground shrink-0 text-xs">{t(`session.subagentState.${state}`)}</span>
-              <Tip label={t('session.subagents.open')}><Button variant="ghost" size="icon-sm" aria-label={t('session.subagents.open')} onClick={() => setOpened(opened === b.key ? null : b.key)} data-testid="subagent-open"><ExternalLink className={cn(opened === b.key && 'text-primary')} /></Button></Tip>
+              <Tip label={t('session.subagents.open')}><Button variant="ghost" size="icon-sm" aria-label={t('session.subagents.open')} onClick={() => setOpened(opened === b.key ? null : b.key)} data-testid="subagent-open"><ExternalLink className={cn(opened === b.key && 'text-primary-text')} /></Button></Tip>
               {state === 'running' ? (<>
                 <Tip label={t('session.subagents.backgroundTip')}><Button variant="ghost" size="xs" onClick={() => ask(b, 'background', t('session.subagents.backgrounded'))} data-testid="subagent-background"><MoveDownRight />{t('session.subagents.background')}</Button></Tip>
                 <Button variant="ghost" size="xs" onClick={() => ask(b, 'stop', t('session.subagents.stopped'))} data-testid="subagent-stop"><Square className="fill-current" />{t('session.subagents.stop')}</Button>

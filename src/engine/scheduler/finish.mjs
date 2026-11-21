@@ -12,9 +12,39 @@ import { isRailOn } from '../../domain/rules/rails.mjs';
 import { redactSecrets, secretFiles, isSecretPath, stagedSecretsAsync } from '../../shared/secrets-scan.mjs';
 import { ATTACH_DIR } from '../sessions.mjs';
 import { logTask } from '../../domain/journal/journal.mjs';
+import { scheduleEndMeta } from '../../domain/schedules/schedules.mjs';
+import { phoneNoticeAllowed, reviewedDoneOf } from '../../domain/notes/announce.mjs';
 import { STATUS_ES, whoRan, mainStatusAsync } from './common.mjs';
 
+// The reason shown in the chat line and the notice: an agent that closed on its own is told in plain words and the
+// exit code stays in the task's result. Anything else is the agent's own message, with a capital letter.
+const CLOSED = /^(.{1,40}?) (?:se cerró|closed) \((?:código|code) -?\d+\)\.?\s*([\s\S]*)$/;
+const capSentence = (x) => { const v = oneLine(x, 160); return v ? `${v.charAt(0).toUpperCase()}${v.slice(1)}${/[.!?…]$/.test(v) ? '' : '.'}` : ''; };
+export function plainWhy(result, minutes) {
+  const closed = CLOSED.exec(result);
+  if (!closed) return capSentence(result);
+  const when = minutes != null && minutes >= 1 ? tr('msg.scheduler.whenMin', { n: Math.round(minutes) }) : tr('msg.scheduler.whenSoon');
+  return [tr('msg.scheduler.whyClosed', { name: closed[1], when }), capSentence(closed[2])].filter(Boolean).join(' ');
+}
+
+// An agent that closed on its own: one plain sentence that also names the task, then the agent's own message.
+// null for any other ending (those keep the usual headline and reason).
+export function closedEnd(result, minutes, task) {
+  const closed = CLOSED.exec(result);
+  if (!closed) return null;
+  const when = minutes != null && minutes >= 1 ? tr('msg.scheduler.whenMin', { n: Math.round(minutes) }) : tr('msg.scheduler.whenSoon');
+  return [tr('msg.scheduler.whyClosedTask', { name: closed[1], when, id: task.id, title: oneLine(task.title) }), capSentence(closed[2])].filter(Boolean).join(' ');
+}
+
 export class FinishPart {
+  // The end line of a task is left out of the phone's notices when the notice of the same fact (held, done and
+  // reviewed) is the one that goes out: the line itself stays in the chat.
+  noticeCoversEndLine(task, held) {
+    if (held) return phoneNoticeAllowed(this.board, task);
+    const reviewed = reviewedDoneOf(this.board, task);
+    return Boolean(reviewed) && phoneNoticeAllowed(this.board, reviewed);
+  }
+
   // Closing a task: git runs off the event loop, so the project stays held (nothing starts in it, nobody undoes the task)
   // until the close is over. The promise never rejects. A close that was already under way when the app began to close is
   // let finish (drain): its state is written before the database shuts.
@@ -146,6 +176,7 @@ export class FinishPart {
     }
     if (held && !['blocked', 'cancelled'].includes(task.status)) task = board.patch(taskId, { status: 'blocked' }, 'orb', 'task.held');
     if (held) task = board.patch(taskId, { result: `${held}. ${task.result ?? ''}`.slice(0, 4000) }, 'orb', 'task.held');
+    if (held && phoneNoticeAllowed(board, task)) { const lead = tr('msg.scheduler.needsReview', { reasons: '' }); try { this.announce({ kind: 'held', task: taskId, reasons: held.startsWith(lead) ? held.slice(lead.length) : '' }); } catch (error) { this.log(`aviso #${taskId}: ${error.message}`); } }
     // a task that ended well on an account paused by a usage limit (launched anyway, or after the limit) lifts it.
     if (task.status === 'done') {
       const launchedAt = board.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.launched' ORDER BY id DESC LIMIT 1", task.id)?.at;
@@ -165,12 +196,14 @@ export class FinishPart {
     if (task.status === 'queued' || task.status === 'limited') return; // handed to another agent, or waiting for the reset (already told)
     const icon = { done: '✅', failed: '❌', blocked: '⛔', cancelled: '🚫' }[task.status] ?? 'ℹ️';
     let spent = '';
-    try { const u = this.runUsage(task); if (u) { spent = this.usageLine(u); board.event(task.id, 'orb', 'task.usage', JSON.stringify({ ...u, minutes: Math.round(u.minutes * 10) / 10 })); } } catch (error) { this.log(`uso #${task.id}: ${error.message}`); }
+    let ranMinutes = null;
+    try { const u = this.runUsage(task); if (u) { ranMinutes = u.minutes; spent = this.usageLine(u, { plain: true }); board.event(task.id, 'orb', 'task.usage', JSON.stringify({ ...u, minutes: Math.round(u.minutes * 10) / 10 })); } } catch (error) { this.log(`uso #${task.id}: ${error.message}`); }
     // one clear line for the user; what the agent reported (technical) goes folded under it (meta.result).
     // (A task that failed or got blocked says why in a short line: that is what the user needs to decide.)
-    const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${oneLine(redactSecrets(task.result), 160)}` : '';
-    board.addChat('system', `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
-      { kind: 'task-end', task: task.id, status: task.status, ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
+    const why = ['failed', 'blocked'].includes(task.status) && task.result ? `\n${plainWhy(redactSecrets(task.result), ranMinutes)}` : '';
+    const closedLine = ['failed', 'blocked'].includes(task.status) && task.result ? closedEnd(redactSecrets(task.result), ranMinutes, task) : null;
+    board.addChat('system', closedLine ? `${icon} ${closedLine}` : `${tr(`msg.scheduler.ended.${task.status in { done: 1, failed: 1, blocked: 1, cancelled: 1 } ? task.status : 'other'}`, { icon, label: whoRan(task), id: task.id, title: oneLine(task.title) })}${spent ? ` (${spent})` : ''}${why}`,
+      { kind: 'task-end', task: task.id, status: task.status, ...scheduleEndMeta(board, task), ...(this.noticeCoversEndLine(task, held) ? { quiet: true } : {}), ...(task.result ? { result: redactSecrets(task.result).slice(0, 1500) } : {}) });
     const cp = board.settingJson(`checkpoint:${task.id}`);
     const revert = cp?.before ? tr('sys.logs.revertUndo', { id: task.id })
       : task.branch ? tr('sys.logs.revertBranch', { branch: task.branch }) : tr('sys.logs.revertFolder');
@@ -187,6 +220,7 @@ export class FinishPart {
       const verdict = /VEREDICTO:\s*CORRECTO/i.test(task.result ?? '') ? 'correcto' : /VEREDICTO:\s*CON FALLOS/i.test(task.result ?? '') ? 'con fallos' : 'sin veredicto claro';
       board.settingJson(`review:${task.review_of}`, { task: task.id, verdict, agent: task.assigned_to, at: new Date().toISOString() });
       board.event(task.review_of, task.assigned_to ?? 'agente', 'review.verdict', `${verdict} (Task Review #${task.id})`);
+      if (verdict === 'correcto' && reviewedDoneOf(board, task) && phoneNoticeAllowed(board, board.task(task.review_of))) { try { this.announce({ kind: 'done', task: task.review_of }); } catch (error) { this.log(`aviso #${task.review_of}: ${error.message}`); } }
     }
     // The way back of the loop (person → assistant → tasks → agents → finished → assistant → person → OK).
     const reported = ['done', 'failed', 'blocked'].includes(task.status) && task.created_by === 'orb' ? this.queueReport(task) : false;

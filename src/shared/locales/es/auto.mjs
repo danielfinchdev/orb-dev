@@ -17,8 +17,8 @@ export default {
   'msg.scheduler.safetyDeletedShare': 'ha eliminado {deleted} de {total} archivos del proyecto ({pct} %)',
   'session.autoMode': 'Auto',
   'session.askMode': 'Preguntar',
-  'session.autoTip': 'Trabaja solo dentro de la carpeta; pregunta antes de publicar, enviar datos o salir de ella',
-  'session.askTip': 'Pregunta antes de borrar carpetas, deshacer cambios de git o escribir fuera de la carpeta',
+  'session.autoTip': 'Trabaja en la carpeta; pregunta antes de publicar, enviar datos o salir',
+  'session.askTip': 'Pregunta antes de borrar carpetas, deshacer git o salir de la carpeta',
   'session.tip.leer': 'Solo lee y analiza; no cambia nada',
   'session.tip.probar': 'Revisa y ejecuta pruebas; no edita archivos',
   'session.tip.preguntar': 'Pide permiso antes de cada acción',
@@ -26,5 +26,6 @@ export default {
   'session.autoOn': 'Modo Auto',
   'session.askOn': 'Modo Preguntar',
   'settings.autonomy': 'Permisos de los agentes',
-  'settings.autonomyHint': 'Auto: trabajan sin preguntar dentro de la carpeta del proyecto (se puede deshacer). Preguntar: piden permiso antes de lo arriesgado. Siempre preguntan antes de publicar, enviar datos o salir de la carpeta.'
+  'settings.autonomyHintAuto': 'trabajan sin preguntar dentro de la carpeta del proyecto (se puede deshacer).',
+  'settings.autonomyHintAsk': 'piden permiso antes de lo arriesgado.'
 };

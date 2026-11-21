@@ -7,14 +7,28 @@ import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
 import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES } from '../shared/appearance.mjs';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, migrateAppearance } from '../shared/appearance.mjs';
+import { ADAPTIVE_THEMES } from '../shared/music.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
 export const connectorKey = (name) => String(name ?? '').toLowerCase().replace(/[^a-z0-9_]/g, '_');
 const EDITABLE = ['assistantName', 'userName', 'language', 'orchestrator', 'autoRun', 'maxParallel', 'perAgent', 'timeoutMinutes', 'agentOrder', 'agents', 'budget', 'policy', 'review', 'mcpServers', 'skills', 'projectRoots', 'ui', 'accounts', 'mobile', 'expert', 'browser', 'continuity', 'delegation', 'oneAtATime', 'approvalWaitMinutes', 'permissions', 'rails', 'protected', 'backup', 'tz', 'setupPending', 'git', 'suggestNext'];
+// A `projects` scope written by hand that is not a list of texts: the texts are kept; with none left (or not a list at all)
+// the entry reaches nobody, so it is turned off instead (an empty list would mean every project).
+function tidyScope(entry) {
+  if (!entry || typeof entry !== 'object' || entry.projects === undefined) return entry;
+  const list = Array.isArray(entry.projects) ? entry.projects : null;
+  const texts = list ? list.filter((p) => typeof p === 'string' && p) : [];
+  if (list && texts.length === list.length) return entry;
+  if (texts.length) return { ...entry, projects: texts };
+  const { projects: _bad, ...bare } = entry;
+  return { ...bare, enabled: false, scopeOff: true };
+}
 function tidyStored(stored) {
   const out = structuredClone(stored);
+  if (out.ui !== undefined) out.ui = migrateAppearance(out.ui);
+  for (const key of ['skills', 'mcpServers']) if (Array.isArray(out[key])) out[key] = out[key].map(tidyScope);
   const rounds = out.budget?.maxFixRounds;
   if (rounds != null && !(Number.isInteger(rounds) && rounds >= 0 && rounds <= 10)) {
     const n = Number(rounds);
@@ -117,23 +131,29 @@ export function validateConfig(c) {
     if (typeof s.command !== 'string' || !s.command.trim()) throw new Error(tr('msg.ctx.connectorCommand', { name: s.name }));
     if (s.args && (!Array.isArray(s.args) || s.args.some((x) => typeof x !== 'string'))) throw new Error(tr('msg.ctx.connectorArgs', { name: s.name }));
   }
+  // the projects a connector or a skill is limited to: a list of names, or absent (every project).
+  for (const e of [...c.mcpServers, ...(Array.isArray(c.skills) ? c.skills : [])]) {
+    if (e?.projects !== undefined && (!Array.isArray(e.projects) || e.projects.some((p) => typeof p !== 'string' || !p))) throw new Error(tr('msg.ctx.badAppearance', { name: `projects (${e.name})` }));
+  }
   // the skills of core\skills that are on (src/domain/extensions/extensions.mjs).
   if (c.skills !== undefined && (!Array.isArray(c.skills) || c.skills.length > 500 || c.skills.some((s) => !/^[a-z0-9][a-z0-9-]{0,62}$/.test(s?.name ?? '') || typeof s.enabled !== 'boolean' || (s.source !== undefined && typeof s.source !== 'string')))) throw new Error(tr('msg.ctx.badAppearance', { name: 'skills' }));
   if (!['sistema', 'claro', 'oscuro'].includes(c.ui?.theme ?? 'sistema')) throw new Error(tr('msg.ctx.badTheme'));
   // visual theme, fonts and colours of code (src/shared/appearance.mjs).
-  for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES], ['palette', PALETTES], ['accent', ACCENTS], ['contrast', CONTRASTS], ['density', Object.keys(DENSITIES)], ['chatWidth', Object.keys(CHAT_WIDTHS)], ['fontSize', FONT_SIZES]]) {
+  for (const [key, list] of [['skin', SKINS], ['font', FONTS], ['codeFont', CODE_FONTS], ['codeTheme', CODE_THEMES], ['palette', PALETTES], ['accent', ACCENTS], ['contrast', CONTRASTS]]) {
     if (c.ui?.[key] !== undefined && !list.includes(c.ui[key])) throw new Error(tr('msg.ctx.badAppearance', { name: `ui.${key}` }));
   }
   // continue tasks after a restart / at the reset, and delegation between agents (orb_delegate).
   const bool = (v, name) => { if (v !== undefined && typeof v !== 'boolean') throw new Error(tr('msg.ctx.boolean', { name })); };
-  bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset');
+  bool(c.continuity?.resumeAfterRestart, 'continuity.resumeAfterRestart'); bool(c.continuity?.resumeAtReset, 'continuity.resumeAtReset'); bool(c.continuity?.switchAccount, 'continuity.switchAccount');
   bool(c.suggestNext, 'suggestNext');
   bool(c.delegation?.enabled, 'delegation.enabled'); bool(c.delegation?.trusted, 'delegation.trusted');
-  // the background music (Windows; src/ui/lib/music.js) and the games' own music (gameMusic: false = muted).
+  // the background music (Windows; src/ui/lib/music.js; any other key, such as the source an earlier version saved, is ignored) and the games' own music (gameMusic: false = muted).
   const music = c.ui?.music;
   if (music !== undefined && (!music || typeof music !== 'object' || Array.isArray(music) || (music.on !== undefined && typeof music.on !== 'boolean')
     || (music.volume !== undefined && !(typeof music.volume === 'number' && music.volume >= 0 && music.volume <= 1))
-    || (music.track !== undefined && (typeof music.track !== 'string' || music.track.length > 40)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
+    || (music.theme !== undefined && !ADAPTIVE_THEMES.includes(music.theme))
+    || (music.reactive !== undefined && typeof music.reactive !== 'boolean')
+    || (music.intensity !== undefined && !(typeof music.intensity === 'number' && music.intensity >= 0 && music.intensity <= 1)))) throw new Error(tr('msg.ctx.badAppearance', { name: 'ui.music' }));
   bool(c.ui?.gameMusic, 'ui.gameMusic');
   bool(c.setupPending, 'setupPending'); // the welcome is not over yet (src/ui/views/setup.jsx)
   bool(c.budget?.autoModel, 'budget.autoModel'); // Orb chooses each task's model (true / missing) or the agents' defaults
@@ -164,6 +184,8 @@ export function validateConfig(c) {
   if (c.permissions !== undefined && (!c.permissions || typeof c.permissions !== 'object' || Array.isArray(c.permissions) || !['auto', 'preguntar'].includes(c.permissions.mode))) throw new Error(tr('msg.ctx.badAppearance', { name: 'permissions' }));
   if (c.budget?.stopAt != null && !(Number(c.budget.stopAt) >= 0.5 && Number(c.budget.stopAt) <= 1)) throw new Error(tr('msg.ctx.stopAt'));
   if (c.budget?.weeklyStopAt != null && !(Number(c.budget.weeklyStopAt) >= 0.5 && Number(c.budget.weeklyStopAt) <= 1)) throw new Error(tr('msg.ctx.weeklyStopAt'));
+  // The heads-up level (0 = none): not a rail value, since it only tells and never stops or loosens anything.
+  if (c.budget?.warnAt != null && !(Number(c.budget.warnAt) === 0 || (Number(c.budget.warnAt) >= 0.5 && Number(c.budget.warnAt) <= 1))) throw new Error(tr('msg.ctx.warnAt'));
   if (c.budget?.maxFixRounds != null) int(c.budget.maxFixRounds, 0, 10, 'budget.maxFixRounds');
   // Only rails with a switch can be set (a core rail never has one).
   if (c.rails !== undefined) {

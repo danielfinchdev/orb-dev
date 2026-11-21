@@ -24,6 +24,8 @@ export const STATE_KEYS = Object.freeze({
     'auto_mode_383',
     // the external MCP server (src/engine/api/mcp-ext.mjs): on/off and its port
     'mcpext_enabled', 'mcpext_port',
+    // what the last look for newer agent programs found (src/engine/usage/versions.mjs)
+    'agent_updates',
   ]),
   prefixes: Object.freeze({
     // a device's (the morning summary card shown today)
@@ -42,7 +44,7 @@ export const STATE_KEYS = Object.freeze({
     // a conversation's with the assistant
     'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
     // a project's
-    'actions:': 'project', 'wb_seen:': 'project',
+    'actions:': 'project', 'wb_seen:': 'project', 'pr_review:': 'project',
     // a chat's own worktree (src/engine/chat-worktrees.mjs, by session id)
     'chatwt:': 'session',
     // older versions' (deleted when the engine starts or by the 3.8 migration)

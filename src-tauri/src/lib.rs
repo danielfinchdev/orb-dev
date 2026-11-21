@@ -29,6 +29,7 @@ mod pipes;
 mod power;
 mod protocol;
 mod screenshot;
+mod signature;
 mod tools;
 mod trace;
 mod updater;

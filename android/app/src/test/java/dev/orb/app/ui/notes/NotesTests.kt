@@ -1,15 +1,19 @@
 package dev.orb.app.ui.notes
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.link.net.PcVersions
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +26,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -33,21 +38,49 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.TimeZone
 
 fun notice(id: String, title: String = "Orbe", at: Long = 1_000, target: NoticeTarget? = NoticeTarget.Chat("conversation", "7")) =
     Notice(id, title, "Hola", "message", at, target)
 
+/** What the notices feed would keep in the database, in memory, so the tests can "restart" the feed over it. */
+class MemoryNoticeStore : NoticeStore {
+    val rows = LinkedHashMap<String, StoredNotice>()
+    var since: Long? = null
+    var available = true
+    override suspend fun load(): List<StoredNotice>? = if (available) rows.values.toList() else null
+    override suspend fun merge(list: List<Notice>) {
+        for (n in list) rows[n.id] = rows[n.id]?.let { it.copy(notice = n.copy(at = maxOf(it.notice.at, n.at))) } ?: StoredNotice(n, read = false, dismissed = false)
+    }
+    override suspend fun markRead(ids: Collection<String>?) {
+        for ((id, s) in rows.entries.toList()) if (ids == null || id in ids) rows[id] = s.copy(read = true)
+    }
+    override suspend fun setDismissed(id: String, dismissed: Boolean) { rows[id]?.let { rows[id] = it.copy(dismissed = dismissed) } }
+    override suspend fun remove(ids: Collection<String>) { ids.forEach { rows.remove(it) } }
+    override suspend fun prune(cutoff: Long, keep: Int) {
+        rows.values.filter { it.notice.at < cutoff }.forEach { rows.remove(it.notice.id) }
+        rows.values.sortedByDescending { it.notice.at }.drop(keep).forEach { rows.remove(it.notice.id) }
+    }
+    override suspend fun since(): Long? = since
+    override suspend fun setSince(at: Long) { since = at }
+}
+
 class FakeNotesBackend : NotesBackend {
     val connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Online("http://pc", "PC", PcVersions(1, 1, "3.8.4")))
     override val connection get() = connectionState
-    val feed = NotesFeed()
+    val feed = NotesFeed(nowMs = { 1_000_000 })
     override val notices get() = feed.rows
+    override var pcKeepsList = false
     val calls = ArrayList<String>()
     var markResult: Result<Unit> = Result.success(Unit)
 
     override suspend fun refresh(): Result<Unit> { calls += "refresh"; return Result.success(Unit) }
     override suspend fun markRead(ids: List<String>?): Result<Unit> { calls += "markRead $ids"; feed.markRead(ids); return markResult }
     override fun markReadLocal(id: String) { calls += "local $id"; feed.markRead(listOf(id)) }
+    override fun markReadChat(key: String) { calls += "chat $key"; feed.markReadKey(key) }
+    override fun dismissChat(kind: String, id: String) { calls += "gone $kind $id"; feed.dismissChat(kind, id) }
+    override fun dismiss(id: String): Boolean { calls += "dismiss $id"; return feed.dismiss(id) }
+    override fun undoDismiss(id: String) { calls += "undo $id"; feed.undoDismiss(id) }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -164,7 +197,7 @@ class NotesScreenTest {
 
     private fun show(b: FakeNotesBackend, onOpen: (NoticeTarget) -> Unit = {}) {
         val vm = NotesViewModel(b)
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { NotesScreen(vm, onBack = {}, onOpen = onOpen, nowMs = { 2_000 }) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { NotesScreen(vm, onBack = {}, onOpen = onOpen, nowMs = { 2_000 }) } }
         rule.waitForIdle()
     }
 
@@ -188,7 +221,7 @@ class NotesScreenTest {
         val b = FakeNotesBackend()
         b.feed.add(notice("a"))
         show(b)
-        rule.onNodeWithText("Marcar todo leído").performClick()
+        rule.onNodeWithText("Marcar todo").performClick()
         rule.waitForIdle()
         assertEquals("markRead null", b.calls.last())
     }

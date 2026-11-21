@@ -15,12 +15,31 @@ import { groupOf } from '../projects/projects.mjs';
 
 
 export const stamp = (d = new Date()) => { const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; };
-const clean = (v, n) => redactSecrets(String(v ?? '').trim()).slice(0, n);
+// Every kind of line break becomes «\n» before any text is split or counted: «^### » in a multiline regex also matches after
+// \r, U+2028 and U+2029, so a stray separator could open a heading of its own.
+export const lineBreaks = (v) => String(v ?? '').replace(/\r\n|[\r\u{2028}\u{2029}\u{85}]/gu, '\n');
+const clean = (v, n) => redactSecrets(lineBreaks(v).trim()).slice(0, n);
+const HECHO_MAX = 6000;
 
 // [name, file] of every log: "general" and each registered project.
 export function logFiles(board) {
   return [['general', ctx.paths.generalLog], ...board.projects().map((p) => [p.name, board.projectLogFile(p.name)])];
 }
+// Entries of a log file (its «### » headings), counted once per version of the file: logs.list runs on every change and the
+// biggest logs weigh hundreds of KB. A file that is missing or unreadable has none.
+const entryCounts = new Map();
+export function countLogEntries(file) {
+  try {
+    const st = fs.statSync(file);
+    const key = `${st.size}:${st.mtimeMs}`;
+    const hit = entryCounts.get(file);
+    if (hit?.key === key) return hit.n;
+    const n = (fs.readFileSync(file, 'utf8').match(/^### /gm) ?? []).length;
+    entryCounts.set(file, { key, n });
+    return n;
+  } catch { entryCounts.delete(file); return 0; }
+}
+
 export function findLog(board, project) {
   const key = String(project ?? '').toLowerCase();
   const found = logFiles(board).find(([name]) => name.toLowerCase() === key || (key === 'central' && name === 'general'));
@@ -83,11 +102,11 @@ export function readLog(board, project, { chars = 12000, entries = 8, whole = fa
 // archivo: one of the user's own files beside the general log (ownLogFiles), instead of GENERAL.md.
 export function writeLog(board, project, { tema, pedido, hecho, revertir, estado, archivo }, author) {
   const [name, file] = logOf(board, project, archivo);
-  if (!clean(tema, 120) || !clean(hecho, 6000)) throw new Error(tr('sys.logs.required'));
+  if (!clean(tema, 120) || !clean(hecho, HECHO_MAX)) throw new Error(tr('sys.logs.required'));
   // The fields in the language of the settings: the user reads these files.
-  const entry = `\n### ${stamp()} — ${oneLine(author, 80)} — ${oneLine(tema, 120)}
+  const entry = `\n### ${stamp()} — ${oneLine(lineBreaks(author), 80)} — ${oneLine(lineBreaks(tema), 120)}
 - ${tr('sys.logs.request', { user: ofUserLabel() })}: ${clean(pedido, 2000) || tr('sys.logs.byAssistant', { name: assistantName() })}
-- ${tr('sys.logs.done')}: ${clean(hecho, 6000)}
+- ${tr('sys.logs.done')}: ${clean(hecho, HECHO_MAX)}
 - ${tr('sys.logs.revert')}: ${clean(revertir, 1000) || tr('sys.logs.revertDefault')}
 - ${tr('sys.logs.status')}: ${clean(estado, 2000) || tr('sys.logs.noPending')}
 `;
@@ -97,6 +116,23 @@ export function writeLog(board, project, { tema, pedido, hecho, revertir, estado
   catch (error) { if (['EPERM', 'EACCES'].includes(error.code)) throw new Error(tr('sys.logs.readOnly', { name })); throw error; }
   board.event(null, author, 'log.written', `${name}: ${oneLine(tema, 80)}`);
   return `Anotado al final de la bitácora de ${name}.`;
+}
+
+// An entry the user writes by hand in a project's logbook (the window's «Escribir entrada»). It goes through writeLog, so it
+// has the same header, signature, redaction and append-only write as Orb's own. On top: the title is one plain line, and no
+// line of the text can start at the left margin, so the text can never open a «### » heading of its own (the entries are
+// counted and read by those headings).
+export const MAX_HAND_ENTRY = 5000;
+export function writeHandEntry(board, project, { title, body }) {
+  if (findLog(board, project)[0] === 'general') throw new Error(tr('sys.logs.entryProjectOnly'));
+  const head = typeof title === 'string' ? title.trim() : '';
+  if (!head || head.length > 120 || lineBreaks(head).includes('\n') || /[\u0000-\u001f]/.test(head) || head.startsWith('#')) throw new Error(tr('sys.logs.entryTitleBad'));
+  const text = typeof body === 'string' ? lineBreaks(body).replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '').trim() : '';
+  if (!text || text.length > MAX_HAND_ENTRY) throw new Error(tr('sys.logs.entryBodyBad', { max: MAX_HAND_ENTRY }));
+  const hecho = text.split('\n').map((line, i) => (i === 0 || !line.trim() ? line.trimEnd() : `  ${line.trimEnd()}`)).join('\n');
+  // writeLog cuts a field that does not fit: here nothing is cut in silence, the indentation counts.
+  if (redactSecrets(hecho).trim().length > HECHO_MAX) throw new Error(tr('sys.logs.entryTooLong', { max: HECHO_MAX }));
+  return writeLog(board, project, { tema: redactSecrets(head), pedido: tr('sys.logs.byHand'), hecho }, oneLine(userName(), 80));
 }
 
 // a text cut to a length without breaking a word («Diálogo de confirmac»), with «…» when something was left out.

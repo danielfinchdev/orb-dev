@@ -20,8 +20,8 @@ android {
         applicationId = "dev.orb.app"
         minSdk = 24
         targetSdk = 36
-        versionCode = 3008007
-        versionName = "3.8.7"
+        versionCode = 3008008
+        versionName = "3.8.8"
         // The only native code is SQLCipher: arm64 for phones, x86_64 for the emulator (debug only).
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -51,6 +51,9 @@ android {
         unitTests.isReturnDefaultValues = true
         // Robolectric runs the Compose UI tests on the JVM and needs the merged resources and manifest.
         unitTests.isIncludeAndroidResources = true
+        // A test worker gets 512 MB by default, which the Robolectric sandboxes of the UI tests outgrew (OutOfMemoryError on an
+        // unrelated test); the whole suite runs in one worker, so the heap is sized for it.
+        unitTests.all { test -> test.maxHeapSize = "2g" }
     }
 
     buildFeatures {
@@ -72,6 +75,12 @@ dependencies {
     implementation(libs.androidx.fragment)
     // WebViewAssetLoader: the local web pages (games, Pizarra) are served from the app's assets, never from the network.
     implementation(libs.androidx.webkit)
+    // The QR scanner: CameraX for the picture and ZXing (bundled, no Google services) to read it.
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.zxing.core)
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
     // No okhttp-sse on purpose: it hides SSE comments, and the silence watchdog must count the PC's ": ping" lines.

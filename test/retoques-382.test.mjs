@@ -17,7 +17,7 @@ test('the list ⋯ of a chat and of an agent conversation offers «Renombrar»',
   assert.match(inbox, /item\.kind === 'session' \? 'sessions\.update' : 'conversations\.update'/);
   // Both lists (the agent's conversation and the assistant's chat) carry the action.
   const actions = inbox.slice(inbox.indexOf('export function useOrbActions'), inbox.indexOf('export function renameChat'));
-  assert.equal([...actions.matchAll(/^\s+rename,$/gm)].length, 2);
+  assert.equal([...actions.matchAll(/\[info, rename, pin,/g)].length, 2);
 });
 
 test('the chat bars keep only the bell and pause; the rest goes into ⋯', () => {
@@ -34,7 +34,7 @@ test('the chat bars keep only the bell and pause; the rest goes into ⋯', () =>
   const head = session.slice(session.indexOf('<PageHeader className="topbar-chat"'), session.indexOf('</PageHeader>'));
   const top = head.slice(0, head.indexOf('<DropdownMenu'));
   assert.doesNotMatch(top, /FolderOpen|GitFork|Archive|Trash2|<Info|Gamepad2/);
-  assert.match(top, /<NotificationBell \/>\s*<BarPause \/>/);
+  assert.match(top, /<BarPause \/>\s*<NotificationBell \/>/);
   const menu = head.slice(head.indexOf('<DropdownMenu'));
   for (const id of ['open-folder', 'details', 'fork', 'archive', 'bar-games', 'delete']) assert.match(menu, new RegExp(`data-testid="${id}"`), id);
   assert.match(menu, /<DropdownMenuSeparator \/>\s*<DropdownMenuItem variant="destructive" onSelect=\{async \(\) => \{ if \(await confirm\(/);
@@ -45,9 +45,9 @@ test('bubbles stay inside the window and the composer folder is a chip like the 
   // Both bubbles keep their tail off the rounded corners (it hides instead of looking cut against the window's edge).
   assert.equal([...overlay.matchAll(/collisionPadding=\{12\} arrowPadding=\{TAIL_PAD\}/g)].length, 2);
   assert.match(read('components', 'sidebar.jsx'), /side="top" align=\{n === 0 \? 'start' : 'center'\}/);
-  const chip = read('views', 'session.jsx').match(/<span tabIndex=\{0\} className="([^"]+)" data-testid="session-folder">/);
-  assert.ok(chip, 'folder chip');
-  for (const c of ['h-8', 'rounded-lg', 'border', 'px-2.5', 'gap-1.5', 'text-control']) assert.ok(chip[1].split(' ').includes(c), c);
+  // the folder left the box: it is the «Carpeta» row of the panel's Ficha
+  assert.match(read('views', 'orb', 'info.jsx'), /data-testid="session-folder">\{s\.cwd\}/);
+  assert.doesNotMatch(read('views', 'session.jsx'), /data-testid="session-folder"/);
 });
 
 test('the cost line can be hidden in Apariencia and the message time shows on hover', async () => {
@@ -100,11 +100,12 @@ test('F5 reloads the window and hands each unsent message back to its box, once'
 test('the first-run welcome opens maximised and fits the window', () => {
   const setup = read('views', 'setup.jsx');
   assert.match(setup, /useEffect\(\(\) => \{ bridge\.windowControls\?\.act\('maximize-on'\)\.catch\(quiet\); \}, \[\]\);/);
-  assert.equal([...setup.matchAll(/className="brand-sky onboard"/g)].length, 2);
-  assert.match(read('views', 'master.jsx'), /<div className="brand-sky onboard">\s*<form onSubmit=\{submit\} className="[^"]*onboard-card/);
+  // Orb UI 2.0: every step of the welcome (and the master password's) is a wizard page, one column centred in the window
+  // that scrolls when the window is low.
+  assert.ok([...setup.matchAll(/<WizardPage step="/g)].length >= 3);
+  assert.match(read('views', 'master.jsx'), /<WizardPage /);
   assert.doesNotMatch(setup + read('views', 'master.jsx').split('export function MasterLocked')[0], /pt-24 pb-6/);
-  const css = read('app.css');
-  assert.match(css, /\.onboard \{[^}]*padding: clamp\(/); assert.match(css, /\.onboard-card \{ gap: clamp\(/);
+  assert.match(read('components', 'wizard.jsx'), /flex h-full flex-col overflow-y-auto[^\n]*\n\s*<div className="m-auto /);
   // Rust: maximise only a window that is meant to be seen (a hidden test window would show).
   const rs = fs.readFileSync(path.join(ROOT, 'src-tauri', 'src', 'window.rs'), 'utf8');
   assert.match(rs, /"maximize-on" => \{\s*if !w\.app_handle\(\)\.state::<Ui>\(\)\.hidden && !w\.is_maximized\(\)/);

@@ -1,5 +1,7 @@
 // Window actions of models, tasks, direct sessions and schedules.
 import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
@@ -8,18 +10,52 @@ import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { PERMISSIONS } from '../sessions.mjs';
-import { globalAutonomy, permissionOfAutonomy } from '../../domain/security/guard.mjs';
+import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
 import { checkDevTools } from '../../platform/dev-tools.mjs';
 import { expandMentions, mentionOptions } from '../mentions.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
-import { diffBetween } from '../../domain/tasks/checkpoints.mjs';
+import { diffBetween, fileBetween, statBetweenAsync } from '../../domain/tasks/checkpoints.mjs';
 import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/turns.mjs';
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
+import { abandonSettled, joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
+// Folders compared as the engine writes them: either separator, any case, no trailing separator.
+const folderKey = (p) => path.resolve(String(p)).replace(/[\\/]+$/, '').replace(/\\/g, '/').toLowerCase();
+const sameFolder = (a, b) => folderKey(a) === folderKey(b);
+// true when the folder is outside the assistant's folder: there a phone sees only its last name, so two folders look alike.
+function outsideHome(folder) {
+  if (!folder || !ctx.home) return false;
+  const rel = path.relative(folderKey(ctx.home), folderKey(folder)).replace(/\\/g, '/');
+  return rel === '..' || rel.startsWith('../') || path.isAbsolute(rel);
+}
+// Which run a task has now, so a stale «Deshacer»/«Aceptar» can be refused (run-id.mjs). It changes exactly once per run
+// and never when held files are rechecked.
+function checkpointIdOf(board, taskId) {
+  return runIdentifier(board.settingJson(`checkpoint:${taskId}`)?.before, lastLaunchId(board, taskId));
+}
+// A phone that sends the checkpointId is refused while the stored end photo still belongs to an earlier run (a task
+// re-run in an isolated copy keeps the previous undo point until its work is joined). A point whose run cannot be known
+// (an old one) only blocks what touches files: accepting just marks the task, so it passes with { files: false }.
+// Whether the undo point has the photo of the end of the task. Without it an undo takes the folder as it is now as «after»
+// and rolls back later work too. null: there is no undo point at all.
+function finalPhotoOf(board, taskId) {
+  const cp = board.settingJson(`checkpoint:${taskId}`);
+  if (!cp?.before) return null;
+  return Boolean(cp.before.kind === 'git' ? cp.after?.commit : cp.after);
+}
+function assertPointCurrent(board, taskId, { files = true } = {}) {
+  const cp = board.settingJson(`checkpoint:${taskId}`);
+  const run = cp?.after?.run;
+  const current = lastLaunchId(board, taskId);
+  if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail(tr('msg.undo.runNotReady')); return; }
+  if (!cp?.after || !current || !files) return;
+  if (runOfAfter(board, taskId, cp, current) == null) fail(tr('msg.undo.runUnknown'));
+}
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
     if (name === 'plan') return planTurn(sessions, s.id, args);
@@ -47,6 +83,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.list': ({ limit }) => {
       // a range of the settings' key (its index), not LIKE (which would read every setting: one per accepted task, …).
       const undone = new Set(board.all("SELECT key FROM settings WHERE key >= 'undone:' AND key < 'undone;' AND value <> '' AND value <> 'null'").map((r) => Number(r.key.slice('undone:'.length))));
+      // the tasks whose result the user already accepted (the same index range), so a row can offer «Aceptar resultado» only once.
+      const accepted = new Set(board.all("SELECT key FROM settings WHERE key >= 'accepted:' AND key < 'accepted;' AND value = '1'").map((r) => Number(r.key.slice('accepted:'.length))));
       // the rows are new objects: changed in place (copying each task twice would cost more than reading it).
       const paused = board.setting('paused') === '1';
       return board.panelTasks(Math.min(Number(limit) || 150, 500)).map((task) => {
@@ -56,6 +94,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         const held = board.heldInfo(task); if (held) task.held = held;
         task.description = cut(task.description); task.result = cut(task.result);
         if (undone.has(task.id)) task.undone = true;
+        if (accepted.has(task.id)) task.accepted = true;
         return task;
       });
     },
@@ -65,15 +104,19 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const children = board.all('SELECT id, title, status, agent, assigned_to, model FROM tasks WHERE parent_id = ? OR review_of = ? ORDER BY id', d.id, d.id);
       // «Deshecha» (undone: the files are as before the task), the model by its name («Haiku 4.5», not «haiku») and the
       // account that ran it by the name the user gave it («Codex Pro»).
+      // folderNow: the folder previewHash covers; it differs from project_path when the project moved after the task was created.
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
-      return { ...d, waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      const now = board.projectPathNow(d) ?? null;
+      const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
       project: project(p.project).name, title: str(p.title, 'título', 200), description: str(p.description, 'descripción', 12000),
       agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
       reasoning: oneOf(p.reasoning, ['low', 'medium', 'high'], 'razonamiento', 'medium'), mode: oneOf(p.mode, ['carpeta', 'aislada'], 'modo', 'carpeta'),
-      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : []
+      readonly: Boolean(p.readonly), account: str(p.account, 'cuenta', 40, { optional: true }) || null, level: oneOf(p.level, ['simple', 'normal', 'complejo'], 'nivel', null), depends_on: Array.isArray(p.depends_on) ? p.depends_on.map((d) => int(d, 'dependencia')) : [],
+      origin_session: p.origin_session == null ? null : str(p.origin_session, 'sesión', 64)
     }, 'usuario'),
     'tasks.approve': ({ id, decision, hash }) => {
       const out = board.approve(int(id, 'tarea'), decision === 'approved' ? 'approved' : 'rejected', 'usuario', str(hash, 'huella', 100));
@@ -84,16 +127,57 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.cancel': ({ id }) => scheduler.cancel(int(id, 'tarea'), 'usuario'),
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
-    'tasks.undo': ({ id }) => scheduler.undo(int(id, 'tarea')),
+    // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
+    'tasks.undo': ({ id, checkpoint }, principal) => {
+      const tid = int(id, 'tarea');
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.undo.rerunSinceUndo'));
+      // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
+      // a browser sends none. Only an explicit desktop principal skips them: a call without principal is not known to be the
+      // window, so it is guarded like a remote one.
+      if (checkpoint != null || principal?.channel !== 'desktop') {
+        if (joinedByHand(board, tid)) fail(tr('msg.undo.joinedByHand'));
+        if (joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
+        if (finalPhotoOf(board, tid) === false) fail(tr('msg.undo.noFinalState'));
+        assertPointCurrent(board, tid);
+      }
+      return scheduler.undo(tid);
+    },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
-    'tasks.diff': async ({ id }) => {
+    // stat: true → only the line counts per file, no patch, and nothing else is done (read only, no recheck of held files).
+    // file: one file of that diff whole, before and after (checkpoints.mjs › fileBetween), asked when it is opened in that view.
+    'tasks.diff': async ({ id, stat, file }, principal) => {
+      // a whole file is read only by the PC's window (the phone of 3.8.7 never asks for it)
+      if (file != null && principal && principal.channel !== 'desktop') fail(tr('msg.remote.pcOnly'));
       const task = board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat'));
-      // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps.
-      if (board.heldInfo(task)) await scheduler.recheckHeld(task);
+      // a held task's diff is read from every file again (safety.mjs › recheckHeld): what accepting it keeps. A whole-file
+      // view is read only and was already rechecked when the tab opened, so it does not repeat it.
+      if (stat !== true && file == null && board.heldInfo(task)) await scheduler.recheckHeld(task);
       const cp = board.settingJson(`checkpoint:${task.id}`);
-      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) return { available: false, files: [], more: 0 };
-      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit) };
+      // the reasons only a phone is told (the PC's window keeps what it always got): the stored diff no longer describes the
+      // folder (joined by hand), or a finished task whose end photo failed (the undo still works from the point before)
+      const phone = Boolean(principal) && principal.channel !== 'desktop';
+      if (phone && cp?.before && joinedByHand(board, task.id)) return { available: false, reason: 'joinedbyhand', files: [], more: 0 };
+      if (phone && cp?.before && joinAbandoned(board, task.id)) return { available: false, reason: 'resolveonpc', files: [], more: 0 };
+      // the checkpointId of the run this diff belongs to (null when that cannot be known): the phone compares it with tasks.get's
+      const diffId = () => {
+        const current = lastLaunchId(board, task.id);
+        const run = runOfAfter(board, task.id, cp, current);
+        return run == null ? null : runIdentifier(cp?.before, run);
+      };
+      // reason (why there is no diff): nophoto (no checkpoint), nogit (a copy checkpoint, no git), notdone (no photo after
+      // the work yet), nophotoafter (phone only: finished without one), joinedbyhand, resolveonpc, unknownrun (phone only), gone (the repository is not there any more).
+      if (cp?.before?.kind !== 'git' || !cp.after?.commit || !cp.before.repo || !fs.existsSync(cp.before.repo)) {
+        const finished = !['queued', 'awaiting_approval', 'waiting', 'running'].includes(task.status);
+        const reason = !cp?.before ? 'nophoto' : cp.before.kind !== 'git' ? (phone && finished && !cp.after ? 'nophotoafter' : 'nogit') : !cp.after?.commit ? (phone && finished && !cp.after ? 'nophotoafter' : 'notdone') : 'gone';
+        return { available: false, reason, files: [], more: 0 };
+      }
+      // a diff of an unknown run is not shown to the phone: it could not tell which run it belongs to (a task never launched has no runs to tell apart)
+      const checkpointId = diffId();
+      if (phone && checkpointId == null && lastLaunchId(board, task.id)) return { available: false, reason: 'unknownrun', files: [], more: 0 };
+      if (typeof file === 'string') return { available: true, ...fileBetween(cp.before.repo, cp.before.commit, cp.after.commit, file), checkpointId };
+      if (stat === true) return { available: true, ...(await statBetweenAsync(cp.before.repo, cp.before.commit, cp.after.commit)), checkpointId };
+      return { available: true, ...diffBetween(cp.before.repo, cp.before.commit, cp.after.commit), checkpointId };
     },
     // «Iniciar de todos modos» starts that task now, over the usage limit and also with the queue paused (only that
     // one: scheduler.tick). One that waits for other tasks cannot: the answer says which. → { paused }
@@ -107,8 +191,23 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     },
     // a task held for review is accepted as it is (its result stays; the tasks waiting for it go on), as the OK
     // to its report does.
-    'tasks.accept': ({ id }) => {
+    // unheld: true (the phone, which may hold stale data) refuses a task the guard holds or that is no longer awaiting
+    // acceptance, so a re-run that Orb held meanwhile is never accepted blind. Without it the PC's window accepts after showing the diff.
+    // checkpoint (optional): the checkpointId the phone saw; if the task ran again since, nothing is accepted.
+    // Only an explicit desktop principal may accept without the guards: the web UI of a linked browser and a stolen phone
+    // session send none, so for them a held task is refused whatever the client sent, as «tasks.undo» does.
+    'tasks.accept': ({ id, unheld, checkpoint }, principal) => {
       const tid = int(id, 'tarea');
+      const remote = principal?.channel !== 'desktop';
+      if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.accept.rerunSinceSeen'));
+      if ((checkpoint != null || remote) && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
+      if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
+      if (remote && checkpoint == null && board.heldInfo(board.task(tid))) fail(tr('msg.accept.held'));
+      if (unheld === true) {
+        const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
+        if (board.heldInfo(t)) fail(tr('msg.accept.held'));
+        if (t.status !== 'done') fail(tr('msg.accept.statusChanged'));
+      }
       if (board.heldInfo(board.task(tid))) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       return accept([tid]);
     },
@@ -121,7 +220,27 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const act = oneOf(action, ['start', 'stop', 'resume', 'clear'], 'acción');
       return runMode(s, { name: 'goal', args: act === 'start' ? str(text, 'objetivo', 1500) : { stop: 'parar', resume: 'continuar', clear: 'quitar' }[act] });
     },
-    'sessions.list': ({ archived }) => sessions.list({ archived: Boolean(archived) }),
+    // `branch` and `prNumber` are optional and only read from what the engine already holds (the chats' worktree records, and
+    // the branch and open PRs that projects.info / projects.prs last read): this list never runs git or gh.
+    'sessions.list': ({ archived }) => {
+      // HEAD read first (cheap, 5 s per folder); the older read of projects.info only when HEAD could not be read.
+      const currentBranch = (dir) => { const live = liveBranch(dir); return live === undefined ? cachedBranch(dir) : live; };
+      const list = sessions.list({ archived: Boolean(archived) });
+      let trees = null;
+      // `activity`: the short line of what a running chat does now (file names only); absent when it is not working and for «Acceso total» chats, which the phone may not read.
+      const withLine = (s) => { const activity = s.kind === 'chat' && s.permission !== 'total' ? sessions.liveLine?.(s.id) : null; return activity ? { ...s, activity } : s; };
+      return list.map((s0) => {
+        const s = withLine(s0);
+        if (s.kind !== 'chat' || !s.project) return s;
+        trees ??= new Map(chatTrees.all().filter((r) => !r.removed).map((r) => [r.id, r]));
+        const tree = trees.get(s.id);
+        // the project's branch is today's: a settled or archived chat did not work on it
+        const branch = tree?.branch || (s.archived || s.settled ? null : currentBranch(s.cwd));
+        if (!branch) return s;
+        const pr = cachedPr(tree?.repo || s.cwd, branch);
+        return { ...s, branch, ...(pr ? { prNumber: pr } : {}) };
+      });
+    },
     'sessions.create': (p) => {
       const proj = p.project ? project(p.project) : null;
       const cwd = proj ? proj.path : ctx.paths.projects;
@@ -179,16 +298,17 @@ ${block}` : ''}` });
     },
     // «Cambios» of a direct chat, turn by turn (turns.mjs): read only, from Orb's light photos of the folder.
     'sessions.turns': async ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? listTurns(s.cwd, s.id) : { available: false, turns: [] }; },
-    'sessions.turnDiff': async ({ id, scope, n }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? turnDiff(s.cwd, s.id, { scope: oneOf(scope, ['last', 'all', 'turn', 'head'], 'ámbito', 'last'), n }) : { available: false, files: [], more: 0 }; },
+    'sessions.turnDiff': async ({ id, scope, n, stat }) => { const s = sessions.must(str(id, 'conversación', 64)); return s.kind === 'chat' && s.project ? turnDiff(s.cwd, s.id, { scope: oneOf(scope, ['last', 'all', 'turn', 'head'], 'ámbito', 'last'), n, stat: stat === true }) : { available: false, files: [], more: 0 }; },
     'sessions.queue': ({ id }) => sessions.queue(str(id, 'conversación', 64)),
     'sessions.editQueued': ({ id, queueId, text, remove, move }) => sessions.editQueued(str(id, 'conversación', 64), int(queueId, 'mensaje'), { text: text === undefined ? undefined : str(text, 'mensaje', 20000), remove: Boolean(remove), move: oneOf(move, ['up', 'down'], 'mover', undefined) }),
     'sessions.approve': ({ id, request, decision }) => sessions.respond(str(id, 'conversación', 64), str(request, 'petición', 200), oneOf(decision, DECISION, 'decisión')),
     'sessions.resume': ({ id }) => { trash.assertSessionNotTrashed(sessions.must(str(id, 'conversación', 64))); return sessions.resume(str(id, 'conversación', 64)); },
     // agent: go on with another agent (the copy gets a summary of the conversation; the original stays).
-    'sessions.fork': ({ id, title, agent }) => {
+    // from: a message of the chat; the copy is cut there (conversation only, never the files).
+    'sessions.fork': ({ id, title, agent, from }) => {
       const other = oneOf(agent, AGENT_IDS, 'agente', undefined);
       if (other && !(board.availableAgents() ?? AGENT_IDS).includes(other)) fail(tr('msg.api.agentUnavailable', { agent: other }));
-      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other });
+      return sessions.fork(str(id, 'conversación', 64), { title: str(title, 'título', 80, { optional: true }) || undefined, agent: other, from: from === undefined || from === null ? undefined : int(from, 'mensaje') });
     },
     // the same chat goes on with another agent (a bounded summary travels; the chat's permission is kept, never raised).
     'sessions.handoff': ({ id, agent }) => {
@@ -206,9 +326,19 @@ ${block}` : ''}` });
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),
     'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
-    'schedules.create': (p) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
-      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true }, 'usuario'),
-    'schedules.update': ({ id, enabled, approve, title, description }) => updateSchedule(board, int(id, 'programada'), { enabled, approved: approve === true, title, description }),
+    // only this PC's window may loosen the permission level of a schedule (src/domain/schedules/schedules.mjs, clampAutonomy)
+    'schedules.create': (p, principal) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true,
+      month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' }),
+    // every field create takes may change, checked the same way; absent = unchanged
+    'schedules.update': (p, principal) => updateSchedule(board, int(p.id, 'programada'), {
+      enabled: p.enabled, approved: p.approve === true, title: p.title, description: p.description,
+      ...(p.project != null ? { project: project(p.project).name } : {}), ...(p.agent != null ? { agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente') } : {}), ...(p.model !== undefined ? { model: str(p.model, 'modelo', 80, { optional: true }) || null } : {}),
+      ...(p.readonly !== undefined ? { readonly: p.readonly === true } : {}), ...(p.every != null ? { every: oneOf(p.every, EVERY, 'frecuencia') } : {}), ...(p.at_time != null ? { at_time: str(p.at_time, 'hora', 16) } : {}),
+      ...(p.hours != null ? { hours: Number(p.hours) || 6 } : {}), ...(Array.isArray(p.weekdays) ? { weekdays: p.weekdays.map(Number) } : {}), ...(p.month_day != null ? { month_day: Number(p.month_day) } : {}),
+      ...(p.tz !== undefined ? { tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null } : {}), ...(p.same_chat !== undefined ? { same_chat: p.same_chat === true } : {}), ...(p.notify_mobile !== undefined ? { notify_mobile: p.notify_mobile === true } : {}),
+      ...(p.autonomy !== undefined ? { autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', null) } : {})
+    }, { desktop: principal?.channel === 'desktop' }),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
     'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),

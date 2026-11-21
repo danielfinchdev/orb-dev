@@ -61,6 +61,15 @@ data class ChatRow(
     val asking: Boolean,
     /** A task of this Orbe chat waits for the person's OK or was held for review (set from `tasks.list`). */
     val needsReview: Boolean = false,
+    /** The branch a direct session works on and the open PR number of it; the PC only sends them when it already knows them. */
+    val branch: String? = null,
+    val prNumber: Int? = null,
+    /** ISO time a mute ends; null with [muted] = until it is lifted. */
+    val mutedUntil: String? = null,
+    /** What a working chat does now ("Editando styles.css"), when the PC says so. */
+    val activity: String? = null,
+    /** How many files a finished chat changed, when the PC counts them. */
+    val changedFiles: Int? = null,
 ) {
     val ref get() = ChatRef(kind, id)
     val direct get() = kind == ChatKind.Agent
@@ -92,11 +101,14 @@ fun agentName(agent: String?): String? = when (agent) {
 
 object InboxParser {
     /** Parses one item of `inbox.list` (possibly completed by [InboxMerge]); null when it has no key. */
-    fun row(o: JsonObject): ChatRow? {
+    fun row(o: JsonObject, nowMs: Long = System.currentTimeMillis()): ChatRow? {
         val key = o.str("key") ?: return null
         val kind = ChatKind.fromWire(o.str("kind") ?: key.substringBefore(':'))
         val id = o.str("id") ?: key.substringAfter(':', "")
         if (id.isEmpty()) return null
+        // A mute with an end stops counting once it has passed, even in a list saved before that moment.
+        val mutedUntil = o.str("mutedUntil")?.takeIf { it.isNotBlank() }
+        val muted = o.bool("muted") && (mutedUntil == null || ChatTime.parse(mutedUntil)?.let { it > nowMs } != false)
         val last = o["lastMessage"] as? JsonObject
         val from = last?.get("from") as? JsonObject
         val speaker = when (from?.str("type")) {
@@ -118,9 +130,11 @@ object InboxParser {
             lastFrom = speaker, lastFromName = from?.str("name"),
             at = last?.str("at") ?: o.str("at"),
             unread = o.int("unread") ?: 0, state = state,
-            pinned = o.bool("pinned"), pinOrder = o.int("pinOrder"), muted = o.bool("muted"),
+            pinned = o.bool("pinned"), pinOrder = o.int("pinOrder"), muted = muted, mutedUntil = mutedUntil,
             snoozedUntil = o.str("snoozedUntil"), section = o.long("section"),
             agent = o.str("agent"), done = o.bool("done"), waitingPermission = o.bool("asks"), asking = o.bool("asking"), needsReview = o.bool("review"),
+            branch = o.str("branch")?.takeIf { it.isNotBlank() }, prNumber = o.int("prNumber")?.takeIf { it > 0 },
+            activity = o.str("activity")?.takeIf { it.isNotBlank() }?.let(::oneLine), changedFiles = o.int("changedFiles")?.takeIf { it > 0 },
         )
     }
 
@@ -204,6 +218,10 @@ object InboxMerge {
         s.str("title")?.let { extra["title"] = JsonPrimitive(it) }
         s.str("project")?.let { extra["project"] = JsonPrimitive(it) }
         s.str("agent")?.let { extra["agent"] = JsonPrimitive(it) }
+        s.str("branch")?.let { extra["branch"] = JsonPrimitive(it) }
+        s.int("prNumber")?.let { extra["prNumber"] = JsonPrimitive(it) }
+        s.str("activity")?.let { extra["activity"] = JsonPrimitive(it) }
+        s.int("changedFiles")?.let { extra["changedFiles"] = JsonPrimitive(it) }
         s.str("updated_at")?.let { extra["at"] = JsonPrimitive(it) }
         extra["state"] = JsonPrimitive(if (s.str("status") == "running") "working" else "idle")
         extra["done"] = JsonPrimitive(s.bool("settled"))

@@ -1,18 +1,19 @@
 // Ajustes: updates, support, feedback, more apps, the music and «Acerca de».
-import { useEffect, useState } from 'react';
-import { HeartHandshake, HandHeart, MessageSquareText, Camera, ImagePlus, X, Send, Download, ExternalLink } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Camera, ImagePlus, X, Send, Download, Heart, RefreshCw } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { PRODUCT, AUTHOR } from '../../../shared/product.mjs';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
+import { Badge, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { Select } from '@/components/ui/overlay.jsx';
-import { act, bridge, useStore, plainSkin } from '@/lib/store.js';
-import { OrbMark } from '@/components/orb-mark.jsx';
+import { act, bridge } from '@/lib/store.js';
+import { notifyInfo } from '@/lib/notify.js';
 import { cn } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { useUpdate, updateActions, notesUrl } from '@/components/update-card.jsx';
-import { TRACKS } from '../../../shared/music.mjs';
 import { available as musicAvailable } from '@/lib/music.js';
+import { useFeedback, FEEDBACK_TYPES } from '@/components/feedback-pop.jsx';
+import { Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
 
 // New versions of Orb (GitHub Releases): the installed version, «Buscar actualizaciones» and the same steps as the card.
 export function UpdatesCard() {
@@ -25,21 +26,20 @@ export function UpdatesCard() {
     downloaded: t('settings.update.downloaded', { version: st.version }), installing: t('settings.update.installing', { version: st.version }), error: t('settings.update.error', { error: st.error })
   }[st.state] ?? '';
   return (
-    <Card data-testid="updates-card">
-      <CardHeader><CardTitle>{t('settings.updates')}</CardTitle><CardDescription>{st.portable ? t('settings.update.portable') : t('settings.updatesDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-1">
-        <div className="text-sm">{t('settings.update.current', { version: st.current })}</div>
-        {line ? <div className={cn('text-xs', st.state === 'error' ? 'text-destructive' : 'text-muted-foreground')}>{line}</div> : null}
-      </CardContent>
-      {st.state === 'off' ? null : (
-        <CardFooter>
-          {st.state === 'available' ? <Button size="sm" onClick={() => updateActions.update(st)}>{st.portable ? t('update.download') : t('update.update')}</Button>
-            : st.state === 'downloaded' ? <Button size="sm" onClick={updateActions.restart}>{t('update.restart')}</Button>
-              : <Button size="sm" variant="outline" disabled={['checking', 'downloading', 'installing'].includes(st.state)} onClick={updateActions.check}>{t('settings.update.check')}</Button>}
-          {st.version ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openExternal(notesUrl(st.version)))}>{t('update.notes')}</Button> : null}
-        </CardFooter>
-      )}
-    </Card>
+    <Block title={t('settings.updates')} note={st.portable ? t('settings.update.portable') : t('settings.updatesDesc')} data-testid="updates-card">
+      <Panel>
+        <Setting label={t('settings.update.current', { version: st.current })} hint={line ? <span className={cn(st.state === 'error' && 'text-destructive')}>{line}</span> : null}>
+          {st.state === 'off' ? null : (
+            <>
+              {st.version ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openExternal(notesUrl(st.version)))}>{t('update.notes')}</Button> : null}
+              {st.state === 'available' ? <Button size="sm" onClick={() => updateActions.update(st)}>{st.portable ? t('update.download') : t('update.update')}</Button>
+                : st.state === 'downloaded' ? <Button size="sm" onClick={updateActions.restart}>{t('update.restart')}</Button>
+                  : <Button size="sm" variant="outline" disabled={['checking', 'downloading', 'installing'].includes(st.state)} onClick={updateActions.check}><RefreshCw />{t('settings.update.check')}</Button>}
+            </>
+          )}
+        </Setting>
+      </Panel>
+    </Block>
   );
 }
 
@@ -47,48 +47,33 @@ export function UpdatesCard() {
 export function SupportCard() {
   const t = useT();
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><HeartHandshake className="text-primary size-5" /><div><CardTitle>{t('contribute.supportTitle')}</CardTitle><CardDescription>{t('contribute.supportDesc')}</CardDescription></div></CardHeader>
-      <CardFooter><Button size="sm" onClick={() => bridge.openExternal(AUTHOR.paypal)} data-testid="contribute-paypal"><HandHeart />{t('contribute.paypal')}</Button></CardFooter>
-    </Card>
+    <Block title={t('contribute.supportTitle')} note={t('contribute.supportDesc')}>
+      <Panel>
+        <Setting label={t('contribute.contribution')}><Button size="sm" onClick={() => bridge.openExternal(AUTHOR.paypal)} data-testid="contribute-paypal"><Heart />{t('contribute.paypal')}</Button></Setting>
+      </Panel>
+    </Block>
   );
 }
 
-const FEEDBACK_TYPES = ['error', 'idea', 'otro'];
+// The same form as the sidebar's pop-up (components/feedback-pop.jsx): one state, one call to the engine.
 export function FeedbackCard() {
   const t = useT();
-  const [v, setV] = useState({ type: 'idea', message: '', contact: '' });
-  const [images, setImages] = useState([]);
-  const [busy, setBusy] = useState(false);
-  const room = images.length < 3;
-  const add = (list) => setImages((now) => [...now, ...list.filter(Boolean)].slice(0, 3));
-  // The capture shows the app behind Ajustes (what the user wants to report), so the window hides while it is taken.
-  const capture = async () => {
-    document.documentElement.dataset.capturing = '1';
-    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-    try { return await act(bridge.feedback.capture()); } finally { delete document.documentElement.dataset.capturing; }
-  };
-  const send = async () => {
-    setBusy(true);
-    const ok = await act(bridge.feedback.send({ ...v, images }), t('contribute.sent'));
-    setBusy(false);
-    if (ok) { setV({ ...v, message: '' }); setImages([]); }
-  };
+  const { v, setV, images, setImages, room, busy, addCapture, addImages, send } = useFeedback({ toasts: true });
+  const messageRef = useRef(null);
+  // The button stays the main one even with nothing written: it points at the message instead of being greyed out.
+  const trySend = () => { if (!v.message.trim()) { notifyInfo(t('sys.feedback.empty')); messageRef.current?.focus(); return; } send(); };
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MessageSquareText className="text-primary size-5" /><div><CardTitle>{t('contribute.feedbackTitle')}</CardTitle><CardDescription>{t('contribute.feedbackDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
-          <Field label={t('contribute.type')}><Select className="w-full" value={v.type} onValueChange={(type) => setV({ ...v, type })} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Field>
-          <Field label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Field>
-        </div>
-        <Field label={t('contribute.message')}><Textarea rows={5} maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Field>
-        <div className="grid gap-2">
+    <Block title={t('contribute.feedbackTitle')} note={t('contribute.feedbackDesc')}>
+      <Panel>
+        <Setting label={t('contribute.type')}><Select caret="solid" value={v.type} onValueChange={(type) => setV({ ...v, type })} title={t('contribute.type')} options={FEEDBACK_TYPES.map((value) => ({ value, label: t(`contribute.type.${value}`) }))} /></Setting>
+        <Fld label={t('contribute.message')}><Textarea ref={messageRef} rows={3} className="field-sizing-fixed h-[74px] min-h-[74px] resize-y" maxLength={5000} value={v.message} placeholder={t('contribute.messagePh')} onChange={(e) => setV({ ...v, message: e.target.value })} data-testid="feedback-message" /></Fld>
+        <Fld label={t('contribute.contact')} hint={t('contribute.contactHint')}><Input type="email" value={v.contact} maxLength={120} placeholder={t('contribute.contactPh')} onChange={(e) => setV({ ...v, contact: e.target.value })} /></Fld>
+        <Stack className="border-border border-t">
           <div className="flex flex-wrap items-center gap-2">
-            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add([await capture()])} data-testid="feedback-capture"><Camera />{t('contribute.capture')}</Button>
-            <Button size="sm" variant="outline" disabled={!room} onClick={async () => add((await act(bridge.feedback.images())) ?? [])}><ImagePlus />{t('contribute.addImage')}</Button>
-            <span className="text-muted-foreground text-xs">{t('contribute.imagesLimit')}</span>
+            <Button size="sm" variant="outline" disabled={!room} onClick={addCapture} data-testid="feedback-capture"><Camera />{t('contribute.capture')}</Button>
+            <Button size="sm" variant="outline" disabled={!room} onClick={addImages}><ImagePlus />{t('contribute.addImage')}</Button>
           </div>
+          <Hint>{t('contribute.imagesLimit')}</Hint>
           {images.length ? (
             <div className="flex flex-wrap gap-2">
               {images.map((img, i) => (
@@ -99,11 +84,10 @@ export function FeedbackCard() {
               ))}
             </div>
           ) : null}
-        </div>
-        <p className="text-muted-foreground text-xs">{t('contribute.privacy')}</p>
-      </CardContent>
-      <CardFooter><Button size="sm" disabled={busy || !v.message.trim()} onClick={send} data-testid="feedback-send">{busy ? <Spinner className="border-white/40 border-t-white" /> : <Send />}{t('contribute.send')}</Button></CardFooter>
-    </Card>
+        </Stack>
+        <CardFoot className="justify-between"><Hint className="min-w-0 flex-1 text-left">{t('contribute.privacy')}</Hint><Button size="sm" disabled={busy} onClick={trySend} data-testid="feedback-send">{busy ? <Spinner className="border-white/40 border-t-white" /> : <Send />}{t('contribute.send')}</Button></CardFoot>
+      </Panel>
+    </Block>
   );
 }
 
@@ -115,51 +99,37 @@ export function MoreAppsCard() {
   useEffect(() => { bridge.moreApps?.().then(setApps).catch(() => setApps([])); }, []);
   const DESC = { 'open-control-edge': t('apps.openControl') };
   return (
-    <Card>
-      <CardContent className="grid gap-3">
-        {!apps ? <div className="flex items-center gap-2 text-sm"><Spinner />{t('apps.loading')}</div> : apps.map((a) => (
-          <div key={a.id} className="flex flex-wrap items-center gap-3 rounded-xl border p-3" data-testid={`app-${a.id}`}>
-            <img src={`apps/${a.id}.png`} alt="" className="size-11 rounded-xl" />
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium">{a.name}</div>
-              <div className="text-muted-foreground text-xs">{DESC[a.id]}</div>
-              <div className="text-muted-foreground mt-0.5 text-xs">{a.version ? t('apps.latest', { version: a.version, date: a.date ? new Date(a.date).toLocaleDateString(locale) : '' }) : t('apps.offline')}</div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="ghost" onClick={() => bridge.openExternal(a.page)}>{t('apps.details')}</Button>
-              <Button size="sm" onClick={() => bridge.openExternal(a.download)}><Download />{t('apps.download')}</Button>
-            </div>
-          </div>
+    <Block title={t('settings.group.apps')}>
+      <Panel>
+        {!apps ? <Stack><div className="flex items-center gap-2 text-control"><Spinner />{t('apps.loading')}</div></Stack> : apps.map((a) => (
+          <Setting key={a.id} data-testid={`app-${a.id}`} label={a.name}
+            hint={<>{DESC[a.id]} {a.version ? t('apps.latest', { version: a.version, date: a.date ? new Date(a.date).toLocaleDateString(locale) : '' }) : t('apps.offline')}</>}>
+            <Button size="sm" variant="outline" onClick={() => bridge.openExternal(a.page)}><ToolIcon tool="gh" className="size-4" />{t('apps.details')}</Button>
+            <Button size="sm" onClick={() => bridge.openExternal(a.download)}><Download />{t('apps.download')}</Button>
+          </Setting>
         ))}
-      </CardContent>
-    </Card>
+      </Panel>
+    </Block>
   );
 }
-
-// the music's credits (src/shared/music.mjs): all CC0, each with the page it comes from.
-const MUSIC_CREDITS = Object.values(TRACKS);
 
 // «Acerca de»: the version, the developer's GitHub and the licence (also at the foot of the sections list).
 export function AboutCard({ version }) {
   const t = useT();
-  const plain = plainSkin(useStore((s) => s.app?.config?.ui?.skin));
+  const st = useUpdate();
   return (
-    <Card data-testid="settings-about">
-      <CardHeader className="flex-row items-center gap-3">{plain ? <span className="shrink-0" data-testid="about-icon"><OrbMark size={40} /></span> : <img src="./icon-o.png" alt="" className="size-10 shrink-0 rounded-[22%]" data-testid="about-icon" />}<div><CardTitle>{PRODUCT.name} {version}</CardTitle></div></CardHeader>
-      <CardContent className="grid gap-1 text-sm">
-        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.developer')}</span>
-          <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="hover:text-primary inline-flex cursor-pointer items-center gap-1.5 font-medium" data-testid="about-github"><ToolIcon tool="gh" className="size-4" />@{AUTHOR.github}<ExternalLink className="text-muted-foreground size-3.5" /></button>
-        </div>
-        <div className="flex items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.license')}</span><span>MIT</span></div>
-        {musicAvailable() ? (
-          <details data-testid="about-music">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3"><span className="text-muted-foreground">{t('about.music')}</span><span>{t('about.musicSummary', { n: MUSIC_CREDITS.length })}</span></summary>
-            <ul className="text-muted-foreground mt-1 grid gap-0.5 text-xs">
-              {MUSIC_CREDITS.map((m) => <li key={m.id}><button type="button" onClick={() => bridge.openExternal(m.page)} className="hover:text-primary cursor-pointer text-left">{t('about.musicTrack', { title: m.title, author: m.author })} · {m.licence}</button></li>)}
-            </ul>
-          </details>
-        ) : null}
-      </CardContent>
-    </Card>
+    <Block title={PRODUCT.name} note={t('about.tagline')} data-testid="settings-about">
+      <Panel className="[&>details]:border-border [&>details]:border-t [&>details]:px-3.5 [&>details]:py-3">
+        <Setting label={t('about.version')} hint={t('about.installed', { version })}>
+          {st?.state === 'none' ? <Badge variant="success">{t('about.upToDate')}</Badge> : null}
+        </Setting>
+        <Setting label={t('about.developer')}>
+          <button type="button" onClick={() => bridge.openExternal(AUTHOR.url)} className="text-primary-text cursor-pointer text-control hover:underline" data-testid="about-github">@{AUTHOR.github}</button>
+        </Setting>
+        <Setting label={t('about.license')} hint={t('about.openSource')}><Badge variant="secondary">MIT</Badge></Setting>
+        {/* all the music is made by Orb as it plays: there is nothing to credit */}
+        {musicAvailable() ? <Setting label={t('about.music')} hint={t('about.musicAdaptive')} data-testid="about-music" /> : null}
+      </Panel>
+    </Block>
   );
 }

@@ -255,4 +255,71 @@ class DirectChatViewModelTest {
         b.events.tryEmit(itemEvent(11, "tool", "tool_result", """{"id":"t1","output":"ok"}""")); runCurrent()
         assertNull(vm.state.value.activity)
     }
+
+    // ---------- context bar, fork from a line, delivery marks ----------
+
+    @Test fun theContextPercentReachesTheState() = runTest(dispatcher) {
+        val vm = vm(FakeDirectChatBackend(base))
+        assertEquals(58, vm.state.value.contextPercent)
+    }
+
+    @Test fun forkingFromALineAsksThePcThenCopiesUpToIt() = runTest(dispatcher) {
+        val b = FakeDirectChatBackend(base)
+        val vm = vm(b)
+        val effects = ArrayList<DirectEffect>()
+        backgroundScope.launch { vm.effects.collect { effects += it } }
+        assertTrue(vm.state.value.canForkFrom)
+        vm.askFork(2); runCurrent()
+        assertEquals(ForkAsk(2, true, null), vm.fork.value)
+        vm.forkFromAsked(); runCurrent()
+        assertEquals(listOf("rewindInfo 2", "fork from 2"), b.calls.filter { it.startsWith("rewindInfo") || it.startsWith("fork") })
+        assertNull(vm.fork.value)
+        assertEquals(listOf<DirectEffect>(DirectEffect.Open("s2")), effects)
+    }
+
+    @Test fun whenThePcSaysNoTheActionStaysOffWithItsReason() = runTest(dispatcher) {
+        val b = FakeDirectChatBackend(base)
+        b.forkInfoOnPc = Result.success(ForkInfo(false, "El chat está trabajando"))
+        val vm = vm(b)
+        vm.askFork(1); runCurrent()
+        assertEquals(ForkAsk(1, false, "El chat está trabajando"), vm.fork.value)
+        vm.forkFromAsked(); runCurrent()
+        assertFalse(b.calls.any { it.startsWith("fork") })
+    }
+
+    @Test fun anOlderPcOnlyCopiesTheWholeChat() = runTest(dispatcher) {
+        val b = FakeDirectChatBackend(base)
+        b.rewindAvailable = false
+        val vm = vm(b)
+        assertFalse(vm.state.value.canForkFrom)
+        vm.askFork(2); runCurrent()
+        assertNull(vm.fork.value)
+        assertFalse(b.calls.any { it.startsWith("rewindInfo") })
+        vm.fork(); runCurrent()
+        assertTrue(b.calls.contains("fork"))
+    }
+
+    @Test fun aRefusedQuestionClosesTheAsk() = runTest(dispatcher) {
+        val b = FakeDirectChatBackend(base)
+        b.forkInfoOnPc = Result.failure(LinkException(LinkError.Timeout))
+        val vm = vm(b)
+        vm.askFork(2); runCurrent()
+        assertNull(vm.fork.value)
+    }
+
+    @Test fun aMessageThePcTookShowsOneTickUntilItsOwnLineArrives() = runTest(dispatcher) {
+        val b = FakeDirectChatBackend(base)
+        val vm = vm(b)
+        vm.send("Hazlo"); runCurrent()
+        // the thread cannot be read yet, so the line is not back: the PC has the message, nothing else
+        b.loadError = LinkException(LinkError.Timeout)
+        b.outbox.value = emptyList(); runCurrent()
+        val waiting = vm.state.value.items.last() as DItem.Waiting
+        assertEquals(PendingState.Arrived, waiting.pending.state)
+    }
+
+    @Test fun theLastUserLineIsKnown() = runTest(dispatcher) {
+        val vm = vm(FakeDirectChatBackend(base))
+        assertEquals(1L, vm.state.value.lastUserId)
+    }
 }

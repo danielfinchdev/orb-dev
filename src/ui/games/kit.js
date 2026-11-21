@@ -31,11 +31,11 @@ export function useKeys(handler) {
   }, []);
 }
 
-// The visual theme in use: html[data-skin] (orb | vaporwave | retro | profesional | nube) and html.dark.
-export const skin = () => document.documentElement.dataset.skin || 'orb';
+// The visual theme in use: html[data-skin] (predeterminado | cristal | orb | vaporwave | candy | retro) and html.dark.
+export const skin = () => document.documentElement.dataset.skin || 'predeterminado';
 export const isDark = () => document.documentElement.classList.contains('dark');
-// Less motion: the system asks for it, or the «profesional» theme (no decorative motion).
-export const reducedMotion = () => skin() === 'profesional' || Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+// Less motion: only when the system asks for it. No theme turns the games' motion off.
+export const reducedMotion = () => Boolean(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
 // The colours of the visual theme in use, for the canvas (read at most every 250 ms: getComputedStyle is not free).
 let cache = null; let cacheAt = 0; let cacheKey = '';
@@ -47,7 +47,8 @@ export function palette() {
   const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
   cache = {
     bg: v('--card', '#fff'), fg: v('--foreground', '#111'), muted: v('--muted', '#eee'), mutedFg: v('--muted-foreground', '#777'),
-    primary: v('--primary', '#4f6bed'), accent: v('--accent', '#e8ecff'), border: v('--border', '#ddd'),
+    // the accent of the theme (--primary is the neutral ink of the main button and would paint the pieces black or white)
+    primary: v('--primary-text', v('--primary', '#4f6bed')), accent: v('--accent', '#e8ecff'), border: v('--border', '#ddd'),
     success: v('--success', '#2bb673'), warning: v('--warning', '#f5a524'), danger: v('--destructive', '#e5484d'), info: v('--info', '#3b82f6'),
     font: getComputedStyle(document.body).fontFamily || 'sans-serif', dark: isDark(), skin: skin()
   };

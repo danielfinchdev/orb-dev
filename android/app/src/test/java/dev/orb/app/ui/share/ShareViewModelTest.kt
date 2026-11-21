@@ -88,4 +88,11 @@ class ShareViewModelTest {
         assertTrue(backend.sent.isEmpty())
         assertEquals(AttachTexts.SHARE_NEEDS_TEXT, vm.state.value.message)
     }
+
+    @Test fun theBadgeNamesOneFileCountsSeveralOrSaysText() {
+        assertEquals("captura.png", sharedLabel(listOf("captura.png"), false))
+        assertEquals("3 archivos", sharedLabel(listOf("a", "b", "c"), true))
+        assertEquals("Texto", sharedLabel(emptyList(), true))
+        assertEquals(null, sharedLabel(emptyList(), false))
+    }
 }

@@ -15,7 +15,8 @@ import { assistantName } from '../../domain/tasks/board.mjs';
 import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
-import { fail, str, int, oneOf } from './common.mjs';
+import { phoneText } from '../transport/remote-calls.mjs';
+import { fail, str, int, oneOf, images } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
 
@@ -28,8 +29,10 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     // the working folder). → { conversation }
     // brain ({ agent, model, reasoning }): a new conversation started from a phone with the brain chosen there (the
     // one new conversations start with is this PC's setting).
-    'chat.send': ({ text, conversation, project: name, brain }, principal) => {
+    // images: the files attached to the message (absolute paths, at most 10), checked and placed exactly as in sessions.send.
+    'chat.send': ({ text, conversation, project: name, brain, images: files }, principal) => {
       const t = str(text, 'mensaje', 20000);
+      const attachments = images(files);
       const id = conversation == null ? null : conversationId(conversation);
       if (id) trash.assertNotTrashed(id);
       const proj = name === undefined ? undefined : name ? project(name).name : null;
@@ -38,13 +41,30 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
         const c = orchestrator.startConversation({ text: t, project: proj });
         const pick = Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => brain[k] !== undefined).map((k) => [k, brain[k]]));
         try { methods['chat.settings']({ conversation: c.id, ...pick }, principal); } catch (error) { board.run('DELETE FROM conversations WHERE id = ?', c.id); board.changed('conversations'); throw error; }
-        return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj });
+        return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: c.id, project: proj, attachments, fresh: true });
       }
       // «/compact» and «/clear» typed alone in an existing chat are Orb's commands (src/shared/slash.mjs).
-      const command = id ? slashCommand(t) : null;
+      const command = id && !attachments.length ? slashCommand(t) : null;
       if (command) return command === 'compact' ? orchestrator.compact(id) : orchestrator.clear(id);
       if (!id && (brainOf().agent || 'claude') === 'cursor') fail(tr('msg.api.cursorNoCoordinate'));
-      return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj });
+      return orchestrator.ask(t, expandMentions(board, sessions, t), { conversation: id, project: proj, attachments });
+    },
+    // The messages written while the assistant works, waiting for their turn: → [{ id, text, at }] (id: a text; at: ms).
+    // Only a message that has not started can be changed: text edits it, remove drops it (→ the queue left).
+    'chat.queue': ({ conversation }) => orchestrator.queueOf(conversationId(conversation)),
+    'chat.editQueued': ({ conversation, queueId, text, remove, expect }) => {
+      const id = conversationId(conversation);
+      trash.assertNotTrashed(id);
+      const qid = str(queueId, 'mensaje', 64);
+      // expect (optional): the text the phone showed; if the queued message changed meanwhile nothing is edited or removed.
+      if (expect != null) {
+        const now = orchestrator.queueOf(id).find((m) => String(m.id) === qid);
+        // a phone gets the queue with the assistant folder cut out of each text (shapeResult), so it may send either form.
+        if (now && now.text !== expect && phoneText(now.text) !== expect) fail(tr('msg.queue.changed'));
+      }
+      if (remove) return orchestrator.editQueued(id, qid, { remove: true });
+      const t = str(text, 'mensaje', 20000);
+      return orchestrator.editQueued(id, qid, { text: t, mentions: expandMentions(board, sessions, t) });
     },
     'chat.stop': ({ conversation }) => orchestrator.stop(conversationId(conversation)),
     // «Compactar»: the conversation's coordinator compacts its own context (or starts afresh with the briefing and
@@ -153,6 +173,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
     'whiteboard.save': async ({ project, elements, appState, files, png }) => (await wb()).save({ project: str(project, 'proyecto', 200), elements, appState, files, png }),
     'whiteboard.attach': async ({ project, paths }) => (await wb()).attach({ project: str(project, 'proyecto', 200), paths }),
     'whiteboard.note': async ({ project, file, note }) => (await wb()).note({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200), note }),
+    'whiteboard.canvasNote': async ({ project, note }) => (await wb()).canvasNote({ project: str(project, 'proyecto', 200), note: str(note, 'nota', 2000, { optional: true }) ?? '' }),
     'whiteboard.remove': async ({ project, file }) => (await wb()).remove({ project: str(project, 'proyecto', 200), file: str(file, 'archivo', 200) }),
     'whiteboard.folder': async ({ project }) => (await wb()).folder({ project: str(project, 'proyecto', 200) }),
     // the answer to a question card (orb_ask): the options picked and/or own words, or skipped. The card keeps it and
@@ -171,12 +192,13 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // as the user asking for something («Auto» publishes or deletes on the user's own words, board.currentRequest).
       return orchestrator.ask(text, '', { conversation: row.conversation_id, meta: { answer: true, own: skip ? '' : own } });
     },
-    'chat.accept': ({ id }) => {
+    'chat.accept': ({ id }, principal) => {
       const row = board.chatRow(int(id, 'mensaje'));
       if (row?.meta?.kind !== 'report') fail(tr('msg.api.notReport'));
       // the OK to the report also settles the tasks of that request Orb held «for your review» (a read-only check
       // that changed build files, for instance), which the report already explained: left alone, they would stay blocked for ever.
-      const held = row.conversation_id ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
+      // Only the PC window settles them: a phone or browser must not release held tasks through the report, as «tasks.accept» refuses.
+      const held = row.conversation_id && principal?.channel === 'desktop' ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
         .map((r) => r.id).filter((tid) => board.heldInfo(board.task(tid))) : [];
       for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       const out = accept([...row.meta.tasks, ...held], row.meta.project);

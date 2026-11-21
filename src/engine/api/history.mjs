@@ -11,6 +11,6 @@ export function historyMethods({ home } = {}) {
   return {
     'history.list': async ({ agent, q, limit } = {}) => listChats({ agent: oneOf(agent, AGENTS, 'agente', undefined), q: str(q, 'búsqueda', 200, { optional: true }), limit, home }),
     'history.read': async ({ id }) => readChat(str(id, 'conversación', 60), { home }),
-    'history.usage': async ({ days } = {}) => usageOf({ days: oneOf(days, [7, 30, 90], 'días', 30), tz: ownerTz(ctx.config), home })
+    'history.usage': async ({ days } = {}) => usageOf({ days: oneOf(days, [1, 7, 30, 90], 'días', 30), tz: ownerTz(ctx.config), home })
   };
 }

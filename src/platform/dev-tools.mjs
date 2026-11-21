@@ -10,11 +10,15 @@
 // the music); a tool found there still counts, since agents can run it. Not loose at the top of Orb's folder either (each
 // folder there is a category or a project).
 //
-// Only file checks (no program is started): cheap enough for every briefing.
+// The checks of the briefing are file checks only. The one program ever started is `java --version`, by the version report
+// of «Prepara tu equipo» (devToolsReport): asynchronous, with a clean environment and a time limit, and its answer is kept
+// for a while so opening the window again does not start it again.
 import fs from 'node:fs';
+import { execFile } from 'node:child_process';
 import path from 'node:path';
 import { ctx } from './context.mjs';
 import { categoryOf } from './paths.mjs';
+import { cleanEnv } from './proc.mjs';
 
 // where the Android SDK may be (its variables, then Android Studio's default folder); android.mjs uses it too.
 export function sdkRoots(env = process.env, platform = process.platform) {
@@ -34,7 +38,7 @@ const LABEL = { flutter: 'Flutter', androidSdk: 'Android SDK', java: 'Java (JDK)
 
 const isFile = (f) => { try { return fs.statSync(f).isFile(); } catch { return false; } };
 const isDir = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
-const inside = (dir, root, win) => { if (!root) return false; const rel = path.relative(win ? root.toLowerCase() : root, win ? dir.toLowerCase() : dir); return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel)); };
+const inside = (dir, root, win) => { if (!root) return false; const rel = path.relative(win ? root.toLowerCase() : root, win ? dir.toLowerCase() : dir); return rel === '' || (rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel)); };
 
 // → [{ id, label, path (found and usable, or null), inCore (found only inside Orb's core), missing ([paths the PATH or a
 //    variable names that do not exist]), url }]
@@ -82,3 +86,63 @@ export function devToolsBrief(list = checkDevTools(), user = 'el usuario') {
 // Whether a task's brief needs them: a mobile or multiplatform project, or a brief that names these tools.
 export const needsDevTools = (project, text = '') => ['android', 'ios', 'multi'].includes(String((project?.path && categoryOf(ctx.home ?? '', project.path)) ?? ''))
   || /\b(flutter|dart|android|gradle|apk|aab|kotlin|jdk|java)\b/i.test(String(text));
+
+// ---- what «Prepara tu equipo» shows: each tool with its version, when it can be told.
+// Nothing is installed or downloaded here and nothing but `--version` is ever run (Java only, when its `release` file says
+// nothing); Flutter and the Android SDK are read from their own files, because `flutter --version` can start a download.
+const firstLine = (f) => { try { return fs.readFileSync(f, 'utf8').split(/\r?\n/)[0].trim(); } catch { return ''; } };
+const versionIn = (text) => String(text ?? '').match(/\d+(?:\.\d+)+/)?.[0] ?? null;
+const maxVersion = (names) => names.map((n) => versionIn(n)).filter(Boolean).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).at(-1) ?? null;
+const listDir = (d) => { try { return fs.readdirSync(d); } catch { return []; } };
+
+// The version of a tool found at `where` (a folder from checkDevTools), or null when it cannot be read without running it.
+export function toolVersion(id, where, { run = defaultRun, platform = process.platform, core = ctx.paths?.core ?? null } = {}) {
+  if (!where) return null;
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  if (id === 'flutter') {
+    const root = p.dirname(where); // .../flutter/bin → .../flutter
+    const fromFile = versionIn(firstLine(p.join(root, 'version')));
+    if (fromFile) return fromFile;
+    try { return versionIn(JSON.parse(fs.readFileSync(p.join(root, 'bin', 'cache', 'flutter.version.json'), 'utf8')).frameworkVersion); } catch { return null; }
+  }
+  if (id === 'androidSdk') return maxVersion(listDir(p.join(where, 'build-tools')));
+  if (id === 'java') {
+    const home = p.dirname(where); // .../jdk/bin → .../jdk
+    const release = (() => { try { return /JAVA_VERSION="?([\d._]+)/.exec(fs.readFileSync(p.join(home, 'release'), 'utf8'))?.[1] ?? null; } catch { return null; } })();
+    if (release) return release;
+    // Agents can write inside Orb's folder (core\herramientas included): a java.exe planted there must never be run by the engine.
+    if (inside(where, core, platform === 'win32')) return null;
+    return versionIn(run(p.join(where, platform === 'win32' ? 'java.exe' : 'java'), ['--version']));
+  }
+  return null;
+}
+// What `java --version` said, per executable, kept for PROBE_TTL_MS (a new install can be seen sooner with forgetProbes()).
+const PROBE_TTL_MS = 10 * 60_000;
+const probes = new Map();
+export const forgetProbes = () => probes.clear();
+const cachedRun = (file) => { const hit = probes.get(file); return hit && Date.now() - hit.at < PROBE_TTL_MS ? hit.out : null; };
+function probeAsync(file, args) {
+  return new Promise((resolve) => {
+    try { execFile(file, args, { timeout: 5000, windowsHide: true, encoding: 'utf8', env: cleanEnv(), maxBuffer: 64 * 1024 }, (error, stdout, stderr) => resolve(error ? '' : `${stdout}
+${stderr}`)); } catch { resolve(''); }
+  });
+}
+
+// → [{ id, label, installed, version (or null), optional: true, url }]; the folder it was found in stays here (the window need not know it).
+// A `run` given in the options (tests) answers synchronously; otherwise the program is asked without blocking the engine.
+export async function devToolsReport(options = {}) {
+  const out = [];
+  for (const t of checkDevTools(options)) {
+    const asked = [];
+    const run = options.run ?? ((file, args) => { const hit = cachedRun(file); if (hit !== null) return hit; asked.push([file, args]); return ''; });
+    let version = toolVersion(t.id, t.path, { ...options, run });
+    if (!options.run && asked.length) {
+      const [file, args] = asked[0];
+      const said = await probeAsync(file, args);
+      probes.set(file, { at: Date.now(), out: said });
+      version = versionIn(said);
+    }
+    out.push({ id: t.id, label: t.label, installed: Boolean(t.path), version, optional: true, url: t.url });
+  }
+  return out;
+}

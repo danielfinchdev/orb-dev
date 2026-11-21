@@ -50,7 +50,7 @@ test('projects.prs lists open pull requests with a fixed gh command in the proje
   calls.length = 0;
   reply = () => ({ ok: true, err: '', out: JSON.stringify([{ number: 7, title: 'Fix\nthing', headRefName: 'f', baseRefName: 'main', url: 'u', isDraft: false, author: { login: 'ana' }, updatedAt: 'x', reviewDecision: '', mergeable: 'MERGEABLE', extra: 1 }]) });
   const r = await call('projects.prs', { name: 'tienda' });
-  assert.deepEqual(calls[0].args, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable']);
+  assert.deepEqual(calls[0].args, ['pr', 'list', '--state', 'open', '--limit', '30', '--json', 'number,title,headRefName,headRefOid,baseRefName,url,isDraft,author,updatedAt,reviewDecision,mergeable,isCrossRepository']);
   assert.equal(calls[0].cwd, dir);
   assert.equal(r[0].author, 'ana'); assert.equal(r[0].title, 'Fix thing'); assert.equal('extra' in r[0], false);
 });

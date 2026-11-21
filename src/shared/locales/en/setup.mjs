@@ -3,6 +3,7 @@ export default {
   'setup.prepareTitle': 'Preparing your PC',
   'setup.prepareDesc': 'I’ll install any missing agents and tools with their official installers. Then sign in to each one from Agents.',
   'setup.continue': 'Continue',
+  'setup.back': 'Back',
   'setup.signIn': 'Sign in to the agents',
   'setup.hello': 'Hello, I’m {name}',
   'setup.tagline': 'Your pocket director',
@@ -15,5 +16,15 @@ export default {
   'setup.pickLocation': 'Choose location…',
   'setup.example': 'For example, D:\\ to create D:\\{name}',
   'setup.folderNote': 'Your projects go here, each in its category, plus my hidden core folder with my data. If you pick a folder I’ve used before, I’ll keep using it.',
-  'setup.create': 'Create and start'
+  'setup.create': 'Create and start',
+  'setup.stepsLabel': 'Welcome steps',
+  'setup.step.welcome': 'Welcome',
+  'setup.step.theme': 'Your theme',
+  'setup.step.folders': 'Tidy up folders',
+  'setup.step.master': 'Master password',
+  'setup.step.equipo': 'Set up your PC',
+  'setup.kick': 'Step {n}',
+  'setup.themeTitle': 'Choose your theme',
+  'setup.themeDesc': 'Changes the colours and style of the whole app. You can change it later in Settings › General › Appearance.',
+  'setup.themeLabel': 'Theme'
 };

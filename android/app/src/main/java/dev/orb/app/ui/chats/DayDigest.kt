@@ -15,10 +15,10 @@ data class DigestLine(val key: String, val text: String, val items: List<String>
 data class DayDigest(val day: String, val lines: List<DigestLine>, val waiting: Boolean)
 
 object DayDigests {
-    /** → the card to show, or null: the PC says it was shown already (`due` false), the day is empty or the answer is not one. */
-    fun parse(result: JsonElement?, t: InboxTexts = InboxTexts.current()): DayDigest? {
+    /** → the card to show, or null: the PC says it was shown already (`due` false, unless [ignoreDue]: it was asked for), the day is empty or the answer is not one. */
+    fun parse(result: JsonElement?, t: InboxTexts = InboxTexts.current(), ignoreDue: Boolean = false): DayDigest? {
         val o = result as? JsonObject ?: return null
-        if (!o.bool("due") || o.bool("empty")) return null
+        if ((!ignoreDue && !o.bool("due")) || o.bool("empty")) return null
         val day = o.str("day") ?: return null
         val lines = ArrayList<DigestLine>()
         fun section(name: String) = o[name] as? JsonObject

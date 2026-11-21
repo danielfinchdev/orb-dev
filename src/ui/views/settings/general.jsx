@@ -1,136 +1,152 @@
 // Ajustes: the assistant, appearance, chat, tasks, interface, God mode, the folder, «Cosas que nadie toca» and the daily test.
-import { useEffect, useState } from 'react';
-import { FlaskConical, FolderOpen, Plus, ArrowLeftRight, SquareTerminal, ZoomIn, ZoomOut, MonitorCog, Palette, X, ChevronRight, ShieldBan, RotateCcw } from 'lucide-react';
-import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, DENSITIES, CHAT_WIDTHS, FONT_SIZES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
-import { previewColors, seedsOf, ACCENT_COLORS } from '@/lib/theme-seeds.js';
-import { PANELS, savePanels } from '../expert.jsx';
-import { Robot } from '@/components/robot.jsx';
-import { SkinPreview } from '@/components/skin-preview.jsx';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { LayoutDashboard, Gem, Bot, Waves, Candy, Terminal, FlaskConical, FolderOpen, Plus, SquareTerminal, ZoomIn, ZoomOut, X, RotateCcw } from 'lucide-react';
+import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
+import { PANELS, savePanels, panelOn } from '../expert.jsx';
 import { confirm } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, Textarea } from '@/components/ui/basic.jsx';
-import { Select, Switch, Checkbox, BubbleTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { Badge, Input, Textarea } from '@/components/ui/basic.jsx';
+import { Segmented } from '@/components/ui/primitives.jsx';
+import { Select, Switch, Checkbox, Range, BubbleTip } from '@/components/ui/overlay.jsx';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { AGENT } from '@/lib/labels.js';
-import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin } from '@/lib/store.js';
+import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, lightOnlySkin, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { LANGUAGES } from '../../../shared/i18n.mjs';
 import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
-import { available as musicAvailable, musicPrefs, setMusicVolume } from '@/lib/music.js';
-import { save, num, Row, WithKeys, sizes } from './rows.jsx';
-import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
+import { ADAPTIVE_THEMES } from '../../../shared/music.mjs';
+import { save, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
   const t = useT();
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Robot size={40} mark /><div><CardTitle>{t('settings.assistant')}</CardTitle><CardDescription>{t('settings.assistantDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} /></Field>
-          <Field label={t('settings.userName')}><Input value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} /></Field>          <Field label={t('settings.language')} hint={t('settings.languageHint')}><Select className="w-full" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label }))} /></Field>
-        </div>
-      </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFooter>
-    </Card>
+    <Block title={t('settings.assistant')} note={t('settings.assistantDesc')}>
+      <Panel>
+        <Setting label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input className="w-[200px]" value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} aria-label={t('settings.assistantName')} /></Setting>
+        <Setting label={t('settings.userName')} hint={t('settings.userNameHint')}><Input className="w-[200px]" value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} aria-label={t('settings.userName')} /></Setting>
+        <Setting label={t('settings.language')} hint={t('settings.languageHint')}><Select caret="solid" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} title={t('settings.language')} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label: label.replace(/\s*\(.*\)$/, '') }))} /></Setting>
+        <CardFoot><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFoot>
+      </Panel>
+    </Block>
   );
 }
 
-// Appearance: light / dark, the visual theme, fonts, colours of code and the robot (floating, sounds, animations).
-// Everything is saved as soon as it changes. The professional theme has no robot, so its options are hidden there.
+// The icon of each theme's card, as the mock-up draws them.
+const SKIN_ICON = { predeterminado: LayoutDashboard, cristal: Gem, orb: Bot, vaporwave: Waves, candy: Candy, retro: Terminal };
+// The sample of each palette's accent (the mock-up's swatches).
+const PALETTE_SWATCH = { grafito: 'oklch(0.6 0.18 40)', oceano: 'oklch(0.6 0.17 252)', bosque: 'oklch(0.6 0.13 155)', uva: 'oklch(0.6 0.18 300)', rubi: 'oklch(0.6 0.19 15)', arena: 'oklch(0.62 0.12 65)' };
+
+// Appearance: light / dark, the visual theme, fonts, colours of code; the reply line; and the robot (floating, sounds,
+// animations) with the music. Everything is saved as soon as it changes. Only the Orb theme shows the robot; the plain
+// themes have no sounds nor motion.
 export function AppearanceCard({ c }) {
   const t = useT();
   const ui = { ...APPEARANCE_DEFAULTS, ...c.ui };
   const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
   const set = (patch, ok = null) => save({ ui: patch }, ok);
   const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
-  const robot = !plainSkin(ui.skin);
   const darkOnly = fullPc() && darkOnlySkin(ui.skin);
-  const mode = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+  const lightOnly = fullPc() && lightOnlySkin(ui.skin);
+  const locked = darkOnly || lightOnly;
+  const mode = ui.theme ?? 'sistema';
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Palette className="text-primary size-5" /><div><CardTitle>{t('appearance.title')}</CardTitle><CardDescription>{t('appearance.desc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-5">
-        <Field label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : undefined}>
-          <div className="bg-muted inline-flex w-fit gap-1 rounded-lg p-1" role="radiogroup" aria-label={t('settings.theme')}>
-            {['claro', 'oscuro', 'sistema'].map((theme) => <button key={theme} type="button" role="radio" aria-checked={(ui.theme ?? 'sistema') === theme} disabled={darkOnly} onClick={() => set({ theme })} className={cn('rounded-md px-3 py-1.5 text-control', darkOnly ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', (ui.theme ?? 'sistema') === theme ? 'bg-background shadow-sm' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>)}
-          </div>
-        </Field>
-        {fullPc() ? <Field label={t('appearance.skin')} hint={t('appearance.skinHint')}>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
-            {SKINS.map((skin) => (
-              <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
-                className={cn('grid cursor-pointer gap-1.5 rounded-xl border p-2 text-left transition-colors', ui.skin === skin ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                <SkinPreview skin={skin} colors={skin === 'paletas' ? previewColors(ui.palette, mode, ui.accent, ui.contrast) : undefined} />
-                <span className="text-control font-medium">{t(`appearance.skin.${skin}`)}</span>
-              </button>
-            ))}
-          </div>
-        </Field> : null}
-        {fullPc() && ui.skin === 'paletas' ? (
-          <div className="grid gap-3" data-testid="palette-settings">
-            <Field label={t('appearance.palette')} hint={t('appearance.paletteHint')}>
-              <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-7" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
-                {PALETTES.map((id) => {
-                  const seeds = seedsOf(id, mode, 'tema');
-                  return (
-                    <button key={id} type="button" role="radio" aria-checked={ui.palette === id} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
-                      className={cn('grid cursor-pointer gap-1 rounded-lg border p-1.5 text-left transition-colors', ui.palette === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                      <span className="flex h-5 overflow-hidden rounded-md border" aria-hidden="true"><i className="flex-1" style={{ background: seeds.surface }} /><i className="flex-1" style={{ background: seeds.ink }} /><i className="flex-1" style={{ background: previewColors(id, mode, 'tema', 'normal')['--p-primary'] }} /></span>
-                      <span className="truncate text-caption">{t(`appearance.palette.${id}`)}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </Field>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <Field label={t('appearance.accent')} hint={t('appearance.accentHint')}>
-                <div className="flex flex-wrap items-center gap-1.5" role="radiogroup" aria-label={t('appearance.accent')} data-testid="accent-picker">
-                  {ACCENTS.map((id) => (
-                    <button key={id} type="button" role="radio" aria-checked={ui.accent === id} aria-label={t(`appearance.accent.${id}`)} title={t(`appearance.accent.${id}`)} onClick={() => set({ accent: id })} data-testid={`accent-${id}`}
-                      className={cn('flex size-7 cursor-pointer items-center justify-center rounded-full border text-caption', ui.accent === id ? 'border-primary ring-primary/30 ring-2' : 'hover:bg-accent/40')}>
-                      {id === 'tema' ? <span aria-hidden="true">∗</span> : <i className="size-4 rounded-full" style={{ background: ACCENT_COLORS[id] }} />}
-                    </button>
-                  ))}
-                </div>
-              </Field>
-              <Field label={t('appearance.contrast')}><Select className="w-full" value={ui.contrast} onValueChange={(contrast) => set({ contrast })} options={opts(CONTRASTS, 'appearance.contrast')} /></Field>
+    <>
+      <Block title={t('appearance.title')} note={t('appearance.desc')}>
+        <Panel>
+          <Setting label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : lightOnly ? t('comp.theme.lightOnly') : t('settings.themeHint')}>
+            <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="radiogroup" aria-label={t('settings.theme')}>
+              {['sistema', 'claro', 'oscuro'].map((theme) => (
+                <button key={theme} type="button" role="radio" aria-checked={mode === theme} disabled={locked} onClick={() => set({ theme })}
+                  className={cn('focus-visible:outline-ring inline-flex h-(--ctl-sm) items-center rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap outline-none focus-visible:outline-2', locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', mode === theme ? 'bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.08)]' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>
+              ))}
             </div>
-          </div>
-        ) : null}
-        <div className="grid gap-3 sm:grid-cols-3" data-testid="size-settings">
-          <Field label={t('appearance.density')} hint={t('appearance.densityHint')}><Select className="w-full" value={ui.density} onValueChange={(density) => set({ density })} options={opts(Object.keys(DENSITIES), 'appearance.density')} /></Field>
-          <Field label={t('appearance.chatWidth')}><Select className="w-full" value={ui.chatWidth} onValueChange={(chatWidth) => set({ chatWidth })} options={opts(Object.keys(CHAT_WIDTHS), 'appearance.chatWidth')} /></Field>
-          <Field label={t('appearance.fontSize')} hint={t('appearance.fontSizeHint')}><Select className="w-full" value={ui.fontSize} onValueChange={(fontSize) => set({ fontSize })} options={FONT_SIZES.map((px) => ({ value: px, label: t('appearance.fontSizeValue', { px: String(px).replace('.', ',') }) }))} /></Field>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Field label={t('appearance.font')}><Select className="w-full" value={ui.font} onValueChange={(font) => set({ font })} options={opts(FONTS, 'appearance.font')} /></Field>
-          <Field label={t('appearance.codeFont')}><Select className="w-full" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Field>
-          <Field label={t('appearance.codeTheme')}><Select className="w-full" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Field>
-        </div>
-        <pre className="code-sample hljs overflow-x-auto rounded-lg border p-3 text-caption leading-[1.55]" aria-label={t('appearance.codeSample')}><code><span className="hljs-keyword">const</span> <span className="hljs-variable">orb</span> = <span className="hljs-title function_">director</span>(<span className="hljs-string">'bolsillo'</span>, {'{ '}<span className="hljs-attr">fases</span>: <span className="hljs-number">3</span>{' }'}); <span className="hljs-comment">// Orbe</span></code></pre>
-        <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
-        {musicAvailable() ? <MusicVolume /> : null}
-        {robot ? (
-          <div className="grid gap-1">
-            <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
-            <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
-            {ui.sounds !== false ? (
-              <div className="flex items-center gap-3 py-1 text-sm">
-                <span className="text-muted-foreground text-xs">{t('settings.volume')}</span>
-                <input type="range" min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} className="accent-primary w-40 cursor-pointer"
-                  onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
+          </Setting>
+          {fullPc() ? (
+            <>
+              <Stack className="border-border border-t pb-0"><div className="flex flex-col gap-0.5"><span className="text-control font-medium">{t('appearance.skin')}</span><Hint>{t('appearance.skinHint')}</Hint></div></Stack>
+              <div className="grid grid-cols-3 gap-2 px-3.5 py-3 max-[900px]:grid-cols-2" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
+                {SKINS.map((skin) => (
+                  <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
+                    className={cn('focus-visible:outline-ring flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-card border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
+                    {(() => { const Icon = SKIN_ICON[skin]; return <Icon className="size-4" aria-hidden="true" />; })()}
+                    <span className="text-control leading-[1.45] font-medium">{t(`appearance.skin.${skin}`)}</span>
+                    <span className="text-muted-foreground text-caption leading-[1.45]">{t(`appearance.skinDesc.${skin}`)}</span>
+                  </button>
+                ))}
               </div>
-            ) : null}
-            <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
-          </div>
-        ) : <p className="text-muted-foreground text-xs">{t('appearance.noRobot')}</p>}
-      </CardContent>
-    </Card>
+            </>
+          ) : null}
+          {fullPc() && plainSkin(ui.skin) ? (
+            <Setting label={t('appearance.palette')} hint={t('appearance.paletteHint')} data-testid="palette-settings">
+              <div className="flex gap-1.5" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
+                {PALETTES.map((id) => (
+                  <button key={id} type="button" role="radio" aria-checked={ui.palette === id} aria-label={t(`appearance.palette.${id}`)} title={t(`appearance.palette.${id}`)} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
+                    className={cn('focus-visible:outline-ring grid size-8 cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-2', ui.palette === id ? 'border-foreground border-2' : 'border-border')}>
+                    <i className="pal-dot block size-5 rounded-full" data-palette={id} style={{ width: 20, height: 20, background: PALETTE_SWATCH[id] }} aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </Setting>
+          ) : null}
+          <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select caret="solid" value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONTS, 'appearance.font')} /></Setting>
+          <Setting label={t('appearance.codeFont')} hint={t('appearance.codeFontHint')}><Select caret="solid" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} title={t('appearance.codeFont')} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Setting>
+          <Setting label={t('appearance.codeTheme')} hint={t('appearance.codeThemeHint')}><Select caret="solid" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} title={t('appearance.codeTheme')} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Setting>
+          <Stack className="border-border border-t">
+            <span className="text-control font-medium">{t('appearance.codeSample')}</span>
+            <pre className="bg-secondary border-border rounded-ctl m-0 overflow-x-auto border px-3 py-2.5 font-mono text-caption" aria-label={t('appearance.codeSample')}><code>{`const robot = await orbe.saluda('Dani');
+if (robot.listo) console.log('Tarea hecha');`}</code></pre>
+          </Stack>
+        </Panel>
+      </Block>
+      <Block title={t('appearance.repliesTitle')}>
+        <Panel>
+          <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
+        </Panel>
+      </Block>
+      <Block title={t('appearance.robotTitle')} note={t('appearance.noRobot')}>
+        <Panel>
+          <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
+          <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
+          <Setting label={t('settings.volume')} hint={t('settings.volumeHint')}>
+            <Range min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} disabled={ui.sounds === false} className="w-[120px]! cursor-pointer"
+              onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
+          </Setting>
+          <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
+          {musicAvailable() ? <MusicSettings /> : null}
+        </Panel>
+        {musicAvailable() ? <MusicMore /> : null}
+      </Block>
+    </>
+  );
+}
+
+// What the mock-up does not draw of the music (its style, whether it follows what happens in Orb, or keeps one intensity): under «Más opciones».
+function MusicMore() {
+  const t = useT();
+  useStore((s) => s.app?.config?.ui?.music);
+  const prefs = musicPrefs();
+  const [level, setLevel] = useState(prefs.intensity);
+  const keepLevel = () => setMusicIntensity(level, { save: true });
+  return (
+    <MoreOptions testid="more-options-music">
+      <Panel>
+        <Setting label={t('appearance.musicTheme')}>
+          <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
+        </Setting>
+        <Row label={t('appearance.musicReactive')} hint={t('appearance.musicReactiveHint')}><Switch checked={prefs.reactive} onCheckedChange={setMusicReactive} data-testid="music-reactive" /></Row>
+        {prefs.reactive ? null : (
+          <Setting label={t('appearance.musicIntensity')}>
+            <Range min={0} max={1} step={0.05} value={level} aria-label={t('appearance.musicIntensity')} className="w-[120px]! cursor-pointer" data-testid="music-intensity"
+              onChange={(e) => { const n = Number(e.target.value); setLevel(n); setMusicIntensity(n); }} onPointerUp={keepLevel} onKeyUp={keepLevel} />
+          </Setting>
+        )}
+      </Panel>
+    </MoreOptions>
   );
 }
 
@@ -143,14 +159,13 @@ export function ChatCard({ c }) {
   const [v, setV] = useState({ maxTurns: o.maxTurns, account: o.account || agent });
   const accounts = (c.accounts ?? []).filter((a) => a.agent === agent);
   return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.chatCard')}</CardTitle><CardDescription>{t('settings.chatCardDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-4">
-        <Field label={t('settings.maxTurns')} hint={t('settings.maxTurnsHint')}><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} className="w-28" /></Field>
-        {accounts.length > 1 ? <Field label={t('settings.brainAccount')}><Select className="w-full" value={v.account} onValueChange={(account) => setV({ ...v, account })} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Field> : null}
-      </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ orchestrator: v })}>{t('settings.save')}</Button></CardFooter>
-    </Card>
+    <Block title={t('settings.chatCard')} note={t('settings.chatCardDesc')}>
+      <Panel>
+        <Setting label={t('settings.maxTurns')} hint={t('settings.maxTurnsHint')}><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} className="w-[72px]" aria-label={t('settings.maxTurns')} /></Setting>
+        {accounts.length > 1 ? <Setting label={t('settings.brainAccount')} hint={t('settings.brainAccountHint')}><Select caret="solid" value={v.account} onValueChange={(account) => setV({ ...v, account })} title={t('settings.brainAccount')} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Setting> : null}
+        <CardFoot><Button size="sm" onClick={() => save({ orchestrator: v })}>{t('settings.save')}</Button></CardFoot>
+      </Panel>
+    </Block>
   );
 }
 
@@ -159,10 +174,16 @@ export function PermissionsCard({ c }) {
   const t = useT();
   const mode = c.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
   return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.autonomy')}</CardTitle><CardDescription>{t('settings.autonomyHint')}</CardDescription></CardHeader>
-      <CardContent><AutonomySwitch value={mode} testid="settings-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} /></CardContent>
-    </Card>
+    <Block title={t('settings.autonomy')} note={t('settings.autonomyNote')}>
+      <Panel>
+        <Setting label={t('settings.autonomyLabel')} hint={<><b className="text-control font-medium">{t('session.autoMode')}:</b> {t('settings.autonomyHintAuto')} <b className="text-control font-medium">{t('session.askMode')}:</b> {t('settings.autonomyHintAsk')}</>}>
+          {/* the same action as the chat's selector (the pieces of the mock-up here: two buttons, Auto and Preguntar) */}
+          <Segmented value={mode} data-testid="settings-autonomy" aria-label={t('settings.autonomyLabel')} onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())}
+            options={[{ value: 'auto', label: t('session.autoMode'), testid: 'settings-autonomy-auto' }, { value: 'editar', label: t('session.askMode'), testid: 'settings-autonomy-editar' }]} />
+        </Setting>
+        <Stack><Hint className="leading-[1.45]">{t('settings.autonomyAlways')}</Hint><Hint className="leading-[1.45]">{t('settings.autonomyMore')}</Hint></Stack>
+      </Panel>
+    </Block>
   );
 }
 
@@ -172,13 +193,14 @@ export function ApprovalWaitCard({ c }) {
   const saved = c.approvalWaitMinutes ?? 10;
   const [minutes, setMinutes] = useState(saved);
   return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.approvalWaitTitle')}</CardTitle><CardDescription>{t('settings.approvalWaitHint')}</CardDescription></CardHeader>
-      <CardContent>
-        <Field label={t('settings.approvalWait')}><div className="flex items-center gap-2"><Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-xs">{t('settings.minutes')}</span></div></Field>
-      </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ approvalWaitMinutes: Math.min(240, Math.max(0, minutes)) })} data-testid="approval-wait-save">{t('settings.save')}</Button></CardFooter>
-    </Card>
+    <Block title={t('settings.approvalWaitTitle')} note={t('settings.approvalWaitNote')}>
+      <Panel>
+        <Setting label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}>
+          <Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} className="w-[72px]" aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-control">{t('settings.minutes')}</span>
+        </Setting>
+        <CardFoot><Button size="sm" onClick={() => save({ approvalWaitMinutes: Math.min(240, Math.max(0, minutes)) })} data-testid="approval-wait-save">{t('settings.save')}</Button></CardFoot>
+      </Panel>
+    </Block>
   );
 }
 
@@ -186,7 +208,7 @@ export function TasksCard({ c }) {
   const t = useT();
   const agents = Object.keys(c.agents);
   const [v, setV] = useState({ autoRun: c.autoRun, maxParallel: c.maxParallel, perAgent: c.perAgent, timeoutMinutes: c.timeoutMinutes, review: c.review?.auto === true, high: c.policy?.highNeedsApproval !== false, windowHours: c.budget.windowHours,
-    stopAt: Math.round((c.budget.stopAt ?? 0.92) * 100), caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
+    caps: Object.fromEntries(agents.map((a) => [a, { maxTasks: c.budget.agents?.[a]?.maxTasks ?? 20, maxHeavy: c.budget.agents?.[a]?.maxHeavy ?? 6 }])),
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
     oneAtATime: c.oneAtATime === true, parallelChats: c.orchestrator?.parallel ?? 3 });
@@ -205,61 +227,73 @@ export function TasksCard({ c }) {
     save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } }).then((r) => { if (!r) { setProfile(before.profile); setV(before.v); } });
   };
   const level = profile ?? null;
+  const saveAdvanced = () => {
+    const was = profile; setProfile(null);
+    save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); });
+  };
+  const numField = (key, label, hint, extra = {}) => (
+    <Setting label={label} hint={hint}><Input type="number" className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: num(e.target.value) })} aria-label={label} {...extra} /></Setting>
+  );
   return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.tasks')}</CardTitle><CardDescription>{t('settings.tasksDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="grid gap-2" data-testid="spend-profile">
-          <div className="flex items-baseline justify-between gap-3"><span className="text-sm font-medium">{t('settings.spend')}</span><span className="text-sm font-medium text-primary">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span></div>
-          <div className="text-muted-foreground flex justify-between text-xs"><span>{t('settings.spendLow')}</span><span>{t('settings.spendHigh')}</span></div>
-          <input type="range" min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="spend-slider" aria-label={t('settings.spend')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
-          <div className="spend-ticks" aria-hidden="true">{[0, 1, 2, 3, 4].map((i) => <span key={i} className={cn(i === 2 && 'spend-ticks-rec')}>{i === 2 ? t('settings.spendRecommended') : ''}</span>)}</div>
-          <p className="text-muted-foreground text-xs leading-snug">{level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)}</p>
-        </div>
-        {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
-        <Row label={t('settings.autoModel')} info={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
-        <ModelGuide auto={c.budget?.autoModel !== false} />
-        <Row label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row>
-        <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
-        {/* tasks work at the same time by default; this makes them wait for each other. */}
-        <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>
-        <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
-        <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
-        <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
-        <Collapsible open={advanced} onOpenChange={setAdvanced}>
-          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground flex cursor-pointer items-center gap-1.5 text-sm" data-testid="spend-advanced"><ChevronRight className={cn('size-4 transition-transform', advanced && 'rotate-90')} />{t('settings.advanced')}</CollapsibleTrigger>
-          <CollapsibleContent>
-        <div className="grid gap-4 pt-4">
-        <p className="text-muted-foreground text-xs leading-snug">{t('settings.advancedHint')}</p>
-        <Row label={t('settings.review')} hint={t('settings.reviewHint')}><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); setProfile(null); save({ review: { auto: review }, budget: { profile: null } }); }} /></Row>
-        <Row label={t('settings.trusted')} hint={t('settings.trustedHint', { n: v.maxPerTask })}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); setProfile(null); save({ delegation: { trusted }, budget: { profile: null } }); }} /></Row>
-        <Row label={t('settings.highApproval')}><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); setProfile(null); save({ policy: { highNeedsApproval: high }, budget: { profile: null } }); }} /></Row>
-        <div className="grid grid-cols-4 gap-3">
-          <Field label={t('settings.parallel')}><Input type="number" min={1} max={10} value={v.maxParallel} onChange={(e) => setV({ ...v, maxParallel: num(e.target.value) })} /></Field>
-          <Field label={t('settings.perAgent')}><Input type="number" min={1} max={5} value={v.perAgent} onChange={(e) => setV({ ...v, perAgent: num(e.target.value) })} /></Field>
-          <Field label={t('settings.maxMinutes')}><Input type="number" min={5} max={600} value={v.timeoutMinutes} onChange={(e) => setV({ ...v, timeoutMinutes: num(e.target.value) })} /></Field>
-          <Field label={t('settings.windowHours')}><Input type="number" min={1} max={24} value={v.windowHours} onChange={(e) => setV({ ...v, windowHours: num(e.target.value) })} /></Field>
-        </div>
-        <div className="grid grid-cols-3 gap-3">
-          <Field label={t('settings.stopAt')} hint={t('settings.stopAtHint')}><Input type="number" min={50} max={100} value={v.stopAt} onChange={(e) => setV({ ...v, stopAt: num(e.target.value) })} /></Field>
-          <Field label={t('settings.maxPerTask')} hint={t('settings.maxPerTaskHint')}><Input type="number" min={0} max={20} value={v.maxPerTask} onChange={(e) => setV({ ...v, maxPerTask: num(e.target.value) })} /></Field>
-          {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
-          <Field label={t('settings.parallelChats')} hint={t('settings.parallelChatsHint')}><Input type="number" min={1} max={6} value={v.parallelChats} onChange={(e) => setV({ ...v, parallelChats: num(e.target.value) })} data-testid="parallel-chats" /></Field>
-        </div>
-        <div className="grid gap-2">
-          <div className="text-muted-foreground text-xs">{t('settings.safetyNet')}</div>
-          <div className="text-muted-foreground grid grid-cols-3 gap-3 text-xs"><span>{t('settings.colAgent')}</span><span>{t('settings.colTasks')}</span><span>{t('settings.colHeavy')}</span></div>
-          {agents.map((a) => <div key={a} className="grid grid-cols-3 items-center gap-3"><span className="text-sm">{AGENT[a] ?? a}</span><Input type="number" min={1} value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} /><Input type="number" min={0} value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} /></div>)}
-        </div>
-        <div><Button size="sm" onClick={() => { const was = profile; setProfile(null); save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, stopAt: Math.min(1, Math.max(0.5, v.stopAt / 100)), agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); }); }} data-testid="spend-save">{t('settings.save')}</Button></div>
-        </div>
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-    </Card>
+    <>
+      <Block title={t('settings.tasks')} note={t('settings.tasksDesc')}>
+        <Panel>
+          <Setting label={t('settings.spend')} hint={level == null ? t('settings.spendCustomHint') : t(`settings.spend${level}Hint`)} data-testid="spend-profile">
+            <Segmented className="max-w-full @max-[28rem]:w-full @max-[28rem]:flex-col" value={SPEND_BUTTON[level] ?? null} onChange={(k) => applyProfile(SPEND_LEVEL[k])} aria-label={t('settings.spend')}
+              options={[{ value: 'low', label: t('settings.spendLow'), testid: 'spend-low' }, { value: 'recommended', label: t('settings.spendRecommended'), testid: 'spend-recommended' }, { value: 'high', label: t('settings.spendHigh'), testid: 'spend-high' }]} />
+          </Setting>
+          {/* Orb chooses each task's model and reasoning (on by default), and the guide says what it uses for what. */}
+          <Row label={t('settings.autoModel')} hint={t('settings.autoModelHint')}><Switch checked={c.budget?.autoModel !== false} onCheckedChange={(autoModel) => save({ budget: { autoModel } })} data-testid="auto-model" /></Row>
+          <Row label={t('settings.autoRun')} hint={t('settings.autoRunHint')}><Switch checked={v.autoRun} onCheckedChange={(autoRun) => { setV({ ...v, autoRun }); save({ autoRun }); }} /></Row>
+          {/* tasks work at the same time by default; this makes them wait for each other. */}
+          <Row label={t('settings.oneAtATime')} hint={t('settings.oneAtATimeHint')}><Switch checked={v.oneAtATime} onCheckedChange={(oneAtATime) => { setV({ ...v, oneAtATime }); save({ oneAtATime }).then((r) => { if (!r) setV((cur) => ({ ...cur, oneAtATime: !oneAtATime })); }); }} data-testid="one-at-a-time" /></Row>
+          <Row label={t('settings.resumeRestart')} hint={t('settings.resumeRestartHint')}><Switch checked={v.resumeAfterRestart} onCheckedChange={(resumeAfterRestart) => { setV({ ...v, resumeAfterRestart }); save({ continuity: { resumeAfterRestart } }); }} /></Row>
+          <Row label={t('settings.resumeReset')} hint={t('settings.resumeResetHint')}><Switch checked={v.resumeAtReset} onCheckedChange={(resumeAtReset) => { setV({ ...v, resumeAtReset }); save({ continuity: { resumeAtReset } }); }} /></Row>
+          <Row label={t('settings.delegation')} hint={t('settings.delegationHint')}><Switch checked={v.delegation} onCheckedChange={(delegation) => { setV({ ...v, delegation }); save({ delegation: { enabled: delegation } }); }} /></Row>
+        </Panel>
+      </Block>
+      {bridge.mobile ? null : <TestCard />}
+      <MoreOptions fold open={advanced} onOpenChange={setAdvanced} testid="spend-more" triggerTestid="spend-advanced">
+            <Panel className="mt-0"><Row data-testid="settings-suggest" label={t('settings.suggest')} hint={`${t('settings.suggestDesc')}`} info={t('settings.suggestWarn')}><Switch checked={c.suggestNext === true} onCheckedChange={(suggestNext) => save({ suggestNext })} data-testid="suggest-next" /></Row></Panel>
+            <Hint>{t('settings.advancedHint')}</Hint>
+            <Panel>
+              <Setting label={t('settings.spendFine')} hint={t('settings.spendFineHint')}>
+                <span className="text-primary-text text-control font-medium">{level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)}</span>
+                <Range min={0} max={4} step={1} value={level ?? 2} onChange={(e) => applyProfile(Number(e.target.value))} className="w-[120px]! cursor-pointer" aria-label={t('settings.spendFine')} aria-valuetext={level == null ? t('settings.spendCustom') : t(`settings.spend${level}`)} data-testid="spend-slider" />
+              </Setting>
+              <Row label={<>{t('settings.review')} <Badge variant="info">{t('settings.reviewBadge')}</Badge></>} hint={t('settings.reviewHint')}><Switch checked={v.review} onCheckedChange={(review) => { setV({ ...v, review }); setProfile(null); save({ review: { auto: review }, budget: { profile: null } }); }} /></Row>
+              <Row label={t('settings.trusted')} hint={t('settings.trustedHint', { n: v.maxPerTask })}><Switch checked={v.trusted} disabled={!v.delegation} onCheckedChange={(trusted) => { setV({ ...v, trusted }); setProfile(null); save({ delegation: { trusted }, budget: { profile: null } }); }} /></Row>
+              <Row label={t('settings.highApproval')} hint={t('settings.highApprovalHint')}><Switch checked={v.high} onCheckedChange={(high) => { setV({ ...v, high }); setProfile(null); save({ policy: { highNeedsApproval: high }, budget: { profile: null } }); }} /></Row>
+              {numField('maxParallel', t('settings.parallel'), t('settings.parallelHint'), { min: 1, max: 10 })}
+              {numField('perAgent', t('settings.perAgent'), t('settings.perAgentHint'), { min: 1, max: 5 })}
+              {numField('timeoutMinutes', t('settings.maxMinutes'), t('settings.maxMinutesHint'), { min: 5, max: 600 })}
+              {numField('windowHours', t('settings.windowHours'), t('settings.windowHoursHint'), { min: 1, max: 24 })}
+              {numField('maxPerTask', t('settings.maxPerTask'), t('settings.maxPerTaskHint'), { min: 0, max: 20 })}
+              {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
+              {numField('parallelChats', t('settings.parallelChats'), t('settings.parallelChatsHint'), { min: 1, max: 6, 'data-testid': 'parallel-chats' })}
+              <CardFoot><Button size="sm" onClick={saveAdvanced} data-testid="spend-save">{t('settings.save')}</Button></CardFoot>
+            </Panel>
+            <Block title={t('settings.capsTitle')} note={t('settings.capsNote')}>
+              <Panel>
+                {agents.map((a) => (
+                  <Setting key={a} label={AGENT[a] ?? a} hint={`${t('settings.colTasks')} · ${t('settings.colHeavy')}`}>
+                    <Input type="number" min={1} className="w-[72px]" value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} aria-label={`${AGENT[a] ?? a}, ${t('settings.colTasks')}`} />
+                    <Input type="number" min={0} className="w-[72px]" value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} aria-label={`${AGENT[a] ?? a}, ${t('settings.colHeavy')}`} />
+                  </Setting>
+                ))}
+                <CardFoot><Button size="sm" onClick={saveAdvanced}>{t('settings.save')}</Button></CardFoot>
+              </Panel>
+            </Block>
+            {/* the guide of models: the mock-up does not draw it, so it lives here with the other settings it does not draw */}
+            <Panel className="mt-0"><Stack><ModelGuide auto={c.budget?.autoModel !== false} /></Stack></Panel>
+      </MoreOptions>
+    </>
   );
 }
 
+// The three buttons of «Ahorro o potencia» are levels 0, 2 and 4; 1 and 3 are reached with the exact-level slider of the advanced options.
+const SPEND_LEVEL = { low: 0, recommended: 2, high: 4 };
+const SPEND_BUTTON = { 0: 'low', 2: 'recommended', 4: 'high' };
 // The five levels of the «ahorro ↔ uso» slider: the limits each one sets (2 = the usual ones, recommended).
 const SPEND_PRESETS = [
   { maxParallel: 1, perAgent: 1, timeoutMinutes: 30, stopAt: 0.75, maxTasks: 8, maxHeavy: 1, high: true, maxPerTask: 1, trusted: false, review: false },
@@ -273,10 +307,13 @@ const SPEND_PRESETS = [
 export function TestCard() {
   const t = useT();
   return (
-    <Card>
-      <CardHeader><CardTitle>{t('test.title')}</CardTitle><CardDescription>{t('test.desc')}</CardDescription></CardHeader>
-      <CardFooter><Button size="sm" variant="outline" onClick={() => { closeSettings(); runTest(t('test.prompt')); }} data-testid="settings-test"><FlaskConical />{t('test.button')}</Button></CardFooter>
-    </Card>
+    <Block title={t('test.title')} note={t('test.desc')}>
+      <Panel>
+        <Setting label={t('test.title')} hint={t('test.hint')}>
+          <Button size="sm" variant="outline" onClick={() => { closeSettings(); runTest(t('test.prompt')); }} data-testid="settings-test"><FlaskConical />{t('test.button')}</Button>
+        </Setting>
+      </Panel>
+    </Block>
   );
 }
 
@@ -284,18 +321,16 @@ export function FolderCard({ c, home }) {
   const t = useT();
   const [roots, setRoots] = useState((c.projectRoots ?? []).join('\n'));
   return (
-    <Card>
-      <CardHeader><CardTitle>{t('settings.folder')}</CardTitle><CardDescription>{t('settings.folderDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-4">
-        <div className="bg-muted rounded-lg px-3 py-2 font-mono text-xs break-all">{home}</div>
-        <div className="flex flex-wrap gap-2">
+    <Block title={t('settings.folder')} note={t('settings.folderDesc')}>
+      <Panel>
+        <Setting label={<span className="break-all">{home}</span>} hint={<Badge variant="success">{t('settings.folderCurrent')}</Badge>}>
           <Button size="sm" variant="outline" onClick={() => act(bridge.openPath(home))}><FolderOpen />{t('settings.open')}</Button>
-          <Button size="sm" variant="ghost" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk'), danger: true })) act(bridge.switchHome(f)); }}><ArrowLeftRight />{t('settings.useOther')}</Button>
-        </div>
-        <Field label={t('settings.roots')} hint={t('settings.rootsHint')}><Textarea rows={2} value={roots} onChange={(e) => setRoots(e.target.value)} /></Field>
-      </CardContent>
-      <CardFooter><Button size="sm" onClick={() => save({ projectRoots: roots.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) })}>{t('settings.save')}</Button></CardFooter>
-    </Card>
+          <Button size="sm" variant="outline" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk'), danger: true })) act(bridge.switchHome(f)); }}>{t('settings.useOther')}</Button>
+        </Setting>
+        <Fld label={t('settings.roots')} hint={t('settings.rootsHint')}><Textarea className="h-[72px] resize-y" rows={3} value={roots} onChange={(e) => setRoots(e.target.value)} /></Fld>
+        <CardFoot><Button size="sm" onClick={() => save({ projectRoots: roots.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) })}>{t('settings.save')}</Button></CardFoot>
+      </Panel>
+    </Block>
   );
 }
 
@@ -320,26 +355,47 @@ export function ProtectedCard({ c }) {
   };
   const missing = DEFAULT_PROTECTED.filter((d) => !list.some((x) => x.toLowerCase() === d.toLowerCase()));
   return (
-    <Card data-testid="protected-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><ShieldBan className="text-primary size-5" /><div><CardTitle>{t('settings.protected')}</CardTitle><CardDescription>{t('settings.protectedHint')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-3">
+    <Block title={t('settings.protected')} count={list.length} note={t('settings.protectedHint')} data-testid="protected-card">
+      <Panel>
         {list.length ? (
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 px-3.5 py-3">
             {list.map((x) => (
-              <Badge key={x} variant="secondary" className="gap-1 font-mono" data-testid="protected-item">
+              <code key={x} className="border-border inline-flex items-center gap-1 rounded-full border py-[3px] pr-1 pl-2.5 font-mono text-caption" data-testid="protected-item">
                 {x}
-                <button type="button" className="hover:text-destructive -mr-0.5 rounded-sm" aria-label={t('settings.protectedRemove', { name: x })} onClick={() => remove(x)} data-testid="protected-remove"><X className="size-3" /></button>
-              </Badge>
+                <button type="button" className="hover:bg-accent hover:text-destructive grid size-(--ctl-sm) cursor-pointer place-items-center rounded-ctl" aria-label={t('settings.protectedRemove', { name: x })} onClick={() => remove(x)} data-testid="protected-remove"><X className="size-3.5" /></button>
+              </code>
             ))}
           </div>
-        ) : <p className="text-muted-foreground text-sm">{t('settings.protectedEmpty')}</p>}
-        <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); add(); }}>
-          <Input value={draft} maxLength={200} onChange={(e) => setDraft(e.target.value)} placeholder={t('settings.protectedPh')} data-testid="protected-input" />
-          <Button type="submit" size="sm" variant="outline" disabled={draft.trim().length < 2 || list.length >= 50}><Plus />{t('settings.protectedAdd')}</Button>
+        ) : <Stack><Hint>{t('settings.protectedEmpty')}</Hint></Stack>}
+        <form className="contents" onSubmit={(e) => { e.preventDefault(); add(); }}>
+          <Setting label={t('settings.protectedAddTitle')} hint={t('settings.protectedPh')} className="border-t">
+            <Input className="w-[220px]" value={draft} maxLength={200} onChange={(e) => setDraft(e.target.value)} placeholder={t('settings.protectedInputPh')} aria-label={t('settings.protectedInputPh')} data-testid="protected-input" />
+            <Button type="submit" size="sm" variant="outline" disabled={draft.trim().length < 2 || list.length >= 50}><Plus />{t('settings.protectedAdd')}</Button>
+          </Setting>
         </form>
-        {missing.length ? <div><Button size="sm" variant="ghost" onClick={() => store([...list, ...missing])} data-testid="protected-defaults"><RotateCcw />{t('settings.protectedDefaults')}</Button></div> : null}
-      </CardContent>
-    </Card>
+        <Setting label={t('settings.protectedDefaults')} hint={t('settings.protectedDefaultsHint')}>
+          <Button size="sm" variant="outline" disabled={!missing.length} onClick={() => store([...list, ...missing])} data-testid="protected-defaults"><RotateCcw />{t('settings.protectedDefaults')}</Button>
+        </Setting>
+      </Panel>
+    </Block>
+  );
+}
+
+// Zoom in steps of 10 %: the mock-up draws only the size list, so the buttons live in «Más opciones».
+export function ZoomFineCard() {
+  const t = useT();
+  const [zoom, setZoom] = useState(null);
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  if (!bridge.zoom) return null;
+  const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
+  return (
+    <Panel>
+      <Setting label={t('settings.zoomFine')} hint={t('settings.zoomFineHint')} data-testid="zoom-fine">
+          <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
+          <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
+          <span className="text-muted-foreground min-w-9 text-caption tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
+      </Setting>
+    </Panel>
   );
 }
 
@@ -357,57 +413,70 @@ export function InterfaceCard({ c }) {
   const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;
   const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><MonitorCog className="text-primary size-5" /><div><CardTitle>{t('settings.interface')}</CardTitle><CardDescription><WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} /></CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
-        <Field label={t('settings.sizeLabel')} hint={<WithKeys text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
-          <div className="flex flex-wrap items-center gap-2">
-            <Select className="w-44" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} options={SIZES} />
-            <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
-            <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
-            <span className="text-muted-foreground text-xs tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
-          </div>
-        </Field>
-        <Field label={t('settings.terminal')} hint={t('settings.terminalHint')}>
-          {/* Narrow window: the selector takes the row and its long option is cut, instead of widening the card. */}
-          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:flex sm:flex-wrap">
-            <Select className="w-full min-w-0 sm:w-72" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
-            <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
-          </div>
-        </Field>
-      </CardContent>
-    </Card>
+    <Block title={t('settings.interface')} note={<WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} />}>
+      <Panel>
+        <Setting label={t('settings.sizeLabel')} hint={<WithKeys plain text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
+          <Select caret="solid" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
+        </Setting>
+        <Setting label={t('settings.terminal')} hint={t('settings.terminalHint')}>
+          <Select caret="solid" className="min-w-0" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} title={t('settings.terminal')} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
+          <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
+          <span className="text-faint-foreground text-control">Ctrl J</span>
+        </Setting>
+      </Panel>
+    </Block>
   );
 }
 
 // Expert mode: an IDE-like view (PC only) with the panels the user picks.
 export function ExpertCard({ c }) {
   const t = useT();
-  const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
+  const on = c.expert?.enabled === true;
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><SquareTerminal className="text-primary size-5" /><div><CardTitle>{t('settings.expert')}</CardTitle><CardDescription>{t('settings.expertDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
+    <Block title={t('settings.expert')} note={t('settings.expertDesc')}>
+      <Panel>
         <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
-        <div className="grid gap-2 sm:grid-cols-2">
-          {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panels[id] !== false} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
-        </div>
-      </CardContent>
-      {on ? <CardFooter><Button size="sm" variant="outline" onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></CardFooter> : null}
-    </Card>
+        <Setting label={t('settings.expertOpen')} hint={t('settings.expertOpenHint')}><Button size="sm" variant="outline" disabled={!on} onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></Setting>
+      </Panel>
+    </Block>
   );
 }
 
-// the background music's volume (Windows; lib/music.js), heard while it is dragged and saved when let go.
-function MusicVolume() {
+// Which panels the God mode shows: Orb's own choice, not drawn by the mock-up, so it sits under «Más opciones».
+export function ExpertPanelsCard({ c }) {
   const t = useT();
-  const [v, setV] = useState(() => musicPrefs().volume);
-  const keep = () => setMusicVolume(v, { save: true });
+  const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
   return (
-    <div className="flex items-center justify-between gap-4 py-1 text-sm">
-      <span>{t('appearance.musicVolume')}</span>
-      <input type="range" min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="accent-primary w-40 cursor-pointer" data-testid="music-volume"
-        onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keep} onKeyUp={keep} />
+    <Block title={t('settings.expertPanels')} data-testid="expert-panels">
+      <Panel>
+        <Stack>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panelOn(panels, id)} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
+          </div>
+        </Stack>
+      </Panel>
+    </Block>
+  );
+}
+
+// the background music (Windows; lib/music.js): the adaptive music, made by Orb on the spot: its theme, whether it follows
+// what happens in Orb (or keeps one intensity) and the volume. Each change is heard at once when the music is playing;
+// the sliders are heard while they are dragged and saved when let go.
+function MusicSettings() {
+  const t = useT();
+  useStore((s) => s.app?.config?.ui?.music); // drawn again when a choice is saved
+  const prefs = musicPrefs();
+  const playing = useSyncExternalStore(onMusic, () => { const s = musicState(); return Boolean(s.playing || s.loading); });
+  const [v, setV] = useState(prefs.volume);
+  const keepVolume = () => setMusicVolume(v, { save: true });
+  return (
+    <div className="contents" data-testid="music-settings">
+      <Row label={t('appearance.music')} hint={t('appearance.musicHint')} className="border-t"><Switch checked={playing} onCheckedChange={() => toggleMusic()} aria-label={t('appearance.music')} data-testid="music-on" /></Row>
+      {/* the mock-up's rows first (on, volume); what it does not draw, after them */}
+      <Setting label={t('appearance.musicVolume')} hint={t('appearance.musicVolumeHint')}>
+        <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px]! cursor-pointer" data-testid="music-volume"
+          onChange={(e) => { const n = Number(e.target.value); setV(n); setMusicVolume(n); }} onPointerUp={keepVolume} onKeyUp={keepVolume} />
+      </Setting>
     </div>
   );
 }

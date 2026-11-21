@@ -5,6 +5,13 @@ export default {
   'chat.suggestion1': 'Create a project called “my-site” with a simple home page',
   'chat.suggestion2': 'How are the tasks going?',
   'chat.suggestion3': 'Review the project and suggest improvements',
+  'chat.suggestion5': 'Check this week’s usage',
+  'chat.suggestions': 'Suggestions',
+  'chat.statusRunning.one': '{n} task in progress',
+  'chat.statusRunning.many': '{n} tasks in progress',
+  'chat.statusWaiting.one': '{n} waiting for your approval',
+  'chat.statusWaiting.many': '{n} waiting for your approval',
+  'chat.heroHint': '{name} shares the work between your agents and asks before anything delicate. Ctrl+K to go anywhere.',
   'chat.suggestion4': 'Summarise this week’s logs',
   'chat.suggestionProject1': 'Explain in a few lines what is in this project',
   'chat.suggestionProject2': 'What was left pending in this project?',
@@ -89,7 +96,7 @@ export default {
   'chat.q.unfold': 'Unfold the question',
   'chat.q.skipped': 'Skipped',
   'chat.placeholderBusy': 'Write another message: {name} will read it when done…',
-  'chat.placeholder': 'Message {name}…',
+  'chat.placeholder': 'Message {name}… @ to mention · / for commands',
   // the choice of brain (agent + model)
   'brain.title': 'Brain: agent and model',
   'brain.titleText': 'Who thinks for the assistant, and with which model.',
@@ -152,7 +159,7 @@ export default {
   'img.editText': 'Edit the attached image {where}: {change}',
   'chat.calendarPrev': 'Previous month',
   'chat.calendarNext': 'Next month',
-  'chat.calendarToday': 'Back to today',
+  'chat.calendarToday': 'Today',
   // mini-games
   'games.title': 'Mini-games',
   'games.desc': 'Pick a game and the difficulty. The agents keep working while you play.',
@@ -226,5 +233,15 @@ export default {
   'chat.workspace.noGit': 'Worktree needs the project to be a git repository with at least one commit.',
   'chat.workspace.base': 'Base branch',
   'chat.workspace.baseCurrent': 'Current branch ({branch})',
-  'chat.workspace.baseTip': 'The copy starts from this branch, without the folder\'s uncommitted changes.'
+  'chat.workspace.baseTip': 'The copy starts from this branch, without the folder\'s uncommitted changes.',
+  'session.menu.terminalShow': 'Show the terminal',
+  'session.menu.terminalHide': 'Hide the terminal',
+  'session.menu.switchAgent': 'Change agent',
+  'session.menu.delete': 'Delete the chat…',
+  'guide.open': 'Model guide',
+  'session.phChat': 'Ask for something, mention with @ or use / to see the commands',
+  'chat.workspace.from': 'from {branch}',
+  'chat.workspace.locked': 'This chat has already started: where it works can no longer be changed.',
+  'chat.stopped.title': 'Orb stopped the turn',
+  'chat.stopped.badge': 'Stopped'
 };

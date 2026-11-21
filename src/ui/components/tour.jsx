@@ -3,12 +3,12 @@
 // it, with «Siguiente» / «Atrás», a counter and «Saltar tutorial» always in view (Esc skips too). It changes screen when
 // a step needs it and comes back to the chat at the end. Steps whose control is not on screen (the context ring before
 // the first answer, the sidebar in a narrow window) are skipped. The dimmed area does not take clicks: the app stays
-// usable underneath. Without animations, the robot stands still; in the «profesional» theme the bubbles go alone.
+// usable underneath. Without animations, the robot stands still; in a theme without the robot the bubbles go alone.
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
-import { useStore, go, endTour, getState, plainSkin } from '@/lib/store.js';
+import { useStore, go, endTour, getState, robotSkin } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
@@ -68,7 +68,7 @@ export function Tour() {
   const name = app.config.assistantName;
   const ui = app.config.ui ?? {};
   const still = ui.motion === 'minima' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  const noRobot = plainSkin(ui.skin);
+  const noRobot = !robotSkin(ui.skin);
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState(null);
   const [side, setSide] = useState('center');

@@ -14,6 +14,8 @@ import path from 'node:path';
 import { EDITOR_IDS } from './editors.mjs';
 
 const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
+// Orb's and git's own folders are never opened by the app (also checked in src-tauri/src/protocol.rs › relative_file)
+const RESERVED = new Set(['.git', '.orb', '.orb-adjuntos']);
 export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.screenshot', ...BROWSER_METHODS]);
 let send = null; let next = 0; const pending = new Map();
 // the ports of this engine's own servers (the phone's access, dev-control). The agents' browser never
@@ -73,7 +75,13 @@ export function checkHostRequest(method, params, { isDir } = {}) {
   if (method === 'host.openTerminal') return { dir: folder(p.dir, 'carpeta no válida'), choice: TERMINAL_CHOICES.includes(p.choice) ? p.choice : 'auto' };
   if (method === 'host.openEditor') {
     if (!EDITOR_IDS.includes(p.which)) throw new Error('editor no válido');
-    return { which: p.which, dir: folder(p.dir, 'carpeta no válida') };
+    const out = { which: p.which, dir: folder(p.dir, 'carpeta no válida') };
+    // the file (relative to the folder) and line the app may open it at; anything else is dropped
+    if (typeof p.file === 'string' && p.file && !p.file.includes('\0') && !path.isAbsolute(p.file) && !/^[a-z]:/i.test(p.file) && !p.file.replace(/\\/g, '/').split('/').some((part) => part === '..' || RESERVED.has(part.toLowerCase()))) {
+      out.file = p.file;
+      if (Number.isInteger(p.line) && p.line > 0 && p.line <= 10_000_000) out.line = p.line;
+    }
+    return out;
   }
   if (method === 'host.runAction') {
     const command = String(p.command ?? '');

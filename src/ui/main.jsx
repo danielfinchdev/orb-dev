@@ -3,18 +3,19 @@ import './lib/tauri-bridge.js'; // first of all: in the desktop app it provides 
 import './lib/app-bridge.js'; // then: in the Android app it tells the web bridge where the linked Orb is
 import './lib/web-bridge.js'; // last: in a phone's browser (or the app) it provides window.orb
 import './app.css';
+import './lib/scroll-hint.js';
 // the Android app's «glass» look, only in the Android build (the other builds drop this line and its CSS).
 if (import.meta.env.MODE === 'android') (await import('./lib/glass.js')).enableGlass();
 import { StrictMode, Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { notify, notifyError, notifyOk, Toaster } from '@/lib/notify.js';
-import { Menu, Smartphone, ScanLine, Link2, RotateCw, FolderOpen, Download, KeyRound, ArrowLeft, WifiOff } from 'lucide-react';
+import { notify, notifyError, notifyOk, holdNotices, Toaster } from '@/lib/notify.js';
+import { Menu, Smartphone, ScanLine, Link2, RotateCw, RefreshCw, FolderOpen, Folder, Database, TriangleAlert, Download, KeyRound, ArrowLeft, WifiOff, Search, ClipboardCheck, FolderGit2, CalendarSync, Presentation } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Field, Input, Textarea, Spinner } from '@/components/ui/basic.jsx';
-import { WindowBar } from '@/components/window-bar.jsx';
 import { MobileTabs, MoreView } from '@/components/mobile-tabs.jsx';
 import { TooltipProvider, Checkbox } from '@/components/ui/overlay.jsx';
 import { DialogHost, confirm, form } from '@/components/dialogs.jsx';
+import { askNewSecret } from '@/components/new-secret.jsx';
 import { ImagePreviewHost } from '@/components/image-viewer.jsx';
 import { Sidebar } from '@/components/sidebar.jsx';
 import { Companion } from '@/components/companion.jsx';
@@ -38,7 +39,7 @@ import { dropUnlock } from '@/lib/core-access.js';
 import { isReloadKey, reloadOrb } from '@/lib/reload.js';
 import { isOffline, retryLoop } from '@/lib/net.js';
 import { ago } from '@/lib/utils.js';
-import { ErrorBoundary } from '@/components/error-boundary.jsx';
+import { ErrorBoundary, CrashCard, OfflineCard } from '@/components/error-boundary.jsx';
 import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
@@ -50,6 +51,7 @@ import { SessionView } from '@/views/session.jsx';
 import { OrbChatsView } from '@/views/orb/inbox.jsx';
 import { OrbInfoHost } from '@/views/orb/info.jsx';
 import { UpdateNeeded } from '@/components/update-needed.jsx';
+import { StartNotice, StartDetails, StartPath, StartProgress, startText, startHint } from '@/components/start-card.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
@@ -152,10 +154,10 @@ function MobileShell() {
   // arrow); the tabs are on the list.
   const fullChat = route.view === 'chat' || route.view === 'session';
   return (
-    <div className="mobile-shell flex h-full flex-col">
+    <div className="mobile-shell relative isolate flex h-full flex-col">
+      <Scene />
       {down ? <div className="bg-warning text-warning-foreground flex shrink-0 items-center justify-center gap-2 px-4 py-1.5 text-caption font-medium" role="status" data-testid="link-down"><WifiOff className="size-3.5" />{t('app.offlineBar')}</div> : null}
       <main className="theme-scene flex min-h-0 min-w-0 flex-1 flex-col">
-        <Scene />
         <ErrorBoundary key={routeKey(route)} onHome={resetRoute}>
           <Suspense fallback={<Loading />}><View key={routeKey(route)} route={route} /></Suspense>
         </ErrorBoundary>
@@ -194,13 +196,13 @@ function Shell() {
   }, []);
   if (phoneLayout()) return <MobileShell />;
   return (
-    <div className="flex h-full">
+    <div className="relative isolate flex h-full">
+      <Scene />
       {/* folded away (its button next to day / night), the screens take the whole width. */}
       <div className={folded ? 'hidden' : 'hidden md:flex'}><Sidebar mood={mood} /></div>
       {/* Narrow windows: the sidebar is a drawer behind a menu button (phones have their own shell). */}
       {drawer ? <div data-modal="" className="fixed inset-0 z-50 flex md:hidden" onClick={() => setDrawer(false)}><div className="animate-in slide-in-from-left flex h-full shadow-2xl" onClick={(e) => { if (e.target.closest('button')) setTimeout(() => setDrawer(false), 50); }}><Sidebar mood={mood} /></div><div className="flex-1 bg-black/40" /></div> : null}
       <main className="theme-scene flex min-w-0 flex-1 flex-col">
-        <Scene />
         <div className="relative topbar theme-band app-titlebar wco-pad bg-sidebar flex h-14 shrink-0 items-center gap-2 border-b px-3 md:hidden">
           <button className="hover:bg-accent grid size-9 cursor-pointer place-items-center rounded-lg" onClick={() => setDrawer(true)} aria-label={t('app.menu')}><Menu className="size-5" /></button>
           <Robot size={26} mood={mood} /><span className="min-w-0 flex-1 truncate text-card-title font-medium">{app.config.assistantName}</span>
@@ -211,7 +213,6 @@ function Shell() {
             <Suspense fallback={<Loading />}><V key={routeKey(r)} route={r} /></Suspense>
           </ErrorBoundary>
         ); }} />
-        <WindowBar kind="status" />
       </main>
       {/* the info pane on the right (a chat, a project). */}
       <OrbInfoHost />
@@ -268,7 +269,7 @@ function NotifyOffer() {
     </div>
   );
 }
-function Root() {
+function AppRoot() {
   const t = useT();
   const ready = useStore((s) => s.ready);
   const [phase, setPhase] = useState('loading'); // loading | setup | pair | update | offline | core | migration | master | unlock | layout | app | error
@@ -438,21 +439,7 @@ function Root() {
   if (phase === 'layout') return <>{strip}<Suspense fallback={null}><LayoutReview plan={layout} onDone={() => location.reload()} /></Suspense></>;
   if (phase === 'migration') return <>{strip}<MigrationFailed state={migration} /></>;
   // on the phone, a way out: try again, or link with another PC.
-  if (phase === 'error') return (
-    <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="app-error">{strip}
-      <div className="grid max-w-md justify-items-center gap-3">
-        <Robot size={90} mood="worried" /><h1 className="mt-1 text-xl">{t('app.errorTitle')}</h1><p className="text-muted-foreground text-sm break-words">{error}</p>
-        {bridge.mobile ? <Button size="lg" onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-        {/* start the engine again; after sealed keys that do not open, also with a new key (asked first). */}
-        {bridge.retryStart ? <Button size="lg" onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
-        {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="ghost" size="sm" data-testid="app-error-new-secret" onClick={async () => {
-          if (!(await askNewSecret(startError))) return;
-          await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
-        }}>{t('app.newSecretOk')}</Button> : null}
-        {bridge.mobile && bridge.unlink ? <Button variant="ghost" size="sm" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) setPhase('pair'); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
-      </div>
-    </div>
-  );
+  if (phase === 'error') return <>{strip}<StartError error={error} startError={startError} onRelink={() => setPhase('pair')} /></>;
   if (phase !== 'app' || !ready) return <div className="grid h-full place-items-center">{strip}<Robot size={80} mood="thinking" /></div>;
   // a tapped notification opens its chat (lib/notes.js).
   return bridge.mobile ? <><NoteOpener /><Shell /></> : <Shell />;
@@ -519,13 +506,112 @@ function PcOffline({ info, onRelink }) {
   );
 }
 
+// «No se pudo iniciar Orb»: the engine did not start (main.jsx › Root, phase 'error'). On the phone, a way out: try again, or link with another PC.
+function StartError({ error, startError, onRelink }) {
+  const t = useT();
+  return (
+    <StartNotice testid="app-error" icon={startError?.code === 'secretUnreadable' ? KeyRound : TriangleAlert} title={t('app.errorTitle')}
+      footer={(
+        <>
+          {bridge.mobile && bridge.unlink ? <Button variant="ghost" onClick={async () => { if (await relinkPhone(getState().info?.pcName)) onRelink(); }} data-testid="app-error-relink"><Link2 />{t('app.offlineRelink')}</Button> : null}
+          {/* after sealed keys that do not open, the engine may also start with a new key (asked first). */}
+          {bridge.retryStart && startError?.code === 'secretUnreadable' ? <Button variant="outline" data-testid="app-error-new-secret" onClick={async () => {
+            if (!(await askNewSecret(startError))) return;
+            await bridge.retryStart({ newSecret: true }).catch(quiet); location.reload();
+          }}><KeyRound />{t('app.newSecretOk')}</Button> : null}
+          {/* on the phone, a way out: try again, or link with another PC; on the PC, start the engine again. */}
+          {bridge.mobile ? <Button onClick={() => location.reload()} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+          {bridge.retryStart ? <Button onClick={() => bridge.retryStart().catch(quiet).finally(() => location.reload())} data-testid="app-error-retry"><RotateCw />{t('app.offlineRetry')}</Button> : null}
+        </>
+      )}>
+      <p className={`${startText} break-words`}>{error}</p>
+      {/* the engine did not start here: the hint must not say that Orb keeps working underneath (that one is the crash card's) */}
+      {bridge.desktop ? <p className={startHint}>{t('app.crashHint')}</p> : null}
+    </StartNotice>
+  );
+}
+
+// Start-up notices preview, only for the e2e tour (test/explora.e2e.mjs, ORB_EXPLORA_START=1): it pictures the cards that
+// cannot be provoked, with sample data and without the engine. Only whoever drives the page over CDP can set
+// window.__ORB_START_PREVIEW__ (an init script); the value only picks among this fixed list and is never evaluated or
+// used as HTML. The cards sit inside an `inert` box: nothing in them can be focused or pressed.
+const START_PREVIEWS = new Set(['core', 'core-sin', 'core-danada', 'core-confirma', 'migra', 'migra-act', 'error', 'clave', 'falla', 'falla-red', 'actualiza']);
+const previewName = () => { const v = window.__ORB_START_PREVIEW__; return typeof v === 'string' && START_PREVIEWS.has(v) ? v : null; };
+// A static drawing of the sidebar for the preview only: the real one reads the engine's state and cannot mount without it.
+function PreviewSidebar() {
+  const t = useT();
+  const places = [[ClipboardCheck, 'nav.tasks'], [FolderGit2, 'nav.projects'], [CalendarSync, 'nav.schedules'], [Presentation, 'nav.board']];
+  return (
+    <aside className="bg-sidebar hidden h-full w-[340px] shrink-0 flex-col border-r md:flex" aria-hidden="true" inert data-testid="start-preview-sidebar">
+      <div className="flex h-14 shrink-0 items-center px-4">
+        <div className="wordmark"><span className="wordmark-orb">ORB</span><span className="wordmark-dot" /><span className="wordmark-e">E</span></div>
+      </div>
+      <div className="px-3 pb-2">
+        <div className="bg-muted text-muted-foreground flex h-[var(--ctl)] items-center gap-2 rounded-ctl px-3 text-control opacity-70"><Search className="size-4" />{t('orbchats.search')}</div>
+      </div>
+      <nav className="grid grid-cols-4 gap-0.5 px-2 pb-1.5">
+        {places.map(([Icon, label]) => (
+          <div key={label} className="text-muted-foreground flex min-w-0 flex-col items-center gap-[3px] pt-[7px] pb-1.5 text-caption leading-[1.45]"><Icon className="size-5" /><span className="max-w-full truncate">{t(label)}</span></div>
+        ))}
+      </nav>
+      <div className="flex flex-col gap-1 px-3 pt-2">
+        {[72, 58, 66].map((w) => (
+          <div key={w} className="flex items-center gap-3 px-1 py-2"><span className="bg-muted size-9 shrink-0 rounded-full" /><span className="flex flex-1 flex-col gap-1.5"><span className="bg-muted h-2.5 rounded" style={{ width: `${w}%` }} /><span className="bg-muted/60 h-2 w-[45%] rounded" /></span></div>
+        ))}
+      </div>
+    </aside>
+  );
+}
+// A screen that fails or cannot load happens inside the app: the card sits in the content area, the sidebar still on view.
+function InArea({ children }) {
+  return (
+    <div className="flex h-full">
+      <PreviewSidebar />
+      <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+    </div>
+  );
+}
+function StartPreview({ name }) {
+  const t = useT();
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    import('@/lib/start-preview.js').then((m) => { if (alive) setData(m.PREVIEW[name] ?? null); });
+    return () => { alive = false; };
+  }, [name]);
+  // The small dialogs of the mock-up open over their card; their answer is ignored (they call nothing).
+  useEffect(() => {
+    if (data?.confirm) confirm(t('data.core.fresh'), t('data.core.freshConfirm'), { ok: t('data.core.fresh'), danger: true, tone: 'primary', noClose: true });
+    if (data?.dialog) askNewSecret(data.startError);
+  }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!data) return null;
+  return (
+    <>
+      <div className="bg-foreground text-background fixed top-0 left-1/2 z-[60] -translate-x-1/2 rounded-b-md px-2 py-0.5 text-micro" data-testid="start-preview-tag">Vista previa — datos de ejemplo</div>
+      <div inert className="flex h-full flex-col" data-testid="start-preview" data-preview={name}>
+        {data.card === 'core' ? <Suspense fallback={null}><CoreMissing state={data.state} /></Suspense>
+          : data.card === 'migration' ? <MigrationFailed state={data.state} preview={{ update: data.update }} />
+            : data.card === 'error' ? <StartError error={data.error} startError={data.startError} onRelink={() => {}} />
+              : data.card === 'crash' ? <InArea><CrashCard onHome={() => {}} /></InArea>
+                : data.card === 'offline' ? <InArea><OfflineCard onRetry={() => {}} /></InArea>
+                  : <UpdateNeeded info={data.info} />}
+      </div>
+    </>
+  );
+}
+function Root() {
+  const name = previewName();
+  return name ? <StartPreview name={name} /> : <AppRoot />;
+}
+
 // the data of Orb 3.7 could not be updated (src/domain/data/legacy/migrate-38.mjs): what to do, where the copy is («Abrir
 // carpeta»), «Reintentar», a new version of Orb (the way out when the cause is Orb's own) and the reason under «Detalles».
-function MigrationFailed({ state }) {
+function MigrationFailed({ state, preview = null }) {
   const t = useT();
   const [s, setS] = useState(state);
   const [busy, setBusy] = useState(false);
-  const v = migrationView(s, useUpdate());
+  const live = useUpdate(!preview); // a preview (the e2e tour's) never asks the updater
+  const v = migrationView(s, preview ? preview.update : live);
   const u = v.update;
   const retry = async () => {
     setBusy(true);
@@ -533,47 +619,31 @@ function MigrationFailed({ state }) {
     catch (e) { setS({ ...s, reason: String(e?.message ?? e) }); }
     finally { setBusy(false); }
   };
+  const footer = (
+    <>
+      {v.folder && bridge.openPath ? <Button variant="ghost" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.migration38.openFolder')}</Button> : null}
+      {u?.action === 'check' ? <Button variant="outline" disabled={u.busy} onClick={updateActions.check} data-testid="migration-update">{u.busy ? <Spinner /> : <RefreshCw />}{t('data.migration38.checkUpdate')}</Button> : null}
+      {u?.action === 'update' ? <Button variant="outline" onClick={() => updateActions.update({ portable: u.portable })} data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
+      {/* while the download runs the same button stays in place, off, so the card does not jump (it starts nothing new) */}
+      {u?.percent != null ? <Button variant="outline" disabled data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
+      {u?.action === 'restart' ? <Button variant="outline" onClick={updateActions.restart} data-testid="migration-update"><RotateCw />{t('update.restart')}</Button> : null}
+      <Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('data.migration38.retry')}</Button>
+    </>
+  );
   return (
-    <div className="grid h-full place-items-center overflow-y-auto p-8 text-center" data-testid="migration-failed">
-      <div className="grid max-w-md gap-3">
-        <div className="flex justify-center"><Robot size={90} mood={busy ? 'thinking' : 'worried'} /></div>
-        <h1 className="text-xl">{t('data.migration38.title')}</h1>
-        <p className="text-muted-foreground text-sm">{t(v.body)}</p>
-        <p className="text-sm" role="alert">{t('data.migration38.help')}</p>
-        <p className="text-muted-foreground text-xs break-all">{s.backup ? t('data.migration38.backup', { path: s.backup }) : t('data.migration38.noBackup', { path: s.data })}</p>
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button disabled={busy} onClick={retry} data-testid="migration-retry">{busy ? <Spinner /> : <RotateCw />}{t('data.migration38.retry')}</Button>
-          {v.folder && bridge.openPath ? <Button variant="outline" onClick={() => act(bridge.openPath(v.folder))}><FolderOpen />{t('data.migration38.openFolder')}</Button> : null}
-          {u?.action === 'check' ? <Button variant="outline" disabled={u.busy} onClick={updateActions.check} data-testid="migration-update">{u.busy ? <Spinner /> : <Download />}{t('data.migration38.checkUpdate')}</Button> : null}
-          {u?.action === 'update' ? <Button variant="outline" onClick={() => updateActions.update({ portable: u.portable })} data-testid="migration-update"><Download />{t(u.portable ? 'update.download' : 'update.update')} {u.version}</Button> : null}
-          {u?.action === 'restart' ? <Button variant="outline" onClick={updateActions.restart} data-testid="migration-update"><RotateCw />{t('update.restart')}</Button> : null}
-        </div>
-        {u?.percent != null ? <p className="text-muted-foreground text-xs">{t('update.downloading', { percent: u.percent })}</p> : null}
-        {u?.none ? <p className="text-muted-foreground text-xs">{t('data.migration38.noUpdate')}</p> : null}
-        <details className="text-muted-foreground text-left text-xs"><summary className="cursor-pointer text-center">{t('data.migration38.details')}</summary><p className="mt-2 break-words">{t('data.migration38.reason', { reason: s.reason })}</p></details>
-      </div>
-    </div>
+    <StartNotice testid="migration-failed" icon={Database} mood={busy ? 'thinking' : 'worried'} title={t('data.migration38.title')} footer={footer}
+      details={<StartDetails>{t('data.migration38.reason', { reason: s.reason })}</StartDetails>}>
+      <p className={startText}>{t(v.body)}</p>
+      {u?.percent != null ? null : <p className={startText} role="alert">{t('data.migration38.help')}</p>}
+      <StartPath icon={Folder} text={t(s.backup ? 'data.migration38.backup' : 'data.migration38.noBackup', { path: '{path}' })} path={s.backup ?? s.data} />
+      {u?.percent != null ? <><StartProgress percent={u.percent} /><p className={startText}>{t('update.downloading', { percent: u.percent })}</p></> : null}
+      {u?.none ? <p className={startText}>{t('data.migration38.noUpdate')}</p> : null}
+    </StartNotice>
   );
 }
 
 // the PC's master password, the second step of linking (the app after scanning, a browser opened from the QR). It
 // never leaves the phone (src/shared/mobile-crypto.mjs › linkDevice proves it is known) and is never kept. fp: the PC's
-// «Empezar con una clave nueva» says what is lost (startError: recovery, master = the
-// recovery code and the master password exist in core). Without a recovery code the backups made until now will not
-// open any more: the word EMPEZAR must be typed.
-async function askNewSecret(startError) {
-  const lines = [t('app.newSecretIntro'), startError?.master ? t('app.newSecretMaster') : startError?.vault ? t('app.newSecretVault') : null, startError?.recovery ? t('app.newSecretRecovery') : t('app.newSecretNoRecovery'), t('app.newSecretBack')].filter(Boolean).join('\n\n');
-  if (startError?.recovery) return confirm(t('app.newSecretTitle'), lines, { ok: t('app.newSecretOk'), danger: true });
-  const word = t('app.newSecretWord');
-  return Boolean(await form(t('app.newSecretTitle'), {
-    description: lines,
-    initial: { word: '' },
-    body: (v, set) => <Field label={t('app.newSecretType', { word })}><Input autoComplete="off" value={v.word} onChange={(e) => set({ word: e.target.value })} data-testid="new-secret-word" /></Field>,
-    ok: t('app.newSecretOk'),
-    onOk: (v) => { if (v.word.trim().toUpperCase() !== word.toUpperCase()) throw new Error(t('app.newSecretWrong', { word })); return true; }
-  }));
-}
-
 // fingerprint, to compare with the PC's screen (with a typed short code it must be confirmed first: confirmFp).
 function PairPassword({ name, fp = null, confirmFp = false, busy, error, onSubmit, onBack = null }) {
   const t = useT();
@@ -681,18 +751,89 @@ function AppLink() {
   );
 }
 
+// Where the notices sit on the PC, worked out from what is on screen: bottom right of the content column (left of an open side
+// panel) and, when a text box is there, over it and the row above it («Compactar»), never over its send button.
+// Without a box they sit in the page's bottom padding, which a list leaves free once it is scrolled to its end.
+// Over the whiteboard they clear its status bar and zoom controls; with a dialog open they stay outside its box (beside it,
+// under it or above it, wherever the notice's real height fits) and only as a last resort sit in the window's corner.
+const TOAST_GAP = 24;
+const TOAST_W = 356;
+const TOAST_H = 56;
+// a notice with a title, a description and a button
+const TOAST_TALL = 140;
+function useToastInsets() {
+  const [ins, setIns] = useState({ bottom: TOAST_GAP, right: TOAST_GAP });
+  useEffect(() => {
+    // a phone keeps its notices at the top: nothing to measure there
+    if (phoneLayout()) return undefined;
+    let frame = 0;
+    const seen = new Set();
+    const resizes = new ResizeObserver(() => schedule());
+    const BOARD_BAR = '[data-testid="whiteboard-status"], .zoom-actions, .layer-ui__wrapper__footer-left';
+    // the notice itself is watched too: a long text makes it taller than the guess, and the gap beside a dialog depends on it
+    const WATCHED = `.composer-dock, [data-testid="chat-panel"], [data-slot="dialog-content"], [data-sonner-toast], ${BOARD_BAR}`;
+    const measure = () => {
+      frame = 0;
+      // a box or panel that left the page is let go, or the observer would keep its whole view alive
+      for (const el of seen) if (!el.isConnected) { resizes.unobserve(el); seen.delete(el); }
+      // boxes and panels come and go with the views: watch each as it appears, and its size from then on
+      for (const el of document.querySelectorAll(WATCHED)) if (!seen.has(el)) { seen.add(el); resizes.observe(el); }
+      const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 ? r : null; };
+      // with two conversations side by side the one nearest the right edge is where the notice lands
+      const docks = [...document.querySelectorAll('.composer-dock')].map(shown).filter(Boolean).sort((a, b) => b.right - a.right);
+      const panel = [...document.querySelectorAll('[data-testid="chat-panel"][data-state="open"]')].map(shown).find(Boolean);
+      const bars = [...document.querySelectorAll(BOARD_BAR)].map(shown).filter(Boolean);
+      const barTop = bars.length ? Math.min(...bars.map((r) => r.top)) : null;
+      // the newest dialog is the last one in the page
+      const dialog = [...document.querySelectorAll('[data-slot="dialog-content"]')].map(shown).filter(Boolean).pop();
+      let next = {
+        bottom: docks[0] ? Math.max(TOAST_GAP, Math.round(innerHeight - docks[0].top + 8)) : barTop != null ? Math.max(TOAST_GAP, Math.round(innerHeight - barTop + 8)) : TOAST_GAP,
+        right: panel && panel.left < innerWidth ? Math.round(innerWidth - panel.left + TOAST_GAP) : TOAST_GAP
+      };
+      if (dialog) {
+        const below = innerHeight - dialog.bottom;
+        const edge = Math.max(TOAST_GAP, Math.round(innerWidth - dialog.right));
+        if (innerWidth - dialog.right >= TOAST_W + 2 * TOAST_GAP) next = { bottom: TOAST_GAP, right: TOAST_GAP };
+        else {
+          const toastH = [...document.querySelectorAll('[data-sonner-toast]')].map(shown).find(Boolean)?.height ?? TOAST_H;
+          if (below >= toastH + 8) next = { bottom: Math.max(4, Math.floor((below - toastH) / 2)), right: edge };
+          else if (dialog.top >= toastH + 8) next = { bottom: Math.round(innerHeight - dialog.top + 8), right: edge };
+          // nowhere outside the box: the window's corner, so the notice never sits inside the dialog's own area higher up
+          else next = { bottom: 4, right: 4 };
+        }
+      }
+      // no room for a tall notice at the right of the dialog, below it or above it: those wait until it closes
+      holdNotices(Boolean(dialog) && innerWidth - dialog.right < TOAST_W + 2 * TOAST_GAP && innerHeight - dialog.bottom < TOAST_TALL + 8 && dialog.top < TOAST_TALL + 8);
+      setIns((old) => (old.bottom === next.bottom && old.right === next.right ? old : next));
+    };
+    function schedule() { if (!frame) frame = requestAnimationFrame(measure); }
+    // Only a box or a panel coming or going moves the notices (their size is the ResizeObserver's): an agent writing its
+    // answer changes the page many times a second and must not cost a measure each time.
+    const touches = (nodes) => { for (const n of nodes) if (n.nodeType === 1 && (n.matches(WATCHED) || n.querySelector(WATCHED))) return true; return false; };
+    const mutations = new MutationObserver((list) => { if (list.some((m) => touches(m.addedNodes) || touches(m.removedNodes))) schedule(); });
+    mutations.observe(document.body, { childList: true, subtree: true });
+    addEventListener('resize', schedule);
+    schedule();
+    return () => { cancelAnimationFrame(frame); mutations.disconnect(); resizes.disconnect(); removeEventListener('resize', schedule); };
+  }, []);
+  return ins;
+}
+
 // the notifications follow the app's day / night (not the system's): more of them now that the notices pass by here.
 function ThemedToaster() {
+  const insets = useToastInsets();
   const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
   useEffect(() => {
     const obs = new MutationObserver(() => setDark(document.documentElement.classList.contains('dark')));
     obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => obs.disconnect();
   }, []);
-  // below the window's header (offset), so a passing notice never covers the menu or the window buttons.
-  // one on screen at a time (the newest); the others are under the bell of the top bar.
-  // on a phone, below the status bar as well (edge to edge, the page starts under it).
-  return <Toaster position="top-center" offset={72} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} richColors closeButton toastOptions={{ className: 'font-sans' }} />;
+  // On the PC they sit at the bottom right (useToastInsets), clear of the top bar's and the filters' controls
+  // (the robot of the Orb theme keeps its own corner lower down); drawn as the mock-up's .pop (themes/pieces.css › .orb-toast),
+  // the tone shown by its icon. One on screen at a time (the newest); the others are under the bell of the top bar.
+  // On a phone they stay at the top, below the status bar as well (edge to edge, the page starts under it).
+  const phone = phoneLayout();
+  return <Toaster position={phone ? 'top-center' : 'bottom-right'} offset={phone ? 72 : insets} mobileOffset={{ top: 'calc(env(safe-area-inset-top, 0px) + 64px)' }} visibleToasts={1} theme={dark ? 'dark' : 'light'} closeButton toastOptions={{ className: 'font-sans orb-toast' }} />;
 }
 
 applyTheme();

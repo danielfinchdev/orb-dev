@@ -1,29 +1,35 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
+// The detail of the usage lives in the «Uso» tab next to this one (views/usage.jsx).
 import { useEffect, useState } from 'react';
-import { Orbit, RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, UserPlus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, X } from 'lucide-react';
+import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, Plus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, ListChecks, LogOut } from 'lucide-react';
 import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
 import { useCatalog } from '@/components/brain-picker.jsx';
+import { ModelGuide } from '@/components/model-guide.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { Installer } from '@/components/installer.jsx';
+import { InstallProgress } from '@/components/installer.jsx';
 import { PageHeader, PageBody } from '@/components/page.jsx';
+import { AgentsUsageTabs } from '@/components/agents-tabs.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, Spinner, Textarea } from '@/components/ui/basic.jsx';
-import { Switch, Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem } from '@/components/ui/overlay.jsx';
+import { IconButton, MoreButton, Note, ListCard, ListRow } from '@/components/ui/primitives.jsx';
+import { Badge, Field, Input, Spinner, Textarea } from '@/components/ui/basic.jsx';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/overlay.jsx';
 import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
 import { LOGIN, OFF_AGENTS } from '@/lib/labels.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
+import { Block, Panel, Setting, Stack, CardFoot, MoreOptions } from './settings/rows.jsx';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com',
   grok: 'https://x.ai/cli', devin: 'https://cli.devin.ai', droid: 'https://factory.ai', omp: 'https://github.com/can1357/oh-my-pi', pi: 'https://pi.dev', antigravity: 'https://antigravity.google' };
-const WINDOW = { five_hour: 'agents.win.fiveHour', seven_day: 'agents.win.week', seven_day_opus: 'agents.win.weekOpus', seven_day_sonnet: 'agents.win.weekSonnet', '300min': 'agents.win.fiveHour', '10080min': 'agents.win.week', '43200min': 'agents.win.month' };
-const windowLabel = (w) => (WINDOW[w] ? t(WINDOW[w]) : w);
 // How each agent is connected (all of them live).
 const KIND = { sdk: 'agents.kind.sdk', 'app-server': 'agents.kind.appServer', 'cli-stream': 'agents.kind.cliStream', acp: 'agents.kind.acp' };
+const NATIVE = ['claude', 'codex', 'cursor'];
+// What the installer (src/engine/host/installer.mjs) sets up besides the agents of the first block.
+const TEAM_AGENTS = ['gemini', 'copilot', 'opencode', 'qwen', 'hermes'];
 
 async function save(agent, patch) {
   const config = await act(call('config.save', { patch: { agents: { [agent]: patch } } }), t('agents.saved'));
@@ -31,8 +37,14 @@ async function save(agent, patch) {
   return config;
 }
 
+// A time as the clock shows it, with the weekday when it is not today.
+const whenOf = (ms, locale) => {
+  const d = new Date(ms);
+  return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) : d.toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+};
+
 // «Solo Orb»: the sign-in of Claude Code and Codex runs hidden: Orb gets the link (and the code, when there is one),
-// shows them in a card and opens the link in the browser; the card follows the 'agents:login' events until it ends.
+// shows them in a dialog and opens the link in the browser; the dialog follows the 'agents:login' events until it ends.
 // Cursor and the other agents still open their own console ({ console: true }).
 let showLogin = () => {};
 async function signIn(acc, label, extra = {}) {
@@ -44,7 +56,7 @@ async function signIn(acc, label, extra = {}) {
   if (!r.opened && r.url) bridge.openExternal(r.url).catch((e) => notifyError(e));
 }
 
-function LoginCard({ reload, windows }) {
+function LoginDialog({ reload, windows }) {
   const t = useT();
   const [login, setLogin] = useState(null);
   const [code, setCode] = useState('');
@@ -59,49 +71,60 @@ function LoginCard({ reload, windows }) {
       return { ...cur, ...p, message: null };
     });
   }), []); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!login) return null;
   const copy = (text) => navigator.clipboard?.writeText(text).then(() => notifyOk(t('agents.loginCopied'))).catch(() => notifyError(t('app.copyFailed')));
   const send = async () => { if (await act(call('agents.loginCode', { id: login.id, code: code.trim() }))) setCode(''); };
-  const cancel = () => { call('agents.loginCancel', { id: login.id }).catch(quiet); setLogin(null); };
+  const cancel = () => { if (login) call('agents.loginCancel', { id: login.id }).catch(quiet); setLogin(null); };
   return (
-    <Card className="border-primary/50" data-testid="agent-login-card">
-      <CardHeader className="flex-row items-start gap-3">
-        <AgentIcon agent={login.agent} className="mt-0.5 size-6 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <CardTitle>{t('agents.loginTitle', { label: login.label })}</CardTitle>
-          <CardDescription>{login.code ? t('agents.loginDevice') : login.opened ? t('agents.loginOpened') : t('agents.loginOpen')}</CardDescription>
-        </div>
-        <BubbleTip title={t('agents.loginCancel')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.loginCancel')} onClick={cancel}><X /></Button></BubbleTip>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        {login.code ? (
-          <div className="flex items-center gap-2">
-            <span className="bg-muted rounded-lg px-3 py-1.5 font-mono text-lg tracking-widest select-all" data-testid="agent-login-code">{login.code}</span>
-            <Button size="sm" variant="ghost" onClick={() => copy(login.code)}><Copy />{t('agents.loginCopyCode')}</Button>
-          </div>
-        ) : null}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button size="sm" onClick={() => act(bridge.openExternal(login.url))} data-testid="agent-login-open"><ExternalLink />{t('agents.loginOpenBrowser')}</Button>
-          <Button size="sm" variant="ghost" onClick={() => copy(login.url)}><Copy />{t('agents.loginCopy')}</Button>
-          <span className="text-muted-foreground flex items-center gap-2 text-xs"><Spinner className="size-3" />{t('agents.loginWaiting')}</span>
-        </div>
-        {login.needsCode ? (
-          <Field label={t('agents.loginPasteHint')}>
-            <div className="flex gap-2">
-              <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('agents.loginPastePh')} onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) send(); }} data-testid="agent-login-paste" />
-              <Button size="sm" variant="outline" disabled={!code.trim()} onClick={send}>{t('agents.loginSend')}</Button>
+    <Dialog open={Boolean(login)} onOpenChange={(open) => { if (!open) cancel(); }}>
+      {login ? (
+        <DialogContent size="sm" data-testid="agent-login-card" aria-describedby={undefined} onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
+          <DialogHeader><DialogTitle>{t('agents.loginTitle', { label: login.label })}</DialogTitle></DialogHeader>
+          <div className="flex flex-col gap-3">
+            <p className="text-control">{login.opened ? t('agents.loginOpened') : t('agents.loginOpen')}</p>
+            {login.code ? <p className="text-muted-foreground text-control">{t('agents.loginDevice')}</p> : null}
+            {login.code ? (
+              <div className="border-border bg-secondary flex items-center justify-between gap-2 rounded-ctl border px-3 py-2.5">
+                <code className="font-mono text-body tracking-widest select-all" data-testid="agent-login-code">{login.code}</code>
+                <Button size="sm" variant="outline" onClick={() => copy(login.code)}><Copy />{t('agents.loginCopyCode')}</Button>
+              </div>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5">
+              <Button size="sm" variant="outline" onClick={() => act(bridge.openExternal(login.url))} data-testid="agent-login-open"><ExternalLink />{t('agents.loginOpenBrowser')}</Button>
+              <Button size="sm" variant="outline" onClick={() => copy(login.url)}><Copy />{t('agents.loginCopy')}</Button>
             </div>
-          </Field>
-        ) : null}
-        {/* The old way, for a sign-in the hidden one cannot do: the agent's own console (Windows only). */}
-        {windows ? <Button size="xs" variant="ghost" className="text-muted-foreground w-fit" onClick={() => { cancel(); act(call('agents.login', { account: login.account, console: true }), t('agents.followSteps')); }}><SquareTerminal />{t('agents.loginConsole')}</Button> : null}
-      </CardContent>
-    </Card>
+            {login.needsCode ? (
+              <div className="flex flex-col gap-1.5">
+                <span className="text-faint-foreground text-caption">{t('agents.loginPasteHint')}</span>
+                <div className="flex gap-1.5">
+                  <Input value={code} onChange={(e) => setCode(e.target.value)} placeholder={t('agents.loginPastePh')} aria-label={t('agents.loginPastePh')} onKeyDown={(e) => { if (e.key === 'Enter' && code.trim()) send(); }} data-testid="agent-login-paste" />
+                  <Button size="sm" variant="outline" disabled={!code.trim()} onClick={send}>{t('agents.loginSend')}</Button>
+                </div>
+              </div>
+            ) : null}
+            <span className="text-faint-foreground inline-flex items-center gap-1.5 text-caption"><Spinner className="size-3" />{t('agents.loginWaiting')}</span>
+          </div>
+          <DialogFooter>
+            {/* The old way, for a sign-in the hidden one cannot do: the agent's own console (Windows only). */}
+            {windows ? <Button size="sm" variant="ghost" className="sm:mr-auto" onClick={() => { cancel(); act(call('agents.login', { account: login.account, console: true }), t('agents.followSteps')); }}><SquareTerminal />{t('agents.loginConsole')}</Button> : null}
+            <Button variant="outline" onClick={cancel}>{t('agents.loginCancel')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      ) : null}
+    </Dialog>
   );
 }
 
 // install or update Claude Code and Codex with one button (hidden, for this user only); 'agents:install' events.
 const INSTALLABLE = ['claude', 'codex'];
+// What the update dialog says: the exact version only when the installer installs that version (npm); Claude's own installer
+// takes the latest one it publishes, so the dialog says what Orb runs and which version was last published. The command
+// shown is the one of this platform, and none when there is none.
+const updateBody = (t, a, upd) => t(upd.exact ? (upd.command ? 'agents.updateConfirmBody' : 'agents.updateConfirmBodyNoCmd') : (upd.command ? 'agents.updateConfirmBodyRun' : 'agents.updateConfirmBodyRunNoCmd'), { label: a.label, latest: upd.latest, cmd: upd.command ?? '' });
+// «Reinstalar» (repair): the same install call as the button, after its own confirmation.
+const reinstall = async (t, a) => {
+  if (!(await confirm(t('agents.reinstallTitle', { label: a.label }), t('agents.reinstallBody', { label: a.label }), { ok: t('agents.reinstall'), tone: 'primary' }))) return;
+  await act(call('agents.install', { agent: a.id }));
+};
 function InstallButton({ a, reload }) {
   const t = useT();
   const [st, setSt] = useState(null);
@@ -114,18 +137,28 @@ function InstallButton({ a, reload }) {
   }), [a.id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!INSTALLABLE.includes(a.id)) return null;
   const busy = st?.state === 'instalando';
+  const upd = a.installed ? a.update : null;
+  // an update check said it is current: no button (the badge takes its place; «Reinstalar» stays in the card's «⋯»). Never checked,
+  // or the installed version is unknown: the plain «Actualizar» stays.
+  if (upd && upd.available === false && !busy) return <Badge variant="success" data-testid={`agent-uptodate-${a.id}`}>{t('agents.upToDate')}</Badge>;
+  const run = async () => {
+    // an update is one click with its confirmation: it says which version and which installer
+    if (upd?.available && !(await confirm(t('agents.updateConfirmTitle', { label: a.label }), updateBody(t, a, upd), { ok: t('agents.update'), tone: 'primary' }))) return;
+    const r = await act(call('agents.install', { agent: a.id })); if (r) setSt(r);
+  };
   return (
     <>
-      <Button size="sm" variant={a.installed ? 'ghost' : 'default'} disabled={busy} onClick={async () => { const r = await act(call('agents.install', { agent: a.id })); if (r) setSt(r); }} data-testid={`agent-install-${a.id}`}>
-        {busy ? <Spinner className="size-3.5" /> : <Download />}{busy ? t('agents.installing') : a.installed ? t('agents.update') : t('agents.install')}
+      <Button size="sm" disabled={busy} onClick={run} data-testid={`agent-install-${a.id}`}>
+        {busy ? <Spinner className="size-3.5" /> : <Download />}{busy ? t('agents.installing') : a.installed ? (upd?.available && upd.exact ? t('agents.updateTo', { version: upd.latest }) : t('agents.update')) : t('agents.install')}
       </Button>
-      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-micro">{st.line}</span> : null}
+      {busy && st.line ? <span className="text-muted-foreground w-full truncate text-right text-micro">{st.line}</span> : null}
     </>
   );
 }
 
 // The subscriptions of one agent: each with its own login folder, so two Codex or three Claude accounts never mix.
-function Accounts({ a, reload }) {
+// Returns the two ways of adding one; the rows themselves are drawn by the card.
+function useAccountActions(a, reload) {
   const t = useT();
   const locale = useLocale();
   // only a name. Orb makes the account's folder and opens the agent's sign-in at once (in the browser), so the other
@@ -196,28 +229,49 @@ function Accounts({ a, reload }) {
     });
     if (r) { notifyOk(t('agents.scanAddedMany', { n: r })); reload(); }
   };
-  if (!a.installed) return null;
+  return { add, scan };
+}
+
+// «Cerrar sesión»: Orb deletes the login of an account it made itself (the user types the name to confirm); for any other
+// account (the CLI's own login, a folder the user picked) it only says how to do it with the agent's own tool.
+async function signOut(acc, reload) {
+  if (acc.logout !== 'orb') {
+    const tool = acc.agent === 'codex' ? 'Codex' : 'Claude Code';
+    await confirm(t('agents.logoutToolTitle'), t('agents.logoutToolBody', { tool, how: t(`agents.logoutHow.${acc.agent}`) }), { ok: t('comp.dialogs.ok'), cancel: null, tone: 'primary' });
+    return;
+  }
+  const done = await form(t('agents.logoutTitle', { label: acc.label }), {
+    description: `${t('agents.logoutBody', { label: acc.label })}${getState().app?.config?.backup?.accounts === true ? ` ${t('agents.logoutBackups')}` : ''}`, initial: { name: '' },
+    body: (v, set) => <Field label={t('agents.logoutField')}><Input autoFocus value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder={acc.label} data-testid={`agent-logout-name-${acc.id}`} /></Field>,
+    ok: t('agents.logout'), okDanger: true, okDisabled: (v) => v.name.trim() !== acc.label,
+    onOk: (v) => call('accounts.logout', { id: acc.id, confirm: v.name.trim() })
+  });
+  if (done) { notifyOk(t('agents.logoutDone', { label: acc.label })); reload(); }
+}
+
+// One account: its name with the plan and the state of its login, and a menu with what can be done with it.
+function AccountRow({ acc, plan, reload, agentOn = true }) {
+  const t = useT();
+  const login = LOGIN[acc.login] ?? LOGIN.desconocido;
+  // The state as the mock-up's row says it: signed out, paused (not used by Orb) or active (signed in and in use).
+  // With its agent turned off no account is in use, so a signed-in one only says that it is signed in.
+  const state = acc.login === 'no' ? [t('agents.accountNoLogin'), 'warning'] : acc.enabled === false ? [t('agents.accountPaused'), 'secondary'] : acc.login === 'si' ? (agentOn ? [t('agents.accountActive'), 'success'] : [t('login.si'), 'secondary']) : login;
   return (
-    <div className="grid gap-1.5">
-      <div className="text-muted-foreground text-xs">{t('agents.accounts')}</div>
-      {a.accounts.map((acc) => {
-        const login = LOGIN[acc.login] ?? LOGIN.desconocido;
-        return (
-          // One line: the name with its state, what can be done with it and its switch.
-          <div key={acc.id} className={cn('rounded-lg border px-3 py-2', acc.enabled === false && 'opacity-60')}>
-            <div className="flex items-center gap-1.5">
-              <div className="min-w-0 flex-1 truncate text-control font-medium">{acc.label}</div>
-              <Badge variant={login[1]}>{login[0]}</Badge>
-              <BubbleTip title={t('agents.login')}><Button size="icon-xs" variant="ghost" aria-label={t('agents.login')} onClick={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn /></Button></BubbleTip>
-              {acc.id !== acc.agent ? <BubbleTip title={t('agents.removeTitle')} text={t('agents.removeTip')}><Button size="icon-xs" variant="danger" aria-label={t('agents.removeTitle')} onClick={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 /></Button></BubbleTip> : null}
-              {/* The bubble wraps a span: on the switch itself, the bubble's data-state hid «checked» and it looked off. */}
-              <BubbleTip title={t('agents.useAccount')}><span className="inline-flex shrink-0"><Switch checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)} aria-label={t('agents.useAccount')} /></span></BubbleTip>
-            </div>
-          </div>
-        );
-      })}
-      {a.multi ? <div className="flex flex-wrap gap-1"><Button size="sm" variant="ghost" className="w-fit" onClick={add}><UserPlus />{t('agents.addAnother')}</Button><BubbleTip title={t('agents.scan')} text={t('agents.scanTip', { label: a.label })}><Button size="sm" variant="ghost" className="w-fit" onClick={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</Button></BubbleTip></div> :<p className="text-muted-foreground text-micro leading-snug">{t('agents.fixedSession', { label: a.label })}</p>}
-    </div>
+    <ListRow className={cn('border-border not-first:border-t', acc.enabled === false && 'opacity-60')} title={acc.label} meta={plan ? <span>{plan}</span> : null}
+      trailing={(
+        <span className="flex flex-none items-center gap-1.5">
+          <Badge variant={state[1]} data-testid={`agent-account-state-${acc.id}`}>{state[0]}</Badge>
+          <DropdownMenu modal={false}>
+            <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-account-more-${acc.id}`} /></DropdownMenuTrigger></BubbleTip>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onSelect={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn />{t('agents.login')}</DropdownMenuItem>
+              <DropdownMenuCheckboxItem checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)}>{t('agents.useAccount')}</DropdownMenuCheckboxItem>
+              {acc.logout ? <DropdownMenuItem onSelect={() => signOut(acc, reload)} data-testid={`agent-logout-${acc.id}`}><LogOut />{t('agents.logout')}</DropdownMenuItem> : null}
+              {acc.id !== acc.agent ? <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 />{t('agents.removeTitle')}</DropdownMenuItem> : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </span>
+      )} />
   );
 }
 
@@ -262,70 +316,6 @@ function StrengthsPicker({ value, onChange, testid }) {
   );
 }
 
-// One agent. In the wide grid the card is a subgrid of five rows (title, state, actions, accounts, settings), so
-// every section sits at the same height in the three cards of a row.
-function AgentCard({ a, reload }) {
-  const t = useT();
-  const cfg = useStore((s) => s.app.config.agents[a.id]);
-  // The models the agent itself says it has (the catalog), its own default first, and the saved one even if not listed.
-  const catalog = useCatalog();
-  const listed = catalog?.find((x) => x.id === a.id)?.models.filter((m) => m.id) ?? [];
-  const modelOptions = [{ value: AGENT_DEFAULT, label: t('agents.defaultOfAgent') }, ...listed.map((m) => ({ value: m.id, label: m.label }))];
-  // A saved alias (sonnet, opus…) shows as the model it stands for (Sonnet 5.5), not as a second entry.
-  const alias = /^(sonnet|opus|haiku)$/.test(cfg.defaultModel ?? '') ? listed.find((m) => m.id.includes(cfg.defaultModel))?.id : null;
-  const defaultValue = alias ?? (cfg.defaultModel || AGENT_DEFAULT);
-  if (cfg.defaultModel && !alias && !modelOptions.some((o) => o.value === cfg.defaultModel)) modelOptions.push({ value: cfg.defaultModel, label: /^[a-z]+$/.test(cfg.defaultModel) ? cfg.defaultModel[0].toUpperCase() + cfg.defaultModel.slice(1) : cfg.defaultModel });
-  const login = LOGIN[a.login] ?? LOGIN.desconocido;
-  return (
-    <Card className="lg:row-span-5 lg:grid lg:grid-rows-[subgrid]" data-testid={`agent-card-${a.id}`}>
-      <CardHeader className="flex-row items-start gap-3">
-        <AgentIcon agent={a.id} className="mt-0.5 size-6 shrink-0" />
-        <div className="min-w-0 flex-1"><CardTitle className="truncate">{a.label}</CardTitle><CardDescription className="truncate">{a.installed ? a.version ?? t('agents.installed') : t('agents.notFoundHere')}</CardDescription></div>
-        <Switch checked={cfg.enabled} onCheckedChange={(enabled) => save(a.id, { enabled })} aria-label={t('agents.enabled')} />
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-1.5">
-        {a.installed ? <Badge variant="success">{t('agents.installed')}</Badge> : <Badge variant="destructive">{t('agents.notFound')}</Badge>}
-        {a.installed ? <Badge variant={login[1]}>{login[0]}</Badge> : null}
-        {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
-        {!cfg.enabled && OFF_AGENTS.includes(a.id) ? <Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid={`agent-enable-${a.id}`}>{t('agents.enable')}</Button> : null}
-        {a.installed && KIND[a.kind] ? <Badge variant="outline" className="text-muted-foreground font-normal">{t(KIND[a.kind])}</Badge> : null}
-      </CardContent>
-      {a.id === 'hermes' ? <CardContent><p className="text-warning-ink text-xs" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></CardContent> : null}
-      {a.unverified ? <CardContent><p className="text-warning-ink text-xs" data-testid={`agent-unverified-${a.id}`}>{t('agents.unverifiedNote')}</p></CardContent> : null}
-      {a.id === 'pi' || a.id === 'antigravity' ? <CardContent><p className="text-warning-ink text-xs" data-testid={`agent-noguard-${a.id}`}>{t('agents.noGuardNote')}</p></CardContent> : null}
-      {a.keys?.length ? <CardContent><AgentKeys a={a} /></CardContent> : null}
-      <CardContent className="flex flex-wrap gap-2">
-        <InstallButton a={a} reload={reload} />
-        {!a.installed && !INSTALLABLE.includes(a.id) ? <Button size="sm" variant="outline" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
-        {/* the paths are not shown (they say too much on a shared screen): a button opens the program's folder. */}
-        {a.where ? <Button size="sm" variant="ghost" onClick={() => act(bridge.openPath(dirOf(a.where)))} data-testid={`agent-open-${a.id}`}><FolderOpen />{t('agents.openFolder')}</Button> : null}
-        <Button size="sm" variant="ghost" onClick={() => act(call('agents.check', { agent: a.id })).then(reload)}><RefreshCw />{t('agents.check')}</Button>
-      </CardContent>
-      <CardContent><Accounts a={a} reload={reload} /></CardContent>
-      <CardContent>
-        <Collapsible>
-          <CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t('agents.modelsSettings')}</CollapsibleTrigger>
-          {/* everything is chosen, nothing typed: the agent's real models, its strengths from a list and its program
-              in Windows' own dialog. Each change is saved at once. */}
-          <CollapsibleContent className="mt-3 grid gap-3">
-            <Field label={t('agents.defaultModel')} hint={t('agents.defaultModelHint')}>
-              <Select className="w-full" value={defaultValue} options={modelOptions} disabled={modelOptions.length < 2} onValueChange={(m) => save(a.id, { defaultModel: m === AGENT_DEFAULT ? '' : m })} data-testid={`agent-default-model-${a.id}`} />
-            </Field>
-            <Field label={t('agents.strengths')} hint={t('agents.strengthsHint')}><StrengthsPicker value={cfg.strengths ?? ''} onChange={(strengths) => save(a.id, { strengths })} testid={`agent-strengths-${a.id}`} /></Field>
-            <Field label={t('agents.path')} hint={t('agents.pathHint')}>
-              <div className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5">
-                <span className="text-muted-foreground min-w-0 flex-1 truncate text-control">{cfg.path ? t('agents.pathCustom') : t('agents.pathAuto')}</span>
-                {cfg.path ? <Button size="xs" variant="ghost" onClick={() => save(a.id, { path: '' }).then(reload)}>{t('agents.auto')}</Button> : null}
-                <Button size="xs" variant="outline" onClick={async () => { const f = await bridge.pickProgram?.(t('sys.dialog.pickProgram')); if (f) save(a.id, { path: f }).then(reload); }} data-testid={`agent-path-${a.id}`}><FolderOpen />{t('agents.pickProgram')}</Button>
-              </div>
-            </Field>
-          </CollapsibleContent>
-        </Collapsible>
-      </CardContent>
-    </Card>
-  );
-}
-
 // The API key of an agent that takes one: kept in the vault (after the master password), never shown again and never in the settings.
 function AgentKeys({ a }) {
   const t = useT();
@@ -344,12 +334,208 @@ function AgentKeys({ a }) {
     if (r) { notifyOk(t('agents.keySaved')); load(); }
   };
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <>
       {a.keys.map((name) => (
-        <Button key={name} size="xs" variant="outline" onClick={() => set(name)} data-testid={`agent-key-${a.id}`}>{saved[name] ? t('agents.keyChange', { name }) : t('agents.keySet', { name })}</Button>
+        <Setting key={name} label={name} hint={saved[name] ? t('agents.keyInVault') : t('agents.keyHint')}>
+          {saved[name] ? <Badge variant="info">{t('agents.keyBadge')}</Badge> : null}
+          <Button size="xs" variant="outline" onClick={() => set(name)} data-testid={`agent-key-${a.id}`}><KeyRound />{saved[name] ? t('agents.keyChange', { name }) : t('agents.keySet', { name })}</Button>
+        </Setting>
       ))}
-      <span className="text-muted-foreground text-xs">{t('agents.keyHint')}</span>
-    </div>
+    </>
+  );
+}
+
+// The window of the plan the agent reports for its active account (a thin bar), or that it has no data.
+function WindowRow({ a, usage }) {
+  const t = useT();
+  const locale = useLocale();
+  const u = usage.find((x) => x.agent === a.id && x.real) ?? usage.find((x) => x.agent === a.id);
+  const real = u?.real;
+  const five = !real?.window || /five_hour|^300min$|^5h$/.test(String(real.window));
+  const pct = real ? Math.round(real.utilization * 100) : null;
+  return (
+    <Setting label={five ? t('agents.window5', { h: u?.windowHours ?? 5 }) : t('agents.windowUse')} hint={real ? t('agents.windowHint') : ''}>
+      {real ? (
+        <span className="flex items-center gap-2.5">
+          <span className="text-muted-foreground text-caption">{pct} %{real.resetAt ? ` · ${t('agents.renews', { when: whenOf(real.resetAt, locale) })}` : ''}</span>
+          <span className="bg-muted block h-1.5 w-[140px] overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={t('agents.window5', { h: u?.windowHours ?? 5 })}><span className="bg-primary-text block h-full rounded-full" style={{ width: `${Math.min(100, Math.max(pct, 1))}%` }} /></span>
+        </span>
+      ) : <span className="text-muted-foreground text-caption">{t('agents.noUsageData')}</span>}
+    </Setting>
+  );
+}
+
+// What the agent spent today (usage.history of one day, from the ledger). The agents that give a cost show it; one that
+// used something without saying its cost says so; no number is made up. Not drawn for an agent with nothing to say, unless it
+// is paid by key (OpenCode, OpenRouter…), where the spend is the point.
+function SpendRow({ a, today }) {
+  const t = useT();
+  const locale = useLocale();
+  const mine = today?.agents?.find((x) => x.agent === a.id);
+  const usd = mine?.usd ?? 0; const turns = mine?.turns ?? 0;
+  if (!usd && !turns && !a.keys?.length) return null;
+  return (
+    <Setting label={t('agents.spendToday')} hint={usd ? t('agents.spendTodayHint', { turns }) : ''} data-testid={`agent-spend-${a.id}`}>
+      {usd ? <span className="text-control tabular-nums">{new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(usd)}</span>
+        : <span className="text-muted-foreground text-caption">{turns ? t('agents.spendNoCost') : t('agents.spendNone')}</span>}
+    </Setting>
+  );
+}
+
+// One agent: a card with its state, accounts, models, the window of its plan and what can be done with it.
+function AgentCard({ a, reload, usage, team, today }) {
+  const t = useT();
+  const cfg = useStore((s) => s.app.config.agents[a.id]);
+  // The models the agent itself says it has (the catalog), its own default first, and the saved one even if not listed.
+  const catalog = useCatalog();
+  const listed = catalog?.find((x) => x.id === a.id)?.models.filter((m) => m.id) ?? [];
+  const modelOptions = [{ value: AGENT_DEFAULT, label: t('agents.defaultOfAgent') }, ...listed.map((m) => ({ value: m.id, label: m.label }))];
+  // A saved alias (sonnet, opus…) shows as the model it stands for (Sonnet 5.5), not as a second entry.
+  const alias = /^(sonnet|opus|haiku)$/.test(cfg.defaultModel ?? '') ? listed.find((m) => m.id.includes(cfg.defaultModel))?.id : null;
+  const defaultValue = alias ?? (cfg.defaultModel || AGENT_DEFAULT);
+  if (cfg.defaultModel && !alias && !modelOptions.some((o) => o.value === cfg.defaultModel)) modelOptions.push({ value: cfg.defaultModel, label: /^[a-z]+$/.test(cfg.defaultModel) ? cfg.defaultModel[0].toUpperCase() + cfg.defaultModel.slice(1) : cfg.defaultModel });
+  const login = LOGIN[a.login] ?? LOGIN.desconocido;
+  // «Modelos y ajustes» is not in the mock-up's card: it opens from the card's «⋯» instead of showing a row of its own.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const { add, scan } = useAccountActions(a, reload);
+  const planOf = (acc) => usage.find((u) => u.account === acc.id)?.plan ?? null;
+  const shown = listed.slice(0, 3);
+  const installViaTeam = team.available && TEAM_AGENTS.includes(a.id);
+  const pickPath = async () => { const f = await bridge.pickProgram?.(t('sys.dialog.pickProgram')); if (f) save(a.id, { path: f }).then(reload); };
+  const firstLogin = a.accounts.find((acc) => acc.enabled !== false) ?? a.accounts[0];
+  // «Cerrar sesión» in the card's foot acts on the account in use that is signed in; the others have it in their own «⋯».
+  const signable = a.installed ? a.accounts.find((acc) => acc.enabled !== false && acc.login === 'si' && acc.logout) : null;
+  // «Versión 2.4.1 · hay 2.4.3» once an update check has run (agents.checkUpdates); the plain version before.
+  const upd = a.installed ? a.update : null;
+  const own = a.version?.match(/\d+(?:\.\d+)+/)?.[0];
+  const subtitle = a.installed ? (upd && own && upd.available != null ? t(upd.available === true ? 'agents.versionUpdate' : 'agents.versionCurrent', { version: own, latest: upd.latest }) : a.version ?? t('agents.installed')) : NATIVE.includes(a.id) ? t('agents.notHere') : t('agents.notFoundHere');
+  return (
+    <ListCard data-testid={`agent-card-${a.id}`}>
+      <div className="agh flex items-center gap-3 p-3.5">
+        <span className="bg-secondary grid size-8 flex-none place-items-center rounded-ctl"><AgentIcon agent={a.id} className="size-4" /></span>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <b className="flex items-center gap-1.5 font-(family-name:--title) text-card-title font-semibold"><span className="truncate">{a.label}</span>{a.kind === 'acp' || !NATIVE.includes(a.id) ? <Badge variant="info">ACP</Badge> : null}</b>
+          <span className="text-muted-foreground truncate text-caption" data-testid={`agent-version-${a.id}`}>{subtitle}</span>
+        </div>
+        <div className="flex flex-none items-center gap-1.5">
+          {!a.installed ? <Badge variant={NATIVE.includes(a.id) ? 'destructive' : 'warning'}>{NATIVE.includes(a.id) ? t('agents.missing') : t('agents.notFound')}</Badge>
+            : a.login === 'no' ? <Badge variant="warning">{login[0]}</Badge> : <Badge variant="success">{t('agents.installed')}</Badge>}
+          {!cfg.enabled ? <Badge variant="secondary">{t('agents.disabled')}</Badge> : null}
+          {/* on/off is not in the mock-up's card: it is an item of the card's «⋯»; the state shows in the badge */}
+          <DropdownMenu modal={false}>
+            <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-more-${a.id}`} /></DropdownMenuTrigger></BubbleTip>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem onSelect={() => save(a.id, { enabled: !cfg.enabled })} data-testid={`agent-toggle-${a.id}`}>{cfg.enabled ? t('agents.turnOff') : t('agents.enable')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => setSettingsOpen((v) => !v)} data-testid={`agent-settings-${a.id}`}>{settingsOpen ? t('agents.hideSettings') : t('agents.showSettings')}</DropdownMenuItem>
+              {a.installed && a.multi ? <DropdownMenuItem onSelect={scan} data-testid={`agent-scan-${a.id}`}><ScanSearch />{t('agents.scan')}</DropdownMenuItem> : null}
+              {a.where ? <DropdownMenuItem onSelect={() => act(bridge.openPath(dirOf(a.where)))} data-testid={`agent-open-${a.id}`}><FolderOpen />{t('agents.openFolder')}</DropdownMenuItem> : null}
+              <DropdownMenuItem onSelect={() => act(call('agents.check', { agent: a.id })).then(reload)} data-testid={`agent-check-${a.id}`}><RefreshCw />{t('agents.check')}</DropdownMenuItem>
+              {a.installed && INSTALLABLE.includes(a.id) && upd?.available === false ? <DropdownMenuItem onSelect={() => reinstall(t, a)} data-testid={`agent-reinstall-${a.id}`}>{t('agents.reinstall')}</DropdownMenuItem> : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      {!cfg.enabled && OFF_AGENTS.includes(a.id) ? <Stack><div><Button size="xs" variant="soft" onClick={() => save(a.id, { enabled: true })} data-testid={`agent-enable-${a.id}`}>{t('agents.enable')}</Button></div></Stack> : null}
+      {a.id === 'hermes' ? <Stack><p className="text-warning-ink text-caption" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></Stack> : null}
+      {a.unverified ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-unverified-${a.id}`}>{t('agents.unverifiedNote')}</p></Stack> : null}
+      {a.id === 'pi' || a.id === 'antigravity' ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-noguard-${a.id}`}>{t('agents.noGuardNote')}</p></Stack> : null}
+      {a.installed ? a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} agentOn={!!cfg.enabled} />) : null}
+      {a.installed && a.multi && a.accounts.filter((acc) => acc.enabled !== false).length === 1 ? <Stack className="py-2.5"><span className="text-muted-foreground text-caption" data-testid={`agent-one-account-${a.id}`}>{t('agents.oneAccount')}</span></Stack> : null}
+      {a.installed && !a.multi ? <Stack className="py-2.5"><span className="text-faint-foreground text-caption">{t('agents.fixedSession', { label: a.label })}</span></Stack> : null}
+      {a.keys?.length ? <AgentKeys a={a} /> : null}
+      {a.installed ? (
+        <Setting label={t('agents.models')} hint={listed.length ? t('agents.modelsHint') : ''}>
+          {shown.length ? <span className="flex flex-wrap justify-end gap-1">{shown.map((m) => <Badge key={m.id} variant="secondary">{m.label}</Badge>)}{listed.length > shown.length ? <Badge variant="secondary">+{listed.length - shown.length}</Badge> : null}</span> : <span className="text-muted-foreground text-caption">{t('agents.modelsAfterLogin')}</span>}
+        </Setting>
+      ) : null}
+      {a.installed ? <WindowRow a={a} usage={usage} /> : null}
+      {a.installed ? <SpendRow a={a} today={today} /> : null}
+      {/* a new version of an agent Orb cannot update by itself, or on a PC where its installer is not at hand: the command, no button */}
+      {upd?.available && !INSTALLABLE.includes(a.id) && !installViaTeam && upd.command ? <Stack><span className="text-muted-foreground text-caption" data-testid={`agent-update-cmd-${a.id}`}>{t('agents.updateManual', { latest: upd.latest, cmd: upd.command })}</span></Stack> : null}
+      <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
+        {/* everything is chosen, nothing typed: the agent's real models, its strengths from a list and its program
+            in Windows' own dialog. Each change is saved at once. */}
+        <CollapsibleContent className="border-border grid gap-3 border-t px-3.5 py-3" data-testid={`agent-settings-body-${a.id}`}>
+            {a.installed && KIND[a.kind] ? <span className="text-muted-foreground text-caption">{t(KIND[a.kind])}</span> : null}
+            <Field label={t('agents.defaultModel')} hint={t('agents.defaultModelHint')}>
+              <Select className="w-full" value={defaultValue} options={modelOptions} disabled={modelOptions.length < 2} onValueChange={(m) => save(a.id, { defaultModel: m === AGENT_DEFAULT ? '' : m })} data-testid={`agent-default-model-${a.id}`} />
+            </Field>
+            <Field label={t('agents.strengths')} hint={t('agents.strengthsHint')}><StrengthsPicker value={cfg.strengths ?? ''} onChange={(strengths) => save(a.id, { strengths })} testid={`agent-strengths-${a.id}`} /></Field>
+            <Field label={t('agents.path')} hint={t('agents.pathHint')}>
+              <div className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-1.5">
+                <span className="text-muted-foreground min-w-0 flex-1 truncate text-control">{cfg.path ? t('agents.pathCustom') : t('agents.pathAuto')}</span>
+                {cfg.path ? <Button size="xs" variant="ghost" onClick={() => save(a.id, { path: '' }).then(reload)}>{t('agents.auto')}</Button> : null}
+                <Button size="xs" variant="outline" onClick={pickPath} data-testid={`agent-path-${a.id}`}><FolderOpen />{t('agents.pickProgram')}</Button>
+              </div>
+            </Field>
+          </CollapsibleContent>
+        </Collapsible>
+      <CardFoot className="flex-wrap gap-2">
+        {a.installed && a.multi ? <Button size="sm" variant="outline" onClick={add} data-testid={`agent-add-account-${a.id}`}><Plus />{t('agents.addAnother')}</Button> : null}
+        {signable ? <Button size="sm" variant="outline" onClick={() => signOut(signable, reload)} data-testid={`agent-signout-${a.id}`}><LogOut />{t('agents.logout')}</Button> : null}
+        {!a.installed ? <Button size="sm" variant="outline" onClick={pickPath}><Search />{t('agents.findIt')}</Button> : null}
+        {a.installed && a.login === 'no' && firstLogin ? <Button size="sm" onClick={() => signIn(firstLogin, firstLogin.label)}><LogIn />{t('agents.login')}</Button> : null}
+        <InstallButton a={a} reload={reload} />
+        {!a.installed && installViaTeam ? <Button size="sm" disabled={team.running} onClick={() => team.install([a.id])}><Download />{t('agents.install')}</Button> : null}
+        {a.installed && upd?.available && installViaTeam ? <Button size="sm" disabled={team.running} onClick={async () => { if (await confirm(t('agents.updateConfirmTitle', { label: a.label }), updateBody(t, a, upd), { ok: t('agents.update'), tone: 'primary' })) team.install([a.id]); }} data-testid={`agent-update-${a.id}`}><Download />{upd.exact ? t('agents.updateTo', { version: upd.latest }) : t('agents.update')}</Button> : null}
+        {a.installed && upd && upd.available === false && !INSTALLABLE.includes(a.id) ? <Badge variant="success" data-testid={`agent-uptodate-${a.id}`}>{t('agents.upToDate')}</Badge> : null}
+        {!a.installed && !INSTALLABLE.includes(a.id) && !installViaTeam ? <Button size="sm" onClick={() => bridge.openExternal(INSTALL[a.id])}><ExternalLink />{t('agents.howInstall')}</Button> : null}
+      </CardFoot>
+    </ListCard>
+  );
+}
+
+// «Prepara tu equipo»: what Orb needs on this PC, with one click to install what is missing (the official installers,
+// installer.* in the engine; the agents that come by ACP are installed from their own card). Windows only.
+function TeamBlock({ team, agents }) {
+  const t = useT();
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(id); }, []);
+  if (!team.available) return null;
+  const items = team.items?.filter((i) => !TEAM_AGENTS.includes(i.id)) ?? [];
+  const missing = items.filter((i) => !i.installed && !i.optional);
+  const ago = Math.floor((now - (team.checkedAt ?? now)) / 60_000);
+  const versionOf = (id) => agents?.find((x) => x.id === id)?.version ?? null;
+  const stepOf = (id) => team.progress?.steps.find((s) => s.id === id);
+  return (
+    <Block title={t('agents.team.title')} count={team.items ? (missing.length ? t('agents.team.missing', { n: missing.length }) : null) : null} note={t('agents.team.note')} data-testid="agents-team">
+      {!team.items ? <div className="text-muted-foreground flex items-center gap-2 text-control"><Spinner />{t('comp.installer.checking')}</div> : (
+        <Panel className="mt-0">
+          {items.map((i) => {
+            const step = stepOf(i.id);
+            const busy = step?.state === 'instalando';
+            const version = i.version?.match(/\d+(?:\.\d+)+/)?.[0] ?? versionOf(i.id);
+            return (
+              <Setting key={i.id} label={i.label} hint={i.installed ? '' : i.why}>
+                {i.installed || step?.state === 'hecho' ? <>{version ? <span className="text-muted-foreground text-control">{version}</span> : null}<Badge variant="success">{t('comp.installer.installed')}</Badge></>
+                  : <>
+                    {i.optional ? <span className="text-muted-foreground text-control">{t('agents.team.optional')}</span> : null}
+                    {step?.state === 'error' ? <BubbleTip title={t('comp.installer.failed')} text={step.detail}><Badge variant="destructive" tabIndex={0}>{t('comp.installer.failed')}</Badge></BubbleTip>
+                      : <Badge variant={i.optional ? 'secondary' : 'destructive'}>{i.optional ? t('agents.team.optional') : t('agents.team.lacks')}</Badge>}
+                    <Button size="sm" variant={i.optional ? 'outline' : 'default'} disabled={team.running || busy} onClick={() => team.install([i.id])} data-testid={`team-install-${i.id}`}>{busy ? <Spinner className="size-3.5" /> : null}{busy ? t('comp.installer.installing') : t('agents.install')}</Button>
+                  </>}
+              </Setting>
+            );
+          })}
+          {/* Flutter, the Android SDK and Java: only found and told (version or not installed); Orb installs none of them */}
+          {team.dev?.map((d) => (
+            <Setting key={d.id} label={t(`agents.team.tool.${d.id}`)} hint={d.installed ? '' : t('agents.team.devHint')} data-testid={`team-dev-${d.id}`}>
+              {d.installed ? <>{d.version ? <span className="text-muted-foreground text-control">{d.version}</span> : null}<Badge variant="success">{t('comp.installer.installed')}</Badge></>
+                : <><span className="text-muted-foreground text-control">{t('agents.team.notInstalled')}</span><Badge variant="secondary">{t('agents.team.optional')}</Badge></>}
+            </Setting>
+          ))}
+          <CardFoot className="justify-between">
+            <span className="text-faint-foreground text-caption">{ago < 1 ? t('agents.team.checkedNow') : t('agents.team.checkedAgo', { n: ago })}</span>
+            <span className="flex items-center gap-2">
+              {missing.length > 1 ? <Button size="sm" disabled={team.running} onClick={() => team.install(missing.map((i) => i.id))} data-testid="team-install-all"><ListChecks />{team.running ? t('comp.installer.installingBtn') : t('agents.team.installMissing', { n: missing.length })}</Button> : null}
+              <Button size="sm" variant="outline" onClick={team.reload} data-testid="team-recheck"><RefreshCw />{t('agents.team.recheck')}</Button>
+            </span>
+          </CardFoot>
+        </Panel>
+      )}
+      {team.progress?.steps.length ? <InstallProgress progress={team.progress} /> : null}
+      {team.progress?.running ? <p className="text-faint-foreground text-caption">{t('comp.installer.windowOpened')}</p> : null}
+    </Block>
   );
 }
 
@@ -361,72 +547,111 @@ function CommitStyleCard() {
   const [text, setText] = useState(cfg.commitInstructions ?? '');
   const options = ['conventional', 'repo', 'custom'].map((v) => ({ value: v, label: t(`agents.commit.${v}`) }));
   return (
-    <Card data-testid="commit-style">
-      <CardHeader><CardTitle>{t('agents.commit.title')}</CardTitle><CardDescription>{t('agents.commit.desc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-3">
-        <Select value={style} onValueChange={setStyle} options={options} className="max-w-sm" title={t('agents.commit.title')} />
-        {style === 'custom' ? <Field label={t('agents.commit.instructions')}><Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000} placeholder={t('agents.commit.ph')} /></Field> : null}
-        <div><Button size="sm" onClick={async () => { const c = await act(call('config.save', { patch: { git: { commitStyle: style, commitInstructions: text } } }), t('agents.saved')); if (c) setState({ app: { ...getState().app, config: c } }); }} data-testid="commit-style-save">{t('agents.commit.save')}</Button></div>
-      </CardContent>
-    </Card>
+    <Block title={t('agents.commit.title')} note={t('agents.commit.desc')} data-testid="commit-style">
+      <Panel>
+        <Stack>
+          <Select value={style} onValueChange={setStyle} options={options} className="max-w-sm" title={t('agents.commit.title')} />
+          {style === 'custom' ? <Field label={t('agents.commit.instructions')}><Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000} placeholder={t('agents.commit.ph')} /></Field> : null}
+        </Stack>
+        <CardFoot><Button size="sm" onClick={async () => { const c = await act(call('config.save', { patch: { git: { commitStyle: style, commitInstructions: text } } }), t('agents.saved')); if (c) setState({ app: { ...getState().app, config: c } }); }} data-testid="commit-style-save">{t('agents.commit.save')}</Button></CardFoot>
+      </Panel>
+    </Block>
+  );
+}
+
+// Two columns of independent cards (a card's height does not stretch its neighbour); one column on a narrow window.
+function CardColumns({ list, render }) {
+  return (
+    <div className="grid items-start gap-4 min-[900px]:grid-cols-2 [&>*]:min-w-0">
+      {[0, 1].map((col) => <div key={col} className="flex flex-col gap-4">{list.filter((_, i) => i % 2 === col).map(render)}</div>)}
+    </div>
   );
 }
 
 export function AgentsView() {
   const t = useT();
-  const locale = useLocale();
   const version = useStore((s) => s.version);
   const [agents, setAgents] = useState(null);
   const [usage, setUsage] = useState([]);
   const [system, setSystem] = useState(null);
+  const [items, setItems] = useState(null);
+  const [checkedAt, setCheckedAt] = useState(null);
+  const [progress, setProgress] = useState(null);
+  const [dev, setDev] = useState(null);
+  const [today, setToday] = useState(null);
   useEffect(() => { call('system.check').then(setSystem).catch(quiet); }, []);
   const load = (refresh = false) => { call('agents.status', { refresh }).then(setAgents).catch(() => setAgents([])); };
   useEffect(() => load(), []);
-  useEffect(() => { call('usage.get').then(setUsage).catch(quiet); }, [version]);
+  useEffect(() => { call('usage.get').then(setUsage).catch(quiet); call('usage.history', { days: 1 }).then(setToday).catch(quiet); }, [version]);
+  const windows = system?.platform === 'win32';
+  const loadTeam = async () => { const [r, d] = await Promise.all([call('installer.check').catch(() => []), call('installer.devTools').catch(() => null)]); setItems(r); setDev(d); setCheckedAt(Date.now()); };
+  useEffect(() => {
+    if (!windows) return undefined;
+    loadTeam();
+    call('installer.progress').then((p) => p.steps.length && setProgress(p)).catch(quiet);
+    return bridge.on('installer:progress', (p) => { setProgress(p); if (p.finished) { loadTeam(); load(true); } });
+  }, [windows]); // eslint-disable-line react-hooks/exhaustive-deps
+  const team = {
+    available: windows, items, dev, checkedAt, progress, running: Boolean(progress?.running), reload: loadTeam,
+    install: async (ids) => { const p = await act(call('installer.start', { ids })); if (p) setProgress(p); }
+  };
+  const native = agents?.filter((a) => NATIVE.includes(a.id)) ?? [];
+  const more = agents?.filter((a) => !NATIVE.includes(a.id)) ?? [];
+  const lacking = items?.filter((i) => !i.installed && !i.optional && !TEAM_AGENTS.includes(i.id)).length ?? 0;
+  const metaParts = [agents ? t('agents.metaCounts', { native: native.length, more: more.length }) : t('agents.meta'), lacking ? t(lacking === 1 ? 'agents.metaLacksOne' : 'agents.metaLacks', { n: lacking }) : null].filter(Boolean);
+  const recheck = () => { setAgents(null); load(true); };
+  // «Buscar actualizaciones»: the only thing here that asks the internet (the public version of each agent's package);
+  // it updates nothing, it only lets each card say «hay X». Explicit: never on opening the page.
+  const [searching, setSearching] = useState(false);
+  const searchUpdates = async () => {
+    setSearching(true);
+    try {
+      const r = await act(call('agents.checkUpdates'));
+      load(false);
+      if (!r) return;
+      const news = r.agents.filter((x) => x.available).length;
+      if (r.failed?.length) notifyWarn(t('agents.updatesFailed', { list: r.failed.join(', ') }));
+      else if (news) notifyInfo(t('agents.updatesFound', { n: news }));
+      else notifyOk(t('agents.updatesNone'));
+    } finally { setSearching(false); }
+  };
+  const guide = () => form(t('guide.open'), { wide: true, body: () => <ModelGuide auto={getState().app?.config?.budget?.autoModel !== false} />, ok: t('comp.dialogs.ok') });
+  const reload = () => load(true);
+  const card = (a) => <AgentCard key={a.id} a={a} reload={reload} usage={usage} team={team} today={today} />;
   return (
     <>
-      <PageHeader icon={<Orbit className="text-primary size-5" />} title={t('agents.title')} meta={t('agents.meta')}>
-        <Button size="sm" variant="outline" onClick={() => { setAgents(null); load(true); }}><RefreshCw />{t('agents.checkAll')}</Button>
+      <PageHeader title={t('agents.title')} meta={metaParts.join(' · ')}>
+        <BubbleTip title={t('guide.open')} text={t('agents.tipGuide')}><IconButton label={t('guide.open')} onClick={guide} data-testid="agents-guide"><BookOpen /></IconButton></BubbleTip>
+        <BubbleTip title={t('agents.tipUpdatesTitle')} text={t('agents.tipUpdates')}><IconButton label={t('agents.tipUpdatesTitle')} onClick={searchUpdates} disabled={searching} data-testid="agents-check-all"><RefreshCw className={searching ? 'animate-spin' : undefined} /></IconButton></BubbleTip>
+        <DropdownMenu modal={false}>
+          <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton data-testid="agents-more" /></DropdownMenuTrigger></BubbleTip>
+          <DropdownMenuContent align="end" className="w-48"><DropdownMenuItem onSelect={recheck} data-testid="agents-refresh"><RefreshCw />{t('agents.checkAll')}</DropdownMenuItem></DropdownMenuContent>
+        </DropdownMenu>
       </PageHeader>
-      <PageBody>
-        <div className="grid gap-4">
-          <LoginCard reload={() => load(true)} windows={system?.platform === 'win32'} />
-          {system?.platform === 'win32' ? (
-            <Card>
-              <CardHeader><CardTitle>{t('agents.installTitle')}</CardTitle><CardDescription>{t('agents.installDesc')}</CardDescription></CardHeader>
-              <CardContent><Installer onChange={() => load()} /></CardContent>
-            </Card>
-          ) : null}
+      <PageBody className="pt-5 pb-10 md:pb-28">
+        <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
+          <AgentsUsageTabs current="agents" />
+          <LoginDialog reload={reload} windows={windows} />
+          <TeamBlock team={team} agents={agents} />
           {system && !system.git ? (
-            <Card className="border-warning/50 flex-row items-center gap-3 px-5 py-3.5">
-              <div className="min-w-0 flex-1"><div className="text-body font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-xs">{t('agents.noGitDesc')}</div></div>
-              <Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://git-scm.com/download/win')}><ExternalLink />{t('agents.getGit')}</Button>
-            </Card>
+            <Note tone="warning" className="items-center">
+              <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="text-body font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-caption">{t('agents.noGitDesc')}</div></div>
+                <Button size="sm" variant="outline" onClick={() => bridge.openExternal('https://git-scm.com/download/win')}><ExternalLink />{t('agents.getGit')}</Button></div>
+            </Note>
           ) : null}
-          {/* Two cards per row from 1024 px, three on very wide windows: each card needs room for its account rows. */}
-          <div className="grid gap-4 lg:grid-cols-2 2xl:grid-cols-3 [&>*]:min-w-0">{agents ? agents.map((a) => <AgentCard key={a.id} a={a} reload={() => load(true)} />) : <Card className="items-center"><Spinner /></Card>}</div>
-          {/* what Orb leaves out of a project's agent settings (claude.mjs, cursor.mjs, guard.mjs). */}
-          <Card><CardHeader><CardTitle>{t('agents.projectSettingsTitle')}</CardTitle><CardDescription>{t('agents.projectSettingsDesc')}</CardDescription></CardHeader></Card>
-          <CommitStyleCard />
-          <Card>
-            <CardHeader><CardTitle>{t('agents.usageTitle')}</CardTitle><CardDescription>{t('agents.usageDesc', { pct: Math.round((usage[0]?.stopAt ?? 0.92) * 100), hours: usage[0]?.windowHours ?? 5 })}</CardDescription></CardHeader>
-            <CardContent className="grid gap-4">
-              {usage.map((u) => (
-                <div key={u.account} className="grid gap-1.5">
-                  <div className="flex flex-wrap items-center gap-2 text-sm"><AgentIcon agent={u.agent} /><span className="min-w-28">{u.label}</span>
-                    {u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{t('agents.plan', { plan: u.plan })}</Badge> : null}
-                    {u.real ? <span className="text-xs">{u.real.window ? t('agents.realQuotaWindow', { pct: Math.round(u.real.utilization * 100), window: windowLabel(u.real.window) }) : t('agents.realQuota', { pct: Math.round(u.real.utilization * 100) })}{u.real.resetAt ? ` · ${t('agents.resetsAt', { when: new Date(u.real.resetAt).toLocaleString(locale, { weekday: 'short', hour: '2-digit', minute: '2-digit' }) })}` : ''}</span> : null}
-                    {/* a plan without high-usage models (Go, free) says so instead of «0/0». */}
-                    <span className="text-muted-foreground text-xs">{u.maxHeavy ? t('agents.tasksUsed', { used: u.used, max: u.max, heavy: u.heavy, maxHeavy: u.maxHeavy }) : t('agents.tasksUsedNoHeavy', { used: u.used, max: u.max })}</span>
-                    {u.cooldownUntil ? <Badge variant="destructive">{u.cooldownUntil - Date.now() > 20 * 3_600_000 ? t('agents.cooldownDay', { time: new Date(u.cooldownUntil).toLocaleString(locale, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) }) : t('agents.cooldown', { time: new Date(u.cooldownUntil).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' }) })}</Badge> : null}
-                    {u.modelLimits?.map((m) => <Badge key={m.model} variant="warning" title={m.model}>{t('agents.modelLimit', { model: m.label, time: new Date(m.until).toLocaleString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) })}</Badge>)}
-                    {/* the user decides the pause is over (the limit was only of one model, or it reset earlier). */}
-                    {u.cooldownUntil || u.modelLimits?.length ? <Button size="sm" variant="outline" className="h-6 px-2 text-xs" data-testid={`clear-cooldown-${u.account}`} onClick={async () => { if (await act(call('accounts.clearCooldown', { account: u.account }), t('agents.clearCooldownDone', { name: u.label }))) setUsage(await call('usage.get')); }}>{t('agents.clearCooldown')}</Button> : null}</div>
-                  <div className="bg-muted h-1.5 overflow-hidden rounded-full"><div className={cn('h-full rounded-full transition-all', (u.real?.utilization ?? 0) >= 0.85 ? 'bg-warning' : 'bg-primary')} style={{ width: `${Math.min(100, (u.real ? u.real.utilization : u.used / Math.max(1, u.max)) * 100)}%` }} /></div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+          <Block title={t('agents.nativeTitle')} note={t('agents.nativeNote')}>
+            {agents ? <CardColumns list={native} render={card} /> : <ListCard className="flex items-center justify-center py-6"><Spinner /></ListCard>}
+          </Block>
+          {more.length ? (
+            <Block title={t('agents.moreTitle')} count={more.length} note={t('agents.moreNote')}>
+              <CardColumns list={more} render={card} />
+            </Block>
+          ) : null}
+          {/* Orb's own, not drawn by the mock-up: at the end, under «Más opciones» (what Orb leaves out of a project's agent settings, and how commits are written) */}
+          <MoreOptions testid="agents-more-options">
+            <Block title={t('agents.projectSettingsTitle')} note={t('agents.projectSettingsDesc')} />
+            <CommitStyleCard />
+          </MoreOptions>
         </div>
       </PageBody>
     </>

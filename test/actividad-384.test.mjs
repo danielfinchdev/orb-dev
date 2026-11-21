@@ -83,7 +83,7 @@ test('a cursor walks the pages without duplicates or gaps', () => {
   fs.writeFileSync(file('motor.log'), lines.join('\n') + '\n');
   const ar = []; for (let i = 0; i < 90; i++) ar.push(`[c] mensaje ${i}`);
   fs.writeFileSync(file('asistente.log'), ar.join('\n') + '\n');
-  for (let i = 0; i < 60; i++) board.event(null, 'orb', 'task.quiet', `evento ${i}`);
+  for (let i = 0; i < 60; i++) board.event(null, 'claude', 'task.quiet', `evento ${i}`);
   const first = readActivity(board, { limit: 50 });
   assert.equal(first.items.length, 50); assert.ok(first.next);
   const seen = all({ limit: 50 });
@@ -227,10 +227,23 @@ test('activity.list for the phone hides this PC folders in the paged form; the d
   assert.ok(pc.items[0].text.includes(ctx.home));
 });
 
+test('activity.list for the phone also hides this PC folders in detail and title', async () => {
+  reset();
+  const dir = path.join(ctx.home, 'core', 'x');
+  const task = board.createTask({ project: 'viejo', title: `en ${dir}`, description: 'x', agent: 'claude' }, 'usuario');
+  board.event(task.id, 'claude', 'agent.reply', `ruta ${dir} fin`);
+  const pick = (r) => r.items.find((i) => i.kind === 'agent.reply');
+  const ph = pick(await call('activity.list', { sources: ['subagentes'], q: 'ruta' }, phone));
+  assert.ok(ph, 'the event is listed');
+  for (const f of ['detail', 'title']) assert.ok(!ph[f].includes(ctx.home) && ph[f].includes('<Orb>'), `${f}: ${ph[f]}`);
+  const pc = pick(await call('activity.list', { sources: ['subagentes'], q: 'ruta' }));
+  assert.ok(pc.detail.includes(ctx.home) && pc.title.includes(ctx.home));
+});
+
 test('events: a filter that only matches the oldest rows does not repeat them on the next page', () => {
   reset();
-  for (let i = 0; i < 100; i++) board.event(null, 'orb', 'task.quiet', `zeta ${i}`);
-  for (let i = 0; i < 500; i++) board.event(null, 'orb', 'task.quiet', `otro ${i}`);
+  for (let i = 0; i < 100; i++) board.event(null, 'claude', 'task.quiet', `zeta ${i}`);
+  for (let i = 0; i < 500; i++) board.event(null, 'claude', 'task.quiet', `otro ${i}`);
   const first = readActivity(board, { sources: ['subagentes'], q: 'zeta', limit: 150 });
   assert.equal(first.items.length, 100);
   assert.equal(first.next, null, 'nothing left to page');
@@ -245,7 +258,7 @@ test('lines without a time: the report has them and they sit by the older timed 
   assert.deepEqual(range, ['suelta sin hora', 'a']);
   fs.writeFileSync(file('asistente.log'), Array.from({ length: 90 }, (_, i) => `[c] mensaje ${i}`).join('\n') + '\n');
   fs.writeFileSync(file('motor-salida.log'), 'linea de la app\n');
-  for (let i = 0; i < 10; i++) board.event(null, 'orb', 'task.quiet', `evento ${i}`);
+  for (let i = 0; i < 10; i++) board.event(null, 'claude', 'task.quiet', `evento ${i}`);
   const big = buildReport(board, { lines: 500, version: 't' }).text;
   assert.ok(big.includes('mensaje 3') && big.includes('linea de la app'), 'the report includes the assistant and the app');
   const few = buildReport(board, { lines: 10, version: 't' }).text;
@@ -291,11 +304,24 @@ test('a forged cursor cannot make the engine loop: out-of-range positions restar
 
 test('a filter that matches no event scans a capped number of rows per call and the cursor reaches the oldest match', () => {
   reset();
-  board.event(null, 'orb', 'task.quiet', 'aguja-unica');
-  for (let i = 0; i < 6000; i++) board.event(null, 'orb', 'task.quiet', `paja ${i}`);
+  board.event(null, 'claude', 'task.quiet', 'aguja-unica');
+  for (let i = 0; i < 6000; i++) board.event(null, 'claude', 'task.quiet', `paja ${i}`);
   const first = {}; const r1 = readActivity(board, { sources: ['subagentes'], q: 'aguja-unica' }, first);
   assert.ok(first.rows <= 5000 + 500, `scanned ${first.rows}`);
   assert.equal(r1.items.length, 0); assert.ok(r1.next, 'more to look at');
   const r2 = readActivity(board, { sources: ['subagentes'], q: 'aguja-unica', cursor: r1.next });
   assert.equal(r2.items.length, 1); assert.equal(r2.next, null);
+});
+
+test('activity.list: the phone gets no PC paths in either shape, nested objects included; the PC keeps them', async () => {
+  reset();
+  const dir = `${ctx.home}\\core\\x`;
+  const task = board.createTask({ project: 'viejo', title: 'Hola', description: 'x', agent: 'claude' }, 'usuario');
+  board.event(task.id, 'claude', 'agent.reply', `en ${dir}`);
+  logUserAction({ kind: 'settings.save', text: 'ajustes', before: { a: { dir }, list: [dir] }, after: { dir } });
+  const oldPhone = JSON.stringify(await call('activity.list', { q: 'en' }, phone));
+  assert.ok(!oldPhone.includes(ctx.home) && oldPhone.includes('<Orb>'), oldPhone);
+  const newPhone = JSON.stringify(await call('activity.list', { sources: ['usuario'] }, phone));
+  assert.ok(!newPhone.includes(ctx.home) && newPhone.includes('<Orb>'), newPhone);
+  assert.ok(JSON.stringify(await call('activity.list', { sources: ['usuario'] })).includes(path.basename(ctx.home)));
 });

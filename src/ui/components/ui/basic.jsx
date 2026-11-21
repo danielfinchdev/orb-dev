@@ -5,24 +5,25 @@ import { cn } from '@/lib/utils.js';
 import { BubbleTip } from './overlay.jsx';
 
 export function Card({ className, ...props }) {
-  return <div data-slot="card" className={cn('bg-card text-card-foreground flex flex-col gap-4 rounded-xl border py-5 shadow-xs', className)} {...props} />;
+  return <div data-slot="card" className={cn('bg-card text-card-foreground flex flex-col gap-2.5 rounded-card border border-border py-2.5', className)} {...props} />;
 }
-export function CardHeader({ className, ...props }) { return <div className={cn('flex flex-col gap-1 px-5', className)} {...props} />; }
-export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('leading-none font-medium text-card-title', className)} {...props} />; }
+export function CardHeader({ className, ...props }) { return <div className={cn('flex flex-col gap-1 px-3', className)} {...props} />; }
+export function CardTitle({ className, ...props }) { return <div data-slot="card-title" className={cn('font-(family-name:--title) leading-tight font-semibold text-card-title', className)} {...props} />; }
 export function CardDescription({ className, ...props }) { return <div className={cn('text-muted-foreground text-control', className)} {...props} />; }
-export function CardContent({ className, ...props }) { return <div className={cn('px-5', className)} {...props} />; }
-export function CardFooter({ className, ...props }) { return <div className={cn('flex items-center gap-2 px-5', className)} {...props} />; }
+export function CardContent({ className, ...props }) { return <div className={cn('px-3', className)} {...props} />; }
+export function CardFooter({ className, ...props }) { return <div className={cn('flex items-center gap-2 px-3', className)} {...props} />; }
 
-const badgeVariants = cva('inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-xs font-medium w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 gap-1 [&>svg]:pointer-events-none', {
+// The mock-up's .badge: 20 px pill, 11 px semibold; each variant is one of its tones (.ok .warn .err .info .acc).
+const badgeVariants = cva('inline-flex h-5 items-center justify-center gap-1 rounded-full border border-transparent px-2 text-micro font-semibold w-fit whitespace-nowrap shrink-0 [&>svg]:size-3 [&>svg]:pointer-events-none', {
   variants: {
     variant: {
-      default: 'border-transparent bg-primary/12 text-primary-text',
-      secondary: 'border-transparent bg-secondary text-secondary-foreground',
-      outline: 'text-foreground',
-      success: 'border-transparent bg-success/14 text-success',
-      warning: 'border-transparent bg-warning/18 text-warning-ink',
-      destructive: 'border-transparent bg-destructive/12 text-destructive',
-      info: 'border-transparent bg-info/14 text-info'
+      default: 'bg-primary-soft text-primary-text',
+      secondary: 'bg-secondary text-muted-foreground',
+      outline: 'border-border bg-transparent text-muted-foreground',
+      success: 'bg-success-soft text-success',
+      warning: 'bg-warning-soft text-warning-ink',
+      destructive: 'bg-[color-mix(in_oklab,var(--destructive)_14%,transparent)] text-destructive',
+      info: 'bg-[color-mix(in_oklab,var(--info)_14%,transparent)] text-info'
     }
   },
   defaultVariants: { variant: 'default' }
@@ -30,10 +31,10 @@ const badgeVariants = cva('inline-flex items-center justify-center rounded-full 
 export function Badge({ className, variant, ...props }) { return <span data-slot="badge" className={cn(badgeVariants({ variant }), className)} {...props} />; }
 
 export function Input({ className, type = 'text', ...props }) {
-  return <input type={type} data-slot="input" className={cn('placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-9 w-full min-w-0 rounded-lg border bg-transparent px-3 py-1 text-sm shadow-xs transition-[color,box-shadow] outline-none disabled:opacity-50 focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px]', className)} {...props} />;
+  return <input type={type} data-slot="input" className={cn('placeholder:text-faint-foreground selection:bg-primary selection:text-primary-foreground border-border bg-card text-foreground rounded-ctl flex h-(--ctl) w-full min-w-0 border px-2.5 text-control transition-[color,border-color] outline-none disabled:opacity-45 focus-visible:border-input', className)} {...props} />;
 }
 export function Textarea({ className, ...props }) {
-  return <textarea data-slot="textarea" className={cn('placeholder:text-muted-foreground dark:bg-input/30 border-input flex field-sizing-content min-h-16 w-full rounded-lg border bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-ring/40 focus-visible:ring-[3px] disabled:opacity-50', className)} {...props} />;
+  return <textarea data-slot="textarea" className={cn('placeholder:text-faint-foreground border-border bg-card text-foreground rounded-ctl flex field-sizing-content min-h-16 w-full border px-2.5 py-1.5 text-control transition-[color,border-color] outline-none focus-visible:border-input disabled:opacity-45', className)} {...props} />;
 }
 export function Label({ className, ...props }) { return <label data-slot="label" className={cn('flex items-center gap-2 text-control leading-none font-medium select-none', className)} {...props} />; }
 // The reason a field was refused, right under it (never in a toast away from the field). role=alert so it is announced.
@@ -66,15 +67,15 @@ export function PathText({ path, className, tail = 20 }) {
     </BubbleTip>
   );
 }
-export function Separator({ className, vertical = false }) { return <div role="separator" className={cn('bg-border shrink-0', vertical ? 'h-full w-px' : 'h-px w-full', className)} />; }
-export function Kbd({ className, ...props }) { return <kbd className={cn('bg-muted text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded border px-1.5 font-mono text-micro', className)} {...props} />; }
-export function Spinner({ className }) { return <span className={cn('inline-block size-4 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary', className)} />; }
+export function Separator({ className, vertical = false }) { return <div role="separator" data-slot="separator" className={cn('bg-border shrink-0', vertical ? 'h-full w-px' : 'h-px w-full', className)} />; }
+export function Kbd({ className, ...props }) { return <kbd className={cn('bg-secondary text-muted-foreground pointer-events-none inline-flex h-5 items-center rounded-ctl border border-border px-1.5 font-mono text-micro', className)} {...props} />; }
+export function Spinner({ className }) { return <span className={cn('inline-block size-4 animate-spin rounded-full border-2 border-border border-t-muted-foreground', className)} />; }
 export function Empty({ icon: Icon, title, children, className }) {
   return (
-    <div className={cn('flex flex-col items-center justify-center gap-2 py-14 text-center', className)}>
-      {Icon ? <div className="bg-muted text-muted-foreground mb-1 grid size-11 place-items-center rounded-xl"><Icon className="size-5" /></div> : null}
-      {title ? <div className="font-medium">{title}</div> : null}
-      {children ? <div className="text-muted-foreground max-w-sm text-sm">{children}</div> : null}
+    <div data-slot="empty" className={cn('text-muted-foreground flex flex-col items-center justify-center gap-1.5 px-6 py-12 text-center', className)}>
+      {Icon ? <Icon className="text-faint-foreground size-6" /> : null}
+      {title ? <div className="text-foreground font-(family-name:--title) text-card-title font-semibold">{title}</div> : null}
+      {children ? <div className="text-muted-foreground max-w-sm text-control">{children}</div> : null}
     </div>
   );
 }

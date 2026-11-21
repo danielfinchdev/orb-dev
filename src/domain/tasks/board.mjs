@@ -75,7 +75,10 @@ export class Board {
   // approvalKey: HMAC key that signs approvals (only the app's user actions sign; the scheduler verifies).
   // noKey: processes that must never hold the secret (the MCP server): approvals cannot be verified there, so sensitive
   // tasks count as not approved and nothing is re-checked.
-  constructor(db = openDb(), { approvalKey, noKey = false } = {}) { this.db = db; this._key = approvalKey ?? null; this.noKey = noKey; this.listeners = new Set(); }
+  constructor(db = openDb(), { approvalKey, noKey = false } = {}) { this.db = db; this._key = approvalKey ?? null; this.noKey = noKey; this.listeners = new Set();
+    // why a queued task waits, kept by the scheduler in memory (never on disk) and recomputed on every tick: the task
+    // that holds its folder, and the structured side of its usage-limit notice.
+    this.folderWaits = new Map(); this.noticeInfo = new Map(); }
   get key() { if (this.noKey) return null; return this._key ??= defaultApprovalKey(); }
 
   // The engine listens to push changes to the window; MCP processes have no listeners (the engine polls the database).
@@ -162,7 +165,7 @@ export class Board {
   // readonly: the task only reads (research, review): it may run at the same time as others in the same folder.
   // conversation_id: the conversation that asked for it (its report goes back there); a subtask, a review or a join
   // task belongs to the one of the task it comes from.
-  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy, external = false }, actor) {
+  createTask({ project, title, description, agent = 'any', account = null, model = null, reasoning, fast, launch = 'auto', priority = 2, depends_on = [], sensitivity = [], mode = 'carpeta', readonly = false, parent_id = null, review_of = null, schedule_id = null, level = null, fixedBrief = false, internal = false, conversation_id = null, autonomy, external = false, origin_session = null }, actor) {
     if (!MODES.includes(mode)) throw new Error(tr('sys.board.badMode'));
     const proj = this.project(project);
     if (!proj) throw new Error(tr('sys.board.unknownProject', { name: project }));
@@ -200,7 +203,7 @@ export class Board {
     const parentTask = parent_id ? this.task(parent_id) : null;
     // external: an agent outside Orb (src/engine/host/mcp-external.mjs) always starts at «Preguntar» and in an isolated copy.
     if (external && (mode !== 'aislada' || !String(actor).startsWith('mcp:'))) throw new Error('external tasks are isolated and signed mcp:<client>');
-    const mine = external ? 'preguntar' : parentTask?.autonomy ?? (actor === 'usuario' && AUTONOMY.includes(autonomy) ? autonomy : globalAutonomy());
+    const mine = external ? 'preguntar' : parentTask?.autonomy ?? (autonomy === 'preguntar' || (actor === 'usuario' && AUTONOMY.includes(autonomy)) ? autonomy : globalAutonomy());
     const auto = mine === 'auto';
     // Approval does not depend on the creator declaring it: a task made by a worker always waits for the user,
     // and a keyword net adds the tags the creator forgot.
@@ -252,6 +255,9 @@ export class Board {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, proj.name, title, String(description), agent, account || null, model, reasoning, Number(fast), launch, Math.min(Math.max(Number(priority) || 2, 1), 3),
       JSON.stringify(depends_on.map(Number)), JSON.stringify([...new Set(tags)]), status, String(actor), proj.path, at, at, mode, Number(Boolean(readonly)), parent_id ? Number(parent_id) : null, review_of ? Number(review_of) : null, schedule_id ? Number(schedule_id) : null, ['simple', 'normal', 'complejo'].includes(level) ? level : null, convId ?? null, mine, asked.length ? JSON.stringify(asked) : null);
     const id = Number(lastInsertRowid);
+    // A label only (the Ficha of a chat lists the tasks made from it): kept just for a chat of the task's own project, and
+    // nothing reads it to decide about permissions or approval.
+    if (origin_session && this.one("SELECT id FROM sessions WHERE id = ? AND kind = 'chat' AND project = ? COLLATE NOCASE", String(origin_session), proj.name)) this.run('UPDATE tasks SET origin_session = ? WHERE id = ?', String(origin_session), id);
     this.event(id, actor, 'task.created', status);
     if (askedNote) this.event(id, 'orb', 'note', askedNote);
     if (status === 'awaiting_approval') { const tagList = tagWords(tags); this.addChat('system', reasons.length ? tr('msg.board.needsApprovalWhy', { id, title, tags: tagList, reasons: reasons.join('; ') }) : tr('msg.board.needsApproval', { id, title, tags: tagList }), { kind: 'attention', task: id }, convId ?? null); }
@@ -287,6 +293,15 @@ export class Board {
   previewHash(task) { return contentHash({ ...task, project_path: this.projectPathNow(task) }); }
   approvalOk(task) { return !task.sensitivity.length || verify(this.key, task); }
   clearApproval() { return { approved_by: null, approval_hash: null, approval_sig: null }; }
+  // What the detail tells about the OK of a task, read-only: the scheduler's own check (verify) run now, never the
+  // signature itself. verified is null when this process holds no key and so cannot check anything.
+  approvalInfo(task) {
+    const required = task.sensitivity.length > 0;
+    const signed = Boolean(task.approval_sig && task.approval_hash);
+    const verified = !this.key ? null : signed ? verify(this.key, task) : false;
+    const at = signed ? this.one("SELECT at FROM events WHERE task_id = ? AND kind = 'task.approved' ORDER BY id DESC LIMIT 1", task.id)?.at ?? null : null;
+    return { required, signed, verified, by: signed ? task.approved_by ?? null : null, at };
+  }
 
   // Queued tasks whose approval is missing or stale, or whose folder moved, go back to waiting for the user.
   revalidateQueued() {
@@ -441,7 +456,10 @@ export class Board {
   // why a queued task has not started, for the user (every list of tasks, PC and phone) and the coordinator.
   // → { kind: 'paused' } (the whole queue is paused) | { kind: 'manual' } (Ajustes: tasks do not start by themselves)
   //   | { kind: 'deps', on: [{ id, status, held }] } (it waits for those)
-  //   | { kind: 'notice', text } (what the scheduler said: usage limit, no agent…) | null (its turn comes)
+  //   | { kind: 'folder', by } (another task writes in its folder: `by` is that task's id)
+  //   | { kind: 'notice', text, account?, until?, percent? } (what the scheduler said: usage limit, no agent…; for a
+  //     usage limit also the account's label, when it comes back (ISO) and the usage percent, each null when unknown)
+  //   | null (its turn comes)
   // A dependency that needs the user (held, failed, blocked) is said first: resuming the queue alone would not start it.
   waitReason(task, paused = this.setting('paused') === '1') {
     if (task?.status !== 'queued') return null;
@@ -452,8 +470,12 @@ export class Board {
     if (paused) return { kind: 'paused' };
     if (ctx.config?.autoRun === false && task.launch === 'auto') return { kind: 'manual' };
     if (deps.length) return on(deps);
+    const by = this.folderWaits.get(task.id);
+    if (by != null && this.task(by)?.status === 'running') return { kind: 'folder', by };
     const notice = this.setting(`wait_notice:${task.id}`);
-    return notice ? { kind: 'notice', text: notice } : null;
+    if (!notice) return null;
+    const info = this.noticeInfo.get(task.id);
+    return { kind: 'notice', text: notice, ...(info?.text === notice ? { account: info.account, until: info.until, percent: info.percent } : {}) };
   }
   // a task Orb stopped after it ran, for the user to review (a mass deletion, a changed remote, a read-only task
   // that wrote): blocked, with a «task.held» since its last launch. → { reasons, folder } or null. The reasons are the
@@ -533,7 +555,7 @@ export class Board {
   explainForAgents(t) {
     const w = this.waitReason(t); const h = this.heldInfo(t);
     const dep = (d) => `#${d.id} (${d.held ? `retenida: ${userName()} la tiene que aceptar o deshacer` : d.status})`;
-    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.text } : {}),
+    return { ...(w ? { waiting: w.kind === 'paused' ? `cola en pausa: no empieza hasta que ${userName()} pulse «Reanudar»` : w.kind === 'manual' ? `${userName()} inicia las tareas a mano (Ajustes): no empieza sola` : w.kind === 'deps' ? `espera a ${w.on.map(dep).join(', ')}` : w.kind === 'folder' ? tr('msg.board.waitFolder', { by: w.by }) : w.text } : {}),
       ...(h ? { held: `retenida para que ${userName()} la revise: ${h.reasons} en ${h.folder}` } : {}) };
   }
   summary(agent, conversation = null) {

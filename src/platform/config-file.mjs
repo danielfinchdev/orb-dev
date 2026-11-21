@@ -2,7 +2,7 @@
 // deep merge used for settings. No process state: src/platform/context.mjs holds the loaded configuration.
 import fs from 'node:fs';
 import { PRODUCT } from '../shared/product.mjs';
-import { APPEARANCE_DEFAULTS } from '../shared/appearance.mjs';
+import { APPEARANCE_DEFAULTS, migrateAppearance } from '../shared/appearance.mjs';
 import { DEFAULT_PROTECTED } from '../shared/layout.mjs';
 import { CONFIG_FILE, paths } from './paths.mjs';
 
@@ -87,7 +87,8 @@ export const DEFAULT_CONFIG = Object.freeze({
   // Task Review: another model (another provider when there is one) audits finished work read-only and gives a verdict.
   review: { auto: false },
   // interrupted tasks continue when the app opens again; tasks stopped by a usage limit continue at the reset.
-  continuity: { resumeAfterRestart: true, resumeAtReset: true },
+  // switchAccount: at its limit an agent passes its work to its next account (off: the task waits for the first one).
+  continuity: { resumeAfterRestart: true, resumeAtReset: true, switchAccount: true },
   // agents may hand subtasks to other agents (orb_delegate). trusted: subtasks without risk words go straight to the
   // queue (instead of waiting for approval), up to maxPerTask per task.
   delegation: { enabled: true, trusted: true, maxPerTask: 4 },
@@ -100,8 +101,9 @@ export const DEFAULT_CONFIG = Object.freeze({
   // skin, font, codeFont, codeTheme: Ajustes → Apariencia (src/shared/appearance.mjs). usageLine: the cost and tokens
   // under each reply of an agent's conversation (Ajustes → Apariencia).
   ui: { companion: true, theme: 'sistema', pip: true, sounds: true, volume: 0.5, motion: 'completa', lockMinutes: 15, usageLine: true, ...APPEARANCE_DEFAULTS },
-  // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat.
-  expert: { enabled: false, panels: { explorer: true, git: true, history: true, running: true, usage: true, system: true, activity: true } },
+  // Expert mode (PC only): an IDE-like view with the panels chosen here around the assistant's chat. The history panel starts
+  // off: the last commits already sit inside the git panel, whose «Ver todo» opens the full history.
+  expert: { enabled: false, panels: { explorer: true, git: true, history: false, running: true, usage: true, system: true, activity: true } },
   browser: { enabled: true }, // the agents' browser (pages drawn by the app, driven through the MCP tools)
   // Phone access (off until the user turns it on): through the home Wi-Fi and/or Tailscale (https when the tailnet has it).
   mobile: { enabled: false, port: 3131, wifi: true, tailscale: true, screenshot: true },
@@ -126,6 +128,8 @@ export function loadConfig(home) {
 }
 // The configuration a stored orb.json gives: the defaults filled in and the settings of older versions updated.
 export function configFrom(stored) {
+  // Themes and palettes of older versions are mapped before merging, so the defaults never mask a retired value.
+  if (stored?.ui !== undefined) stored = { ...stored, ui: migrateAppearance(stored.ui) };
   const config = merge(DEFAULT_CONFIG, stored);
   // The old fixed caps (6 tasks, 2 heavy per window; 20 turns) were too tight. Values the user never changed
   // move to the new ones; anything the user set by hand stays.
@@ -149,7 +153,9 @@ export function configFrom(stored) {
   // «Monitoreo del equipo» and Opti Bot are gone, and so are the bots, Open Control Edge and the «Orb | Bots» mode too.
   // Their settings go (the file loses them at the next save).
   delete config.monitor; delete config.bots; delete config.oce;
-  if (config.ui) { delete config.ui.mode; delete config.ui.menuBar; } // menuBar: Windows' menu bar is always hidden now
+  if (config.ui) { delete config.ui.mode; delete config.ui.menuBar; }
+  // The background music is only the adaptive one: the source and the track an earlier version saved are dropped, the rest stays.
+  if (config.ui?.music) { delete config.ui.music.mode; delete config.ui.music.track; } // menuBar: Windows' menu bar is always hidden now
   // the phone never types the master password on a page without encryption: «mobile.lanHttp» is gone.
   if (config.mobile) delete config.mobile.lanHttp;
   // Folders made by older versions: agents added later get their default account and their place in the order.

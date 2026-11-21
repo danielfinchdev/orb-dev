@@ -177,11 +177,26 @@ export async function fullSnapshot(repo, { message }) {
 // What a fast snapshot `after` missed, by a full one taken later: files whose content now is not the one it recorded
 // although their date says nobody wrote them after it was taken (at: when it started; an older one without it, its
 // commit's second). A file written after it (the user's later edit) has a newer date and is not counted. → [{ status, path }]
-export function missedBy(repo, after, full) {
+// The date of a file's last write can be set back (by the task, or by a copy or an unzip the user made later, which keep the
+// source's date), while its change date (ctime) follows every ordinary write, copy and date change: one newer than the
+// snapshot means somebody touched the file after the task ended, so it is not counted as hidden. Those paths go to `later`
+// (when given): left as they are and reported, so a task that forged that date still cannot hide the file from the person.
+// A change date in the future is no proof of a later edit (a task may set it so, to hide a change): it is trusted only up to
+// `now`, and beyond it the file counts as changed by the task.
+// Both comparisons leave CLOCK_SLACK: the file system stamps files with a clock that runs a few ms apart from the one
+// Date.now() reads (so a task's last write can look newer than a snapshot started right after it), and a snapshot
+// without `at` only knows its second. Inside that margin the file counts as the task's, as before.
+const CLOCK_SLACK = 2000;
+export function missedBy(repo, after, full, later = [], now = Date.now()) {
   const at = after.at ?? Number(git(repo, 'show', '-s', '--format=%ct', after.commit).stdout.trim()) * 1000;
   return changedBetween(repo, after.commit, full.commit).filter((c) => {
     if (isSecretPath(c.path)) return false;
-    try { return fs.statSync(path.join(repo, c.path)).mtimeMs < at; } catch { return false; } // gone: git always sees that
+    try {
+      const st = fs.statSync(path.join(repo, c.path)); // gone: git always sees that
+      if (st.mtimeMs >= at) return false;
+      if (st.ctimeMs > at + CLOCK_SLACK && st.ctimeMs <= now + CLOCK_SLACK) { later.push(c.path); return false; }
+      return true;
+    } catch { return false; }
   });
 }
 // Whole or not at all (another snapshot may be reading it): written beside and renamed over. Losing it only costs time.
@@ -385,7 +400,7 @@ function* changedFlow(before, after) {
 // what a task changed, file by file, for the window's diff panel. Read only: one `git diff` between the checkpoint
 // before the task and the one after (commits, so line endings and the user's index never matter). Secret-looking paths
 // are left out (the snapshots already keep them out) and secret-looking text in the patches is hidden. Each file's patch and the whole answer are capped, and a binary file
-// has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more }
+// has no patch. → { files: [{ status, path, added, removed, binary, patch, cut }], more, hidden } (hidden: changed files not shown because they look like secrets)
 export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 200_000, maxTotal = 2_000_000 } = {}) {
   const range = ['--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', before, after]; // never a program of the project
   const stats = git(repo, 'diff', '--numstat', '-z', ...range);
@@ -410,7 +425,55 @@ export function diffBetween(repo, before, after, { maxFiles = 300, maxPatch = 20
     total += patch.length;
     files.push({ status: status.get(f.path) ?? 'M', ...f, patch, cut });
   });
-  return { files, more: list.filter((f) => !isSecretPath(f.path)).length - files.length };
+  return { files, more: list.filter((f) => !isSecretPath(f.path)).length - files.length, hidden: list.filter((f) => isSecretPath(f.path)).length };
+}
+
+// One file of that diff whole, before and after the task, for the «Antes» / «Después» views. Only a path the diff itself lists
+// (never any other file of the repository), no secret-looking path, never a program of the project (cat-file applies no
+// textconv). A side over maxBytes is not read at all: { tooBig: true }. A binary file is told apart, not shown.
+// → { path, status, binary, tooBig, before, after } (a side that does not exist is null).
+export function fileBetween(repo, before, after, file, { maxBytes = 512 * 1024 } = {}) {
+  const rel = String(file ?? '').replace(/\\/g, '/');
+  const bad = (key) => Object.assign(new Error(tr(key)), { userFacing: true });
+  if (!rel || rel.includes('\0') || isSecretPath(rel) || isSecretPath(rel.toLowerCase())) throw bad('msg.api.fileNotInDiff');
+  const entry = changedBetween(repo, before, after).find((c) => c.path === rel);
+  if (!entry) throw bad('msg.api.fileNotInDiff');
+  const out = { path: rel, status: entry.status, binary: false, tooBig: false, before: null, after: null };
+  const read = (commit) => {
+    const spec = `${commit}:${rel}`; // a revision, so the path is taken literally
+    const size = git(repo, 'cat-file', '-s', spec);
+    if (size.status !== 0) return null;
+    if (Number(size.stdout.trim()) > maxBytes) { out.tooBig = true; return null; }
+    const blob = gitBuffer(repo, 'cat-file', 'blob', spec);
+    if (blob.status !== 0) return null;
+    const buf = blob.stdout;
+    if (buf.subarray(0, 8000).includes(0)) { out.binary = true; return null; }
+    return redactSecrets(buf.toString('utf8'));
+  };
+  if (entry.status !== 'A') out.before = read(before);
+  if (entry.status !== 'D') out.after = read(after);
+  if (out.binary || out.tooBig) { out.before = null; out.after = null; }
+  return out;
+}
+
+// The line counts of diffBetween without its patches: the same range and options, one `git diff --numstat`, so the numbers
+// are the ones the patch shows. Read only. → { files: [{ status, path, added, removed, binary }], more } (secret-looking paths left out, as in
+// diffBetween), at most maxFiles of them; `more` is how many were left past the cap, `hidden` how many were left out as secrets.
+export const statBetween = (repo, before, after, opts) => finishStat(runSync(repo, statFlow(before, after)), opts);
+export const statBetweenAsync = async (repo, before, after, opts) => finishStat(await runAsync(repo, statFlow(before, after)), opts);
+function* statFlow(before, after) {
+  const r = yield ask({}, 'diff', '--numstat', '-z', '--no-renames', '--no-color', '--no-ext-diff', '--no-textconv', before, after);
+  if (r.status !== 0) throw new Error(oneLineOf(r.stderr) || 'git diff');
+  const status = new Map((yield* changedFlow(before, after)).map((c) => [c.path, c.status]));
+  return r.stdout.split('\0').filter(Boolean).map((row) => {
+    const [added, removed, ...rest] = row.split('\t');
+    const path = rest.join('\t');
+    return { status: status.get(path) ?? 'M', path, binary: added === '-', added: Number(added) || 0, removed: Number(removed) || 0 };
+  });
+}
+function finishStat(list, { maxFiles = 300 } = {}) {
+  const shown = list.filter((f) => !isSecretPath(f.path));
+  return { files: shown.slice(0, maxFiles), more: Math.max(0, shown.length - maxFiles), hidden: list.length - shown.length };
 }
 
 const walkFiles = (root, rel = '') => fs.readdirSync(path.join(root, rel), { withFileTypes: true }).flatMap((e) => {

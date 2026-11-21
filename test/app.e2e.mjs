@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import http from 'node:http';
-import { throughStart, sandboxEnv } from './fixtures/e2e-flows.mjs';
+import { throughStart, sandboxEnv, TEST_MASTER } from './fixtures/e2e-flows.mjs';
 import { launchOrb } from './fixtures/launch-orb.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -110,9 +110,9 @@ try {
   // ---- a project from the chat's project control: a folder in the web category (the default) of the assistant's folder
   step = 'proyecto';
   await win.click('[data-testid=project-picker]');
-  await win.getByRole('menuitem', { name: 'Nuevo proyecto' }).click();
-  await win.getByRole('dialog').locator('input').fill('webviaproject');
-  await dialogButton('Crear proyecto').click();
+  await win.getByRole('menuitem', { name: 'Crear proyecto' }).click();
+  await win.getByRole('dialog').locator('input[type=text]').first().fill('webviaproject');
+  await dialogButton('Crear').click();
   await until(async () => (await call('app.state')).activeProject?.name === 'webviaproject', 'proyecto activo');
   assert.ok(fs.existsSync(path.join(home, 'web', 'webviaproject', '.git')), 'D:\\Orb\\webviaproject');
   // A folder created by hand in the Explorer shows up as a project too.
@@ -199,6 +199,8 @@ try {
   await win.fill('[data-testid=session-input]', 'Y ahora sigue');
   await win.keyboard.press('Enter');
   await win.waitForSelector('text=Codex sigue');
+  // The tool calls come folded under «Trabajó…»; unfolded, each call keeps its own folding row.
+  await win.locator('[data-testid=worked-toggle]').first().click();
   await win.getByRole('button', { name: /Bash/ }).first().click();
   await win.waitForTimeout(300);
   await shot('05-conversacion-codex');
@@ -232,7 +234,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'Git y GitHub'], ['nav-agents', '07-agentes', 'Uso de cada cuenta'], ['nav-memories', '08-bitacoras', 'Bitácora general'], ['memories-activity', '09-actividad', 'Tarea creada'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'webviaproject'], ['nav-agents', '07-agentes', 'Agentes nativos'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Creaste la tarea'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -243,8 +245,11 @@ try {
   await win.fill('[data-testid=help-search]', 'deshacer');
   await until(async () => (await win.locator('[data-testid^=tutorial-]').count()) < 10, 'la búsqueda filtra los tutoriales');
   await win.fill('[data-testid=help-search]', '');
-  await win.click('[data-testid=faq-1]');
+  await until(async () => (await win.locator('[data-testid^=tutorial-]').count()) >= 10, 'sin búsqueda vuelven todos los tutoriales');
+  // The first question comes open; another one unfolds with a click.
   await win.waitForSelector('text=Orb usa su programa oficial');
+  await win.click('[data-testid=faq-2]');
+  await win.waitForSelector('text=En la carpeta de Orb');
   await win.click('[data-testid=tour-replay]');
   await win.locator('[data-testid=tour]').waitFor();
   await win.keyboard.press('Escape');
@@ -261,13 +266,14 @@ try {
   const section = async (name) => {
     const [id, part] = PARTS[name] ?? [name];
     await win.click(`[data-testid=settings-nav-${id}]`);
-    if (part) await win.click(`[data-testid=settings-sub-${part}]`);
+    // the menu only has the eight sections: a block inside one is reached by scrolling to it
+    if (part) await win.evaluate((p) => document.getElementById(`settings-${p}`)?.scrollIntoView({ block: 'start' }), part);
     await win.waitForTimeout(250);
   };
   // 3.6: the version and the developer's GitHub are in «Acerca de».
   await section('acerca');
   await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
-  await win.locator('[data-testid=settings-about]', { hasText: /Orb \d+\.\d+\.\d+/ }).waitFor();
+  await win.locator('[data-testid=settings-about]', { hasText: /Instalada: \d+\.\d+\.\d+/ }).waitFor();
   // 3.8: «Datos» has the master password's card (change it, «He olvidado la contraseña»).
   await section('datos');
   await win.locator('[data-testid=master-card] [data-testid=master-change]').waitFor();
@@ -284,10 +290,10 @@ try {
   await until(async () => (await call('app.state')).config.ui.skin === 'retro', 'tema guardado');
   await win.waitForTimeout(400);
   await shot('10f-tema-retro');
-  await win.click('[data-testid=skin-profesional]');
-  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'profesional', 'tema profesional');
+  await win.click('[data-testid=skin-predeterminado]');
+  await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'predeterminado', 'tema predeterminado');
   await win.waitForTimeout(400);
-  await shot('10g-tema-profesional');
+  await shot('10g-tema-predeterminado');
   await win.click('[data-testid=skin-orb]');
   await until(async () => (await win.evaluate(() => document.documentElement.dataset.skin)) === 'orb', 'vuelve al tema Orb');
   // 2.6: no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own, and the top bars move
@@ -310,7 +316,7 @@ try {
 
   // ---- interface size: Ctrl + / Ctrl - / Ctrl 0 and the presets in Ajustes (kept per PC)
   step = 'tamaño de la interfaz';
-  // The interface's size (×1.15 on top in WebView2: window.rs › ZOOM_BASE); the keys are read by the page itself.
+  // The interface's size (100 % real in WebView2: protocol.rs › ZOOM_BASE = 1); the keys are read by the page itself.
   const factor = () => win.evaluate(() => window.orb.zoom());
   const ctrl = (key) => win.keyboard.press(`Control+${key}`);
   assert.ok(Math.abs((await factor()) - 1) < 0.01, 'por defecto «Normal»');
@@ -325,9 +331,9 @@ try {
   const sizeBox = win.getByRole('combobox').filter({ hasText: 'Normal' });
   await sizeBox.scrollIntoViewIfNeeded(); await win.waitForTimeout(800); await sizeBox.scrollIntoViewIfNeeded();
   await sizeBox.click();
-  await win.getByRole('option', { name: 'Grande' }).click();
-  await until(async () => Math.abs((await factor()) - 1.15) < 0.01, 'tamaño grande');
-  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.15);
+  await win.getByRole('option', { name: 'Grande (110 %)', exact: true }).first().click();
+  await until(async () => Math.abs((await factor()) - 1.1) < 0.01, 'tamaño grande');
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'datos-app', 'interfaz.json'), 'utf8')).zoom, 1.1);
   await win.waitForTimeout(400);
   await shot('10a-ajustes-grande');
   await ctrl('Digit0');
@@ -339,11 +345,19 @@ try {
   await win.getByText('Iniciar las tareas automáticamente').click();
   await until(async () => (await call('app.state')).config.autoRun === autoRun, 'y vuelve');
   // 2.6: one slider from maximum saving to maximum use sets every limit; the limits stay under «Opciones avanzadas».
-  await win.locator('[data-testid=spend-slider]').fill('0');
+  // Changing the safety limits asks for the master password every time.
+  const unlock = async () => {
+    const ask = win.getByRole('dialog').filter({ hasText: 'Contraseña maestra' });
+    await ask.locator('input').first().fill(TEST_MASTER);
+    await ask.getByRole('button', { name: 'Desbloquear', exact: true }).click();
+  };
+  await win.click('[data-testid=spend-low]');
+  await unlock();
   await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 0 && c.maxParallel === 1 && c.budget.stopAt === 0.75; }, 'máximo ahorro aplicado');
   await win.click('[data-testid=spend-advanced]');
   await shot('10f-ajustes-ahorro');
   await win.locator('[data-testid=spend-slider]').fill('2');
+  await unlock();
   await until(async () => { const c = (await call('app.state')).config; return c.budget.profile === 2 && c.maxParallel === 3; }, 'vuelve a equilibrado');
 
   // ---- a new version (ORB_FAKE_UPDATE: no network): the card in the corner and the Updates card in Ajustes
@@ -371,7 +385,7 @@ try {
   const firstTask = (await call('tasks.list')).find((x) => x.project === 'webviaproject' && x.status === 'done');
   await win.fill('[data-testid=sidebar-search-input]', `#${firstTask.id}`);
   await win.click(`[data-testid=sidebar-results] [data-testid=item-t${firstTask.id}]`);
-  await win.locator('[data-testid=task-detail]', { hasText: `Tarea #${firstTask.id}` }).waitFor();
+  await win.locator('[data-testid=task-detail]', { hasText: `#${firstTask.id} ·` }).waitFor();
   await win.fill('[data-testid=sidebar-search-input]', '');
   // The conversation of the first request is done after the OK (nothing of it is still open): only under «Ver completados».
   assert.equal((await call('conversations.list')).find((c) => c.id === task.conversation_id).status, 'done', 'conversación completada con el OK');
@@ -493,8 +507,10 @@ try {
   // 2.6: a clean top bar: the clock and icon buttons with their bubble. 3.6: in a new chat nothing in the middle (the
   // project is chosen and shown in the composer only).
   // 3.6: the chat's pill (its title, project and who answers; it opens the chat's info) is all there is besides the buttons.
-  assert.equal(await win.locator('main header').evaluate((h) => [h.querySelector('[data-testid=orb-chat-head]'), h.querySelector('h1')].reduce((txt, e) => txt.replace(e?.innerText ?? '', ''), h.innerText).trim()), '', 'sin modo, modelo ni carpeta en la barra');
-  assert.doesNotMatch(await win.locator('[data-testid=orb-chat-head]').innerText(), /Opus|Sonnet|Documentos/, 'el modelo y la carpeta, en el compositor');
+  assert.equal(await win.locator('main header').evaluate((h) => [h.querySelector('[data-testid=orb-chat-head]'), h.querySelector('h1'), h.querySelector('[data-testid=bar-clock]')].reduce((txt, e) => txt.replace(e?.innerText ?? '', ''), h.innerText).trim()), '', 'sin modo, modelo ni carpeta en la barra');
+  // The pill says who answers (assistant and model); the pickers for model and folder live in the composer, not in the bar.
+  assert.match(await win.locator('[data-testid=orb-chat-head]').innerText(), /Orbe · Opus/, 'la píldora dice quién responde');
+  assert.equal(await win.locator('main header [data-testid=brain-picker], main header [data-testid=project-picker]').count(), 0, 'el modelo y la carpeta se eligen en el compositor');
   await win.hover('[data-testid=bar-pause]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
@@ -510,7 +526,7 @@ try {
     else await win.keyboard.press('ArrowUp');
     await win.waitForTimeout(400);
     await shot(`11d-juego-${game}`);
-    await win.getByRole('button', { name: 'Volver a los juegos' }).click();
+    await win.getByRole('button', { name: 'Volver a los juegos' }).first().click(); // the arrow in the header and the button at the foot do the same
   }
   await win.keyboard.press('Escape');
   await until(async () => (await win.locator('[data-testid=games-dialog]').count()) === 0, 'minijuegos cerrados');

@@ -54,7 +54,7 @@ export class LaunchPart {
         orb: assistantName(), usuario: userName(), del_usuario: ofUser(), tarea: String(task.id), carpeta: cwd, rama: branch ?? '',
         notas: notes.map((n) => `- ${n}`).join('\n'), nota_grupo: groupNote(this.board, project), nota_contrato: contractNote(cwd, task),
         // skills (agents without their own loader) and dev tools as one block; the section supplies its closing newline
-        herramientas: `${nativeSkills(agent) ? '' : skillsBrief(liveSkills().list)}${needsDevTools(project, `${task.title}\n${task.description}`) ? `\n${devToolsBrief(checkDevTools(), userName())}\n` : ''}`.replace(/\n$/, '')
+        herramientas: `${nativeSkills(agent) ? '' : skillsBrief(liveSkills(project.name).list)}${needsDevTools(project, `${task.title}\n${task.description}`) ? `\n${devToolsBrief(checkDevTools(), userName())}\n` : ''}`.replace(/\n$/, '')
       },
       conds: {
         en_carpeta: Boolean(folder), solo_lectura: Boolean(task.readonly), notas: notes.length > 0, publicar_pedido: asked.includes('publish'),

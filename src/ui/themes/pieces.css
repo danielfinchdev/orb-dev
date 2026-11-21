@@ -1,0 +1,104 @@
+/* The shared pieces (components/ui/*) as the mock-up draws them. Everything that a Tailwind class in the component can say
+   lives there; this file only holds what it cannot: the range, the brand colours of the marks, the dialog's bleeding
+   header and footer, and what each theme changes in the pieces (Candy 3D, Retro, Cristal). Colours come from tokens. */
+
+/* ---- range (.range): 4 px track filled up to --v (set by <Range>), 14 px thumb */
+.range { appearance: none; -webkit-appearance: none; width: 100%; height: 16px; background: transparent; cursor: pointer; --v: 50%; }
+.range::-webkit-slider-runnable-track { height: 4px; border-radius: var(--r-full); background: linear-gradient(to right, var(--primary-text) var(--v), var(--secondary) var(--v)); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--background); border: 1px solid var(--border); box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 25%, transparent); transition: transform 0.15s var(--ease-out, ease-out); }
+.range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.range::-moz-range-track { height: 4px; border-radius: var(--r-full); background: linear-gradient(to right, var(--primary-text) var(--v), var(--secondary) var(--v)); }
+.range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--background); border: 1px solid var(--border); }
+.range:disabled { cursor: default; opacity: 0.55; }
+.range:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: var(--r-full); }
+
+/* ---- dialog: the header and footer reach the edges of the card (the content pads its body by 18 px) */
+[data-slot="dialog-content"]:not(.p-0) > [data-slot="dialog-header"] { margin: -18px -18px 0; }
+[data-slot="dialog-content"]:not(.p-0) > [data-slot="dialog-footer"] { margin: 0 -18px -18px; }
+[data-slot="dialog-overlay"] { background-color: color-mix(in oklab, black 32%, transparent); }
+[data-slot="dialog-content"] { box-shadow: 0 30px 80px -20px color-mix(in oklab, black 45%, transparent); }
+
+/* ---- tabs: variant="line" is the mock-up's .vtabs; its triggers are .ptab (a flat tab that fills when selected) */
+[data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"] { height: var(--ctl); padding-inline: 8px; border-radius: var(--r-ctl); box-shadow: none; }
+[data-slot="tabs-list"][data-variant="line"] [data-slot="tabs-trigger"][data-state="active"] { background: var(--accent); color: var(--foreground); }
+
+/* ---- the active pill of the segmented control and of the pill tabs: a card-coloured chip with a hairline shadow, no outline */
+:is([data-slot="segmented"] button[aria-selected="true"], [data-slot="tabs-list"]:not([data-variant="line"]) [data-slot="tabs-trigger"][data-state="active"]) { box-shadow: 0 1px 2px rgb(0 0 0 / 0.08); }
+
+/* ---- bubbles and popovers: the mock-up's .tip (8 × 12 padding, card radius, 260 px) and .pop radius */
+[data-slot="tip"]:not(.orb-card) { padding: 8px 12px; max-width: 260px; --tip-radius: var(--r-card); }
+[data-slot="popover"] { --tip-radius: var(--r-card); }
+
+/* ---- project dot (.pj) and agent marks (.ag) */
+.pj { display: inline-block; flex: none; border-radius: 50%; }
+[data-agent="claude"] { color: oklch(0.62 0.17 40); }
+[data-agent="codex"], [data-agent="cursor"], [data-agent="copilot"], [data-agent="opencode"] { color: var(--foreground); }
+[data-agent="gemini"] { color: #4285f4; }
+[data-agent="qwen"] { color: #615ced; }
+[data-agent="hermes"] { color: #b8892e; }
+[data-agent="orb"] { color: var(--info); }
+[data-agent="other"] { color: var(--muted-foreground); }
+[data-tool="git"] { color: #f05032; }
+[data-tool="node"] { color: #5fa04e; }
+[data-tool="gh"], [data-tool="tailscale"] { color: var(--foreground); }
+
+/* ---- Candy: buttons are 3D (a hard shadow under them) and spring back when pressed */
+html[data-skin="candy"] [data-slot="button"]:not([data-variant="link"], [data-variant="ghost"], [data-variant="soft"]) { transition: transform 0.18s cubic-bezier(0.3, 1.6, 0.5, 1), background-color 0.15s, box-shadow 0.15s; }
+html[data-skin="candy"] [data-slot="button"][data-variant="default"] { box-shadow: 0 3px 0 color-mix(in oklab, var(--primary) 55%, black); }
+html[data-skin="candy"] [data-slot="button"][data-variant="destructive"] { box-shadow: 0 3px 0 color-mix(in oklab, var(--destructive) 55%, black); }
+html[data-skin="candy"] [data-slot="button"][data-variant="warn"] { box-shadow: 0 3px 0 color-mix(in oklab, var(--warning) 55%, black); }
+html[data-skin="candy"] [data-slot="button"]:not(:disabled):active { transform: translateY(2px) scale(0.97); }
+html[data-skin="candy"] [data-slot="button"][data-variant="default"]:not(:disabled):active,
+html[data-skin="candy"] [data-slot="button"][data-variant="destructive"]:not(:disabled):active,
+html[data-skin="candy"] [data-slot="button"][data-variant="warn"]:not(:disabled):active { box-shadow: 0 1px 0 color-mix(in oklab, var(--primary) 55%, black); }
+html[data-skin="candy"] [data-slot="switch"] > span { transition-timing-function: cubic-bezier(0.3, 1.6, 0.5, 1); }
+
+/* ---- Retro: no soft shadows, hard borders, square dots */
+html[data-skin="retro"] .pj { border-radius: 0; background: var(--primary) !important; }
+html[data-skin="retro"] :is([data-slot="dialog-content"], [data-slot="popover"], [data-slot="tip"]) { box-shadow: none; border-color: var(--input); }
+html[data-skin="retro"] :is([data-slot="button"][data-variant="outline"], [data-slot="input"], [data-slot="textarea"], [data-slot="search"], [data-slot="checkbox"]) { border-color: var(--input); }
+html[data-skin="retro"] [data-slot="switch"] > span { box-shadow: none; }
+/* the line tabs (.vtabs) keep only the hairline under them, as in the mock-up */
+html[data-skin="retro"] [data-slot="segmented"], html[data-skin="retro"] [data-slot="tabs-list"]:not([data-variant="line"]) { border: 1px solid var(--input); }
+
+/* ---- Cristal: the rim of light on the panes of glass (menus, popovers, bubbles and dialogs) */
+/* The dialog is left out of `position`: it is fixed, which already anchors its rim; made relative it would drop into
+   the page's flow and push the whole window down. */
+html[data-skin="cristal"] :is([data-slot="menu-content"], [data-slot="select-content"], [data-slot="popover"], [data-slot="tip"]:not(.orb-card)) { position: relative; isolation: isolate; }
+html[data-skin="cristal"] [data-slot="dialog-content"] { isolation: isolate; }
+html[data-skin="cristal"] :is([data-slot="dialog-content"], [data-slot="menu-content"], [data-slot="select-content"])::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 2;
+  background: linear-gradient(140deg, var(--g-rim), var(--g-rim-low) 38%, var(--g-rim-low) 62%, var(--g-rim));
+  -webkit-mask: linear-gradient(black 0 0) content-box, linear-gradient(black 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(black 0 0) content-box exclude, linear-gradient(black 0 0);
+}
+/* Small controls are frosted glass with a highlight on top; the card behind them is glass too (skins.css), so they read as lighter panes, not as bare text. */
+html[data-skin="cristal"] :is([data-slot="button"][data-variant="outline"], [data-slot="input"], [data-slot="textarea"], [data-slot="search"], [data-slot="select-trigger"]) { background-color: oklch(1 0 0 / 0.4); border-color: var(--g-line); backdrop-filter: blur(12px) saturate(1.5); box-shadow: inset 0 1px 0 var(--g-rim), 0 1px 3px -1px var(--g-shadow-near); }
+html[data-skin="cristal"] :is([data-slot="segmented"], [data-slot="tabs-list"]:not([data-variant="line"])) { background-color: oklch(1 0 0 / 0.25); box-shadow: inset 0 1px 2px oklch(0.4 0.03 265 / 0.12); }
+html[data-skin="cristal"] :is([data-slot="segmented"] button[aria-selected="true"], [data-slot="tabs-list"]:not([data-variant="line"]) [data-slot="tabs-trigger"][data-state="active"]) { background-color: oklch(1 0 0 / 0.85); box-shadow: 0 2px 8px -2px var(--g-shadow), inset 0 1px 0 oklch(1 0 0); }
+html[data-skin="cristal"] [data-slot="button"][data-variant="default"] { box-shadow: inset 0 1px 0 var(--g-rim), 0 6px 16px -6px var(--g-shadow); }
+
+/* ---- motion: nothing springs or slides for those who asked for less */
+@media (prefers-reduced-motion: reduce) {
+  html[data-skin="candy"] [data-slot="button"] { transition: none; }
+  html[data-skin="candy"] [data-slot="button"]:not(:disabled):active { transform: none; }
+  [data-slot="switch"] > span, .range::-webkit-slider-thumb { transition: none; }
+}
+html[data-motion="minima"] [data-slot="switch"] > span, html[data-motion="minima"] .range::-webkit-slider-thumb { transition: none; }
+html[data-motion="minima"][data-skin="candy"] [data-slot="button"] { transition: none; }
+html[data-motion="minima"][data-skin="candy"] [data-slot="button"]:not(:disabled):active { transform: none; }
+
+/* ---- passing notices (lib/notify.js): the mock-up's .pop, the tone said by the icon */
+html [data-sonner-toaster][data-sonner-theme] { --normal-bg: var(--popover); --normal-text: var(--popover-foreground); --normal-border: var(--border); --border-radius: var(--r-card); }
+.orb-toast { box-shadow: var(--shadow); font-size: 13px; }
+.orb-toast [data-title] { font-weight: 500; }
+.orb-toast [data-description] { color: var(--muted-foreground); }
+.orb-toast[data-type="success"] [data-icon] { color: var(--success); }
+.orb-toast[data-type="warning"] [data-icon] { color: var(--warning-ink); }
+.orb-toast[data-type="error"] [data-icon] { color: var(--destructive); }
+.orb-toast[data-type="info"] [data-icon], .orb-toast[data-type="loading"] [data-icon] { color: var(--primary-text); }
+.orb-toast [data-button] { height: var(--ctl-sm); border-radius: var(--r-ctl); font-size: 13px; }
+.orb-toast [data-button]:not([data-cancel]) { background: var(--primary); color: var(--primary-foreground); }
+
+/* The «Nueva programada» dialog is 620 px wide, as in the mock-up (the form dialog's wide size is 672). */
+.dialog:has([data-testid="schedule-summary"]) { max-width: min(620px, calc(100% - 2rem)); }

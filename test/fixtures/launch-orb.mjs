@@ -4,6 +4,8 @@
 // Playwright to its WebView2 over CDP (chromium.connectOverCDP). Nothing opens on the desktop.
 //   const orb = await launchOrb({ env, userData });
 //   orb.page (Playwright Page of Orb's window), orb.call(method, params) (window.orb.call), orb.close(), orb.pid
+// visible: the window is shown (no ORB_HIDDEN_WINDOW). detach: Orb is its own process group and outlives this script (a seeded
+// Orb left open for someone to use); orb.orbEnv is then the ORB_* the process was started with, to start it again the same way.
 // userData: the app's data folder for the test (ORB_USER_DATA: never the real profile). env: added to the process's.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,13 +23,17 @@ const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 const until = async (fn, what, ms, every = 250) => { const end = Date.now() + ms; while (Date.now() < end) { try { const v = await fn(); if (v) return v; } catch { /* not yet */ } await wait(every); } throw new Error(`no llegó: ${what}`); };
 const MAIN = /^http:\/\/tauri\.localhost\/?(index\.html)?([?#].*)?$/;
 
-export async function launchOrb({ env = {}, userData, args = [], exe = E2E_EXE, timeout = 60000 } = {}) {
+export async function launchOrb({ env = {}, userData, args = [], exe = E2E_EXE, timeout = 60000, visible = false, detach = false } = {}) {
   if (!fs.existsSync(exe)) throw new Error(`no existe ${exe} (npm run tauri:build:e2e)`);
   if (!isTestBuild(exe)) throw new Error(`${exe} no es la build de pruebas (su ventana se vería): npm run tauri:build:e2e`);
   if (!userData) throw new Error('launchOrb: falta userData (nunca el perfil real)');
   fs.mkdirSync(userData, { recursive: true });
   const port = 9300 + Math.floor(Math.random() * 600);
-  const child = spawn(exe, args, { env: { ...process.env, ORB_NO_UPDATE: '1', ...env, ORB_USER_DATA: userData, ORB_E2E_CDP_PORT: String(port), ORB_HIDDEN_WINDOW: '1' }, stdio: 'ignore' });
+  const childEnv = { ...process.env, ORB_NO_UPDATE: '1', ...env, ORB_USER_DATA: userData, ORB_E2E_CDP_PORT: String(port), ORB_HIDDEN_WINDOW: '1' };
+  if (visible) delete childEnv.ORB_HIDDEN_WINDOW;
+  const child = spawn(exe, args, { env: childEnv, stdio: 'ignore', ...(detach ? { detached: true } : {}) });
+  if (detach) child.unref();
+  const orbEnv = Object.fromEntries(Object.entries({ ORB_NO_UPDATE: '1', ...env, ORB_USER_DATA: userData }).filter(([k]) => k.startsWith('ORB_')));
   const exited = new Promise((r) => child.once('exit', r));
   const kill = () => { if (child.exitCode === null) { try { execFileSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' }); } catch { /* gone */ } } };
   let browser = null;
@@ -45,7 +51,7 @@ export async function launchOrb({ env = {}, userData, args = [], exe = E2E_EXE, 
       if (!done) kill();
       try { await browser.close(); } catch { /* gone */ }
     };
-    return { page, browser, call, close, kill, pid: child.pid, port, exited };
+    return { page, browser, call, close, kill, pid: child.pid, port, exited, orbEnv };
   } catch (error) {
     try { await browser?.close(); } catch { /* gone */ }
     kill();

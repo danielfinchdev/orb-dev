@@ -37,6 +37,9 @@ data class ProjectsState(
     val filter: ProjectFilter = ProjectFilter.Active,
     /** The categories the listed projects belong to, in the order they first appear. */
     val categories: List<String> = emptyList(),
+    /** What the new-project sheet offers: the mockup's categories, the rest of the PC's fixed ones and any free ones the PC already has. */
+    val newCategories: List<String> = NewProjectCategories,
+    val connection: ConnectionState = ConnectionState.Connecting,
     val activeCount: Int = 0,
     val online: Boolean = false,
     val loaded: Boolean = false,
@@ -69,6 +72,10 @@ class ProjectsViewModel(
     )
 
     private val data = MutableStateFlow(ProjectsData.Empty)
+
+    // The git line arrives apart from the list, so the cards are drawn first and completed when it comes.
+    private val git = MutableStateFlow<Map<String, ProjectGit>>(emptyMap())
+    private var gitRead: kotlinx.coroutines.Job? = null
     private val ui = MutableStateFlow(Ui())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
     private val _messages = Channel<String>(Channel.BUFFERED)
@@ -76,7 +83,8 @@ class ProjectsViewModel(
     /** Short messages for a snackbar. */
     val messages = _messages.receiveAsFlow()
 
-    val state: StateFlow<ProjectsState> = combine(data, ui, backend.connection) { d, u, c ->
+    val state: StateFlow<ProjectsState> = combine(data, git, ui, backend.connection) { base, lines, u, c ->
+        val d = if (lines.isEmpty()) base else base.copy(projects = base.projects.map { p -> p.copy(git = lines[p.name]) })
         val canFinished = backend.available(ApiMethods.PROJECTS_FINISHED)
         // A filter that no longer has anything behind it falls back to the whole list.
         val filter = when (val f = u.filter) {
@@ -91,6 +99,8 @@ class ProjectsViewModel(
             },
             finished = d.finished, filter = filter,
             categories = d.projects.mapNotNull { it.category }.distinct(),
+            newCategories = (NewProjectCategories + (d.projects.mapNotNull { it.category } + d.finished.mapNotNull { it.category })).distinct(),
+            connection = c,
             activeCount = d.projects.size, online = c is ConnectionState.Online,
             loaded = d.projects.isNotEmpty() || d.finished.isNotEmpty() || u.answered,
             refreshing = u.refreshing, loadFailed = u.failed, busy = u.busy,
@@ -122,6 +132,13 @@ class ProjectsViewModel(
         reading = false
         r.getOrNull()?.let { fresh -> data.update { fresh } }
         ui.update { it.copy(refreshing = false, failed = r.isFailure, answered = it.answered || r.isSuccess) }
+        if (r.isSuccess && backend.readsGit) readGit()
+    }
+
+    /** Asks for the git lines without holding the list back; a newer read replaces one still under way. */
+    private fun readGit() {
+        gitRead?.cancel()
+        gitRead = viewModelScope.launch { backend.gitLines().onSuccess { lines -> git.value = lines } }
     }
 
     /** Pull to refresh and the return to the screen; a read already under way is not repeated. */

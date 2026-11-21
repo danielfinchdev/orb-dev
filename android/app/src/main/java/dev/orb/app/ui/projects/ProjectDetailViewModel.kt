@@ -8,6 +8,7 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkEvent
 import dev.orb.app.ui.chats.ChatRow
 import dev.orb.app.ui.linkErrorText
+import dev.orb.app.ui.tasks.NewTaskState
 import dev.orb.app.ui.tasks.TaskRow
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -34,6 +35,13 @@ data class ProjectDetailState(
     val chats: List<ChatRow> = emptyList(),
     val tasks: List<TaskRow> = emptyList(),
     val git: ProjectGit? = null,
+    val category: String? = null,
+    /** The project is one of the finished ones; this is the key that reopens it. */
+    val finishedKey: String? = null,
+    val finishedAt: String? = null,
+    val canNewTask: Boolean = false,
+    val canReopen: Boolean = false,
+    val newTask: NewTaskState? = null,
     val online: Boolean = false,
     val loaded: Boolean = false,
     val loadFailed: Boolean = false,
@@ -47,7 +55,18 @@ data class ProjectDetailState(
     val log: LogState? = null,
     /** True once the PC finished the project: the screen leaves. */
     val finished: Boolean = false,
-)
+) {
+    val archived get() = finishedKey != null
+
+    /** Tasks that are queued, waiting for the OK or running. */
+    val openTasks get() = tasks.count { it.status == "queued" || it.status == "pending" || it.status == "running" || it.needsApproval }
+
+    /**
+     * The finished tasks whose changes the person has neither accepted nor undone. A read-only task changes nothing, so it never
+     * counts. This is not what git calls «sin confirmar», which is [ProjectGit.changes].
+     */
+    val unaccepted get() = tasks.filter { it.status == "done" && !it.accepted && !it.undone && !it.readonly }
+}
 
 /** The project's own page. Actions go to the PC one at a time ([ProjectDetailState.busy]) and are never repeated on their own. */
 @OptIn(FlowPreview::class)
@@ -62,6 +81,7 @@ class ProjectDetailViewModel(
         val busy: Boolean = false,
         val log: LogState? = null,
         val finished: Boolean = false,
+        val newTask: NewTaskState? = null,
     )
 
     private val data = MutableStateFlow(ProjectDetailData(emptyList(), emptyList(), null))
@@ -74,7 +94,8 @@ class ProjectDetailViewModel(
 
     val state: StateFlow<ProjectDetailState> = combine(data, ui, backend.connection) { d, u, c ->
         ProjectDetailState(
-            name = name, chats = d.chats, tasks = d.tasks, git = d.git, online = c is ConnectionState.Online,
+            name = name, chats = d.chats, tasks = d.tasks, git = d.git, category = d.category, finishedKey = d.finishedKey, finishedAt = d.finishedAt,
+            canNewTask = backend.available(ApiMethods.TASKS_CREATE), canReopen = backend.available(ApiMethods.PROJECTS_REOPEN), newTask = u.newTask, online = c is ConnectionState.Online,
             loaded = u.loaded, loadFailed = u.failed, busy = u.busy,
             canReview = backend.available(ApiMethods.PROJECTS_REVIEW),
             canSecurityReview = backend.available(ApiMethods.PROJECTS_SECURITY_REVIEW),
@@ -139,6 +160,43 @@ class ProjectDetailViewModel(
     fun finish() {
         if (!backend.available(ApiMethods.PROJECTS_FINISH)) return
         act({ backend.finish(name).map { ProjectTexts.FINISHED } }, onSuccess = { ui.update { it.copy(finished = true) } })
+    }
+
+    fun openNewTask() {
+        if (!backend.available(ApiMethods.TASKS_CREATE)) return
+        // The project is fixed, so there is nothing to load.
+        ui.update { it.copy(newTask = NewTaskState(projects = listOf(name), loading = false)) }
+    }
+
+    fun closeNewTask() = ui.update { it.copy(newTask = null) }
+
+    fun createTask(project: String, title: String, description: String) {
+        val n = ui.value.newTask ?: return
+        val t = title.trim()
+        val d = description.trim()
+        if (n.saving || t.isEmpty() || d.isEmpty()) return
+        if (backend.connection.value !is ConnectionState.Online) {
+            ui.update { it.copy(newTask = n.copy(error = ProjectTexts.ACTION_OFFLINE)) }
+            return
+        }
+        ui.update { it.copy(newTask = n.copy(saving = true, error = null)) }
+        viewModelScope.launch {
+            val r = backend.createTask(name, t, d)
+            if (r.isSuccess) {
+                ui.update { it.copy(newTask = null) }
+                _messages.trySend(ProjectTexts.TASK_CREATED)
+                reload()
+            } else {
+                ui.update { u -> u.copy(newTask = u.newTask?.copy(saving = false, error = linkErrorText(r.exceptionOrNull()!!))) }
+            }
+        }
+    }
+
+    /** Brings a finished project back to the list; the page then reads as an active one. */
+    fun reopen() {
+        val key = state.value.finishedKey ?: return
+        if (!backend.available(ApiMethods.PROJECTS_REOPEN)) return
+        act({ backend.reopen(key).map { ProjectTexts.REOPENED } }, onSuccess = { viewModelScope.launch { reload() } })
     }
 
     fun openLog() {

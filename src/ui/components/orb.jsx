@@ -131,7 +131,10 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   useEffect(() => { if (gesture && !still) play(gesture); }, [gesture]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => Object.values(timers.current).forEach(clearTimeout), []);
 
+  // Floating and the chest light are for a window somebody is looking at: a window without focus (hidden, behind others,
+  // driven by a test) keeps the robot still, so no filtered, blended layers animate for nobody.
   function float() {
+    if (!document.hasFocus()) return;
     setMoment(true);
     clearTimeout(timers.current.moment);
     timers.current.moment = setTimeout(() => setMoment(false), MOMENT);
@@ -172,7 +175,7 @@ export function Orb({ pose = 'head', size = 34, mood = 'idle', live: wantsLive =
   return (
     <span ref={self} className={cn('orb', still && 'still', calm && 'calm', className)} data-away={seen ? undefined : ''} data-mood={face} data-act={act ?? undefined} data-blink={blink || undefined}
       data-float={loops.float || undefined} data-glow={loops.glow || undefined} onAnimationIteration={loopEnded}
-      onPointerEnter={still ? undefined : () => setHover(true)} onPointerLeave={still ? undefined : () => setHover(false)}
+      onPointerEnter={still ? undefined : () => setHover(document.hasFocus())} onPointerLeave={still ? undefined : () => setHover(false)}
       style={{ width: box.w, height: box.h, '--k': k }} role="img" aria-label={title} onClick={still ? undefined : poke}>
       <span className="orb-body" style={{ width: w, height: w * G.ratio, left: (box.w - w) / 2, '--u': `${w / VW}px` }}>
         <img className="orb-img" src={url(file)} alt="" draggable={false} />

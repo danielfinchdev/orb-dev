@@ -20,14 +20,22 @@
   #root { pointer-events: auto; --removed-body-scroll-bar-size: 0px; }
   body[style*="pointer-events: none"] > #root::after { content: ""; position: fixed; inset: 0; z-index: 50; }
   body { @apply bg-background text-foreground antialiased; font-family: var(--font-sans); font-size: 14.5px; overflow: hidden; }
-  /* Órbita compact scale on the Orb theme (see the compact variant in tokens.css). rem is untouched so Tailwind spacing and the webview zoom are unaffected. */
-  @media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"], [data-skin="retro"]) body { font-size: 13px; } }
+  /* The compact scale of every theme (see the compact variant in tokens.css). rem is untouched so Tailwind spacing and the webview zoom are unaffected. */
+  @media (pointer: fine) { body { font-size: 13px; } }
+  /* one stroke for every icon, as the mock-up draws them (the phone keeps lucide's own) */
+  @media (pointer: fine) { svg.lucide { stroke-width: 1.75; } }
   h1, h2, h3, h4 { font-weight: 500; letter-spacing: -0.01em; }
   ::selection { background: color-mix(in oklch, var(--primary) 30%, transparent); }
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  /* The scrollbar's width, for a scroller whose content must end where it would with an overlay bar: its end padding
+     gives this much back, with scrollbar-gutter: stable so the bar's room is always there. */
+  :root { --sb-w: 10px; }
+  ::-webkit-scrollbar { width: var(--sb-w); height: var(--sb-w); }
   /* A touch screen scrolls by dragging: no grey scrollbars (they showed under the tabs of Tareas on the phone). */
-  @media (pointer: coarse) { ::-webkit-scrollbar { display: none; } * { scrollbar-width: none; } }
-  ::-webkit-scrollbar-thumb { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+  @media (pointer: coarse) { ::-webkit-scrollbar { display: none; } * { scrollbar-width: none; } :root { --sb-w: 0px; } }
+  /* The bar's room is kept (nothing shifts) but its thumb is not drawn at rest, as the mock-up shows none: it appears while the area
+     scrolls (lib/scroll-hint.js sets data-scrolling) and under the pointer. */
+  ::-webkit-scrollbar-thumb { background: transparent; border-radius: 10px; border: 3px solid transparent; background-clip: content-box; }
+  [data-scrolling]::-webkit-scrollbar-thumb, ::-webkit-scrollbar-thumb:hover { background: color-mix(in oklch, var(--muted-foreground) 30%, transparent); background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-corner { background: transparent; }
   /* A long one-line text (a path, a command) never widens the grid cell it sits in: the cell shrinks and the text wraps,
@@ -37,10 +45,10 @@
 
 /* ---------- the app's tooltip: a small speech bubble (ui/overlay.jsx: BubbleTip) ----------
    A soft bubble of the card's colour with a diffuse shadow in the theme's accent, a bold title, a line or two of muted
-   text and a little tail towards the control. Each visual theme tunes the variables below. */
+   text and a little tail towards the control. The corners follow the theme's --r-big; Retro restates the variables in skins.css. */
 :root {
-  --tip-bg: var(--card); --tip-border: var(--border); --tip-title: var(--foreground); --tip-text: var(--muted-foreground);
-  --tip-radius: 18px; --tip-shadow: 0 14px 34px -12px color-mix(in oklch, var(--primary) 38%, transparent), 0 3px 10px -4px color-mix(in oklch, var(--primary) 22%, transparent);
+  --tip-bg: var(--popover); --tip-border: var(--border); --tip-title: var(--foreground); --tip-text: var(--muted-foreground);
+  --tip-radius: var(--r-big); --tip-shadow: 0 14px 34px -12px color-mix(in oklch, var(--primary) 38%, transparent), 0 3px 10px -4px color-mix(in oklch, var(--primary) 22%, transparent);
 }
 .dark { --tip-shadow: 0 14px 34px -10px rgb(0 0 0 / 0.6), 0 0 0 1px color-mix(in oklch, var(--primary) 12%, transparent); }
 .orb-tip { background: var(--tip-bg); color: var(--tip-title); border: 1px solid var(--tip-border); border-radius: var(--tip-radius); padding: 10px 14px 11px; box-shadow: var(--tip-shadow); transform-origin: var(--radix-tooltip-content-transform-origin); animation: orb-tip-in 0.16s cubic-bezier(0.2, 0.8, 0.3, 1.1); }
@@ -52,19 +60,8 @@
 .orb-tip-tail { display: block; position: relative; width: 16px; height: 8px; overflow: hidden; translate: 0 -1px; }
 .orb-tip-tail::before { content: ""; position: absolute; left: 50%; top: 0; box-sizing: border-box; width: 11px; height: 11px; background: var(--tip-bg); border: 1px solid var(--tip-border); transform: translate(-50%, -50%) rotate(45deg); }
 @keyframes orb-tip-in { from { opacity: 0; transform: scale(0.94); } to { opacity: 1; transform: scale(1); } }
-html[data-motion="minima"] .orb-tip, html[data-skin="profesional"] .orb-tip { animation: none; }
+html[data-motion="minima"] .orb-tip { animation: none; }
 @media (prefers-reduced-motion: reduce) { .orb-tip { animation: none; } }
-/* Each theme's bubble. Vaporwave: a pastel sticker with the window's bevel colours. Retro: ink outline and a hard offset
-   shadow, like its cards. Candy: rounder, with a pink glow. Professional: tighter corners, a neutral shadow. */
-html[data-skin="vaporwave"]:not(.dark) { --tip-border: var(--vw-dk); --tip-radius: 0px; --tip-shadow: 3px 3px 0 oklch(0.55 0.15 330 / 0.35); }
-html.dark[data-skin="vaporwave"] { --tip-border: var(--vw-pink); --tip-radius: 0px; --tip-shadow: 0 0 18px -4px oklch(0.7 0.25 345 / 0.75); }
-html[data-skin="retro"] { --tip-border: var(--primary); --tip-radius: 0px; --tip-shadow: 0 0 12px -3px oklch(0.86 0.21 145 / 0.45); }
-html[data-skin="retro"] .orb-tip { border-width: 2px; }
-html[data-skin="retro"] .orb-tip-tail::before { border-width: 2px; }
-html[data-skin="retro"] .orb-tip-tail { translate: 0 -2px; }
-html[data-skin="nube"] { --tip-border: var(--cd-rim); --tip-radius: 16px; --tip-shadow: 0 3px 0 var(--cd-drop); }
-html[data-skin="nube"] .orb-tip-title { color: var(--primary); }
-html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -10px rgb(0 0 0 / 0.25), 0 2px 6px -2px rgb(0 0 0 / 0.12); }
 
 /* Progress of a task that does not report its percentage: a sliding bar (a third of the track wide). It
    slides with translate (percentages of its own width: -105% / 300% are the old left -35% / 100% of the track), on the
@@ -73,7 +70,7 @@ html[data-skin="profesional"] { --tip-radius: 10px; --tip-shadow: 0 10px 24px -1
 
 /* Ajustes → Contribuye → «Capturar la ventana»: the capture shows what is behind Ajustes, not Ajustes itself. At once:
    the window's duration-200 would otherwise fade it over 200 ms (transition-property defaults to all). */
-html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"]) { visibility: hidden; }
+html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"], [data-testid="feedback-pop"]) { visibility: hidden; }
 html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-dialog"], [data-testid="settings-dialog"] *) { transition: none; }
 
 /* The little floating window: dragged by its header, buttons stay clickable. */
@@ -93,7 +90,9 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .screen-loading { animation: screen-loading-in var(--dur-base) ease .4s both; }
 @keyframes screen-loading-in { from { opacity: 0; } to { opacity: 1; } }
 .prose-chat { line-height: 1.6; overflow-wrap: anywhere; }
-@media (pointer: fine) { html:is([data-skin="orb"], [data-skin="profesional"], [data-skin="nube"], [data-skin="vaporwave"], [data-skin="retro"]) .prose-chat { font-size: 14.5px; line-height: 1.43; } }
+/* a message's own text (a person's, a notice) wraps inside the column too; code blocks keep their `pre` and scroll */
+.msg-box { overflow-wrap: anywhere; }
+@media (pointer: fine) { .prose-chat { font-size: 14.5px; line-height: 1.43; } }
 .prose-chat p { margin: 0 0 .6em; } .prose-chat p:last-child { margin-bottom: 0; }
 .prose-chat ul, .prose-chat ol { margin: .3em 0 .6em; padding-left: 1.3em; } .prose-chat ul { list-style: disc; } .prose-chat ol { list-style: decimal; }
 .prose-chat li { margin: .15em 0; }
@@ -203,77 +202,73 @@ html[data-capturing] :is([data-slot="dialog-overlay"], [data-testid="settings-di
 .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #c3cbff 0%, #a7b1f6 45%, #8f9ef0 100%); }
 .dark .brand-sky { background: radial-gradient(120% 90% at 30% 10%, #2b3270 0%, #1d2257 50%, #141838 100%); }
 
-/* the type of the themes' titles, for the pieces drawn with it (the Orb·E wordmark, the clock of the chat bar). */
-:root { --font-title: var(--font-sans); }
-html[data-skin="vaporwave"] { --font-title: "Tiny5", "Space Grotesk Variable", var(--font-sans); }
-html.dark[data-skin="vaporwave"] { --font-title: "Orbitron Variable", "Space Grotesk Variable", var(--font-sans); }
-html[data-skin="retro"] { --font-title: "Press Start 2P", "VT323", monospace; }
-html[data-skin="nube"] { --font-title: "Fredoka Variable", var(--font-sans); }
-html[data-skin="profesional"] { --font-title: "Inter Variable", var(--font-sans); }
+/* the type of the themes' titles (--title, tokens.css and skins.css), for the pieces drawn with it (the Orb·E wordmark, the clock of the chat bar). */
+:root { --font-title: var(--title); }
 
-/* the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name, chosen per theme.
-   Orb (and the others for now): «WALL·E» style, spaced capitals and a round dot of the theme's colour. */
-/* --wm-track is the spacing between letters and --wm-gap the extra room on each side of the dot: the dot sits exactly
-   halfway between B and E, and the last letter gives back its spacing (it pushed the wordmark off its centre). */
-.wordmark { --wm-track: 0.16em; --wm-gap: 0.06em; display: inline-flex; align-items: center; font-family: "Outfit Variable", var(--font-sans); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: var(--wm-track); color: var(--foreground); }
-.wordmark-dot { flex: none; width: 0.34rem; height: 0.34rem; margin: 0 calc(var(--wm-track) + var(--wm-gap)) 0 var(--wm-gap); border-radius: 999px; background: var(--primary); }
+/* the assistant's wordmark ORB·E at the top of the sidebar when it keeps its default name: spaced capitals and a round dot
+   (the theme's one accent: --ring in the default theme, --primary in Orb). --wm-track is the spacing between letters and --wm-gap the extra room
+   on each side of the dot: the dot sits exactly halfway between B and E, and the last letter gives back its spacing
+   (it pushed the wordmark off its centre). */
+.wordmark { --wm-track: 0.16em; --wm-gap: 0.06em; display: inline-flex; align-items: center; font-family: var(--title); font-weight: 600; font-size: 1.12rem; line-height: 1; letter-spacing: var(--wm-track); color: var(--foreground); }
+.wordmark-dot { flex: none; width: 0.34rem; height: 0.34rem; margin: 0 calc(var(--wm-track) + var(--wm-gap)) 0 var(--wm-gap); border-radius: var(--r-full); background: var(--ring); }
 .wordmark-e { margin-inline-end: calc(var(--wm-track) * -1); }
-/* Vaporwave: Silkscreen capitals on the title bar by day, chrome Orbitron by night; the dot is a little diamond. */
-html[data-skin="vaporwave"] .wordmark { font-family: "Silkscreen", var(--font-title); --wm-track: 0.16em; --wm-gap: 0.06em; font-weight: 400; font-size: 0.95rem; color: oklch(1 0 0); }
-html[data-skin="vaporwave"] .wordmark-dot { width: 0.24rem; height: 0.24rem; border-radius: 0; background: oklch(0.88 0.14 350); transform: rotate(45deg); }
-html[data-skin="vaporwave"] .wordmark-e { color: inherit; }
-html.dark[data-skin="vaporwave"] .wordmark { font-family: "Orbitron Variable", var(--font-sans); font-weight: 800; font-size: 0.92rem; background: linear-gradient(180deg, oklch(0.98 0.02 210) 20%, oklch(0.82 0.14 205) 50%, oklch(0.8 0.18 345) 52%, oklch(0.95 0.06 345)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-/* Retro: a plate, chunky capitals in an ink frame with a hard shadow of the theme's colour. */
-html[data-skin="retro"] .wordmark { font-family: "Press Start 2P", var(--font-title); font-size-adjust: none; --wm-track: 0.06em; --wm-gap: 0.1em; font-weight: 400; font-size: 0.62rem; padding: 6px 8px 5px; border: 3px double var(--primary); border-radius: 0; color: var(--primary); }
-html[data-skin="retro"] .wordmark-dot { width: 0.3rem; height: 0.3rem; border-radius: 0; background: var(--warning); }
-/* Candy: a jelly pill, white capitals on the theme's pink with the darker edge below. */
-html[data-skin="nube"] .wordmark { font-family: "Fredoka Variable", var(--font-sans); --wm-track: 0.06em; --wm-gap: 0.03em; font-weight: 700; font-size: 1rem; color: var(--primary-foreground); background: var(--primary); padding: 6px 14px 5px; border-radius: 999px; box-shadow: 0 3px 0 color-mix(in oklch, var(--primary) 60%, black); }
-html[data-skin="nube"] .wordmark-dot { width: 0.24rem; height: 0.24rem; background: currentColor; }
-/* Profesional: sober, widely spaced capitals, the dot in the text's colour. */
-html[data-skin="profesional"] .wordmark { font-family: "Inter Variable", var(--font-sans); --wm-track: 0.22em; --wm-gap: 0em; font-weight: 600; font-size: 0.9rem; }
-html[data-skin="profesional"] .wordmark-dot { width: 0.22rem; height: 0.22rem; background: currentColor; }
+html[data-skin="orb"] .wordmark-dot { background: var(--primary); }
+/* Vaporwave: a chrome gradient on the letters, the dot a little diamond. */
+html[data-skin="vaporwave"] .wordmark { font-weight: 800; font-size: 0.98rem; background: var(--wm-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+html[data-skin="vaporwave"] .wordmark-dot { background: var(--wm-dot); border-radius: 0; transform: rotate(45deg); }
+/* Candy: the accent colour, the dot in the theme's mint. */
+html[data-skin="candy"] .wordmark { color: var(--primary-text); }
+html[data-skin="candy"] .wordmark-dot { background: var(--wm-dot); }
+/* Retro: the terminal's prompt with a blinking cursor. */
+html[data-skin="retro"] .wordmark { color: var(--primary); font-size: 1.6rem; font-weight: 400; letter-spacing: 0.12em; }
+html[data-skin="retro"] .wordmark::after { content: ""; width: 0.5em; height: 0.9em; margin-left: 0.2em; background: var(--primary); animation: wordmark-cursor 1.06s steps(1) infinite; }
+html[data-skin="retro"] .wordmark-dot { border-radius: 0; }
+@keyframes wordmark-cursor { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { html[data-skin="retro"] .wordmark::after { animation: none; } }
 
-/* the system's date and time on the left of the chat's top bar, in the theme's title type. */
-.bar-clock { display: grid; line-height: 1.1; font-family: var(--font-title); font-variant-numeric: tabular-nums; }
-.bar-clock-time { font-size: 1.05rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-.bar-clock-date { font-family: var(--font-sans); font-size: 0.72rem; color: var(--muted-foreground); white-space: nowrap; }
+/* The header of every view (components/page.jsx › AppBar): clock · title and a useful line · actions, 56 px. The window's
+   own buttons sit in its last 120 px (the tab strip takes that job when it is on screen). */
+.bar { position: relative; height: 56px; flex: none; display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(150px, 1fr); align-items: center; gap: 8px; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); container: bar / inline-size; }
+html.has-win-controls .bar { padding-right: 120px; }
+html.has-win-controls:has(.tabs-strip) .bar { padding-right: 10px; }
+.bar-left { justify-self: start; display: flex; align-items: center; gap: 4px; min-width: 0; }
+.bar-center { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
+.bar-center .name { margin: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border-radius: var(--r-ctl); font-family: var(--font-title); font-weight: 600; font-size: 15px; line-height: 1.3; letter-spacing: normal; }
+button.name:hover { background: var(--accent); }
+.bar .sub { max-width: 100%; overflow: hidden; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
+.bar-right { justify-self: end; display: flex; align-items: center; gap: 4px; }
+/* the clock: time in the theme's title type and the date under it; a button, the calendar opens on click. */
+.bar-clock { display: flex; flex-direction: column; align-items: flex-start; margin-left: -6px; padding: 3px 6px; border-radius: var(--r-ctl); line-height: 1.15; text-align: left; cursor: pointer; transition: background-color 0.15s; }
+.bar-clock:hover, .bar-clock[aria-expanded="true"] { background: var(--accent); }
+.bar-clock:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.bar-clock-time { font-family: var(--font-title); font-weight: 600; font-size: 18px; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; color: var(--foreground); }
+.bar-clock-date { font-family: var(--font-sans); font-size: 12px; font-weight: 400; color: var(--muted-foreground); white-space: nowrap; }
 .bar-clock-date::first-letter { text-transform: uppercase; }
-html[data-skin="retro"] .bar-clock-time { font-weight: 400; }
-/* The clock sits in the bar's title (an h1): the themes' outlined title styles are not for it. */
-html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-shadow: none !important; color: var(--foreground); letter-spacing: normal; text-transform: none !important; }
-html .bar-clock .bar-clock-date { color: var(--muted-foreground); font-family: var(--font-sans) !important; font-weight: 400; font-variant-numeric: tabular-nums; }
-/* the clock is a button (the calendar opens on click), with no button look. no box behind it on hover either,
-   in any theme (only the keyboard's focus ring). */
-html button.bar-clock, html button.bar-clock:hover, html button.bar-clock[data-state="open"] { justify-items: start; text-align: left; background: none !important; box-shadow: none !important; border: 0; margin: -4px -8px; padding: 4px 8px; border-radius: 10px; cursor: pointer; }
-button.bar-clock:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-/* the working folder in the middle of the chat's bar: a quiet pill over the theme's art. */
-.bar-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; min-width: 0; padding: 4px 12px; border-radius: 999px; border: 1px solid var(--border); background: color-mix(in oklch, var(--card) 82%, transparent); backdrop-filter: blur(6px); color: var(--foreground); font-size: 13px; font-weight: 500; line-height: 1.3; cursor: default; }
-.bar-project svg { color: var(--primary); }
-.bar-project.is-empty { color: var(--muted-foreground); font-weight: 400; }
-.bar-project:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-html[data-skin="retro"] .bar-project { border-radius: 0; border: 2px dashed var(--input); box-shadow: none; font-family: var(--font-sans); font-weight: 400; font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; }
-html[data-skin="nube"] .bar-project { font-family: "Fredoka Variable", var(--font-sans); font-weight: 600; border-color: color-mix(in oklch, var(--primary) 35%, var(--border)); }
-html[data-skin="vaporwave"] .bar-project { border-radius: 0; border-color: transparent; background: var(--vw-face); box-shadow: var(--vw-out-thin); backdrop-filter: none; }
-html.dark[data-skin="vaporwave"] .bar-project { background: oklch(0.14 0.05 290); box-shadow: inset 0 0 0 1px var(--vw-violet); }
-html[data-skin="profesional"] .bar-project { border-radius: 6px; backdrop-filter: none; background: var(--card); }
+/* the themes' outlined title styles are not for the clock */
+html .bar-clock, html .bar-clock * { -webkit-text-stroke: 0 !important; text-transform: none !important; }
+/* a narrow window has no room beside the title: the date goes first, then the whole clock, and the title ellipsizes instead of
+   running under it. Declared after the clock's own `display` and with the bar in the selector, or the base rule wins the cascade. */
+@container bar (max-width: 560px) { .bar .bar-clock-date { display: none; } }
+@container bar (max-width: 480px) { .bar .bar-clock { display: none; } }
+/* the screens' column: positioned and isolated so what is placed inside it stays inside */
+.theme-scene { position: relative; isolation: isolate; }
+/* The buttons inside a chat message (accept the report, ask for changes, play, allow / always / deny, see the task): small and light so the conversation stays calm. */
+.chat-actions [data-slot="button"] { font-weight: 500; }
 /* the conversation's title in the middle of the bar, big, and under it, small, its project with its icon. */
-.bar-title { display: grid; justify-items: center; min-width: 0; max-width: 100%; line-height: 1.15; text-align: center; }
-.bar-title-main { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 4px; border: 0; background: none; color: var(--foreground); font-family: var(--font-title); font-size: 15.5px; font-weight: 600; letter-spacing: 0.005em; }
-button.bar-title-main { cursor: pointer; border-radius: 6px; }
+.bar-title { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; text-align: center; }
+.bar-title-main { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 6px; border: 0; background: none; color: var(--foreground); font-family: var(--font-title); font-size: 15px; font-weight: 600; line-height: 1.3; }
+button.bar-title-main { cursor: pointer; border-radius: var(--r-ctl); }
+button.bar-title-main:hover { background: var(--accent); }
 button.bar-title-main:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.bar-title-sub { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; margin-top: 2px; color: var(--muted-foreground); font-size: 11.5px; }
+.bar-title-sub { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; color: var(--muted-foreground); font-size: 12px; }
 .bar-title-agent { display: inline-flex; align-items: center; gap: 4px; flex: none; }
 .bar-title-agent::before { content: '·'; margin: 0 2px 0 1px; }
-html[data-skin="retro"] .bar-title-main { font-weight: 400; font-size: 14px; letter-spacing: 0.02em; }
-html[data-skin="nube"] .bar-title-main { font-weight: 700; color: color-mix(in oklch, var(--primary) 55%, var(--foreground)); }
 html[data-skin="vaporwave"] .bar-title-main { font-weight: 700; letter-spacing: 0.03em; border-radius: 0; }
 /* a project's icon (project-icon.jsx): its own picture, or its initials on a colour of its own. */
 .project-icon { display: inline-grid; place-items: center; flex: none; width: 1rem; height: 1rem; border-radius: 5px; overflow: hidden; font-family: var(--font-sans); font-size: 8px; font-weight: 700; line-height: 1; letter-spacing: 0.02em; color: oklch(0.99 0.01 var(--pi-hue, 255)); background: oklch(0.62 0.14 var(--pi-hue, 255)); }
 .dark .project-icon:not(.is-image) { background: oklch(0.52 0.13 var(--pi-hue, 255)); }
 .project-icon.is-image { object-fit: contain; background: none; }
 html[data-skin="retro"] .project-icon:not(.is-image) { border-radius: 0; box-shadow: none; border: 1px solid var(--primary); }
-html[data-skin="nube"] .project-icon:not(.is-image) { border-radius: 999px; }
-html[data-skin="profesional"] .project-icon:not(.is-image) { background: var(--muted); color: var(--foreground); box-shadow: inset 0 0 0 1px var(--border); }
 /* the corner of a chat's avatar (views/orb/inbox.jsx › OrbAvatar): the marks of the agents that worked in
    it, each on a small round chip that reads on any row (hovered, open, glass) without cutting a ring out of the icon
    under it; several overlap like a stack of avatars (the first on top), «+N» past three (overlapped less, so it reads). */
@@ -286,54 +281,59 @@ html.glass .orb-avatar-badge { background: var(--glass-solid); box-shadow: 0 0 0
 .side-search-box { background: color-mix(in oklch, var(--card) 70%, transparent); transition: border-color 0.15s, box-shadow 0.15s; }
 .side-search-box:focus-within { border-color: color-mix(in oklch, var(--ring) 70%, var(--border)); box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 18%, transparent); }
 html[data-skin="retro"] .side-search-box, html[data-skin="retro"] .side-search button { border-radius: 0; border-width: 2px; border-style: dashed; }
-html[data-skin="nube"] .side-search-box { border-radius: 999px; }
 .orb-card { padding: 12px 14px 12px; }
-/* the foot of the sidebar: icons with their bubble (folded) or the list (unfolded); its arrow sits on the line above. */
-.side-foot-toggle { position: absolute; top: 0; left: 50%; z-index: 1; display: grid; place-items: center; width: 26px; height: 16px; transform: translate(-50%, -50%); border: 1px solid var(--border); border-radius: 999px; background: var(--sidebar); color: var(--muted-foreground); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
-.side-foot-toggle:hover { color: var(--foreground); border-color: color-mix(in oklch, var(--foreground) 30%, var(--border)); }
-.side-foot-toggle:focus-visible, .side-foot-icon:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.side-foot-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
-.side-foot-icon:hover { color: var(--foreground); background: color-mix(in oklch, var(--accent) 60%, transparent); }
-.side-foot-icon.is-active { color: var(--primary); background: var(--accent); }
-.side-foot-version { margin-left: 2px; padding-right: 2px; color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; }
-html[data-skin="retro"] .side-foot-icon, html[data-skin="profesional"] .side-foot-icon { border-radius: 0; }
-html[data-skin="retro"] .side-foot-toggle { border-width: 2px; border-color: var(--primary); border-radius: 0; }
+/* the foot of the sidebar: only icons (the mock-up's .fi), each with its bubble; the version sits at the right end. */
+.side-foot-icon { position: relative; display: grid; place-items: center; width: var(--ctl); height: var(--ctl); border-radius: var(--r-ctl); color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
+.side-foot-icon:hover, .side-foot-icon:focus-visible, .side-foot-icon[aria-current="page"] { color: var(--foreground); background: var(--accent); }
+.side-foot-icon:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+.side-foot-icon.is-active { color: var(--primary-text); }
+.side-foot-version { padding: 0 4px 0 6px; color: var(--muted-foreground); font-size: 13px; font-variant-numeric: tabular-nums; }
+html[data-skin="retro"] .side-foot-icon { border-radius: 0; }
 html[data-skin="retro"] .side-foot-version { font-family: var(--font-sans); font-size: 10px; }
-html[data-skin="nube"] .side-foot-icon { border-radius: 999px; }
 /* the bell and its list (notification-center.jsx), dressed as the help bubbles. */
-.notice-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 2px var(--background); }
+.notice-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 999px; background: var(--primary-text); }
 .notice-center { width: min(22rem, calc(100vw - 24px)); padding: 10px 10px 8px; }
 .notice-row { display: flex; gap: 10px; width: 100%; padding: 7px 8px; border-radius: 10px; text-align: left; color: var(--tip-title); }
 button.notice-row { cursor: pointer; transition: background-color 0.15s; }
 button.notice-row:hover { background: color-mix(in oklch, var(--primary) 9%, transparent); }
 button.notice-row:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
 .notice-time { font-variant-numeric: tabular-nums; }
-html[data-skin="retro"] .notice-row, html[data-skin="profesional"] .notice-row { border-radius: 0; }
+html[data-skin="retro"] .notice-row { border-radius: 0; }
 html[data-skin="retro"] .notice-dot { border-radius: 0; }
-/* The month's calendar: the help bubble (.orb-tip, its colours, corners and shadow per theme) holding a grid of days. */
+/* The month's calendar: a bubble (.orb-tip, its colours and corners follow the theme) holding a grid of days. */
 .orb-pop { transform-origin: var(--radix-popover-content-transform-origin); }
-.orb-cal { width: 17.5rem; padding: 12px 12px 12px; }
-.orb-cal-title { font-family: var(--font-title); color: var(--tip-title); }
+.orb-cal { width: 252px; padding: 10px; }
+.orb-cal-h { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-family: var(--font-title); font-weight: 600; font-size: 15px; }
 .orb-cal-title::first-letter { text-transform: uppercase; }
-.orb-cal-nav { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 999px; color: var(--tip-text); cursor: pointer; transition: background-color 0.15s, color 0.15s; }
-.orb-cal-nav:hover { background: color-mix(in oklch, var(--primary) 12%, transparent); color: var(--tip-title); }
-.orb-cal-head { padding: 2px 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--tip-text); opacity: 0.8; }
-.orb-cal-day { display: grid; place-items: center; height: 32px; border-radius: 999px; font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--tip-title); }
-.orb-cal-day.is-weekend { color: var(--tip-text); }
-.orb-cal-day.is-today { background: var(--primary); color: var(--primary-foreground); font-weight: 700; box-shadow: 0 4px 12px -4px color-mix(in oklch, var(--primary) 70%, transparent); }
-.orb-cal-today { justify-self: center; padding: 3px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--primary); cursor: pointer; }
-.orb-cal-today:hover { background: color-mix(in oklch, var(--primary) 10%, transparent); }
-.orb-cal-nav:focus-visible, .orb-cal-today:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-/* Each theme's touch: Retro squares with ink, Vaporwave a glowing day, Professional plain corners. */
-html[data-skin="retro"] .orb-cal-day, html[data-skin="retro"] .orb-cal-nav, html[data-skin="retro"] .orb-cal-today { border-radius: 0; }
-html[data-skin="retro"] .orb-cal-day.is-today { box-shadow: inset 0 0 0 2px var(--primary); }
-html.dark[data-skin="vaporwave"] .orb-cal-day.is-today { box-shadow: inset 0 0 0 1px var(--vw-pink), 0 0 10px -2px var(--primary); }
-html[data-skin="profesional"] .orb-cal-day, html[data-skin="profesional"] .orb-cal-nav, html[data-skin="profesional"] .orb-cal-today { border-radius: 6px; }
-html[data-skin="profesional"] .orb-cal-day.is-today { box-shadow: none; }
-html[data-skin="nube"] .orb-cal-title { font-family: "Fredoka Variable", var(--font-sans); color: var(--primary); }
+.orb-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 12px; }
+.orb-cal-head { padding: 2px 0; font-size: 11px; font-weight: 500; color: var(--faint-foreground); }
+.orb-cal-day { padding: 5px 0; border-radius: var(--r-ctl); font-variant-numeric: tabular-nums; }
+.orb-cal-day.is-weekend { color: var(--muted-foreground); }
+.orb-cal-day.is-today { background: var(--primary); color: var(--primary-foreground); font-weight: 600; }
+.orb-cal-today { width: 100%; margin-top: 8px; }
 /* the Pizarra. The canvas is Excalidraw's own (light or dark with the app); around it, the theme's surfaces. */
 .wb-canvas { isolation: isolate; }
 .wb-canvas .excalidraw { --ui-font: var(--font-sans); }
+/* The PC canvas draws the approved tool bar itself (wb-controls.jsx): Excalidraw's own tool bar, lock, key numbers,
+   extra-tools button, main menu, library button, hint and help button are hidden here. Their functions live in the canvas
+   menu (⋯) and on Excalidraw's keyboard shortcuts, which keep working while hidden. */
+.wb-pc .excalidraw .App-toolbar-container, .wb-pc .excalidraw .layer-ui__wrapper__footer-right { display: none !important; }
+.wb-pc .excalidraw .ToolIcon__lock, .wb-pc .excalidraw .ToolIcon__keybinding, .wb-pc .excalidraw .App-toolbar__divider,
+.wb-pc .excalidraw .App-toolbar__extra-tools-trigger, .wb-pc .excalidraw .main-menu-trigger, .wb-pc .excalidraw .default-sidebar-trigger,
+.wb-pc .excalidraw .HintViewer { display: none !important; }
+/* Zoom and undo/redo are Excalidraw's own (its public API has no undo): dressed as the approved pill. */
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left { --lg-button-size: var(--ctl-sm); --lg-icon-size: 16px; left: 14px; bottom: 14px; }
+.wb-pc .excalidraw .zoom-actions, .wb-pc .excalidraw .undo-redo-buttons { padding: 4px; gap: 2px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--background); box-shadow: none; }
+.wb-pc .excalidraw .zoom-actions button, .wb-pc .excalidraw .undo-redo-buttons button { height: var(--ctl-sm); min-width: var(--ctl-sm); border-radius: var(--r-ctl) !important; border: 0 !important; background: transparent !important; color: var(--foreground); box-shadow: none; }
+.wb-pc .excalidraw .zoom-actions button:hover:not(:disabled), .wb-pc .excalidraw .undo-redo-buttons button:hover:not(:disabled) { background: var(--accent) !important; }
+.wb-pc .excalidraw .zoom-actions button:disabled, .wb-pc .excalidraw .undo-redo-buttons button:disabled { opacity: 0.45; }
+.wb-pc .excalidraw .reset-zoom-button { font-size: 12px; color: var(--muted-foreground); width: 72px !important; }
+/* One pill, as the mock-up draws it: the section that holds both islands carries the frame and the islands lose theirs; a 1 px
+   rule (::before, no extra element) separates the zoom from undo / redo. Only Excalidraw's own wrappers are styled, never its DOM. */
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left section { display: flex; align-items: center; gap: 2px; width: auto; padding: 4px; border: 1px solid var(--border); border-radius: var(--r-card); background: var(--background); }
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left .zoom-actions, .wb-pc .excalidraw .layer-ui__wrapper__footer-left .undo-redo-buttons { padding: 0; margin: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left .undo-redo-buttons { position: relative; display: flex; gap: 2px; margin-inline-start: 9px; }
+.wb-pc .excalidraw .layer-ui__wrapper__footer-left .undo-redo-buttons::before { content: ""; position: absolute; inset-inline-start: -6px; top: 50%; width: 1px; height: 16px; margin-top: -8px; background: var(--border); }
 .wb-status { background: color-mix(in oklch, var(--card) 88%, transparent); color: var(--muted-foreground); border: 1px solid var(--border); box-shadow: 0 4px 14px -8px rgb(0 0 0 / 0.25); backdrop-filter: blur(6px); }
 .wb-item { background: color-mix(in oklch, var(--card) 70%, transparent); }
 .wb-panel { background: color-mix(in oklch, var(--sidebar) 94%, transparent); backdrop-filter: blur(10px); box-shadow: 0 18px 40px -18px rgb(0 0 0 / 0.35), 0 2px 8px -4px rgb(0 0 0 / 0.15); }
@@ -347,7 +347,6 @@ html[data-skin="nube"] .orb-cal-title { font-family: "Fredoka Variable", var(--f
 .mobile-tabs { position: relative; z-index: 10; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .mobile-tab { -webkit-tap-highlight-color: transparent; }
 .mobile-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; border-radius: 12px; }
-html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bottom: 3px; }
 /* A robot that only illustrates (the chat's avatars) is not a button. */
 .orb.still { cursor: default; }
 /* the time of each message, bottom right, as in a messaging app. */
@@ -357,45 +356,83 @@ html[data-skin="retro"] .wordmark, html[data-skin="nube"] .wordmark { margin-bot
 .msg-time-hover { opacity: 0; transition: opacity 0.15s ease; }
 .msg-hover:hover .msg-time-hover, .msg-hover:focus-within .msg-time-hover { opacity: 0.6; }
 @media (hover: none) { .msg-time-hover { opacity: 0.6; } }
-/* the «ahorro ↔ uso» slider of Ajustes › Tareas y usos: five steps on a soft track, «Recomendado» under the middle. */
-.spend-slider { width: 100%; height: 1.25rem; accent-color: var(--primary); cursor: pointer; background: transparent; }
-.spend-slider::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: color-mix(in oklch, var(--foreground) 12%, transparent); }
-.spend-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 999px; background: var(--primary); border: 3px solid var(--card); box-shadow: 0 1px 4px rgb(0 0 0 / 0.25); }
-.spend-slider { -webkit-appearance: none; appearance: none; }
-.spend-slider:focus-visible { outline: none; }
-.spend-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px color-mix(in oklch, var(--ring) 45%, transparent); }
-.spend-ticks { display: grid; grid-template-columns: repeat(5, 1fr); margin-top: -4px; font-size: 11px; color: var(--muted-foreground); }
-.spend-ticks span { text-align: center; }
-.spend-ticks span:first-child { text-align: left; } .spend-ticks span:last-child { text-align: right; }
 
 /* the sidebar's edge, dragged to make it wider or narrower. */
 .sidebar-resize { position: absolute; top: 0; right: -3px; bottom: 0; width: 6px; cursor: col-resize; z-index: 5; -webkit-app-region: no-drag; app-region: no-drag; }
 .sidebar-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
 .sidebar-resize:hover::after, .sidebar-resize[data-dragging]::after { opacity: 0.45; }
+/* The preview card of the transcript's rail (trail.jsx) is a frosted pane like the menus on the glass skin. */
+html[data-skin="cristal"] [data-slot="trail-card"] { background-color: var(--g-fill-strong); background-image: linear-gradient(170deg, oklch(1 0 0 / 0.86), oklch(1 0 0 / 0.68)); backdrop-filter: blur(28px) saturate(1.8); border-color: var(--g-line); }
+html[data-skin="retro"] [data-slot="trail-card"] { box-shadow: none; border-color: var(--input); }
+
+/* the chat's right panel (components/chat-panel.jsx): it slides in and fades with transform and opacity only; its edge is
+   dragged between 320 and 640 px. The window's buttons live in its tab strip while it is open (the chat's bar gives
+   their room back). */
+.chat-panel[data-state="open"] { animation: chat-panel-in 0.22s ease-out; }
+.chat-panel[data-state="closed"] { animation: chat-panel-out 0.16s ease-in forwards; pointer-events: none; }
+@keyframes chat-panel-in { from { opacity: 0; transform: translateX(24px); } }
+@keyframes chat-panel-out { to { opacity: 0; transform: translateX(24px); } }
+@media (prefers-reduced-motion: reduce) { .chat-panel[data-state] { animation: none; } }
+.chat-panel-resize { position: absolute; top: 0; bottom: 0; left: -3px; width: 6px; cursor: col-resize; z-index: 5; outline: none; -webkit-app-region: no-drag; app-region: no-drag; }
+.chat-panel-resize::after { content: ""; position: absolute; inset: 0 2px; border-radius: 2px; background: var(--primary); opacity: 0; transition: opacity 0.15s; }
+.chat-panel-resize:hover::after, .chat-panel-resize:focus-visible::after, .chat-panel-resize[data-dragging]::after { opacity: 0.45; }
+html.has-win-controls .chat-panel-tabs { padding-right: 118px; }
+html.has-win-controls:has(.tabs-strip) .chat-panel-tabs { padding-right: 10px; }
+html.has-win-controls:has(.chat-panel) .bar { padding-right: 10px; }
 
 /* the window has no Windows title bar nor Windows buttons: minimise, maximise and close are the app's own
-   (components/window-controls.jsx), top right over every screen, centred in the 56 px of the top bars. The top bars
-   (.app-titlebar) move the window and maximise it with a double click; what is clickable inside them stays clickable.
-   --wco-inset is the room those buttons take (0 in a browser, such as the phone), and .wco-pad / .wco-pad-md (wide
-   windows only) leave it free on the right. Each theme dresses them like the rest of its bar (themes.css). */
+   (components/window-controls.jsx), 32 px like every icon button, inside the 56 px header (or the tab strip, which takes
+   that place when it is on screen). The headers (.app-titlebar) move the window and maximise it with a double click;
+   what is clickable inside them stays clickable. --wco-inset is the room those buttons take (0 in a browser, such as the
+   phone), and .wco-pad leaves it free on the right of the bars that are not .bar. Each theme dresses them
+   like its buttons (themes/skins.css). */
 :root { --wco-inset: 0px; }
-html.has-win-controls { --wco-inset: 8.25rem; }
-.win-controls { position: fixed; top: 0; right: 0; z-index: 70; height: 3.5rem; padding-inline: 0.5rem 0.625rem; display: flex; align-items: center; gap: 0.25rem; pointer-events: auto; -webkit-app-region: no-drag; app-region: no-drag; }
-/* inside a top bar (window-controls.jsx): the bar's own right edge, as tall as the bar; the slot only marks the spot */
+html.has-win-controls { --wco-inset: 7.5rem; }
+.win-controls { position: fixed; top: 0; right: 0; z-index: 70; height: 56px; padding-inline: 0 10px; display: flex; align-items: center; gap: 2px; pointer-events: auto; -webkit-app-region: no-drag; app-region: no-drag; }
+/* inside a header (window-controls.jsx): the header's own right edge, as tall as it is; the slot only marks the spot */
 .win-slot { display: contents; }
 .win-controls.in-bar { position: absolute; z-index: 5; }
-.win-control { display: grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
-.win-control svg { width: 1rem; height: 1rem; stroke-width: 2; }
-.win-control:hover { background-color: color-mix(in oklch, var(--foreground) 9%, transparent); color: var(--foreground); }
+/* the lock card (views/master.jsx) draws a veil at z 46 over the whole window: the buttons stay clickable (the veil lets the pointer through) but go under it, as in the mock-up */
+html:has([data-testid="master-locked"]) .win-controls { z-index: 45; }
+.win-control { display: grid; place-items: center; width: var(--ctl); height: var(--ctl); border-radius: var(--r-ctl); color: var(--muted-foreground); cursor: pointer; transition: background-color 0.15s, color 0.15s, transform 0.1s; }
+.win-control svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.win-control:hover { background-color: var(--accent); color: var(--foreground); }
 .win-control:active { transform: scale(0.94); }
 .win-control:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
-.win-control.win-close:hover { background-color: oklch(0.6 0.2 25); color: white; }
+.win-control.win-close:hover { background-color: var(--destructive); color: oklch(0.99 0 0); }
 @media (prefers-reduced-motion: reduce) { .win-control { transition: none; } }
 html[data-motion="minima"] .win-control { transition: none; }
 .app-titlebar { -webkit-app-region: drag; app-region: drag; }
-.app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb) { -webkit-app-region: no-drag; app-region: no-drag; }
+/* app-region is inherited, and a region whose box moves makes the WebView rework the window's draggable regions on
+   every frame: the robot's head floats on hover and while agents work, and with its moving parts inside a region the
+   window stopped answering. So nothing that moves inside a robot carries a region: its parts take the initial value,
+   and a robot inside a control leaves the region to that control (the control's own box does not move). A robot
+   standing alone keeps a region on its own still box, so it stays clickable. */
+.app-titlebar :is(button, a, input, select, textarea, label, [role=button], [role=combobox], [role=tab], [role=switch], [contenteditable], [data-no-drag], .orb:not(:is(button, a, [role=button]) .orb)) { -webkit-app-region: no-drag; app-region: no-drag; }
+.app-titlebar .orb *, .app-titlebar :is(button, a, [role=button]) .orb { -webkit-app-region: initial; app-region: initial; }
+/* the brand's robot hops once when the pointer comes onto the brand (Orb theme: only there is the head an .orb). Only
+   transform, and no region of its own: the head keeps taking the button's. */
+.side-brand .orb { transform-origin: 50% 90%; }
+@keyframes brand-hop { 0% { transform: translateY(0); } 35% { transform: translateY(-5px) rotate(4deg); } 70% { transform: translateY(0) rotate(-2deg); } 100% { transform: none; } }
+@media (prefers-reduced-motion: no-preference) { html:not([data-motion="minima"]) .side-brand:hover .orb { animation: brand-hop 0.6s ease-out; } }
 .wco-pad { padding-inline-end: calc(var(--wco-inset) + 0.75rem) !important; }
-@media (min-width: 768px) { .wco-pad-md { padding-inline-end: calc(var(--wco-inset) + 1.25rem) !important; } }
+
+/* open chats (components/chat-tabs.jsx): one 56 px strip over the chat and its panel, so both headers keep their line.
+   Tabs are 32 px like every control, the active one in soft grey; the × shows on hover. */
+.tabs-strip { position: relative; height: 56px; flex: none; display: flex; align-items: center; gap: 2px; padding: 0 120px 0 10px; border-bottom: 1px solid var(--border); }
+html:not(.has-win-controls) .tabs-strip { padding-right: 10px; }
+.tabs-list { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.otab { height: var(--ctl); flex: 0 1 auto; min-width: 0; max-width: 220px; display: flex; align-items: center; border-radius: var(--r-ctl); color: var(--muted-foreground); font-size: 13px; transition: background-color 0.15s, color 0.15s; }
+.otab:hover { color: var(--foreground); background: color-mix(in oklab, var(--accent) 60%, transparent); }
+.otab[data-shown="true"] { color: var(--foreground); }
+.otab[data-on="true"] { background: var(--accent); color: var(--foreground); }
+.otab-main { min-width: 0; height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 0 0 10px; border-radius: var(--r-ctl); cursor: pointer; }
+.otab-main:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
+.otab-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.otab-spin { color: var(--muted-foreground); }
+.otab-x { margin-right: 4px; opacity: 0; }
+.otab:hover .otab-x, .otab:focus-within .otab-x, .otab[data-on="true"] .otab-x { opacity: 1; }
+.otab-x:hover { background: color-mix(in oklab, var(--foreground) 8%, transparent); }
 
 /* ---------- the guided tour (components/tour.jsx) ----------
    A ring around the control of each step, the rest of the window dimmed by the ring's own shadow (which takes no clicks:
@@ -419,9 +456,7 @@ html[data-motion="minima"] .win-control { transition: none; }
 @keyframes tour-in { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
 html[data-skin="retro"] .tour-bubble, html[data-skin="retro"] .tour-tail { border-width: 3px; border-style: double; }
 html[data-skin="retro"] .tour-spot { border-radius: 0; box-shadow: 0 0 0 9999px rgb(0 0 0 / 0.6), 0 0 0 3px var(--primary), 0 0 0 6px var(--warning); }
-html[data-skin="nube"] .tour-title { color: var(--primary); }
-html[data-skin="profesional"] .tour-spot { border-radius: 8px; }
-html[data-motion="minima"] :is(.tour-panel, .tour-spot), html[data-skin="profesional"] :is(.tour-panel, .tour-spot) { animation: none; transition: none; }
+html[data-motion="minima"] :is(.tour-panel, .tour-spot) { animation: none; transition: none; }
 @media (prefers-reduced-motion: reduce) { .tour-panel, .tour-spot { animation: none; transition: none; } }
 @media (max-width: 640px) { .tour-robot { display: none; } .tour-bubble { width: calc(100vw - 2rem); } }
 html[data-skin="retro"] .tour-bubble { width: 25rem; }
@@ -464,7 +499,13 @@ html[data-motion="minima"] :is(.animate-in, .animate-out, [class*=":animate-in"]
 
 /* the message box grows with its text in CSS (no layout read per key; views/chat.jsx › Composer): two lines at
    least (its rows), 260 px at most, then it scrolls. */
-@supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: calc(2lh + 1rem); max-height: 260px; } }
+/* A conversation's scroller ends in a soft fade instead of a hard cut, so a line passing under the row above the text box never shows half a line. */
+/* A row that scrolls sideways fades its right edge while more of it is out of sight; fitting, or scrolled to the end, it is untouched. */
+@property --fade-end { syntax: '<length>'; inherits: false; initial-value: 0px; }
+@keyframes fade-end-x { from { --fade-end: 16px; } to { --fade-end: 0px; } }
+.fade-end-x { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-end)), transparent); mask-image: linear-gradient(to right, #000 calc(100% - var(--fade-end)), transparent); animation: fade-end-x linear both; animation-timeline: scroll(self inline); }
+.chat-fade {-webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 20px), transparent); }
+@supports (field-sizing: content) { .composer-text { field-sizing: content; min-height: 56px; max-height: 260px; } }
 
 /* the composer's contextual action slot (components/context-slot.jsx, DESIGN-SYSTEM §2.2): one suggestion at a
    time, in with a 150 ms fade and a 2 px rise, out with a fade; reduced motion keeps the fade only. */
@@ -487,19 +528,6 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
   html:not(.glass) [data-slot="dialog-content"][data-sheet="bottom"] { top: auto; bottom: 0; left: 0; right: 0; translate: none; width: 100%; max-width: 100%; border-radius: 22px 22px 0 0; border-width: 1px 0 0; padding: 18px 14px calc(14px + env(safe-area-inset-bottom, 0px)); --tw-enter-scale: 1; --tw-exit-scale: 1; --tw-enter-translate-y: 100%; --tw-exit-translate-y: 100%; --tw-duration: 280ms; --tw-ease: var(--ease-drawer); }
 }
 
-/* the first-run welcome (views/setup.jsx, master.jsx › MasterCreate), maximised: the room above the card (the
-   robot rises out of it), the card's padding and the gaps shrink with the window's height, so its screens fit with no
-   scroll bar. The scroll stays only for what truly cannot fit (the agents' install). */
-.onboard { display: flex; height: 100%; overflow: auto; padding: clamp(4.25rem, 11vh, 6rem) 1.5rem clamp(0.75rem, 2.5vh, 1.5rem); }
-.onboard-card { gap: clamp(0.7rem, 2.2vh, 1.25rem); padding: clamp(1.25rem, 3.6vh, 2rem); }
-/* Orb draws at 115 % (window.rs › ZOOM_BASE): a 1366 × 768 screen leaves ≈ 626 px of height, and the welcome needs ≈ 744.
-   On a short window the whole card (robot, texts, fields) is drawn smaller in a few steps, the same design at a smaller
-   size, so it still fits without a scroll bar. Only with a mouse (PC): a phone keeps its fields at full size. */
-@media (pointer: fine) and (max-height: 743px) { .onboard-card { zoom: 0.93; } }
-@media (pointer: fine) and (max-height: 700px) { .onboard-card { zoom: 0.87; } }
-@media (pointer: fine) and (max-height: 660px) { .onboard-card { zoom: 0.82; } }
-@media (pointer: fine) and (max-height: 625px) { .onboard-card { zoom: 0.76; } }
-@media (pointer: fine) and (max-height: 590px) { .onboard-card { zoom: 0.7; } }
 
 /* an answer being typed (components/markdown.jsx › TypingMarkdown): each new paragraph, item or block fades in as
    it starts (opacity only, so the compositor runs it). Less motion: the text shows at once and nothing fades. */
@@ -508,3 +536,66 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
   html:not([data-motion="minima"]) .prose-chat.typing > :last-child,
   html:not([data-motion="minima"]) .prose-chat.typing > :is(ul, ol):last-child > li:last-child { animation: type-in 240ms ease-out; }
 }
+
+/* the chat never scrolls sideways: a long line wraps and wide code scrolls inside its own block */
+.lazy-lines { min-width: 0; }
+.lazy-lines > * { min-width: 0; }
+.lazy-lines pre { max-width: 100%; overflow-x: auto; }
+
+/* ---- the sidebar foot's pop-ups (music player, «Enviar comentarios»): they hang from the whole foot (.foot-anchor) and
+   take its width less 8 px a side, so they never leave the window. */
+.side-foot-icon[aria-expanded="true"] { color: var(--foreground); background: var(--accent); }
+.foot-anchor { position: absolute; inset: 0; pointer-events: none; }
+.orb-tip.foot-pop { width: calc(var(--radix-popover-trigger-width) - 16px); max-width: none; max-height: var(--radix-popover-content-available-height); overflow-y: auto; padding: 12px; font-size: 13px; }
+.foot-pop svg { flex: none; }
+.mp-now { display: flex; align-items: center; gap: 10px; }
+.mp-art { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border-radius: var(--r-ctl); background: var(--primary-soft); color: var(--primary-text); }
+.mp-art svg { width: 20px; height: 20px; }
+.mp-t { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-t b { font-weight: 600; font-size: 14.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-t span { font-size: 12px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-t .mp-err { color: var(--destructive); }
+.mp-ctl { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 12px; }
+.mp-ctl .mp-play { border-radius: var(--r-full); }
+.mp-play svg { width: 16px; height: 16px; }
+.mp-hr { border: 0; border-top: 1px solid var(--border); margin: 12px -12px; }
+.mp-row { display: flex; align-items: flex-start; gap: 12px; }
+.mp-lab { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mp-lab b { font-weight: 500; font-size: 13px; }
+.mp-lab span { font-size: 12px; color: var(--muted-foreground); }
+.mp-sl { display: grid; grid-template-columns: 96px 1fr 40px; align-items: center; gap: 8px; margin-top: 12px; font-size: 13px; }
+.mp-k { display: inline-flex; align-items: center; gap: 6px; color: var(--muted-foreground); }
+.mp-k svg { width: 14px; height: 14px; }
+.mp-v { font-size: 12px; color: var(--muted-foreground); text-align: right; font-variant-numeric: tabular-nums; }
+.orb-tip.foot-pop.fb-pop { display: flex; flex-direction: column; padding: 0; }
+.fb-h { display: flex; flex-direction: column; gap: 2px; padding: 12px 12px 0; }
+.fb-h b { font-family: var(--title); font-weight: 600; font-size: 15px; }
+.fb-h span { font-size: 12px; color: var(--muted-foreground); }
+.fb-form { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+.fb-form .fb-type { align-self: flex-start; }
+.fb-form .fb-msg { field-sizing: fixed; min-height: 104px; padding: 8px 10px; resize: vertical; font-size: 13px; line-height: 1.45; }
+.fb-att { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; margin: -4px 0 0 -8px; }
+.fb-att [data-slot="button"] { padding: 0 8px; font-size: 12px; }
+.fb-n { font-size: 11px; color: var(--faint-foreground); margin-left: auto; }
+.fb-imgs { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-img { position: relative; width: 48px; height: 36px; border-radius: var(--r-ctl); border: 1px solid var(--border); background: var(--secondary); }
+.fb-img img { width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
+.fb-img button { position: absolute; top: -6px; right: -6px; width: 16px; height: 16px; display: grid; place-items: center; border-radius: 50%; cursor: pointer; background: var(--foreground); color: var(--background); }
+.fb-img button svg { width: 10px; height: 10px; }
+.fb-mail { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted-foreground); }
+.fb-mail small { font-size: 11px; color: var(--faint-foreground); }
+.fb-err { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: var(--destructive); }
+.fb-err svg { width: 14px; height: 14px; }
+.fb-ok { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 12px; text-align: center; }
+.fb-ok > svg { width: 24px; height: 24px; color: var(--success); }
+.fb-ok b { font-weight: 500; font-size: 14.5px; }
+.fb-f { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-top: 1px solid var(--border); }
+.fb-priv { flex: 1; display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--faint-foreground); }
+.fb-priv svg { width: 14px; height: 14px; margin-top: 1px; }
+
+/* the patch's added and removed lines wear the mock-up's soft green and red (the shared .dl.a / .dl.r of the design) */
+.diff[data-testid="patch-view"] .code-add { background: color-mix(in oklab, var(--success) 12%, transparent); }
+.diff[data-testid="patch-view"] .code-del { background: color-mix(in oklab, var(--destructive) 10%, transparent); }
+
+/* Edge/WebView2 draw their own eye and clear button inside inputs; the app has its own «Mostrar» and clear controls. */
+input::-ms-reveal, input::-ms-clear { display: none; }

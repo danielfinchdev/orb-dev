@@ -131,9 +131,9 @@ export default function Chess({ level, onScore, onOver, paused }) {
       {strip('b', 'justify-start')}
       <div className={cn('relative overflow-hidden rounded-xl p-1.5 shadow-lg ring-1 ring-black/20 dark:ring-white/10',
         // A wooden frame and warm squares that suit the cream and terracotta pieces, lightly tinted by the theme's colour.
-        'bg-[color-mix(in_oklab,var(--primary)_14%,#5e4330)] dark:bg-[color-mix(in_oklab,var(--primary)_12%,#3c2a1e)]',
-        '[--sq-l:color-mix(in_oklab,var(--primary)_6%,#f2e4cb)] [--sq-d:color-mix(in_oklab,var(--primary)_15%,#b58b61)]',
-        'dark:[--sq-l:color-mix(in_oklab,var(--primary)_8%,#c9b08c)] dark:[--sq-d:color-mix(in_oklab,var(--primary)_14%,#7d5a3e)]')} style={{ width: SIZE + 12, height: SIZE + 12 }}>
+        'bg-[color-mix(in_oklab,var(--primary-text)_14%,#5e4330)] dark:bg-[color-mix(in_oklab,var(--primary-text)_12%,#3c2a1e)]',
+        '[--sq-l:color-mix(in_oklab,var(--primary-text)_6%,#f2e4cb)] [--sq-d:color-mix(in_oklab,var(--primary-text)_15%,#b58b61)]',
+        'dark:[--sq-l:color-mix(in_oklab,var(--primary-text)_8%,#c9b08c)] dark:[--sq-d:color-mix(in_oklab,var(--primary-text)_14%,#7d5a3e)]')} style={{ width: SIZE + 12, height: SIZE + 12 }}>
        <div className="relative overflow-hidden rounded-md" style={{ width: SIZE, height: SIZE }}>
         <div className="grid grid-cols-8 grid-rows-8" style={{ width: SIZE, height: SIZE }} aria-label={t('games.chess')}>
           {g.board.map((p, i) => {
@@ -163,7 +163,7 @@ export default function Chess({ level, onScore, onOver, paused }) {
       </div>
       {strip('w', 'justify-start')}
       <p className={cn('flex h-5 items-center gap-1.5 text-xs', end === 'win' ? 'text-success font-medium' : end === 'lose' ? 'text-destructive font-medium' : check >= 0 && !end && !thinking ? 'text-destructive font-medium' : 'text-muted-foreground')}>
-        {thinking && !end ? <span className="bg-primary inline-block size-1.5 animate-pulse rounded-full" /> : null}
+        {thinking && !end ? <span className="bg-primary-text inline-block size-1.5 animate-pulse rounded-full" /> : null}
         {status}
       </p>
     </div>

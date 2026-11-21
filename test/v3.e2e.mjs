@@ -88,16 +88,22 @@ try {
   await shot('03-conversaciones-directas');
   await call('chat.settings', { orchestrate: true });
 
-  step = 'Tareas sin botón Nueva tarea';
+  step = 'Tareas: «Nueva tarea» abre su diálogo';
   await win.click('[data-testid=nav-tasks]');
   await win.waitForTimeout(300);
-  assert.equal(await win.getByRole('button', { name: 'Nueva tarea', exact: true }).count(), 0, 'ya no hay «Nueva tarea»: se habla directamente con el agente');
+  // The Tareas screen draws «Nueva tarea» (the chat button is a different one: «Nuevo chat»).
+  assert.equal(await win.getByRole('button', { name: 'Nueva tarea', exact: true }).count(), 1, '«Nueva tarea» está en Tareas');
+  await win.click('[data-testid=task-new]');
+  await win.getByRole('dialog').getByRole('button', { name: 'Crear tarea', exact: true }).waitFor();
+  await win.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await win.getByRole('dialog').waitFor({ state: 'detached' });
 
   step = 'Security Review';
   await win.click('[data-testid=nav-projects]');
+  await win.locator('[data-testid=project-open]').first().click();
+  await win.click('[data-testid=project-tab-tareas]');
+  await win.click('[data-testid=project-new-task-more]');
   await win.locator('[data-testid=project-security]').first().waitFor();
-  await win.hover('[data-testid=project-security]');
-  await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
   await shot('05-security-review');
   await win.click('[data-testid=project-security]');
   await win.getByRole('button', { name: 'Solicitar Security Review' }).click();
@@ -106,11 +112,12 @@ try {
   step = 'robot de la esquina';
   await win.click('[data-testid=nav-tasks]');
   await win.mouse.move(400, 300);
+  // The robot belongs to the Orb theme only: the default theme draws none, and choosing Orb brings it to its corner.
+  assert.equal(await win.locator('[data-testid=companion]').count(), 0, 'el tema predeterminado no dibuja el robot');
+  await call('config.save', { patch: { ui: { skin: 'orb' } } });
   await win.locator('[data-testid=companion]').waitFor({ timeout: 15000 }); // the robot of the notices has gone
-  assert.equal(await win.locator('[data-testid=companion]').getAttribute('data-shown'), 'false', 'oculto lejos de la esquina');
-  const size = await win.evaluate(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  await win.mouse.move(size.w - 40, size.h - 40, { steps: 4 });
-  await until(async () => (await win.locator('[data-testid=companion]').getAttribute('data-shown')) === 'true', 'aparece al acercar el ratón');
+  // Orb UI 2.0: the companion rests in its corner in sight (it no longer waits for the pointer to come near)
+  await until(async () => (await win.locator('[data-testid=companion]').getAttribute('data-shown')) === 'true', 'el compañero está a la vista en su esquina');
   await shot('06-robot-esquina');
   assert.deepEqual(errors, [], 'sin errores en la ventana');
   console.log('✔ Orb 3.0/3.2: conversaciones, conversaciones directas, Iniciar test, Security Review y robot de la esquina');

@@ -14,7 +14,9 @@ import * as claude from '../agents/claude.mjs';
 import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { titleFrom } from '../shared/titles.mjs';
+import { slashCommand } from '../shared/slash.mjs';
 import { mcpServersOf } from './sessions.mjs';
+import { placeAttachments, prepareAttachments } from './host/attachments.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { accountEnv } from '../domain/usage/accounts.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
@@ -77,13 +79,26 @@ export function answerOf(result, said = []) {
 // a message of the user that arrives while the assistant is answering waits for the end of that turn and is added
 // to what was asked (added to the running turn, a short turn could lose its answer). Several messages
 // written meanwhile go together, as one turn.
-function queueUserMessage(lane, text, user = userName()) {
+// Each message keeps its own part ({ id, chat, shown, mentions, notes, restore, at, attachments, answer }): what the user typed
+// (shown), what was added for the brain (the @mentions' content, and the system notices that were owed to the user's next
+// message) and the chat line that shows it, so one waiting message can be edited or removed without touching the others
+// merged into the same turn. `restore` is what the notices came from, to put them back if the message never goes.
+function queueUserMessage(lane, text, user = userName(), attachments = [], { chat = null, shown = text, mentions = '', notes = '', restore = null, answer = false } = {}) {
   const last = lane.queue.at(-1);
-  if (last && !last.internal && last.user) { last.text += `\n\n${text}`; return last; }
+  const part = { id: crypto.randomUUID(), chat, shown, mentions, notes, restore, at: Date.now(), attachments, answer };
+  if (last && !last.internal && last.user) { last.parts.push(part); rebuildQueued(last); return last; }
   // (For the brain, in Spanish like the rest of its instructions; the chat shows the message as the user wrote it.)
-  const item = { text: lane.busy ? `(Mensaje nuevo de ${user}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${text}` : text, user: true };
+  const item = { text, user: true, parts: [part], note: lane.busy ? user : null };
+  rebuildQueued(item);
   lane.queue.push(item);
   return item;
+}
+// the text the brain gets, from the parts that still wait
+function rebuildQueued(item) {
+  const body = item.parts.map((p) => `${p.shown}${p.mentions}${p.notes}`).join('\n\n');
+  item.text = item.note ? `(Mensaje nuevo de ${item.note}, escrito mientras respondías: se suma a lo anterior y no lo sustituye salvo que lo diga. Atiende los dos.)\n${body}` : body;
+  const files = item.parts.flatMap((p) => p.attachments);
+  if (files.length) item.attachments = files; else delete item.attachments;
 }
 
 // one conversation with the assistant: its messages waiting, its own live agent process and what it is doing now.
@@ -143,6 +158,57 @@ class Lane {
     this.forget();
     this.say('system', tr('msg.orch.cleared'), { kind: 'cleared' });
     return { ok: true };
+  }
+
+  // The messages of the user that wait for their turn, in the order they will be answered. A message that already
+  // started (it left the queue) is not here. → [{ id, text, at }]
+  // The answer to a question card is not listed: the card already shows it as answered, so changing it here would
+  // leave the card and the assistant with different answers.
+  waiting() { return this.queue.filter((q) => !q.internal && q.parts).flatMap((q) => q.parts.filter((p) => !p.answer).map((p) => ({ id: p.id, text: p.shown, at: p.at }))); }
+  findWaiting(partId) {
+    for (const item of this.queue) {
+      const part = !item.internal && item.parts?.find((p) => p.id === partId);
+      if (!part) continue;
+      if (part.answer) throw new Error(ctx.config?.language === 'en' ? 'the answer to a question card cannot be changed or removed' : 'la respuesta a una pregunta no se puede cambiar ni quitar');
+      return { item, part };
+    }
+    throw new Error(tr('msg.sessions.notQueued'));
+  }
+  // The user's next waiting message after `part` (it gets what the removed one was carrying), or null.
+  nextWaiting(part) {
+    const parts = this.queue.filter((q) => !q.internal && q.parts).flatMap((q) => q.parts.map((p) => ({ item: q, part: p })));
+    const at = parts.findIndex((x) => x.part === part);
+    return at < 0 ? null : parts.slice(at + 1).find((x) => !x.part.answer) ?? null;
+  }
+  // `text` replaces what the user wrote in a waiting message (its chat line too); null removes it (and its chat line:
+  // it was never sent).
+  // mentions: the content of the @mentions of the new text (the old ones go); the system notices and pictures stay.
+  changeWaiting(partId, text, { mentions = '' } = {}) {
+    const { item, part } = this.findWaiting(partId);
+    if (text === null) {
+      // its notices go to the next message of the user; with none left they are owed again to the next one that comes
+      const next = this.nextWaiting(part);
+      const carried = part.restore;
+      item.parts = item.parts.filter((p) => p !== part);
+      if (!item.parts.length) this.queue = this.queue.filter((q) => q !== item); else rebuildQueued(item);
+      if (part.notes && carried) {
+        if (next) {
+          next.part.notes = part.notes + next.part.notes;
+          next.part.restore = { notes: [...(carried.notes ?? []), ...(next.part.restore?.notes ?? [])], wbSeen: carried.wbSeen ?? next.part.restore?.wbSeen ?? null };
+          rebuildQueued(next.item);
+        } else this.orch.returnNotes(this.id, carried);
+      }
+      if (part.chat != null) { this.board.run('DELETE FROM chat WHERE id = ? AND conversation_id = ?', part.chat, this.id); this.board.changed('chat'); }
+      this.orch.dropAttachments(this.id, part.attachments);
+      this.orch.dropIfEmpty(this.id);
+    } else {
+      // chat.send runs «/compact» and «/clear» typed alone (and without pictures) as commands; a waiting message cannot turn into one
+      if (slashCommand(text) && !part.attachments.length) throw new Error(tr('msg.queue.slashCommand'));
+      part.shown = text; part.mentions = mentions; rebuildQueued(item);
+      if (part.chat != null) { this.board.run('UPDATE chat SET body = ? WHERE id = ? AND conversation_id = ?', text, part.chat, this.id); this.board.changed('chat'); }
+    }
+    this.push();
+    return this.waiting();
   }
 
   // The chat is free at once, but the agent's turn takes a moment to wind down: a new message waits for it in next()
@@ -241,7 +307,7 @@ class Lane {
     const { text, meta } = item;
     const generation = this.generation;
     let outcome = null;
-    const run = this.run(text, true, meta, { internal: Boolean(item.internal) }).then((r) => { outcome = r ?? null; }).catch((error) => {
+    const run = this.run(text, true, meta, { internal: Boolean(item.internal), attachments: item.attachments ?? [] }).then((r) => { outcome = r ?? null; }).catch((error) => {
       this.orch.log(`asistente (conversación ${this.id}): ${error.stack}`);
       outcome = { ok: false };
       if (generation !== this.generation) return; // stopped meanwhile: nothing to report
@@ -313,7 +379,8 @@ class Lane {
   // the user draws or attaches on the Pizarra and the assistant sees it by itself: with the next message, a line
   // telling it that the conversation's project's Pizarra changed since it last heard (a new conversation reads it in the
   // briefing).
-  whiteboardNote() {
+  // `out.seen` gets the value the note replaced, so a message that never goes can give the notice back.
+  whiteboardNote(out = {}) {
     const c = this.conv(); const project = c?.project ? this.board.project(c.project) : null;
     if (!project?.path) return '';
     const md = path.join(project.path, 'pizarra', 'PIZARRA.md');
@@ -322,6 +389,7 @@ class Lane {
     if (at <= seen) return '';
     this.board.setting(key, String(at));
     if (!c.session_id) return ''; // the briefing of the new conversation already has it
+    out.seen = seen;
     return `\n\n(AVISO DEL SISTEMA: ${userName()} ha cambiado la pizarra de ${project.name} desde la última vez. Léela antes de seguir: ${md} y el dibujo en ${path.join(project.path, 'pizarra', 'pizarra.png')}.)`;
   }
 
@@ -362,7 +430,7 @@ class Lane {
   }
 
   // → { ok, limit } (undefined when stopped meanwhile).
-  async run(text, allowRetry, meta = null, { internal = false } = {}) {
+  async run(text, allowRetry, meta = null, { internal = false, attachments = [] } = {}) {
     // the message that started this turn gets its reply (chat.send) first; starting the agent's process, reading
     // the logs for the briefing and the rest come right after, in the next turn of the event loop. The order holds: the
     // lane is already busy, so anything sent meanwhile waits in its queue.
@@ -401,18 +469,22 @@ class Lane {
     // 20 minutes for a coordinating turn (reviewing several finished tasks can take a while; 10 would cut reports short).
     // a turn that ignores the interrupt goes with its process after the same grace as «Detener» (the
     // lane stayed busy for ever otherwise, and three such lanes left every conversation unanswered).
+    // What the user attached: pictures go natively to a brain that reads them; for the rest the brain gets each file's path
+    // and what Orb knows about it (the same block an agent's chat gets).
+    const prepared = attachments.length ? await prepareAttachments(attachments, { nativeImages: adapter(this.liveAgent).caps?.images === true, log: (m) => this.orch.log(m) }) : null;
+    if (generation !== this.generation || this.orch.closing) return undefined;
     const live = this.live; const run = this.inflight;
     const timer = setTimeout(() => {
-      this.say('system', tr('msg.orch.timeLimit')); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
+      this.say('system', tr('msg.orch.timeLimit'), { kind: 'turn-stopped', cause: 'time' }); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
       setTimeout(() => { if (this.inflight === run && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
     }, 20 * 60_000);
     let result;
-    try { result = await live.send({ text: prompt }); } finally { clearTimeout(timer); }
+    try { result = await live.send({ text: prepared?.text ? `${prompt}\n\n${prepared.text}` : prompt, ...(prepared?.images.length ? { images: prepared.images } : {}) }); } finally { clearTimeout(timer); }
     try { recordSpend(this.board, { account: this.liveAccount, conversation: this.id, usage: result?.usage ?? {} }); } catch { /* usage only */ }
     if (generation !== this.generation) return undefined; // stopped: nothing to publish
     // A stale conversation id fails before any answer: forget it and try once more with a fresh conversation. Only for that failure:
     // a usage limit or any other error must not drop the coordinator's memory.
-    if (staleConversation(result) && allowRetry && !fresh) { this.forget(); return this.run(text, false, meta, { internal }); }
+    if (staleConversation(result) && allowRetry && !fresh) { this.forget(); return this.run(text, false, meta, { internal, attachments }); }
     const answer = answerOf(result, this.said);
     this.said = [];
     const ok = !result.isError;
@@ -493,7 +565,11 @@ export class Orchestrator {
 
   // A message of the user: in its conversation (a new one when none is given). → { conversation }
   // meta: { answer: true, own } for the answer to a question card (src/engine/api › chat.answer).
-  ask(text, context = '', { conversation = null, project, meta = null } = {}) {
+  // attachments: absolute paths of what the user attached; each one is copied into this conversation's own folder
+  // (placeAttachments refuses folders, links, Orb's own data and oversized files) before anything is saved.
+  // fresh: the conversation given was made a moment ago for this very message (a brain chosen for it): refused
+  // attachments take it away as they do with one started here.
+  ask(text, context = '', { conversation = null, project, meta = null, attachments = [], fresh = false } = {}) {
     text = String(text ?? '').trim();
     if (!text) throw new Error(tr('msg.orch.writeMessage'));
     if (text.length > 20000) throw new Error(tr('msg.orch.tooLong'));
@@ -502,27 +578,79 @@ export class Orchestrator {
     if (c?.trashed_at) throw new Error(tr('msg.trash.inTrash'));
     const isNew = !c;
     if (!c) c = this.startConversation({ text, project });
-    this.board.addChat('usuario', text, meta, c.id);
+    let placed = [];
+    if (attachments.length) {
+      try { placed = placeAttachments(attachments, path.join(assistantDir(), 'adjuntos', String(c.id))); } catch (error) {
+        if (isNew || fresh) { this.board.run('DELETE FROM conversations WHERE id = ?', c.id); this.board.changed('conversations'); }
+        throw error;
+      }
+    }
+    const line = this.board.addChat('usuario', text, placed.length ? { ...meta, images: placed.map((f) => f.path) } : meta, c.id);
     if (c.status === 'done') this.board.setConversationDone(c.id, false); // written in again: open again
     if (isNew || !c.titled) { try { this.title?.(c, text); } catch (error) { this.log(`título de la conversación ${c.id}: ${error.message}`); } }
     const lane = this.lane(c.id);
-    context += lane.whiteboardNote() + this.takeNotes(c.id);
+    const owed = {}; const wb = {};
+    const notes = lane.whiteboardNote(wb) + this.takeNotes(c.id, owed);
+    const restore = notes ? { notes: owed.notes ?? [], wbSeen: wb.seen ?? null } : null;
     // never into the running turn (see queueUserMessage): every message of the user gets its own answer.
-    const item = queueUserMessage(lane, text + context, userName());
+    const item = queueUserMessage(lane, text + context + notes, userName(), placed, { chat: line.id, shown: text, mentions: context, notes, restore, answer: Boolean(meta?.answer) });
     lane.next();
     return { conversation: c.id, queued: lane.current !== item };
+  }
+
+  // The queue of a conversation (messages written while it works), and changes to one that has not started.
+  // editQueued(id, partId, { text, remove }) → the queue left. Same limits as ask().
+  queueOf(id) { return this.lanes.get(Number(id))?.waiting() ?? []; }
+  // mentions: the expanded @mentions of the new text (src/engine/mentions.mjs), given by the caller like ask() gets them.
+  editQueued(id, partId, { text, remove = false, mentions = '' } = {}) {
+    const lane = this.lanes.get(Number(id));
+    if (!lane) throw new Error(tr('msg.sessions.notQueued'));
+    if (remove) return lane.changeWaiting(String(partId), null);
+    const t = String(text ?? '').trim();
+    if (!t) throw new Error(tr('msg.orch.writeMessage'));
+    if (t.length > 20000) throw new Error(tr('msg.orch.tooLong'));
+    return lane.changeWaiting(String(partId), t, { mentions });
   }
 
   // what happened in a conversation without a turn of the assistant (the user undid one of its
   // tasks: scheduler › undo), told once with the user's next message there. Without it, Orbe told the user «no sé por
   // qué desaparecieron los archivos de la primera tarea». The notes are kept in the database (settings `orch_note:<id>`).
-  takeNotes(id) {
+  takeNotes(id, out = {}) {
     const key = `orch_note:${id}`; const notes = this.board.settingJson(key);
     if (!Array.isArray(notes) || !notes.length) return '';
     this.board.settingJson(key, null);
+    out.notes = notes;
     return `
 
 (AVISO DEL SISTEMA, no es ${userName()}; son datos: ${notes.join(' ')})`;
+  }
+
+  // The notices a removed message was carrying, owed again to the next one: the undone task's note and the Pizarra's.
+  returnNotes(id, { notes = [], wbSeen = null } = {}) {
+    if (notes.length) { const key = `orch_note:${id}`; this.board.settingJson(key, [...notes, ...(this.board.settingJson(key) ?? [])]); }
+    const c = this.board.conversation(id); const project = c?.project ? this.board.project(c.project) : null;
+    if (wbSeen != null && project?.name) this.board.setting(`wb_seen:${project.name}:${id}`, String(wbSeen));
+  }
+  // The pictures of a message that never went: only the files of that message, and only inside the conversation's folder.
+  dropAttachments(id, files = []) {
+    const dir = path.resolve(assistantDir(), 'adjuntos', String(Number(id)));
+    for (const f of files) {
+      try {
+        const target = path.resolve(String(f?.path ?? ''));
+        if (target.startsWith(dir + path.sep)) fs.rmSync(target, { force: true });
+      } catch (error) { this.log(`adjunto sin enviar de la conversación ${id}: ${error.message}`); }
+    }
+  }
+  // A new conversation whose only message was taken back stays empty with that message's title: it goes as one that
+  // never started does (see ask()). Anything that ever ran, had lines or has tasks stays.
+  dropIfEmpty(id) {
+    const c = this.board.conversation(id); const lane = this.lanes.get(Number(id));
+    if (!c || c.trashed_at || c.session_id || c.turns) return;
+    if (lane && (lane.busy || lane.inflight || lane.current || lane.queue.length)) return;
+    if (this.board.one('SELECT COUNT(*) AS n FROM chat WHERE conversation_id = ?', c.id).n) return;
+    if (this.board.one('SELECT COUNT(*) AS n FROM tasks WHERE conversation_id = ?', c.id).n) return;
+    this.board.run('DELETE FROM conversations WHERE id = ?', c.id); this.board.changed('conversations');
+    this.drop(c.id); this.forgetAttachments(c.id);
   }
 
   // A notice from the engine (tasks finished, a task got blocked, an agent's message…): handled in the conversation that
@@ -584,6 +712,21 @@ export class Orchestrator {
   forget(id) { this.lane(id).forget(); }
   clear(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).clear(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }
+  // The assistant's processes on this account: false, and nothing closed, if one of its conversations is working; otherwise
+  // the resting ones are closed.
+  releaseAccount(accountId) {
+    const mine = [...this.lanes.values()].filter((l) => l.live && !l.live.isClosed?.() && l.liveAccount === accountId);
+    if (mine.some((l) => l.busy || l.inflight)) return false;
+    for (const l of mine) l.closeLive();
+    return true;
+  }
+  // A conversation deleted for good: the copies of what was attached to it go too (they may be private, and the next
+  // conversation could be given the same number).
+  forgetAttachments(id) {
+    const key = Number(id);
+    if (!Number.isInteger(key) || key <= 0) return;
+    try { fs.rmSync(path.join(assistantDir(), 'adjuntos', String(key)), { recursive: true, force: true }); } catch (error) { this.log(`adjuntos de la conversación ${key}: ${error.message}`); }
+  }
   // A conversation removed: its process and its waiting messages go.
   drop(id) {
     const key = Number(id);

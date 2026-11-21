@@ -50,17 +50,19 @@ test('every change goes through guarded(): unlockCore first, the call only with 
 test('no HTML is injected and the type scale is used', () => {
   for (const f of files) {
     const code = src(f);
-    assert.doesNotMatch(code, /dangerouslySetInnerHTML|innerHTML|Markdown/, f);
+    // the editor's preview is the one place that draws Markdown (react-markdown never renders raw HTML)
+    assert.doesNotMatch(code, /dangerouslySetInnerHTML|innerHTML/, f);
+    if (f !== 'views/rules-dialogs.jsx') assert.doesNotMatch(code, /Markdown/, f);
     assert.doesNotMatch(code, /text-\[/, f);
   }
 });
 
-test('pausing is orange (warn: --warning + its foreground), only deleting is red', () => {
+test('pausing is the main button of its dialog (as in the mock-up), only deleting or removing is red', () => {
   const dialogs = src('views/rules-dialogs.jsx');
-  assert.match(dialogs.slice(dialogs.indexOf('export function confirmPauseRail')), /warn: true/);
-  assert.match(src('components/dialogs.jsx'), /d\.warn \? 'warn'/);
+  const pause = dialogs.slice(dialogs.indexOf('export async function confirmPauseRail'), dialogs.indexOf('export async function confirmResumeRail'));
+  assert.doesNotMatch(pause, /danger: true/);
+  assert.match(dialogs.slice(dialogs.indexOf('export async function confirmRemoveRail')), /danger: true/);
   assert.match(src('components/ui/button.jsx'), /warn: 'bg-warning text-warning-foreground/);
-  assert.match(dialogs, /confirmRemoveRail[^\n]*danger: true/);
   const tokens = src('tokens.css');
   const blocks = tokens.split(/\n\.dark\b/);
   for (const b of blocks) { assert.match(b, /--warning:/); assert.match(b, /--warning-foreground:/); }
@@ -68,7 +70,9 @@ test('pausing is orange (warn: --warning + its foreground), only deleting is red
 
 test('the card does not call a rail change itself and tells which controls ask every time', () => {
   const cards = src('views/rules-cards.jsx');
-  assert.ok((cards.match(/<EveryTime/g) ?? []).length >= 3);
+  assert.ok((cards.match(/<EveryTime/g) ?? []).length >= 2);
+  // the notice of each rail's switch is now the badge of its section: both lists of rails carry it
+  assert.ok((src('views/rules.jsx').match(/badge=\{everyTime\}/g) ?? []).length >= 2);
   assert.match(cards, /rails\.\$\{rail\.id\}\.enabled/);
 });
 

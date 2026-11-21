@@ -5,9 +5,11 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig, checkAccountHome } from '../../platform/config.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir } from '../../domain/usage/accounts.mjs';
+import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, logoutKind, closeAccountSession } from '../../domain/usage/accounts.mjs';
+import { devToolsReport } from '../../platform/dev-tools.mjs';
+import { PACKAGES, updateInfo, checkUpdates } from '../usage/versions.mjs';
 import { accountInfo as codexAccountInfo } from '../../agents/codex.mjs';
-import { clearCooldown } from '../../domain/usage/budget.mjs';
+import { clearCooldown, pickAccount } from '../../domain/usage/budget.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable } from '../../agents/index.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../../agents/login.mjs';
@@ -19,7 +21,13 @@ import { fail, str, oneOf } from './common.mjs';
 let installerModule = null;
 const inst = () => (installerModule ??= import('../host/installer.mjs').catch((error) => { installerModule = null; throw error; }));
 
-export function accountMethods({ board, emit, log }) {
+export function accountMethods({ board, emit, log, sessions, orchestrator }) {
+  // What the window needs besides the agent's state: whether Orb can close each account's session (logout: 'orb' = it can,
+  // 'tool' = only the agent's own command can, absent = no session to close) and what the last update check found.
+  const decorate = (a) => {
+    const update = updateInfo(board, a.id, a.version);
+    return { ...a, accounts: a.accounts?.map((acc) => { const logout = logoutKind(acc); return logout ? { ...acc, logout } : acc; }), ...(update ? { update } : {}) };
+  };
   return {
     // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
     'agents.status': ({ refresh }) => {
@@ -27,9 +35,19 @@ export function accountMethods({ board, emit, log }) {
         forgetInstalled(); refreshAllModels(board, { force: true, log });
         if (!process.env.ORB_FAKE_AGENTS) import('../usage/plans.mjs').then(({ refreshPlans }) => refreshPlans(board, { force: true, log })).catch(() => {});
       }
-      return statusAll({ refresh: Boolean(refresh) });
+      return statusAll({ refresh: Boolean(refresh) }).then((list) => list.map(decorate));
     },
-    'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }); },
+    // «Buscar actualizaciones»: the only call that asks the internet about agents (npm's public registry, a package name per
+    // request, nothing else). It never updates anything; the window shows what it found and the user presses «Actualizar».
+    'agents.checkUpdates': async () => {
+      const list = await statusAll({ refresh: false });
+      const mine = list.filter((a) => a.installed && PACKAGES[a.id]).map((a) => a.id);
+      const r = await checkUpdates(board, { agents: mine });
+      return { at: r.at, failed: r.failed, agents: list.map((a) => [a.id, updateInfo(board, a.id, a.version)]).filter(([, u]) => u) .map(([agent, u]) => ({ agent, ...u })) };
+    },
+    // what «Prepara tu equipo» says about Flutter, the Android SDK and Java: found or not, and their version when it can be read.
+    'installer.devTools': () => devToolsReport(),
+    'agents.check': ({ agent }) => { const a = oneOf(agent, AGENT_IDS, 'agente'); forgetInstalled(); refreshModels(board, a, { force: true, log }); return agentStatus(a, { refresh: true }).then(decorate); },
     // «Solo Orb»: Claude Code and Codex sign in without a console: { id, url, code?, opened, needsCode, mode } and
     // 'agents:login' events until it ends (src/agents/login.mjs). console: true opens the old console (Windows only), the
     // way left for a sign-in the CLI cannot do without a terminal. Cursor and the ACP agents keep their console.
@@ -120,6 +138,26 @@ export function accountMethods({ board, emit, log }) {
       if (ctx.config.orchestrator.account === acc.id) fail(tr('msg.api.accountAssistant'));
       // The folder (and its login) stays on disk: removing an account from the app never signs anyone out.
       const c = saveConfig({ accounts: ctx.config.accounts.filter((a) => a.id !== acc.id) }); emit('config:changed', c);
+      return true;
+    },
+    // «Cerrar sesión»: deletes the login file of an account that Orb itself made, inside its own accounts folder, and nothing
+    // else (accounts.mjs › closeAccountSession). The user names the account to confirm. It does not revoke the login at the
+    // provider: it only forgets it on this PC.
+    'accounts.logout': ({ id, confirm }) => {
+      const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));
+      if (logoutKind(acc) !== 'orb') fail(tr('msg.api.logoutNotHere'));
+      if (str(confirm, 'nombre', 60, { optional: true }) !== acc.label) fail(tr('msg.api.logoutConfirm'));
+      if (board.one("SELECT COUNT(*) AS n FROM tasks WHERE status = 'running' AND run_account = ?", acc.id).n) fail(tr('msg.api.accountRunning'));
+      if (board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running' AND account = ?", acc.id).n) fail(tr('msg.api.accountBusy'));
+      // The assistant: the account it really uses now (the process it has open, else the one it would be given).
+      const o = ctx.config.orchestrator ?? {};
+      if (o.account === acc.id || pickAccount(board, { agent: o.agent || 'claude', preferred: o.account || null })?.id === acc.id) fail(tr('msg.api.accountAssistant'));
+      // Any process still open on the account (also chats at rest, which stay open up to 20 minutes, and side chats) keeps
+      // reading its login: a turn in progress stops this; resting ones are closed first.
+      if (orchestrator?.releaseAccount && !orchestrator.releaseAccount(acc.id)) fail(tr('msg.api.accountOpenChat'));
+      if (sessions?.releaseAccount && !sessions.releaseAccount(acc.id)) fail(tr('msg.api.accountOpenChat'));
+      if (!closeAccountSession(acc)) fail(tr('msg.api.logoutNoLogin'));
+      forgetInstalled(); emit('config:changed', ctx.config);
       return true;
     },
     // the user lifts an account's usage pause (and its models without usage) by hand.

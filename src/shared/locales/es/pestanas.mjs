@@ -41,6 +41,7 @@ export default {
   'keys.cmd.nextNeeds': 'Ir al siguiente chat que te necesita',
   'keys.cmd.changes': 'Mostrar u ocultar los cambios del chat',
   'keys.cmd.tabNew': 'Nueva pestaña',
+  'keys.cmd.chatNew': 'Chat nuevo',
   'keys.cmd.tabClose': 'Cerrar la pestaña',
   'keys.cmd.tabNext': 'Pestaña siguiente',
   'keys.cmd.tabPrev': 'Pestaña anterior',

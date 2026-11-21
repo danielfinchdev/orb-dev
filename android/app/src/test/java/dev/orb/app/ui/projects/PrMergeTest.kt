@@ -14,7 +14,7 @@ import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.link.net.LinkError
 import dev.orb.app.link.net.LinkException
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -219,7 +219,7 @@ class PrMergeScreenTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     private fun show(b: FakeProjectsBackend) {
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { PrDetailScreen(PrDetailViewModel(b, "app", 4), {}) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { PrDetailScreen(PrDetailViewModel(b, "app", 4), {}) } }
         rule.waitForIdle()
     }
 

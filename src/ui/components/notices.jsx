@@ -1,11 +1,11 @@
 // when something happens (tasks finished, the assistant's report ready, something that needs you), the whole robot
-// comes in at the bottom right with a bubble that says so. Without animations (Ajustes), in the «profesional» theme or on
+// comes in at the bottom right with a bubble that says so. Without animations (Ajustes), in a theme without the robot or on
 // the phone, a notice at the top instead: green when all went well, orange when something needs attention.
 import { useEffect, useRef, useState } from 'react';
 import { CircleCheck, TriangleAlert, X } from 'lucide-react';
 import { Robot } from './robot.jsx';
 import { Button } from './ui/button.jsx';
-import { bridge, go, useStore, getState, setState, plainSkin } from '@/lib/store.js';
+import { bridge, go, useStore, getState, setState, robotSkin } from '@/lib/store.js';
 import { notify, popupClosed } from '@/lib/notify.js';
 import { cn } from '@/lib/utils.js';
 import { cutWords } from '@/lib/text.js';
@@ -28,7 +28,7 @@ export function Notices() {
   const [notice, setNotice] = useState(null);
   const timer = useRef(null);
   const last = useRef(0);
-  const quiet = ui?.motion === 'minima' || plainSkin(ui?.skin) || bridge.mobile || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const quiet = ui?.motion === 'minima' || !robotSkin(ui?.skin) || bridge.mobile || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   useEffect(() => bridge.on('chat:new', (payload) => {
     const found = noticeOf(payload); if (!found) return;
     // «chat» is the conversation the notice belongs to.

@@ -7,7 +7,7 @@ export const PAGE = 100;
 
 // Any request that carries `sources` makes a newer engine answer { items, next }; an older one ignores it and
 // still answers with the plain array of events.
-export function buildQuery(filters = {}, cursor = null) {
+export function buildQuery(filters = {}, cursor = null, { counts = true } = {}) {
   const sources = filters.sources?.length ? filters.sources.filter((s) => SOURCES.includes(s)) : SOURCES;
   const q = { sources, limit: PAGE };
   if (filters.q?.trim()) q.q = filters.q.trim();
@@ -15,7 +15,8 @@ export function buildQuery(filters = {}, cursor = null) {
   if (filters.project) q.project = filters.project;
   if (filters.from) q.from = dayEdge(filters.from, false);
   if (filters.to) q.to = dayEdge(filters.to, true);
-  if (cursor) q.cursor = cursor;
+  // the totals per source and level are asked with the first page only (and not while the text is being typed)
+  if (cursor) q.cursor = cursor; else if (counts) q.counts = true;
   return q;
 }
 
@@ -26,14 +27,23 @@ export function dayEdge(day, end) {
   return (end ? new Date(y, m - 1, d, 23, 59, 59, 999) : new Date(y, m - 1, d, 0, 0, 0, 0)).toISOString();
 }
 
+// The totals of the engine, or null when it sent none (an older one) or something of another shape.
+function validCounts(c) {
+  const ok = (o, keys) => o && typeof o === 'object' && keys.every((k) => Number.isFinite(o[k]));
+  return ok(c?.sources, SOURCES) && ok(c?.levels, LEVELS) ? { sources: c.sources, levels: c.levels, partial: c.partial === true } : null;
+}
+
 // One shape for both answers. paged: the engine reads by pages and understands the filters.
 export function normalizeActivity(res) {
   if (Array.isArray(res)) {
     return { paged: false, next: null, items: res.map((r) => ({ id: `events:${r.id}`, at: r.at ?? null, source: 'subagentes', level: 'info', project: r.project ?? null, kind: r.kind, text: String(r.detail ?? ''), legacy: r })) };
   }
-  if (res && Array.isArray(res.items)) return { paged: true, next: res.next ?? null, items: res.items };
+  if (res && Array.isArray(res.items)) return { paged: true, next: res.next ?? null, items: res.items, counts: validCounts(res.counts) };
   return { paged: false, next: null, items: [] };
 }
+
+// Everything but the typed text: the totals are asked again only when this changes (the text waits for a pause).
+export const countsKey = (f) => JSON.stringify([f.sources ?? [], f.level, f.project, f.from, f.to]);
 
 // The same filters left untouched.
 export const EMPTY_FILTERS = Object.freeze({ sources: [], level: 'info', project: '', from: '', to: '', q: '' });

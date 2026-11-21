@@ -21,7 +21,7 @@ function Chat({ id, onBack }) {
   useEffect(() => { let alive = true; call('history.read', { id }).then((r) => alive && setChat(r ?? false)).catch(() => alive && setChat(false)); return () => { alive = false; }; }, [id]);
   return (
     <>
-      <PageHeader icon={<History className="text-primary size-5" />} title={chat?.project || t('history.title')}>
+      <PageHeader icon={<History className="text-primary-text size-5" />} title={chat?.project || t('history.title')}>
         <Button variant="ghost" size="sm" onClick={onBack} data-testid="history-back"><ArrowLeft />{t('history.back')}</Button>
       </PageHeader>
       <PageBody>
@@ -57,7 +57,7 @@ export function HistoryView() {
   if (open) return <Chat id={open} onBack={() => setOpen(null)} />;
   return (
     <>
-      <PageHeader icon={<History className="text-primary size-5" />} title={t('history.title')}>
+      <PageHeader icon={<History className="text-primary-text size-5" />} title={t('history.title')}>
         <Tabs value={agent} onValueChange={setAgent}><TabsList>{['all', 'claude', 'codex'].map((a) => <TabsTrigger key={a} value={a} data-testid={`history-agent-${a}`}>{a === 'all' ? t('history.all') : AGENT[a]}</TabsTrigger>)}</TabsList></Tabs>
       </PageHeader>
       <PageBody>

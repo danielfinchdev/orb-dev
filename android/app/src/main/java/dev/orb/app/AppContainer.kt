@@ -16,18 +16,25 @@ import dev.orb.app.link.net.LinkClient
 import dev.orb.app.link.net.LinkSession
 import dev.orb.app.link.net.LinkSessionCodec
 import dev.orb.app.link.net.PairOk
+import dev.orb.app.link.net.pcDisplayName
+import dev.orb.app.link.net.pcNameOrNull
 import dev.orb.app.link.net.Pairing
 import dev.orb.app.link.net.ResolvedLink
 import dev.orb.app.link.api.PcCaller
 import dev.orb.app.link.net.ConnectionState
 import dev.orb.app.notify.AndroidNetworkWatcher
 import dev.orb.app.notify.AndroidNotePoster
+import dev.orb.app.notify.AndroidNoticeSettings
 import dev.orb.app.notify.AndroidNotificationAccess
+import dev.orb.app.notify.NoticeSettings
 import dev.orb.app.notify.AndroidServiceLauncher
 import dev.orb.app.notify.KeepAliveController
 import dev.orb.app.notify.KeepAlivePolicy
+import dev.orb.app.notify.LinkLine
+import dev.orb.app.notify.NoteReader
 import dev.orb.app.notify.LinkKind
 import dev.orb.app.notify.NoteActionRunner
+import dev.orb.app.notify.NoteOutcome
 import dev.orb.app.notify.NoteIntents
 import dev.orb.app.notify.NoteJobs
 import dev.orb.app.notify.Notifier
@@ -111,8 +118,16 @@ class AppContainer(private val app: Application) {
     /** What the phone remembers about its notices and the «Mantener conectado» service; not secrets. */
     val notifyPrefs = NotifyPrefs(SharedPrefsStore(app.getSharedPreferences("orb.notify", android.content.Context.MODE_PRIVATE)))
     val noteJobs = NoteJobs(SharedPrefsJobStorage(app.getSharedPreferences("orb.notes", android.content.Context.MODE_PRIVATE)))
-    private val notePoster = AndroidNotePoster(app, noteJobs) { lockPrefs.settings.value.enabled }
+    private val notePoster = AndroidNotePoster(
+        app, noteJobs, { notifyPrefs.settings.value.lockScreen },
+        deviceLocked = { app.getSystemService(android.app.KeyguardManager::class.java)?.isDeviceLocked == true },
+    ) { lockPrefs.settings.value.enabled }
+    /** Opens Android's own notice settings of the app and of each channel (their sound lives there). */
+    val noticeSettings: NoticeSettings = AndroidNoticeSettings(app)
     val notificationAccess = AndroidNotificationAccess(app, notifyPrefs)
+    /** The camera permission as «Este móvil» shows it, and the battery optimization of Android. */
+    val cameraAccess = dev.orb.app.ui.scan.AndroidCameraAccess(app)
+    val batteryAccess: dev.orb.app.notify.BatteryAccess = dev.orb.app.notify.AndroidBatteryAccess(app)
     val keepAliveLauncher: ServiceLauncher = AndroidServiceLauncher(app)
     private val keepAliveRunning = MutableStateFlow(false)
     private var notifier: Notifier? = null
@@ -139,6 +154,9 @@ class AppContainer(private val app: Application) {
     /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
     val gate: dev.orb.app.share.AppGate get() = lock.gate
 
+    /** Which headings of the chat list the person folded; local only, forgotten when the phone is unlinked. */
+    val chatListPrefs = dev.orb.app.ui.chats.ChatListPrefs(SharedPrefsStore(app.getSharedPreferences("orb.chatlist", android.content.Context.MODE_PRIVATE)))
+
     /** When the PC last answered, and what the «sin conexión» notes need to show it and to try again. */
     val lastContact = dev.orb.app.data.LastContact(SharedPrefsStore(app.getSharedPreferences("orb.contact", android.content.Context.MODE_PRIVATE)))
     val offline = dev.orb.app.ui.offline.OfflineInfo(
@@ -146,7 +164,14 @@ class AppContainer(private val app: Application) {
             .stateIn(scope, SharingStarted.Eagerly, ConnectionState.Connecting),
         lastContact = lastContact.at,
         retryNow = { _runtime.value?.client?.resume() },
+        pcName = { _runtime.value?.client?.let { it.pcInfo.value?.name ?: pcNameOrNull(it.currentSession.name) } },
+        pcVersions = { _runtime.value?.client?.pcInfo?.value?.versions },
     )
+
+    /** When the app takes the whole screen to say the PC is out of reach or the app is out of date. */
+    val pcDown = dev.orb.app.ui.offline.PcDownGate().also { gate ->
+        scope.launch { offline.connection.collect(gate::onConnection) }
+    }
 
     /** Content another app shared, kept until the person chooses where it goes (or drops it). */
     val pendingShare = MutableStateFlow<dev.orb.app.share.ShareRequest?>(null)
@@ -212,16 +237,33 @@ class AppContainer(private val app: Application) {
         network = AndroidNetworkWatcher(app),
         launcher = keepAliveLauncher,
         log = log::add,
+        park = ::parkLink,
+        onNetwork = ::retryLinkNow,
     ).also { it.start(scope) }
+
+    /** The PC stayed out of sight: the link stops retrying (the service stays, so it can come back); false lets it try again. */
+    private fun parkLink(parked: Boolean) = synchronized(runtimeLock) {
+        val client = _runtime.value?.client
+        if (parked) client?.pause() else if (foreground || keepAliveRunning.value) client?.resume()
+        Unit
+    }
+
+    /** Another network: a link that is not up tries again at once, whatever pause it was in the middle of. */
+    private fun retryLinkNow() = synchronized(runtimeLock) {
+        val client = _runtime.value?.client ?: return@synchronized
+        if ((foreground || keepAliveRunning.value) && client.connection.value !is ConnectionState.Online) client.resume()
+    }
 
     /** The fixed notice of the service: who it is connected to. */
     val keepAliveText: StateFlow<String> = runtime.flatMapLatest { rt ->
         if (rt == null) flowOf(NotifyTexts.connected(null))
-        else rt.client.connection.map { c ->
-            val pc = (c as? ConnectionState.Online)?.pcName ?: rt.client.pcInfo.value?.name ?: rt.client.currentSession.name
-            if (c is ConnectionState.Online) NotifyTexts.connected(pc) else NotifyTexts.searching(pc)
-        }
+        else LinkLine.lines(
+            online = rt.client.connection.map { it is ConnectionState.Online },
+            pc = { rt.client.pcDisplayName() },
+        )
     }.stateIn(scope, SharingStarted.WhileSubscribed(5_000), NotifyTexts.connected(null))
+
+    private val noteReader = NoteReader({ startup.await() }, ::notesBackend)
 
     /** The database, opened off the main thread; null while the Keystore is busy. */
     suspend fun database(): OrbCacheDatabase? = withContext(Dispatchers.IO) { databaseFactory.open() }
@@ -267,6 +309,8 @@ class AppContainer(private val app: Application) {
         val runtime = LinkRuntime(client, api, sender)
         synchronized(runtimeLock) {
             _runtime.value = runtime
+            // The list listens from the moment the link exists, so a notice that arrives with the screen closed is kept too.
+            notesBackend()
             client.start()
             if (!foreground && !keepAliveRunning.value) client.pause()
         }
@@ -284,8 +328,9 @@ class AppContainer(private val app: Application) {
         noteJobs.forgetAll()
         notifyPrefs.linked = false
         lastContact.clear()
+        chatListPrefs.clear()
         notifyPrefs.setKeepConnected(true)
-        notifyPrefs.setLockScreenPublic(false)
+        notifyPrefs.setLockScreen(dev.orb.app.notify.LockScreenNotice.Generic)
         SecureStore.remove(app, SESSION_KEY)
         wipe.wipe()
         outboxLock.withLock { outboxFor = null; outboxRepo = null }
@@ -293,6 +338,7 @@ class AppContainer(private val app: Application) {
 
     fun onForeground() = synchronized(runtimeLock) {
         foreground = true
+        pcDown.reopened(offline.connection.value)
         lock.gate.onForeground()
         _runtime.value?.client?.resume()
         // The app lists the notices itself now.
@@ -326,6 +372,12 @@ class AppContainer(private val app: Application) {
             onStart = { notePoster.say(it, NotifyTexts.SENDING, null) },
         )
         val (job, outcome) = runner.run(token, typed) ?: return
+        if (outcome is NoteOutcome.Read) {
+            // The button only reads the chat's notices on this phone: the notification goes away and the list knows.
+            notePoster.cancel(job.group)
+            noteReader.read(job, wholeChat = true)
+            return
+        }
         notePoster.say(job, outcome.text, if (outcome.done) 4_000L else null)
         log.add("aviso respondido")
     }
@@ -335,8 +387,25 @@ class AppContainer(private val app: Application) {
         val token = intent?.getStringExtra(NoteIntents.EXTRA_TOKEN) ?: return
         intent.removeExtra(NoteIntents.EXTRA_TOKEN)
         // MainActivity is exported: only a token kept here counts, never extras made up by another app.
-        val target = noteJobs.take(token)?.target?.toNotice() ?: return
+        val job = noteJobs.take(token) ?: return
+        // The activity can start before the link is read; the list is reached once the start-up is over.
+        scope.launch { noteReader.read(job, wholeChat = false) }
+        val target = job.target?.toNotice() ?: return
+        noticeChat = target as? NoticeTarget.Chat
         openTarget.value = target
+    }
+
+    /** The chat a notice just opened, so a chat found deleted can take its notices away; consumed by [chatGone]. */
+    @Volatile
+    var noticeChat: NoticeTarget.Chat? = null
+
+    /** A notice led to a chat the PC no longer has: its notices leave the list. True when the chat was the one a notice opened. */
+    fun chatGone(kind: String, id: String): Boolean {
+        val opened = noticeChat ?: return false
+        if (opened.kind != kind || opened.id != id) return false
+        noticeChat = null
+        scope.launch { startup.await(); notesBackend()?.dismissChat(kind, id) }
+        return true
     }
 
     fun linkTestBackend(): LinkTestBackend? = _runtime.value?.let { RuntimeBackend(this, it) }
@@ -345,6 +414,8 @@ class AppContainer(private val app: Application) {
 
     /** One Orbe conversation; null until a PC is linked. */
     fun orbeChatBackend(): dev.orb.app.ui.chats.OrbeChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeOrbeChatBackend(this, it) }
+    /** What «@» offers in a writing box; null until a PC is linked. */
+    fun mentionSource(): dev.orb.app.ui.chats.MentionSource? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeMentionSource(it.api) }
     fun directChatBackend(): dev.orb.app.ui.chats.DirectChatBackend? = _runtime.value?.let { dev.orb.app.ui.chats.RuntimeDirectChatBackend(this, it) }
     fun tasksBackend(): dev.orb.app.ui.tasks.TasksBackend? = _runtime.value?.let { dev.orb.app.ui.tasks.RuntimeTasksBackend(this, it) }
     fun projectsBackend(): dev.orb.app.ui.projects.ProjectsBackend? = _runtime.value?.let { dev.orb.app.ui.projects.RuntimeProjectsBackend(it, chatsBackend(), this) }
@@ -355,7 +426,7 @@ class AppContainer(private val app: Application) {
     /** One notices list per link, so the bell keeps counting while the center is closed. */
     fun notesBackend(): dev.orb.app.ui.notes.NotesBackend? = synchronized(runtimeLock) {
         val rt = _runtime.value ?: return null
-        notes?.takeIf { it.first === rt }?.second ?: dev.orb.app.ui.notes.RuntimeNotesBackend(rt, scope).also { notes?.second?.close(); notes = rt to it }
+        notes?.takeIf { it.first === rt }?.second ?: dev.orb.app.ui.notes.RuntimeNotesBackend(rt, scope, store = dev.orb.app.ui.notes.RoomNoticeStore { database()?.notices() }).also { notes?.second?.close(); notes = rt to it }
     }
 
     fun whiteboardBackend(): dev.orb.app.ui.web.WhiteboardBackend? = _runtime.value?.let { rt -> projectsBackend()?.let { dev.orb.app.ui.web.RuntimeWhiteboardBackend(rt, it) } }

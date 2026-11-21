@@ -1,12 +1,11 @@
 // Imperative dialogs: confirm(...) and form(...) return promises, rendered by <DialogHost/> once in the app.
 import { useState } from 'react';
 import { LoaderCircle } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
+import { Dialog, DialogContent, DialogHeader, DialogBody, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/overlay.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { FieldError } from '@/components/ui/primitives.jsx';
-import { WindowBar } from '@/components/window-bar.jsx';
 import { useStore, setState } from '@/lib/store.js';
-import { errorText } from '@/lib/utils.js';
+import { errorText, cn } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
 
 let seq = 0;
@@ -24,13 +23,17 @@ function open(dialog) {
 }
 function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
-export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false, warn = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger, warn });
+// tone: 'primary' draws the accept button as the main (neutral) one even when danger keeps the focus on Cancel.
+export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false, warn = false, tone = null, noClose = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger, warn, tone, noClose });
 // one of a few answers (each { value, label, hint?, variant? }); resolves with the value chosen, or null when closed.
 // With hints, each answer is a full-width button with its one line under it (the first one is the default).
 // cancel: false when one of the answers already is «leave it as it is».
-export const choose = (title, description, options, { testid, cancel = true } = {}) => open({ kind: 'choice', title, description, options, testid, cancel });
+export const choose = (title, description, options, { testid, cancel = true, noClose = false } = {}) => open({ kind: 'choice', title, description, options, testid, cancel, noClose });
+// noClose: no ✕ in the corner (a question that has its own «Cancelar» button; Escape still closes it).
+// Dialogs are 440 px wide, the mock-up's small size; `wide` is for the ones that hold a long text or a diff.
 // body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
-export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide });
+// okDisabled(values): the accept button stays off while it is true (a help for the eye: onOk still checks); okDanger draws it red.
+export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false, noClose = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide, okDisabled, okDanger, noClose });
 
 function FormDialog({ d }) {
   const [values, setValues] = useState(d.initial);
@@ -47,10 +50,10 @@ function FormDialog({ d }) {
     finally { setBusy(false); }
   };
   return (
-    <form onSubmit={submit} className="grid gap-4">
-      <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
-      <div className="grid gap-4">{d.body(values, set)}<FieldError>{error}</FieldError></div>
-      <DialogFooter><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" disabled={busy} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
+    <form onSubmit={submit} className="flex max-h-[inherit] min-h-0 flex-col">
+      <DialogHeader className="flex-none"><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
+      <DialogBody className="grid gap-4 p-[18px]">{d.body(values, set)}<FieldError>{error}</FieldError></DialogBody>
+      <DialogFooter className="flex-none"><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" variant={d.okDanger ? 'destructive' : undefined} disabled={busy || Boolean(d.okDisabled?.(values))} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );
 }
@@ -58,19 +61,19 @@ function FormDialog({ d }) {
 function ChoiceDialog({ d }) {
   const rich = d.options.some((o) => o.hint);
   return (
-    <div className="grid gap-4" data-testid={d.testid ?? 'choice-dialog'}>
-      <DialogHeader><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription> : <DialogDescription className="sr-only">{d.title}</DialogDescription>}</DialogHeader>
+    <div className="flex max-h-[inherit] min-h-0 flex-col" data-testid={d.testid ?? 'choice-dialog'}>
+      <DialogHeader className="flex-none"><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription> : <DialogDescription className="sr-only">{d.title}</DialogDescription>}</DialogHeader>
       {rich ? (
-        <div className="grid gap-2">
+        <DialogBody className="grid gap-2 p-[18px]">
           {d.options.map((o, i) => (
             <button key={o.value} type="button" onClick={() => close(d.id, o.value)} data-testid={`choice-${o.value}`}
-              className={`press grid cursor-pointer gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${i === 0 ? 'border-primary/60 bg-primary/5 hover:bg-primary/10' : 'hover:bg-accent/60'} ${o.variant === 'danger' ? 'text-destructive' : ''}`}>
+              className={`press grid cursor-pointer gap-0.5 rounded-xl border px-4 py-3 text-left transition-colors ${i === 0 ? 'border-primary-text/60 bg-primary-soft bg-primary-soft' : 'hover:bg-accent/60'} ${o.variant === 'danger' ? 'text-destructive' : ''}`}>
               <span className="text-body font-medium">{o.label}</span>
               {o.hint ? <span className="text-muted-foreground text-caption">{o.hint}</span> : null}
             </button>
           ))}
           <div className="flex justify-end pt-1"><Button variant="ghost" onClick={() => close(d.id, null)} data-testid="choice-cancel">{t('comp.dialogs.cancel')}</Button></div>
-        </div>
+        </DialogBody>
       ) : (
         <DialogFooter>
           {d.cancel ? <Button variant="ghost" onClick={() => close(d.id, null)} data-testid="choice-cancel">{t('comp.dialogs.cancel')}</Button> : null}
@@ -93,15 +96,14 @@ export function DialogHost() {
   const dialogs = useStore((s) => s.dialogs ?? []);
   return dialogs.map((d) => (
     <Dialog key={d.id} open onOpenChange={(o) => { if (!o) close(d.id, null); }}>
-      <DialogContent className={d.wide ? 'sm:max-w-2xl' : undefined} onOpenAutoFocus={d.kind === 'confirm' ? confirmAutoFocus : undefined} onKeyDown={d.kind === 'confirm' ? swallowHeldEnter : undefined}>
+      <DialogContent size={d.wide ? undefined : 'sm'} showClose={!d.noClose} className={d.kind === 'confirm' ? 'gap-[18px]' : cn('grid-rows-[minmax(0,1fr)] gap-0 overflow-hidden p-0', d.wide && 'sm:max-w-2xl')} onOpenAutoFocus={d.kind === 'confirm' ? confirmAutoFocus : undefined} onKeyDown={d.kind === 'confirm' ? swallowHeldEnter : undefined}>
         {d.kind === 'confirm' ? (
           <>
-            {/* Decorative caption bar of the window-like themes; the title, text and buttons below are untouched. */}
-            <WindowBar kind="title" />
-            <DialogHeader><DialogTitle>{d.title}</DialogTitle><DialogDescription className="whitespace-pre-wrap">{d.description}</DialogDescription></DialogHeader>
+            <DialogHeader><DialogTitle>{d.title}</DialogTitle></DialogHeader>
+            <DialogDescription className="text-foreground text-control whitespace-pre-wrap">{d.description}</DialogDescription>
             <DialogFooter>
               {d.cancel ? <Button variant="outline" data-autofocus={d.danger ? "" : undefined} onClick={() => close(d.id, false)}>{d.cancel}</Button> : null}
-              <Button variant={d.danger ? 'destructive' : d.warn ? 'warn' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
+              <Button variant={d.tone === 'primary' ? 'default' : d.danger ? 'destructive' : d.warn ? 'warn' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
             </DialogFooter>
           </>
         ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : <FormDialog d={d} />}

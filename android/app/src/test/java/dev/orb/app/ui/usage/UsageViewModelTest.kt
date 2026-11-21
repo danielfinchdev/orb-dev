@@ -199,4 +199,103 @@ class UsageViewModelTest {
         assertNull(s.history.data)
         assertTrue(s.canUsage && s.canAgents)
     }
+
+    private val utc = java.util.TimeZone.getTimeZone("UTC")
+    private fun hours(h: Int) = h * 3_600_000L
+
+    @Test fun windowHeaderNamesTheWindowThatReturnsFirstAndItsLengthOnlyWhenThePcSaysIt() {
+        val five = account("a", 0.5, resetAt = hours(15))
+        assertEquals("Esta ventana de 5 h · vuelve 15:00", UsageTexts.windowHeader(listOf(five), 0, utc))
+        // Another account's longer window that returns earlier does not win over the shortest window.
+        val week = account("b", 0.1, resetAt = hours(2)).copy(windows = listOf(UsageWindow("seven_day", 0.1, hours(2))))
+        assertEquals("Esta ventana de 5 h · vuelve 15:00", UsageTexts.windowHeader(listOf(week, five), 0, utc))
+        // A window whose name says nothing about its length has no «de N h».
+        val odd = account("c", 0.1).copy(windows = listOf(UsageWindow("cycle", 0.1, hours(16))))
+        assertEquals("Esta ventana · vuelve 16:00", UsageTexts.windowHeader(listOf(odd), 0, utc))
+        // The hour is the phone's: the same instant in Madrid (UTC+1 in November).
+        assertEquals("Esta ventana de 5 h · vuelve 16:00", UsageTexts.windowHeader(listOf(five), 0, java.util.TimeZone.getTimeZone("Europe/Madrid")))
+    }
+
+    @Test fun windowHeaderIsMissingWithoutAResetTimeAndShowsTheDayWhenFar() {
+        assertNull(UsageTexts.windowHeader(emptyList(), 0, utc))
+        assertNull(UsageTexts.windowHeader(listOf(account("a", 0.5, resetAt = null)), 0, utc))
+        assertNull(UsageTexts.windowHeader(listOf(account("a", 0.5, resetAt = 10)), 20, utc))
+        val far = account("a", 0.5).copy(windows = listOf(UsageWindow("seven_day", 0.5, 3 * 86_400_000L + hours(9))))
+        // 1 January 1970 was a Thursday; three days later is a Sunday.
+        assertEquals("Esta ventana de 7 días · vuelve dom 09:00", UsageTexts.windowHeader(listOf(far), 0, utc))
+    }
+
+    @Test fun amberStartsAt85PercentOfTheFigureTheReaderSees() {
+        assertFalse(UsageTexts.nearLimit(0.84))
+        assertTrue(UsageTexts.nearLimit(0.85))
+        assertTrue(UsageTexts.nearLimit(0.94))
+        assertEquals("94 %", UsageTexts.percentText(0.94))
+    }
+
+    @Test fun historyRowsAreRealSpendNewestFirstWithBarsOverTheBusiestDay() {
+        val now = 1_794_484_800_000L // 2026-11-12 12:00 UTC
+        val days = listOf(
+            DaySpend("2026-11-09", 0.0, 0), DaySpend("2026-11-10", 5.0, 1000), DaySpend("2026-11-11", 7.5, 2000), DaySpend("2026-11-12", 0.0, 0),
+            DaySpend("2026-10-30", 2.5, 500),
+        )
+        val rows = UsageTexts.historyRows(days, now, utc)
+        assertEquals(listOf("Ayer", "Anteayer", "30 oct"), rows.map { it.label })
+        assertEquals(listOf("$7,50", "$5,00", "$2,50"), rows.map { it.value })
+        assertEquals(1f, rows[0].fraction, 0f)
+        assertEquals(5.0f / 7.5f, rows[1].fraction, 0.0001f)
+        assertTrue(rows.none { '%' in it.label + it.value })
+        // Nothing priced: the tokens give the bar and the figure.
+        val unpriced = UsageTexts.historyRows(listOf(DaySpend("2026-11-12", 0.0, 1500), DaySpend("2026-11-11", 0.0, 750)), now, utc)
+        assertEquals(listOf("Hoy", "Ayer"), unpriced.map { it.label })
+        assertEquals(listOf("1,5 k tokens", "750 tokens"), unpriced.map { it.value })
+        assertEquals(0.5f, unpriced[1].fraction, 0f)
+        assertTrue(UsageTexts.historyRows(listOf(DaySpend("2026-11-12", 0.0, 0)), now, utc).isEmpty())
+    }
+
+    @Test fun parserIsTolerantWithNewFieldsOddEntriesAndMissingOnes() {
+        val acc = UsageParser.accounts(
+            Json.parseToJsonElement(
+                """[{"account":"c1","agent":"claude","label":"Claude","windowHours":5,"stopAt":0.92,"warnAt":0.8,"heavy":1,"maxHeavy":2,
+                  "modelLimits":[{"model":"opus","until":1}],"future":{"x":[1,2]},"windows":[{"window":"five_hour","utilization":1.7,"resetAt":null,"status":"ok","at":1},{"utilization":0.2},"x"]},
+                  7,{"agent":"claude"},{"account":"c2","agent":"codex","windowHours":"soon"}]""",
+            ),
+        )
+        assertEquals(listOf("c1", "c2"), acc.map { it.account })
+        assertEquals(5, acc[0].windowHours)
+        assertNull(acc[1].windowHours)
+        assertEquals(1, acc[0].windows.size)
+        assertEquals(1.0, acc[0].windows[0].utilization, 0.0)
+        assertEquals("c2", acc[1].label)
+        assertTrue(UsageParser.accounts(null).isEmpty())
+        assertTrue(UsageParser.accounts(Json.parseToJsonElement("""{"not":"a list"}""")).isEmpty())
+        val agents = UsageParser.agents(Json.parseToJsonElement("""[{"id":"claude","installed":true,"enabled":1,"login":"si","update":{"latest":"9.9"},"accounts":[{"id":"x"}]},{"label":"no id"}]"""))
+        assertEquals(1, agents.size)
+        assertTrue(agents[0].enabled)
+    }
+
+    @Test fun guideKeepsEveryModelThePcGives() {
+        val g = UsageParser.guide(
+            Json.parseToJsonElement(
+                """[{"id":"claude","label":"Claude Code","tiers":{"light":["Haiku"],"balanced":["Sonnet","Sonnet 4"],"heavy":["Opus","Opus 4","Fable"],"extra":["x"]},
+                  "picks":{"simple":{"label":"Haiku"},"normal":{"label":"Sonnet","reasoning":"medium"},"complejo":{"label":"Opus","reasoning":"high"}},"readPicks":{}}]""",
+            ),
+        ).single()
+        assertEquals(listOf("Haiku", "Sonnet", "Sonnet 4", "Opus", "Opus 4", "Fable"), g.tiers.flatMap { it.second })
+        assertEquals(3, g.picks.size)
+    }
+
+    @Test fun stateIsEmptyOnlyWhenEverythingTheDeviceOffersAnsweredWithNothing() = runTest(dispatcher) {
+        val b = FakeUsageBackend()
+        b.accountList = Result.success(emptyList())
+        b.agentList = Result.success(emptyList())
+        b.guideList = Result.success(emptyList())
+        b.historyResult = { Result.success(sampleHistory(it, 0.0).copy(turns = 0, byDay = emptyList(), byAgent = emptyList())) }
+        val vm = vm(b)
+        advanceUntilIdle()
+        assertTrue(vm.state.value.isEmpty)
+        b.agentList = Result.success(listOf(AgentInfo("claude", "Claude Code", true, true, null, "si")))
+        vm.refresh()
+        advanceUntilIdle()
+        assertFalse(vm.state.value.isEmpty)
+    }
 }

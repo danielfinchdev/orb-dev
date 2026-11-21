@@ -351,3 +351,10 @@ test('the window draws the choices outside the frame and sends them through html
   assert.match(ui, /call\('htmlPages\.choose'/); assert.ok(!/sessions\.send/.test(ui), 'a button never sends free text');
   assert.match(read('src/mcp/server.mjs'), /choices: \{ type: 'array', maxItems: 6/);
 });
+
+test('step 7F: one list for several sessions keeps a page without internet away from one that has it', async () => {
+  const { sideSessionIds } = await import('../src/ui/lib/html-mount.js');
+  assert.deepEqual(sideSessionIds([{ id: 4, conversation_id: 'c', session_id: 'b' }, { id: 5, conversation_id: 'c', session_id: 'b' }, { id: 6, conversation_id: 'c', session_id: 'a' }], 'c'), ['a', 'b']);
+  assert.deepEqual([...mountable([{ id: 'p1', session: 'a', internet: false }, { id: 'p2', session: 'b', internet: true }])], ['p2']);
+  assert.match(read('src/ui/components/html-page.jsx'), /sandbox="allow-scripts"/);
+});

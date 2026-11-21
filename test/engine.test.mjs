@@ -235,6 +235,8 @@ test('varias cuentas: si una cuenta de Codex llega a su límite de uso, el traba
   assert.equal(acc.id, 'codex-2');
   assert.ok(acc.home.includes(path.join('core', 'cuentas', 'codex-2')));
   await assert.rejects(call('accounts.add', { agent: 'cursor', label: 'otra' }), /solo admite una cuenta/);
+  // an account of Orb's own folder takes work once it has signed in (its login file is there)
+  fs.writeFileSync(path.join(acc.home, 'auth.json'), '{}');
   // The main Codex account runs out of quota: the next Codex task goes to the second account.
   const quota = await call('tasks.create', { project: 'web', title: 'Uso', description: 'algo', agent: 'codex' });
   await taskDone(quota.id);

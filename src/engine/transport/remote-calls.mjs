@@ -62,12 +62,15 @@ const homePattern = () => {
   return new RegExp(`${/^[\\/]/.test(path.resolve(ctx.home)) ? SEP : ''}${parts.join(SEP)}(?:(${SEP})|(?![\\w-]|\\.\\w))`, 'gi');
 };
 const cutHome = (text, re) => (re ? text.replace(re, (m, sep) => (sep ? '' : '…')) : text);
+// The approval fingerprint and its signature stay on the PC: the phone approves with previewHash, so nothing it receives
+// (answers or pushed events, at any depth) carries them.
+const PC_ONLY_KEYS = new Set(['approval_hash', 'approval_sig']);
 export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
   if (typeof value === 'string') return !TEXT_FIELD.test(key) && isPath(value) ? placeOf(value) : cutHome(value, re);
   if (!value || typeof value !== 'object') return value;
-  if (depth > 12) { try { return JSON.parse(cutHome(JSON.stringify(value), re)); } catch { return null; } }
+  if (depth > 12) { try { return JSON.parse(cutHome(JSON.stringify(value, (k, v) => (PC_ONLY_KEYS.has(k) ? undefined : v)), re)); } catch { return null; } }
   if (Array.isArray(value)) return value.map((v) => withoutPaths(v, depth + 1, key, re));
-  return Object.fromEntries(Object.entries(value).map(([k, v]) => [cutHome(k, re), withoutPaths(v, depth + 1, k, re)]));
+  return Object.fromEntries(Object.entries(value).filter(([k]) => !PC_ONLY_KEYS.has(k)).map(([k, v]) => [cutHome(k, re), withoutPaths(v, depth + 1, k, re)]));
 }
 
 // What a call from outside gets back: the settings without secrets, and no folder of this PC (its home, the assistant's
@@ -75,11 +78,21 @@ export function withoutPaths(value, depth = 0, key = '', re = homePattern()) {
 export function shapeResult(method, result) {
   // The whiteboard comes back to the PC as it went (whiteboard.save): only its attachments are cut.
   if (method === 'whiteboard.load' && result) return { ...result, attachments: withoutPaths(result.attachments) };
+  // The phone approves the fingerprint of the full description: say when the folder cut above changed the text it shows.
+  if (method === 'tasks.get' && result && typeof result.description === 'string') {
+    const re = homePattern();
+    // user_asked is part of the same fingerprint, so a cut there also counts.
+    const cut = (v) => Array.isArray(v) ? v.some(cut) : typeof v === 'string' && Boolean(re) && cutHome(v, re) !== v;
+    return { ...withoutPaths(result), descriptionCut: cut(result.description) || cut(result.user_asked) };
+  }
   if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
   const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
   return withoutPaths({ ...rest, activeProject, config: phoneConfig(rest.config) });
 }
+
+// A free text as a phone receives it (the assistant folder cut), to compare what the phone says it saw with what the PC holds.
+export const phoneText = (text) => (typeof text === 'string' ? cutHome(text, homePattern()) : text);
 
 export { IMAGE_NAME };
 

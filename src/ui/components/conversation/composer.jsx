@@ -8,7 +8,7 @@ import { micMode } from '@/lib/mic.js';
 import { ArrowUp, Square, AtSign, Mic, ChevronRight, ClipboardPaste, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, useSkin, call, act, getState } from '@/lib/store.js';
+import { bridge, useStore, call, act, getState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { notifyWarn } from '@/lib/notify.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
@@ -105,7 +105,7 @@ function PastedCards({ draft, blocks }) {
 // it. attached: something besides text can be sent (pictures). The box grows with its text in CSS (field-sizing), with
 // no layout read per key; where the browser lacks it, measured once per change.
 const FIELD_SIZING = typeof CSS !== 'undefined' && CSS.supports?.('field-sizing', 'content');
-export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion, onSuggestionDone, top, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
+export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion, onSuggestionDone, top, above, bottom, notice, disabled, onPaste, onDrop, testid, attached = false, mentions = true }) {
   const t = useT();
   const ta = useRef(null);
   const value = useDraftValue(draft);
@@ -122,7 +122,6 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
   };
   useEffect(() => { const el = ta.current; if (!el || FIELD_SIZING) return; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 260)}px`; }, [value]);
   const [dropping, setDropping] = useState(false);
-  const skin = useSkin();
   const m = useMentions(value, onChange, ta);
   // what this box had when F5 reloaded the window comes back on the same screen (lib/reload.js).
   const here = useStore((s) => routeKey(s.route));
@@ -144,8 +143,10 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
     finally { setHearing(false); }
   };
   return (
-    <div className="composer-dock shrink-0 px-5 pb-5">
-      <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-[var(--chat-max-width)] rounded-2xl border shadow-sm transition-shadow focus-within:shadow-md focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-primary ring-2')}
+    <div className="composer-dock shrink-0 px-5 pb-3.5">
+      {/* the row over the box (where the chat works, «Compactar»): outside the box, as wide as it. */}
+      {above ? <div className="mx-auto mb-1.5 flex max-w-[var(--chat-max-width)] min-w-0 items-center gap-1" data-testid="composer-above">{above}</div> : null}
+      <div data-slot="composer" className={cn('bg-card relative mx-auto max-w-[var(--chat-max-width)] rounded-big border border-[color-mix(in_oklab,var(--foreground)_10%,transparent)] shadow-[var(--shadow)] transition-shadow focus-within:ring-[3px] focus-within:ring-ring/25', dropping && 'ring-ring ring-2')}
         onDragOver={onDrop ? (e) => { e.preventDefault(); setDropping(true); } : undefined} onDragLeave={() => setDropping(false)} onDrop={onDrop ? (e) => { e.preventDefault(); setDropping(false); onDrop(e); } : undefined}>
         {mentions && m.list.length ? null : notice}
         {mentions && m.list.length ? (
@@ -160,16 +161,16 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
         ) : null}
         {top ? <div className="flex min-w-0 items-center gap-2 px-3 pt-3" data-testid="composer-top">{top}</div> : null}
         <PastedCards draft={draft} blocks={blocks} />
-        {skin === 'retro' ? <span className="composer-prompt" aria-hidden="true">&gt;</span> : null}
         <textarea ref={ta} data-testid={testid} value={value} disabled={disabled} rows={2} placeholder={proposed || placeholder} title={proposed ? t('session.suggest.hint') : undefined} onPaste={paste}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => { if (proposed && e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); onChange(proposed); return; } if (mentions && m.onKey(e)) return; if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); onSend({ alt: e.ctrlKey || e.metaKey }); } }}
           className="composer-text placeholder:text-muted-foreground block w-full resize-none bg-transparent px-4 pt-3 pb-1 text-body compact:text-body compact:leading-5 leading-relaxed outline-none" />
-        <div className="flex items-center gap-2 px-3 pb-3">
-          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1" data-testid="composer-bottom">{bottom}</div>
-          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary animate-pulse' : undefined} /></Button></Tip> : null}
+        {/* the mock-up's button bar: 6 px above a 32 px row and 8 px below, whatever its buttons measure */}
+        <div className="flex items-center gap-2 px-3 pt-1.5 pb-2">
+          <div className="flex min-h-(--ctl) min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 max-sm:flex-nowrap max-sm:overflow-hidden" data-testid="composer-bottom">{bottom}</div>
+          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary-text animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
-          <Button size="icon-sm" className="rounded-full" onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
+          <Button size="icon-sm" className={cn('rounded-full', !disabled && 'disabled:opacity-100')} onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>
       </div>
     </div>

@@ -6,9 +6,6 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -23,17 +20,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SnackbarHost
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
+import dev.orb.app.ui.kit.OrbDialog
+import dev.orb.app.ui.kit.OrbDialogAction
+import dev.orb.app.ui.kit.OrbIconButton
+import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSheetItem
+import dev.orb.app.ui.kit.OrbSnackbarHost
+import dev.orb.app.ui.kit.OrbSpinner
+import dev.orb.app.ui.kit.OrbTextField
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -107,14 +107,12 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
                 title = ready?.let { "${WhiteboardTexts.TITLE} · ${it.project}" } ?: WhiteboardTexts.TITLE,
                 onBack = back, backLabel = WhiteboardTexts.BACK,
                 actions = {
-                    if (ready != null && vm.canNote) IconButton(onClick = { showAttachments = true }) {
-                        Icon(OrbIcons.Image, WhiteboardTexts.ATTACHMENTS, tint = OrbTheme.colors.text2)
-                    }
+                    if (ready != null && vm.canNote) OrbIconButton(OrbIcons.Image, WhiteboardTexts.ATTACHMENTS, { showAttachments = true })
                     if (state.projects.size > 1 && phase !is WhiteboardPhase.Choose) ProjectMenu(state.projects, ready?.project, vm::choose)
                 },
             )
             when (phase) {
-                WhiteboardPhase.Loading -> Center { CircularProgressIndicator() }
+                WhiteboardPhase.Loading -> Center { OrbSpinner(size = 28.dp) }
                 is WhiteboardPhase.NeedsPc -> Notice(
                     if (phase.unsupported) WhiteboardTexts.UNSUPPORTED else if (phase.error != null) WhiteboardTexts.LOAD_FAILED else WhiteboardTexts.NEEDS_PC,
                     phase.error ?: if (phase.unsupported) WhiteboardTexts.UNSUPPORTED_BODY else WhiteboardTexts.NEEDS_PC_BODY,
@@ -134,7 +132,7 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
                 }
             }
         }
-        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
+        OrbSnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).padding(16.dp))
     }
 
     // The panel is bound to the project it was opened with, so a late answer never writes a note elsewhere.
@@ -145,12 +143,10 @@ fun WhiteboardScreen(vm: WhiteboardViewModel, onBack: () -> Unit, modifier: Modi
         }
     }
 
-    if (state.confirmLeave) AlertDialog(
-        onDismissRequest = vm::keepEditing,
-        title = { Text(WhiteboardTexts.LEAVE_TITLE) },
-        text = { Text(WhiteboardTexts.LEAVE_BODY) },
-        confirmButton = { TextButton(onClick = vm::keepEditing) { Text(WhiteboardTexts.STAY) } },
-        dismissButton = { TextButton(onClick = vm::leaveWithoutSaving) { Text(WhiteboardTexts.LEAVE, color = MaterialTheme.colorScheme.error) } },
+    if (state.confirmLeave) OrbDialog(
+        onDismiss = vm::keepEditing, title = WhiteboardTexts.LEAVE_TITLE, text = WhiteboardTexts.LEAVE_BODY,
+        confirm = OrbDialogAction(WhiteboardTexts.STAY, vm::keepEditing),
+        dismiss = OrbDialogAction(WhiteboardTexts.LEAVE, vm::leaveWithoutSaving, danger = true),
     )
 }
 
@@ -176,7 +172,7 @@ private fun Notice(title: String, body: String, onRetry: (() -> Unit)?) {
         Icon(OrbIcons.PenTool, null, tint = OrbTheme.colors.text3)
         Text(title, Modifier.padding(top = 12.dp), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         Text(body, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium, color = OrbTheme.colors.text2, textAlign = TextAlign.Center)
-        if (onRetry != null) TextButton(onClick = onRetry, Modifier.padding(top = 8.dp)) { Text(WhiteboardTexts.RETRY) }
+        if (onRetry != null) OrbButton(WhiteboardTexts.RETRY, onRetry, Modifier.padding(top = 8.dp))
     }
 }
 
@@ -196,10 +192,10 @@ private fun ChooseProject(projects: List<String>, onPick: (String) -> Unit) {
 private fun ProjectMenu(projects: List<String>, current: String?, onPick: (String) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { open = true }) { Icon(OrbIcons.FolderInput, WhiteboardTexts.CHANGE_PROJECT, tint = OrbTheme.colors.text2) }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+        OrbIconButton(OrbIcons.FolderInput, WhiteboardTexts.CHANGE_PROJECT, { open = true })
+        if (open) OrbSheet(onDismiss = { open = false }, title = WhiteboardTexts.CHANGE_PROJECT) {
             projects.forEach { name ->
-                DropdownMenuItem(text = { Text(if (name == current) "$name ✓" else name) }, onClick = { open = false; onPick(name) })
+                OrbSheetItem(name, { open = false; onPick(name) }, icon = OrbIcons.FolderInput, checked = name == current)
             }
         }
     }
@@ -226,29 +222,24 @@ private fun readableSize(n: Long): String = when {
     else -> "%.1f MB".format(java.util.Locale.US, n / 1048576.0)
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttachmentsSheet(items: List<WhiteboardAttachment>, onDismiss: () -> Unit, onSave: suspend (String, String) -> Boolean) {
     var editing by remember { mutableStateOf<WhiteboardAttachment?>(null) }
     var draft by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Text(WhiteboardTexts.ATTACHMENTS, Modifier.padding(horizontal = 16.dp, vertical = 4.dp), style = MaterialTheme.typography.titleMedium)
+    OrbSheet(onDismiss = onDismiss, title = WhiteboardTexts.ATTACHMENTS) {
         val current = editing
         if (current != null) {
             Column(Modifier.padding(16.dp)) {
                 Text(current.name, style = MaterialTheme.typography.bodyLarge)
-                OutlinedTextField(
-                    draft, { draft = it.take(WhiteboardViewModel.MAX_NOTE) }, Modifier.fillMaxWidth().padding(top = 8.dp),
-                    label = { Text(WhiteboardTexts.NOTE_HINT) }, minLines = 3, maxLines = 8,
-                )
+                OrbTextField(draft, { draft = it.take(WhiteboardViewModel.MAX_NOTE) }, WhiteboardTexts.NOTE_HINT, Modifier.padding(top = 8.dp), minLines = 3, maxLines = 8)
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalArrangement = Arrangement.End) {
-                    TextButton(onClick = { editing = null }, enabled = !busy) { Text(WhiteboardTexts.CANCEL) }
-                    TextButton(
-                        onClick = { busy = true; scope.launch { if (onSave(current.name, draft)) editing = null; busy = false } },
-                        enabled = !busy,
-                    ) { Text(WhiteboardTexts.SAVE_NOTE) }
+                    OrbButton(WhiteboardTexts.CANCEL, { editing = null }, kind = OrbButtonKind.Ghost, enabled = !busy)
+                    OrbButton(
+                        WhiteboardTexts.SAVE_NOTE, { busy = true; scope.launch { if (onSave(current.name, draft)) editing = null; busy = false } },
+                        kind = OrbButtonKind.Primary, enabled = !busy,
+                    )
                 }
             }
         } else if (items.isEmpty()) {

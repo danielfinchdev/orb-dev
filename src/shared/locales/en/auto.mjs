@@ -17,8 +17,8 @@ export default {
   'msg.scheduler.safetyDeletedShare': 'deleted {deleted} of the project’s {total} files ({pct} %)',
   'session.autoMode': 'Auto',
   'session.askMode': 'Ask',
-  'session.autoTip': 'Works on its own inside the folder; asks before publishing, sending data or leaving it',
-  'session.askTip': 'Asks before deleting folders, undoing git changes or writing outside the folder',
+  'session.autoTip': 'Works in the folder; asks before publishing, sending data or leaving it',
+  'session.askTip': 'Asks before deleting folders, undoing git changes or leaving the folder',
   'session.tip.leer': 'Only reads and analyses; changes nothing',
   'session.tip.probar': 'Reviews and runs tests; does not edit files',
   'session.tip.preguntar': 'Asks permission before every action',
@@ -26,5 +26,6 @@ export default {
   'session.autoOn': 'Auto mode',
   'session.askOn': 'Ask mode',
   'settings.autonomy': 'Agent permissions',
-  'settings.autonomyHint': 'Auto: they work without asking inside the project folder (it can be undone). Ask: they ask before anything risky. They always ask before publishing, sending data or leaving the folder.'
+  'settings.autonomyHintAuto': 'they work without asking inside the project folder (it can be undone).',
+  'settings.autonomyHintAsk': 'they ask for permission before anything risky.'
 };

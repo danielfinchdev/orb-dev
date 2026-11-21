@@ -35,6 +35,11 @@ object ApiMethods {
     val INBOX_MUTE = m("inbox.mute")
     val INBOX_SNOOZE = m("inbox.snooze")
     val INBOX_MARK_READ = m("inbox.markRead")
+    val INBOX_MARK_UNREAD = m("inbox.markUnread", requiresPc = "3.8.8")
+    val CHAT_QUEUE = m("chat.queue", requiresPc = "3.8.8")
+    val CHAT_EDIT_QUEUED = m("chat.editQueued", requiresPc = "3.8.8")
+    val SESSIONS_REWIND_INFO = m("sessions.rewindInfo", requiresPc = "3.8.8")
+    val NOTES_LIST = m("notes.list", requiresPc = "3.8.8")
     val INBOX_SECTIONS_LIST = m("inbox.sections.list")
     val INBOX_SECTIONS_CREATE = m("inbox.sections.create")
     val INBOX_SECTIONS_RENAME = m("inbox.sections.rename")
@@ -153,6 +158,12 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
     /** Whether the linked PC can run [m] (always true for the methods every PC has). */
     fun available(m: ApiMethod) = m.requiresPc == null || pc.supports(m.name)
 
+    /**
+     * Whether the PC checks the guard parameters (`unheld`, `checkpoint`, `expect`) it was sent. They arrived together with
+     * `chat.editQueued`, so a PC that lists it knows them; an older one would ignore them without checking anything.
+     */
+    val knowsSafetyGuards get() = available(ApiMethods.CHAT_EDIT_QUEUED)
+
     private suspend fun run(m: ApiMethod, params: JsonObject = NONE): Result<JsonElement> =
         if (!available(m)) Result.failure(LinkException(LinkError.Unsupported(m.name))) else pc.call(m.name, params)
 
@@ -167,6 +178,7 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
         suspend fun mute(params: JsonObject = NONE) = run(ApiMethods.INBOX_MUTE, params)
         suspend fun snooze(params: JsonObject = NONE) = run(ApiMethods.INBOX_SNOOZE, params)
         suspend fun markRead(params: JsonObject = NONE) = run(ApiMethods.INBOX_MARK_READ, params)
+        suspend fun markUnread(params: JsonObject = NONE) = run(ApiMethods.INBOX_MARK_UNREAD, params)
         suspend fun sectionsList(params: JsonObject = NONE) = run(ApiMethods.INBOX_SECTIONS_LIST, params)
         suspend fun sectionsCreate(params: JsonObject = NONE) = run(ApiMethods.INBOX_SECTIONS_CREATE, params)
         suspend fun sectionsRename(params: JsonObject = NONE) = run(ApiMethods.INBOX_SECTIONS_RENAME, params)
@@ -194,6 +206,8 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
         suspend fun answer(params: JsonObject = NONE) = run(ApiMethods.CHAT_ANSWER, params)
         suspend fun accept(params: JsonObject = NONE) = run(ApiMethods.CHAT_ACCEPT, params)
         suspend fun settings(params: JsonObject = NONE) = run(ApiMethods.CHAT_SETTINGS, params)
+        suspend fun queue(params: JsonObject = NONE) = run(ApiMethods.CHAT_QUEUE, params)
+        suspend fun editQueued(params: JsonObject = NONE) = run(ApiMethods.CHAT_EDIT_QUEUED, params)
     }
 
     val chat = Chat()
@@ -207,6 +221,7 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
         suspend fun approve(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_APPROVE, params)
         suspend fun resume(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_RESUME, params)
         suspend fun fork(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_FORK, params)
+        suspend fun rewindInfo(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_REWIND_INFO, params)
         suspend fun settle(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_SETTLE, params)
         suspend fun stop(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_STOP, params)
         suspend fun compact(params: JsonObject = NONE) = run(ApiMethods.SESSIONS_COMPACT, params)
@@ -386,6 +401,10 @@ class OrbApi(private val pc: PcCaller, private val newId: () -> String = { UUID.
     /** Marks notes as read: the given [ids], or all of them when [ids] is null. */
     suspend fun notesMarkRead(ids: List<String>? = null): Result<JsonElement> =
         run(ApiMethods.NOTES_MARK_READ, buildJsonObject { if (ids != null) put("ids", JsonArray(ids.map { JsonPrimitive(it) })) })
+
+    /** The notices the PC sent to the phones in the last days, newest first; [since] (ms, exclusive) asks only for newer ones. */
+    suspend fun notesList(since: Long? = null, limit: Int? = null): Result<JsonElement> =
+        run(ApiMethods.NOTES_LIST, buildJsonObject { if (since != null) put("since", since); if (limit != null) put("limit", limit) })
 
     private fun idOf(id: String) = buildJsonObject { put("id", id) }
 

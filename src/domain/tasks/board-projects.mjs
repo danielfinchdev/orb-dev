@@ -3,10 +3,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
+import { saveConfig } from '../../platform/config.mjs';
+import { scopesRemoved } from '../extensions/catalog.mjs';
 import { folderName, folderKey } from '../../platform/paths.mjs';
 import { projectLogHeader, logBody } from '../../platform/journal-files.mjs';
 import { IGNORED_PROJECTS, FINISHED_PROJECTS, DELETING_PROJECTS } from '../../platform/state.mjs';
-import { oneLine } from '../../shared/text.mjs';
+import { oneLine, shortPath } from '../../shared/text.mjs';
 import { git, isGitRepo } from '../../platform/git.mjs';
 import { ROOT_LOG_MAX, now, same, checkProjectPath } from './board-common.mjs';
 
@@ -44,6 +46,10 @@ export class BoardProjects {
     const project = this.project(name); if (!project) throw new Error(tr('msg.board.noProject', { name }));
     const open = this.one("SELECT COUNT(*) AS n FROM tasks WHERE project = ? AND status IN ('queued', 'awaiting_approval', 'running')", project.name).n;
     if (open) throw new Error(tr('msg.board.projectOpenTasks', { open }));
+    // The skills and connectors scoped to it leave with it (a project created later under the same name starts with none).
+    // First, and if that cannot be saved the project stays: a name nobody owns must never keep a scope.
+    const scopes = scopesRemoved(ctx.config ?? {}, project.name);
+    if (scopes) saveConfig(scopes);
     this.run('DELETE FROM projects WHERE name = ?', project.name);
     if (this.setting('active_project') === project.name) this.setting('active_project', '');
     this.event(null, actor, 'project.removed', `${project.name} (la carpeta no se borra)`);
@@ -104,7 +110,7 @@ export class BoardProjects {
     if (this.activeName() === project.name) return project;
     this.setting('active_project', project.name);
     this.event(null, actor, 'project.active', `${project.name} -> ${project.path}`);
-    this.notice(tr('msg.board.activeFolder', { name: project.name, path: project.path }), 'info');
+    this.notice(tr('msg.board.activeFolder', { name: project.name, path: shortPath(project.path) }), 'info');
     this.changed('projects');
     return project;
   }

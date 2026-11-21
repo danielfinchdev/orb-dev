@@ -18,7 +18,10 @@ const RISKY = [
   // a push under another name (git -c alias.p=push p, git config alias.up push).
   [/\balias\.[\w.-]+\s*[= ]\s*["']?!?\s*(?:git\s+)?(push|send-pack)\b/i, 'msg.guard.push'],
   // git settings that make git run a program (Orb's own snapshots run git in the project): they ask.
-  [new RegExp(`${GIT}config\\b[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.insteadOf|include(?:If\\.\\S+)?\\.path|diff\\.external|gpg\\.(?:[\\w-]+\\.)?program)\\b`, 'i'), 'msg.guard.gitRuns'],
+  // Reading one does not: «git config --get remote.origin.url» is what every agent asks first. Only a read whose flag
+  // comes right after «config» (or after a scope flag) is let through, so a «--get» hidden in a value changes nothing;
+  // and a remote's keys ask only when a value follows them, since «git config remote.origin.url» alone is a read too.
+  [new RegExp(`${GIT}config\\b(?!(?:\\s+--(?:local|global|system|worktree))*\\s+(?:--get(?:-all|-regexp|-urlmatch)?|--list|-l|get|list)\\b)[^|;&]*\\b(filter\\.[\\w.-]+\\.(clean|smudge|process)|core\\.(fsmonitor|hooksPath|sshCommand|pager|editor|askpass|gitProxy)|credential\\.[\\w.-]*helper|diff\\.[\\w.-]+\\.(command|textconv)|merge\\.[\\w.-]+\\.driver|url\\.[^\\s]*\\.(?:push)?insteadOf|http(?:\\.[^\\s]*)?\\.(?:proxy|sslVerify|extraHeader)|push\\.recurseSubmodules|include(?:If\\.\\S+)?\\.path|diff\\.external|gpg\\.(?:[\\w-]+\\.)?program|remote\\.[^\\s]*\\.(?:url|pushurl|uploadpack|receivepack|vcs|proxy)(?=["']?\\s+[^\\s|;&]))\\b`, 'i'), 'msg.guard.gitRuns'],
   [/\bgh(\.exe)?\s+(repo|pr|release|api|gist|secret)\b/i, 'msg.guard.github'],
   [/\b(npm|pnpm|yarn)(\.cmd)?\s+publish\b|\bcargo\s+publish\b|\btwine\s+upload\b/i, 'msg.guard.publish'],
   // images, packages and sites published by their own tools.

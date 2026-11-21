@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { gitAsync, repoRootAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { integrateIntoAsync } from '../../domain/tasks/checkpoints.mjs';
+import { lastLaunchId, mergedByHand } from './run-id.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export class FoldersPart {
@@ -66,10 +67,17 @@ export class FoldersPart {
   }
   async integrate(task, project, info) {
     const { board } = this;
+    const run = lastLaunchId(board, task.id); // the run being joined, read before the awaits
     const repo = await repoRootAsync(project.path);
     const tip = task.branch ? (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', task.branch)).stdout.trim() : '';
-    if (!tip) { board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
-    if (tip === info.base) { this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
+    // Nothing to join: this run changed no files, so the undo point kept from an earlier run is still true for the current
+    // one. Marking it keeps a phone that sends the checkpointId from being told «not ready» for ever.
+    const keepPoint = () => {
+      const key = `checkpoint:${task.id}`; const cp = board.settingJson(key);
+      if (cp?.after && cp.after.run !== run) board.settingJson(key, { ...cp, after: { ...cp.after, run } });
+    };
+    if (!tip) { if (!mergedByHand(board, task.id)) keepPoint(); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'integrate.skipped', 'no hay rama que unir'); return; }
+    if (tip === info.base) { keepPoint(); this.dropCopy(task, project); board.settingJson(`integrate:${task.id}`, null); board.event(task.id, 'orb', 'files.changed', 'ningún archivo'); return; }
     const out = await integrateIntoAsync(repo, { base: info.base, tip });
     // Read again after the awaits: a join closed meanwhile writes nothing more, unless files were already written: then
     // they are noted anyway, so «Deshacer» can give them back.
@@ -82,7 +90,7 @@ export class FoldersPart {
       await gitAsync(repo, {}, 'update-ref', `${REF_PREFIX}/t${task.id}-antes-de-unir`, out.before);
       await gitAsync(repo, {}, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, out.after);
       const head = (await gitAsync(repo, {}, 'rev-parse', 'HEAD')).stdout.trim();
-      board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', repo, ref: `${REF_PREFIX}/t${task.id}-antes-de-unir`, commit: out.before }, after: { kind: 'git', repo, commit: out.after }, head, remotes: null });
+      board.settingJson(`checkpoint:${task.id}`, { before: { kind: 'git', repo, ref: `${REF_PREFIX}/t${task.id}-antes-de-unir`, commit: out.before }, after: { kind: 'git', repo, commit: out.after, run }, head, remotes: null });
       board.event(task.id, 'orb', 'files.changed', out.changed.length ? out.changed.slice(0, 60).map((c) => `${c.status} ${c.path}`).join(', ') + (out.changed.length > 60 ? ` … y ${out.changed.length - 60} más` : '') : 'ningún archivo');
       this.dropCopy(task, project); // not waited for: the removal runs off the event loop and the project is not held meanwhile
       board.settingJson(`integrate:${task.id}`, null); board.setting(`integrate_error_at:${task.id}`, '');
@@ -101,7 +109,7 @@ export class FoldersPart {
     }
     // Both changed the same lines: a task (the same agent when it can) joins it by hand, in the folder, in its turn.
     const agent = task.assigned_to && board.availableAgents()?.includes(task.assigned_to) ? task.assigned_to : 'any';
-    const join = board.createTask({ project: project.name, agent, mode: 'carpeta', level: 'normal', internal: true, conversation_id: board.conversationOfTask(task.id),
+    const join = board.createTask({ project: project.name, agent, mode: 'carpeta', level: 'normal', internal: true, conversation_id: board.conversationOfTask(task.id), ...(task.autonomy === 'preguntar' ? { autonomy: 'preguntar' } : {}),
       title: tr('msg.scheduler.joinTitle', { id: task.id, title: oneLine(task.title, 60) }),
       description: `La tarea #${task.id} «${oneLine(task.title)}» trabajó a la vez que otras, en una copia aislada (rama ${task.branch}, carpeta ${task.workdir}). Al unir su trabajo a la carpeta del proyecto hay conflicto en: ${out.conflicts.slice(0, 30).join(', ')}.
 Lo que hizo esa tarea: ${oneLine(task.result ?? 'sin resumen', 1500)}

@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.link.api.ApiMethods
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.ui.chats.ChatErrors
 import dev.orb.app.ui.linkErrorText
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -34,6 +35,8 @@ data class TaskDetailState(
     val busy: Boolean = false,
     val actions: Set<TaskAction> = emptySet(),
     val agents: List<AgentChoice>? = null,
+    /** An event of the PC arrived and the task has not been read again yet: what the screen shows may be older than the PC's word. */
+    val reloading: Boolean = false,
 )
 
 object TaskActions {
@@ -58,6 +61,22 @@ object TaskActions {
         if (d.hasCheckpoint && !r.undone && (r.status == "done" || held) && can(ApiMethods.TASKS_DIFF)) out += TaskAction.SeeChanges
         return out
     }
+
+    /** Why a button of the fixed bar is off, in words for the person; null when [action] is allowed. */
+    fun barReason(action: TaskAction, d: TaskDetail, allowed: Set<TaskAction>): String? {
+        if (action in allowed) return null
+        val r = d.row
+        return when (action) {
+            TaskAction.Cancel -> if (r.status in CANCELLABLE) TaskTexts.BAR_PC_NO else TaskTexts.BAR_CANCEL_DONE
+            TaskAction.Reassign -> when {
+                r.held != null -> TaskTexts.BAR_REASSIGN_HELD
+                r.status in REASSIGNABLE -> TaskTexts.BAR_PC_NO
+                else -> TaskTexts.BAR_REASSIGN_STATE
+            }
+            TaskAction.Followup -> if (r.status == "cancelled") TaskTexts.BAR_FOLLOWUP_CANCELLED else TaskTexts.BAR_PC_NO
+            else -> null
+        }
+    }
 }
 
 /**
@@ -70,36 +89,52 @@ class TaskDetailViewModel(
     val id: Long,
     private val reloadDebounceMs: Long = 300,
 ) : ViewModel() {
-    private data class Ui(val detail: TaskDetail? = null, val loading: Boolean = true, val error: String? = null, val busy: Boolean = false, val agents: List<AgentChoice>? = null)
+    private data class Ui(
+        val detail: TaskDetail? = null, val loading: Boolean = true, val error: String? = null, val busy: Boolean = false,
+        val agents: List<AgentChoice>? = null, val pending: Boolean = false,
+    )
 
     private val ui = MutableStateFlow(Ui())
     private val reloads = Channel<Unit>(Channel.CONFLATED)
     private val _messages = Channel<String>(Channel.BUFFERED)
+    private var eventStamp = 0
 
     val messages = _messages.receiveAsFlow()
 
     val state: StateFlow<TaskDetailState> = combine(ui, backend.connection) { u, c ->
         TaskDetailState(
             detail = u.detail, loading = u.loading, error = u.error, online = c is ConnectionState.Online, busy = u.busy,
-            actions = u.detail?.let { TaskActions.of(it, backend::available) }.orEmpty(), agents = u.agents,
+            actions = u.detail?.let { TaskActions.of(it, backend::available) }.orEmpty(), agents = u.agents, reloading = u.pending,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), TaskDetailState())
 
     init {
         viewModelScope.launch { reloads.receiveAsFlow().debounce(reloadDebounceMs).collect { load() } }
-        viewModelScope.launch { backend.events.collect { if (it.name in RELOAD_EVENTS) reloads.trySend(Unit) } }
+        viewModelScope.launch {
+            backend.events.collect {
+                if (it.name in RELOAD_EVENTS) {
+                    // The decisions go off at once, not after the wait: during it the screen still shows what the PC has left behind.
+                    eventStamp++
+                    ui.update { u -> u.copy(pending = true) }
+                    reloads.trySend(Unit)
+                }
+            }
+        }
         viewModelScope.launch {
             backend.connection.map { it is ConnectionState.Online }.distinctUntilChanged().filter { it }.collect { load() }
         }
     }
 
     private suspend fun load() {
+        val stamp = eventStamp
         val r = backend.get(id)
         ui.update { u ->
+            // An event that came while this read was under way asks for another one: until it is done this is not final.
+            val pending = eventStamp != stamp
             r.fold(
-                onSuccess = { Ui(it, loading = false, error = null, busy = u.busy, agents = u.agents) },
+                onSuccess = { Ui(it, loading = false, error = null, busy = u.busy, agents = u.agents, pending = pending) },
                 // What was on screen stays: only a first read that fails shows the error.
-                onFailure = { u.copy(loading = false, error = if (u.detail == null) linkErrorText(it) else null) },
+                onFailure = { u.copy(loading = false, error = if (u.detail == null) linkErrorText(it) else null, pending = pending) },
             )
         }
     }
@@ -120,30 +155,76 @@ class TaskDetailViewModel(
             ui.update { it.copy(busy = false) }
             if (r.isSuccess) {
                 done?.let { _messages.trySend(it) }
-                load()
             } else {
-                _messages.trySend("${TaskTexts.ACTION_FAILED}. ${linkErrorText(r.exceptionOrNull()!!)}")
+                _messages.trySend(failureText(r.exceptionOrNull()!!))
             }
+            // A refusal means the task is not what the screen showed: it is drawn again from the PC's answer.
+            load()
         }
     }
 
     private fun allowed(a: TaskAction) = ui.value.detail?.let { a in TaskActions.of(it, backend::available) } == true
 
-    fun approve(approve: Boolean) {
-        val hash = ui.value.detail?.previewHash ?: return
-        if (!allowed(TaskAction.Approve)) return
+    /** The decisions that touch the person's work wait for the read an event of the PC asked for. */
+    private fun settled() = !ui.value.pending
+
+    /**
+     * [shownHash] is the fingerprint of what the screen painted when the person tapped: the PC refuses the OK if the task
+     * changed since. Without it, the one captured by [askReject] for a rejection, and last the current one.
+     */
+    fun approve(approve: Boolean, shownHash: String? = null) {
+        val hash = shownHash ?: rejectHash?.takeIf { !approve } ?: ui.value.detail?.previewHash ?: return
+        rejectHash = null
+        if (!allowed(TaskAction.Approve) || !settled()) return
         act(if (approve) TaskTexts.APPROVED else TaskTexts.REJECTED) { backend.decide(id, approve, hash) }
     }
 
+    private var rejectHash: String? = null
+
+    /** The reject dialog opens on the fingerprint shown now; that one goes back with the yes. */
+    fun askReject() {
+        rejectHash = ui.value.detail?.previewHash
+    }
+
+    /**
+     * «Aceptar» keeps the work of a task Orb held. What the screen shows may be older than the PC's last word on it, so the task is
+     * read again first and nothing is accepted if the hold, the point of return or the state is not what the person was looking at.
+     */
     fun accept() {
-        if (!allowed(TaskAction.AcceptHeld)) return
-        act(TaskTexts.ACCEPTED) { backend.accept(id) }
+        if (!allowed(TaskAction.AcceptHeld) || !settled()) return
+        val shown = ui.value.detail ?: return
+        act(TaskTexts.ACCEPTED) {
+            backend.get(id).fold(
+                onSuccess = { fresh ->
+                    val same = fresh.row.status == shown.row.status && fresh.row.held == shown.row.held && fresh.checkpointId == shown.checkpointId
+                    if (!same || TaskAction.AcceptHeld !in TaskActions.of(fresh, backend::available)) Result.failure(Stale(TaskTexts.ACCEPT_CHANGED))
+                    else backend.accept(id, shown.checkpointId)
+                },
+                onFailure = { Result.failure(it) },
+            )
+        }
+    }
+
+    private class Stale(message: String) : Exception(message)
+
+    private fun failureText(e: Throwable): String =
+        (e as? Stale)?.message ?: ChatErrors.pcText(e) ?: "${TaskTexts.ACTION_FAILED}. ${linkErrorText(e)}"
+
+    private var undoAsked = false
+    private var undoCheckpoint: String? = null
+
+    /** The dialog opens on the point of return shown now; that one goes back with the yes. */
+    fun askUndo() {
+        undoAsked = true
+        undoCheckpoint = ui.value.detail?.checkpointId
     }
 
     /** The screen asks first; this is only called after the person accepted the dialog. */
     fun undo() {
-        if (!allowed(TaskAction.UndoHeld)) return
-        act(TaskTexts.UNDO_DONE) { backend.undo(id) }
+        if (!allowed(TaskAction.UndoHeld) || !settled()) return
+        val checkpoint = if (undoAsked) undoCheckpoint else ui.value.detail?.checkpointId
+        undoAsked = false
+        act(TaskTexts.UNDO_DONE) { backend.undo(id, checkpoint) }
     }
 
     fun launchAnyway() {

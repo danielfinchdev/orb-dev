@@ -7,8 +7,8 @@ const src = (f) => readFileSync(new URL(`../src/ui/${f}`, import.meta.url), 'utf
 // Serious or externally visible actions must open with Cancel focused, so a stray Enter cannot accept them.
 const SERIOUS = [
   ['components/task-approval.jsx', "tasks.approve.ok"], ['views/extensions.jsx', 'ext.activate'], ['views/extensions.jsx', 'ext.apply'],
-  ['views/extensions.jsx', 'ext.moveToCore'], ['views/projects.jsx', 'projects.push.ok'], ['views/tasks.jsx', 'tasks.merge.ok'],
-  ['views/core-missing.jsx', 'data.core.fresh']
+  ['views/extensions.jsx', 'ext.moveToCore'], ['components/project-flows.jsx', 'projects.push.ok'], ['views/tasks.jsx', 'tasks.merge.ok'],
+  ['views/core-missing.jsx', 'data.core.fresh'], ['views/project-page.jsx', 'projects.prs.mergeOk']
 ];
 
 test('serious confirmations are marked danger so the focus goes to Cancel', () => {

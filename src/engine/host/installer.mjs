@@ -40,12 +40,13 @@ export async function check() {
   for (const agent of AGENT_ITEMS) out[agent] = Boolean(ADAPTERS[agent]?.detect(ctx.config.agents[agent] ?? {}));
   // A tool is there when its program answers or, at least, when its executable is in the PATH: on a busy PC a version
   // call can fail for a moment, and «No instalado» (ticked) would make the user install it again.
-  const present = async (name, args) => Boolean(await versionOf(IS_WIN ? `${name}.exe` : name, args)) || inPath(name).length > 0;
+  const versions = {};
+  const present = async (name, args) => { versions[name] = await versionOf(IS_WIN ? `${name}.exe` : name, args); return Boolean(versions[name]) || inPath(name).length > 0; };
   out.git = await present('git');
   out.node = await present('node');
   out.gh = await present('gh');
   out.tailscale = Boolean(await versionOf(tailscaleExe(), ['version']));
-  return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id] }));
+  return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id], version: versions[i.id] ?? null }));
 }
 
 // The PowerShell script for the chosen items, in a safe order (Node before Codex). Only fixed text from ITEMS goes in.

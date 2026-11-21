@@ -12,10 +12,8 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.assertIsDisplayed
 import dev.orb.app.ui.shell.MainShell
 import dev.orb.app.ui.shell.ShellActions
-import dev.orb.app.ui.theme.MemoryStore
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
-import dev.orb.app.ui.theme.ThemePrefs
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -26,7 +24,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [35])
+@Config(sdk = [35], qualifiers = "w390dp-h844dp")
 class ChatScreensTest {
     @get:Rule val rule = createComposeRule()
 
@@ -40,7 +38,7 @@ class ChatScreensTest {
     private fun list(b: FakeChatsBackend, onOpen: (ChatRef) -> Unit = {}) {
         val vm = ChatListViewModel(b, dispatcher = Dispatchers.Unconfined)
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
                 ChatListScreen(vm, menu, onOpenChat = onOpen, onSearch = {}, onNewChat = {})
             }
         }
@@ -52,6 +50,7 @@ class ChatScreensTest {
         rule.onNodeWithText("Carrito que no guarda").assertIsDisplayed()
         rule.onNodeWithText("Revisar pasarela").assertIsDisplayed()
         for (chip in listOf("Todos", "No leídos", "Directos")) rule.onNodeWithText(chip).assertIsDisplayed()
+        rule.onNodeWithText("Prioridad").assertDoesNotExist()
         rule.onNodeWithText("Fijados").assertIsDisplayed()
         rule.onNodeWithText("tienda-online").assertIsDisplayed()
         rule.onNodeWithText("Nuevo chat", useUnmergedTree = true).assertExists()
@@ -77,7 +76,7 @@ class ChatScreensTest {
         list(FakeChatsBackend(rows))
         rule.onNodeWithText("Revisar pasarela").performTouchInput { longClick() }
         rule.waitForIdle()
-        for (a in listOf("Fijar arriba", "Marcar como leído", "Silenciar", "Posponer", "Mover a sección…", "Renombrar", "Archivar")) {
+        for (a in listOf("Fijar arriba", "Marcar como leído", "Silenciar", "Posponer", "Mover a sección", "Renombrar", "Archivar")) {
             rule.onNodeWithText(a).assertExists()
         }
         rule.onNodeWithText("Borrar el chat en el PC").assertDoesNotExist()
@@ -147,20 +146,19 @@ class ChatScreensTest {
         )
         val vm = SearchViewModel(b, debounceMs = 0)
         var opened: ChatRef? = null
-        rule.setContent { OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) { SearchScreen(vm, onBack = {}, onOpenChat = { opened = it }) } }
+        rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { SearchScreen(vm, onBack = {}, onOpenChat = { opened = it }) } }
         vm.setQuery("carrito")
         rule.waitUntil(5_000) { vm.state.value.phase == SearchPhase.Done }
         rule.waitForIdle()
-        rule.onNodeWithText("Todo · 4").assertExists()
-        for (c in listOf("Chats · 1", "Mensajes · 1", "Tareas · 1", "Proyectos · 1")) rule.onNodeWithText(c).assertExists()
-        rule.onNodeWithText("Carrito que no guarda").assertExists()
-        rule.onNodeWithText("Mensajes · 1").performClick()
+        for (c in listOf("Todo", "Chats", "Mensajes", "Tareas", "Proyectos")) assert(rule.onAllNodesWithTextCount(c) >= 1) { c }
+        rule.onAllNodesWithText("Carrito que no guarda")[0].assertExists()
+        rule.onNodeWithText("Mensajes").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("el carrito solo vive en memoria", substring = true).assertExists()
-        rule.onNodeWithText("Proyectos · 1").performClick()
+        rule.onNodeWithText("Proyectos").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Proyecto en el PC · 3 chats").assertExists()
-        rule.onNodeWithText("Tareas · 1").performClick()
+        rule.onNodeWithText("3 chats").assertExists()
+        rule.onNodeWithText("Tareas").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("#42", substring = true).assertExists()
         assertNull(opened)
@@ -168,10 +166,9 @@ class ChatScreensTest {
 
     @Test fun theThreeTabsNavigate() {
         val b = FakeChatsBackend(rows)
-        val prefs = ThemePrefs(MemoryStore())
         rule.setContent {
-            OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
-                MainShell(b, prefs, ShellActions({}, {}, {}, {}, {}, {}), Dispatchers.Unconfined)
+            OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
+                MainShell(b, ShellActions({}, {}, {}, {}, {}, {}), Dispatchers.Unconfined)
             }
         }
         rule.waitUntil(5_000) { rule.onAllNodesWithTextCount("Orb 3.8.4 seguimiento") > 0 }

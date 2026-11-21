@@ -23,6 +23,8 @@ export default {
   'compact.busy': 'Compacting…',
   'compact.title': 'Compact the conversation',
   'compact.tip': 'The context is almost full. The conversation is summarised so it can continue with more room; the history is kept.',
+  'compact.noRoom': 'There is still plenty of room in the context: it can be compacted once it passes 70 %.',
+  'compact.noChat': 'There is nothing to compact yet: the conversation starts when you write.',
   'msg.orch.compactBusy': 'Wait for the current answer to finish before compacting the conversation.',
   'msg.orch.compacted': 'Conversation compacted. It continues from a summary; the history is kept.',
   'msg.orch.compactRenewed': 'Conversation compacted. The next answer starts from a summary of the conversation; the history is kept.',
@@ -36,7 +38,7 @@ export default {
   'msg.api.reasoningXhigh': 'extra',
   'msg.api.reasoningUnavailable': 'This model does not support Extra reasoning.',
   // Settings in six sections
-  'settings.section.magiclink': 'Magic Link',
+  'settings.section.magiclink': 'Devices',
   'settings.section.agentes': 'Agents and usage',
   'settings.section.avanzado': 'Advanced',
   'settings.section.extensiones': 'Skills and MCP',
@@ -46,8 +48,8 @@ export default {
   'settings.sectionDesc.magiclink': 'Devices linked with this PC.',
   'settings.sectionDesc.agentes': 'Conversations, tasks and usage limits.',
   'settings.sectionDesc.avanzado': 'Agent tools and God mode.',
-  'settings.sectionDesc.extensiones': 'The agents’ skills and MCP servers.',
-  'settings.sectionDesc.permisos': 'What the agents may do without asking, protected paths and the timeout.',
+  'settings.sectionDesc.extensiones': 'Only what is turned on is used. What is imported starts turned off.',
+  'settings.sectionDesc.permisos': 'What the agents may do without asking and what they never touch.',
   'settings.sectionDesc.acerca': 'Version, feedback and other apps.',
   'settings.group.apariencia': 'Appearance',
   'settings.group.actualizaciones': 'Updates',
@@ -60,8 +62,7 @@ export default {
   'about.developer': 'Developer',
   'about.license': 'Licence',
   'about.music': 'Music',
-  'about.musicSummary': '{n} free tracks (CC0)',
-  'about.musicTrack': '“{title}” by {author}',
+  'about.musicAdaptive': 'The background music and the minigames’ are made by Orb on the spot, with no audio files',
   // Texts that pointed to the old sections
   'help.faq.10.a': 'The Professional theme hides the robot and animations; change it in Settings › General, where the floating robot is also turned on or off.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

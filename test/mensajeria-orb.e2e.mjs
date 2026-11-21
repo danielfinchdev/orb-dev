@@ -157,7 +157,7 @@ try {
     await page.waitForSelector('[data-testid=task-line][data-status=running]');
     await page.waitForSelector('[data-testid=chat-task-approval][data-status=awaiting_approval] [data-testid=chat-task-approve]');
     assert.match(await page.textContent('[data-testid=chat-task-approval]'), /«Publicar la web» necesita tu aprobación/);
-    assert.match(await page.textContent('[data-testid=orb-chat-status]'), /mi-web · Esperando tu aprobación/);
+    assert.match(await page.textContent('[data-testid=orb-chat-status]'), /mi-web\s*·\s*Pendiente de aprobación/);
     assert.equal(await page.locator('[data-testid=live-strip]').count(), 0, 'las tareas en una línea, no en un bloque aparte');
     assert.doesNotMatch(await page.textContent('[data-testid=chat-lines]'), /orb_|\{"/, 'sin llamadas de herramientas a la vista');
     await page.waitForSelector('[data-testid=reasoning-picker]');

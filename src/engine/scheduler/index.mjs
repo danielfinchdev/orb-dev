@@ -8,11 +8,11 @@ import { enabledAgents } from '../../platform/config.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
 import { assistantName, userName } from '../../domain/tasks/board.mjs';
 import { git, isGitRepo, repoRoot, mayHaveWorktrees, REF_PREFIX } from '../../platform/git.mjs';
-import { rankAccounts, untilText, modelName } from '../../domain/usage/budget.mjs';
+import { rankAccounts, rateWindows, untilText, modelName } from '../../domain/usage/budget.mjs';
 import { installed } from '../../agents/index.mjs';
 import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { runDue } from '../../domain/schedules/schedules.mjs';
-import { wakeSnoozed } from '../../domain/conversations/inbox.mjs';
+import { wakeSnoozed, clearExpiredMutes } from '../../domain/conversations/inbox.mjs';
 import { usableAccounts, accountLabel } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { parallelLimits, taskTimeoutMinutes } from '../../domain/rules/rails.mjs';
@@ -27,8 +27,9 @@ import { FinishPart } from './finish.mjs';
 export { contractNote } from './common.mjs';
 
 export class Scheduler {
-  constructor(board, sessions, { log = () => {}, orchestrator = null, emit = () => {} } = {}) {
+  constructor(board, sessions, { log = () => {}, orchestrator = null, emit = () => {}, announce = () => {} } = {}) {
     this.board = board; this.sessions = sessions; this.log = log; this.orchestrator = orchestrator; this.emit = emit;
+    this.announce = announce; // a notice for the linked phones (src/engine/transport/notes-center.mjs)
     this.running = new Map(); // task id -> { sessionId, agent }
     this.cleaning = new Map(); // task id -> the stop of its leftover programs still under way (a promise)
     this.mainSnapshot = new Map();
@@ -48,6 +49,7 @@ export class Scheduler {
         board.patch(t.id, { status: 'failed', pid: null, result: tr('msg.scheduler.closedWhileWorking', { name: PRODUCT.name, result: t.result ?? '' }).slice(0, 4000) }, 'orb', 'task.interrupted');
       }
     }
+    try { clearExpiredMutes(board); } catch (error) { this.log(`silencios caducados: ${error.message}`); }
     // Tasks the agent closed itself (orb_update_task) whose process was still alive when the app went away: what Orb does
     // when the process ends (automatic commit, files changed, log, report) never happened, and their pid would hold their
     // dependent tasks forever. It is done now.
@@ -258,7 +260,8 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
   // the snoozed chats whose time has come are back in the list, with a notice naming each.
   wakeChats() {
     const woken = wakeSnoozed(this.board);
-    if (!woken.length) return;
+    const cleared = clearExpiredMutes(this.board); // so both lists stop saying «Silenciado» without a reload
+    if (!woken.length) { if (cleared) this.emit?.('inbox:changed', {}); return; }
     for (const { kind, id } of woken) {
       const title = kind === 'session' ? this.board.one('SELECT title FROM sessions WHERE id = ?', id)?.title : this.board.conversation(Number(id))?.title;
       if (title) this.board.notice(tr('msg.inbox.snoozeBack', { title }));
@@ -293,6 +296,7 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     const limits = parallelLimits();
     for (const task of board.readyTasks('auto')) {
       if (this.running.has(task.id) || (only && !only.has(task.id))) continue;
+      board.folderWaits.delete(task.id);
       // a subtask whose parent is running is what that parent waits for (orb_wait_tasks): it does not wait for a free
       // slot, or with «one at a time» (or one per account) both would wait until the wait runs out.
       // With «Una tarea cada vez», only one of those subtasks at a time.
@@ -302,7 +306,9 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       // Only agents whose program is on this PC take work (an "any" task never goes to one that is not installed).
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a) && !UNGUARDED_AGENTS.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
-      const candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
+      let candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
+      // continuity.switchAccount off: a task that already ran on an account waits for that one instead of resuming on another.
+      if (ctx.config.continuity?.switchAccount === false && task.run_account && candidates.some((acc) => acc.id === task.run_account)) candidates = candidates.filter((acc) => acc.id === task.run_account);
       // a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for
       // ever: it goes to any available agent. Not a sensitive one: its approval was for that agent, so the user decides.
       const available = board.availableAgents();
@@ -340,7 +346,12 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
         // Orb joins its work into the folder when it ends. «Una tarea cada vez», a read-only task or a folder without git:
         // it waits its turn, as before.
         // A task that joins two pieces of work by hand works in the folder itself, so it always waits for it.
-        if (limits.oneAtATime || task.readonly || board.setting(`join_task:${task.id}`) || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) continue;
+        if (limits.oneAtATime || task.readonly || board.setting(`join_task:${task.id}`) || !others.some((t) => !t.readonly) || !isGitRepo(project.path)) {
+          // say which task holds the folder (a read-only one when no writer runs: the join waits for it too)
+          const holder = others.find((t) => !t.readonly) ?? others[0];
+          if (holder) board.folderWaits.set(task.id, holder.id);
+          continue;
+        }
         isolate = true;
       }
       this.launch(task, pick.agent, pick.account, { isolate });
@@ -367,7 +378,12 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
     const until = Math.min(...ranked.map((r) => r.check.paused ?? 0));
     const long = until > 0 && until - Date.now() >= 30 * 60_000;
     const reason = ranked.map((r) => r.check.reason).join('; ');
-    this.notice(task, reason);
+    // the account that comes back first is the one the task waits for
+    const first = ranked.filter((r) => !r.check.ok).sort((a, b) => (a.check.paused ?? a.check.resetAt ?? Infinity) - (b.check.paused ?? b.check.resetAt ?? Infinity))[0];
+    const back = first ? first.check.paused ?? first.check.resetAt : null;
+    // the percent only when the reason is a real-usage brake (its text carries it), not a cooldown or a launch count
+    const brake = first ? rateWindows(this.board, first.account).filter((w) => w.utilization != null && new RegExp(String.raw`\b${Math.round(w.utilization * 100)}\b`).test(first.check.reason)) : [];
+    this.notice(task, reason, first ? { text: reason, account: accountLabel(first.account), until: back ? new Date(back).toISOString() : null, percent: brake.length ? Math.round(brake[0].utilization * 100) : null } : null);
     if (!long || this.board.setting(`pause_offer:${task.id}`) || !this.orchestrator || task.created_by !== 'orb') return;
     const conversation = this.board.conversationOfTask(task.id);
     const others = (this.board.availableAgents() ?? []).filter((a) => a !== task.agent);
@@ -380,7 +396,8 @@ Díselo a ${userName()} en 1-2 líneas, con esa hora, y ofrécele pasarla a otro
   }
 
   // One chat notice per task and reason, so a waiting task does not flood the chat.
-  notice(task, reason) {
+  notice(task, reason, info = null) {
+    if (info) this.board.noticeInfo.set(task.id, info); else this.board.noticeInfo.delete(task.id);
     const key = `wait_notice:${task.id}`;
     if (this.board.setting(key) === reason) return;
     this.board.setting(key, reason);

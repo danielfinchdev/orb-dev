@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 /**
  * «Mantener conectado»: a foreground service whose only job is to keep the app's process, and with it the link to the
  * PC, alive while the app is closed. It holds no wake lock; the link is the same one the app uses and the notices come
- * from [Notifier]. The fixed notice stays in the quiet «Estado de la conexión» channel.
+ * from [Notifier]. The fixed notice stays in the quiet «Estado» channel.
  */
 class KeepAliveService : Service() {
     private var watching: Job? = null
@@ -116,10 +116,13 @@ class AndroidNetworkWatcher(private val context: Context) : NetworkWatcher {
     }
 }
 
-/** Brings the service back after a restart of the phone, when it was on and a PC is linked. */
+/**
+ * Brings the service back after a restart of the phone or an update of the app (which stops it), when it was on and a PC is
+ * linked. Both broadcasts let an app start a foreground service from the background.
+ */
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val container = (context.applicationContext as OrbApplication).container
         if (container.notifyPrefs.linked && container.notifyPrefs.settings.value.keepConnected) container.keepAliveLauncher.start()
     }

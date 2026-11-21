@@ -1,7 +1,7 @@
 // Ajustes › General › Atajos de teclado: the chat tabs switch and the table of shortcuts with a recorder. The table is
 // src/shared/keybindings.mjs; what the user changes is saved by the engine in core/keybindings.json.
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, Kbd } from '@/components/ui/basic.jsx';
+import { Kbd } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { Switch } from '@/components/ui/overlay.jsx';
 import { useT } from '@/lib/i18n.js';
@@ -9,16 +9,12 @@ import { notifyOk } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
 import { useKeys, saveKeys } from '@/lib/keys.js';
 import { COMMANDS, comboFromEvent, conflictOf, normalizeCombo, withBinding, withoutBinding } from '../../../shared/keybindings.mjs';
-import { save, Row } from './rows.jsx';
+import { save, Row, Block, Panel, Stack, CardFoot } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 export function TabsCard({ c }) {
   const t = useT();
-  return (
-    <Card>
-      <CardContent><Row label={t('tabs.setting')} hint={t('tabs.settingHint')}><Switch checked={c.ui?.tabs !== false} onCheckedChange={(tabs) => save({ ui: { tabs } })} data-testid="tabs-switch" /></Row></CardContent>
-    </Card>
-  );
+  return <Panel className="mt-0"><Row label={t('tabs.setting')} hint={t('tabs.settingHint')}><Switch checked={c.ui?.tabs !== false} onCheckedChange={(tabs) => save({ ui: { tabs } })} data-testid="tabs-switch" /></Row></Panel>;
 }
 
 const parts = (combo) => combo.split(/\+(?=.)/);
@@ -64,25 +60,24 @@ export function ShortcutsCard() {
 
   const bad = problems.filter((p) => p.index >= 0 || p.reason === 'json').length;
   return (
-    <Card data-testid="shortcuts-card">
-      <CardHeader><CardTitle>{t('keys.title')}</CardTitle><CardDescription>{t('keys.hint')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-1">
-        {bad ? <p className="text-warning-ink mb-1 text-control" role="status">{t('keys.problems', { n: bad })}</p> : null}
-        <ul className="grid gap-0.5" aria-label={t('keys.title')}>
+    <Block title={t('keys.title')} note={t('keys.hint')} data-testid="shortcuts-card">
+      <Panel>
+        {bad ? <Stack><p className="text-warning-ink text-control" role="status">{t('keys.problems', { n: bad })}</p></Stack> : null}
+        <ul aria-label={t('keys.title')}>
           {COMMANDS.map((cmd) => {
             const v = table.get(cmd.id);
             const recording = rec === cmd.id;
             return (
-              <li key={cmd.id} className="hover:bg-accent/40 -mx-2 grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 rounded-lg px-2 py-1.5" data-testid={`shortcut-${cmd.id}`}>
+              <li key={cmd.id} className="border-border hover:bg-accent/40 grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 px-3.5 py-2.5 not-first:border-t" data-testid={`shortcut-${cmd.id}`}>
                 <div className="min-w-0">
-                  <div className="text-control">{t(cmd.label)}{cmd.when === 'chat' ? <span className="text-muted-foreground ml-2 text-caption">{t('keys.chatOnly')}</span> : null}</div>
+                  <div className="text-control font-medium">{t(cmd.label)}{cmd.when === 'chat' ? <span className="text-muted-foreground ml-2 text-caption font-normal">{t('keys.chatOnly')}</span> : null}</div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   {recording ? <span className="text-primary-text text-control" role="status">{t('keys.recording')}</span> : <Keys combo={v?.key} t={t} />}
                   {cmd.reserved ? <span className="text-muted-foreground text-caption">{t('keys.fixed')}</span> : (
                     <>
-                      <Button size="sm" variant={recording ? 'default' : 'outline'} onClick={() => { setMsg(null); setRec(recording ? null : cmd.id); }} aria-pressed={recording}>{t('keys.record')}</Button>
-                      <Button size="sm" variant="ghost" disabled={!v?.custom} onClick={() => { setMsg(null); saveKeys(withoutBinding(rules, cmd.id)).catch((e) => setMsg({ id: cmd.id, text: errorText(e) })); }}>{t('keys.reset')}</Button>
+                      <Button size="xs" variant={recording ? 'default' : 'outline'} onClick={() => { setMsg(null); setRec(recording ? null : cmd.id); }} aria-pressed={recording}>{t('keys.record')}</Button>
+                      <Button size="xs" variant="ghost" disabled={!v?.custom} onClick={() => { setMsg(null); saveKeys(withoutBinding(rules, cmd.id)).catch((e) => setMsg({ id: cmd.id, text: errorText(e) })); }}>{t('keys.reset')}</Button>
                     </>
                   )}
                 </div>
@@ -91,8 +86,8 @@ export function ShortcutsCard() {
             );
           })}
         </ul>
-        {rules.length ? <div className="pt-2"><Button size="sm" variant="outline" onClick={() => { setMsg(null); saveKeys([]).catch(quiet); }}>{t('keys.resetAll')}</Button></div> : null}
-      </CardContent>
-    </Card>
+        {rules.length ? <CardFoot className="justify-start"><Button size="sm" variant="outline" onClick={() => { setMsg(null); saveKeys([]).catch(quiet); }}>{t('keys.resetAll')}</Button></CardFoot> : null}
+      </Panel>
+    </Block>
   );
 }

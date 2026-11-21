@@ -1,87 +1,67 @@
-import { useLayoutEffect, useRef } from 'react';
-import { ChevronLeft, Search } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import { cn } from '@/lib/utils.js';
 import { useStore, go, phoneLayout } from '@/lib/store.js';
 import { useT } from '@/lib/i18n.js';
 import { Button } from './ui/button.jsx';
+import { BarClock } from './bar-clock.jsx';
 import { SidebarToggle } from './theme-toggle.jsx';
 import { MobileMenu } from './mobile-menu.jsx';
 import { WindowControlsSlot } from './window-controls.jsx';
-import { openPalette } from '@/lib/palette.js';
 
-// the moving pieces of a theme's band (themes.css › .band-art; only Nube's rows of sweets for now), in layers the
-// compositor slides. Its art stays aligned to the window like the band's still art (background-attachment: fixed): the
-// band's place in the window is given to it here (--band-x / --band-y), read again only when the band or the window
-// change size (never per frame). Hidden (display: none) in every other theme.
-export function BandArt() {
-  const ref = useRef(null);
-  useLayoutEffect(() => {
-    const art = ref.current; const band = art?.parentElement;
-    if (!band || typeof ResizeObserver === 'undefined') return undefined;
-    let frame = null;
-    const place = () => {
-      frame = null;
-      const r = band.getBoundingClientRect();
-      art.style.setProperty('--band-x', `${Math.round(r.left)}px`);
-      art.style.setProperty('--band-y', `${Math.round(r.top)}px`);
-    };
-    const soon = () => { frame ??= requestAnimationFrame(place); };
-    place();
-    const ro = new ResizeObserver(soon);
-    ro.observe(band);
-    window.addEventListener('resize', soon);
-    return () => { ro.disconnect(); window.removeEventListener('resize', soon); if (frame != null) cancelAnimationFrame(frame); };
-  }, []);
-  return <span ref={ref} className="band-art" aria-hidden="true"><span /><span /></span>;
+// The header every view of the PC app shares (app.css .bar): the clock on the left, the title with a useful line under
+// it in the middle, the view's actions on the right, and the window's own buttons in the 120 px kept at the end
+// (window-controls.jsx). `left` is the clock unless a view brings its own; `center` the title block.
+// `inner`: a bar inside a pane (the chat embedded in the God mode): it does not drag the window nor keep room for its buttons.
+export function AppBar({ lead, left, center, children, className, inner = false, ...props }) {
+  return (
+    <header className={cn('bar topbar theme-band', !inner && 'app-titlebar', className)} {...props}>
+      <div className="bar-left">{lead}{left}</div>
+      <div className="bar-center">{center}</div>
+      <div className="bar-right">{children}</div>
+      {inner ? null : <WindowControlsSlot />}
+    </header>
+  );
 }
 
-// The way into Ctrl+K from a bar (the shortcut itself is unchanged); the phone has no palette.
-function PaletteButton({ className }) {
-  const t = useT();
-  if (phoneLayout()) return null;
-  return <Button size="icon" variant="ghost" className={cn('shrink-0', className)} onClick={openPalette} aria-label={t('palette.open')} title={t('palette.open')} data-testid="open-palette"><Search className="size-4" /></Button>;
-}
-
-export function PageHeader({ icon, title, meta, center, children, className, back, palette = true }) {
+// `meta`: the line under the title (counts, the project…). `center`: the view draws the whole middle itself and `title`
+// then takes the clock's place.
+export function PageHeader({ title, meta, center, children, className, back }) {
   // with the sidebar folded away, the button that brings it back starts the bar.
   const folded = useStore((s) => s.sidebarCollapsed);
   // the phone: the menu ☰ starts every bar (the status bar's room is the page's own, app.css › #root).
   const phone = phoneLayout();
+  if (!phone) {
+    return (
+      <AppBar className={className} lead={folded ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
+        left={center ? title : <BarClock />}
+        center={center ?? <><h1 className="name">{title}</h1>{meta ? <div className="sub">{typeof meta === 'string' ? <span className="min-w-0 truncate">{meta}</span> : meta}</div> : null}</>}>
+        {children}
+      </AppBar>
+    );
+  }
   // a screen that takes the whole phone (a conversation) has its back arrow there instead.
-  const menu = phone ? back ?? <MobileMenu /> : null;
-  // something in the very middle of the bar (the chat's working folder): three columns, the sides of equal width,
-  // so it stays centred whatever is on each side.
-  // by the width of the bar itself, not of the window (a container query): the chat inside God mode is narrow in
-  // a wide window. And the sides never shrink below what they hold: the middle gives way and is cut with «…» instead of
-  // drawing over the clock or the buttons.
+  const menu = back ?? <MobileMenu />;
   if (center) return (
     <div className="@container shrink-0">
-      <header className={cn('relative topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur @2xl:grid @2xl:flex-nowrap @2xl:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @2xl:px-5', className)}>
+      <header className={cn('relative topbar theme-band app-titlebar bg-background/80 flex min-h-14 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur @2xl:grid @2xl:flex-nowrap @2xl:grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] @2xl:px-5', className)}>
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
-          {icon}
+          {menu}
           <h1 className="min-w-0 text-title leading-tight">{title}</h1>
         </div>
-        {/* Too narrow for three (a phone, a side panel): the middle goes to a line of its own, under the clock and the buttons. */}
         <div className="order-last flex min-w-0 basis-full justify-center overflow-hidden @2xl:order-none @2xl:max-w-[28rem] @2xl:basis-auto">{center}</div>
-        <div className="flex min-w-0 items-center justify-end gap-2">{children}{palette ? <PaletteButton /> : null}</div>
-        <BandArt />
-        <WindowControlsSlot />
+        <div className="flex min-w-0 items-center justify-end gap-2">{children}</div>
       </header>
     </div>
   );
   return (
-    <header className={cn('relative topbar theme-band app-titlebar wco-pad-md bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
-      {menu}{folded && !phone ? <SidebarToggle collapsed className="-ml-1.5" /> : null}
-      {phone ? null : icon}
+    <header className={cn('relative topbar theme-band app-titlebar bg-background/80 flex min-h-14 shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b px-4 py-2.5 backdrop-blur sm:px-5', className)}>
+      {menu}
       {/* On a phone the buttons go under the title instead of squeezing it. */}
       <div className="min-w-[9rem] flex-1">
         <h1 className="truncate text-title leading-tight">{title}</h1>
         {meta ? <div className="text-muted-foreground truncate text-xs">{meta}</div> : null}
       </div>
-      {children || palette ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}{palette ? <PaletteButton /> : null}</div> : null}
-      <BandArt />
-      <WindowControlsSlot />
+      {children ? <div className="flex max-w-full flex-wrap items-center gap-2">{children}</div> : null}
     </header>
   );
 }
@@ -94,5 +74,5 @@ export function BackButton({ to, label }) {
 
 // The scrolling body under a PageHeader. `column`: one centred column for a list.
 export function PageBody({ className, column = false, children, ...props }) {
-  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-5 py-5', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
+  return <div className={cn('min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] py-5 pr-[calc(1.5rem-var(--sb-w))] pl-6', className)} {...props}>{column ? <div className="mx-auto w-full max-w-3xl">{children}</div> : children}</div>;
 }

@@ -12,7 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -76,7 +77,7 @@ fun IslandBlock(
             }
             mounted -> {
                 IslandPage(kind, source, display, dark, onFailed = { failed = true })
-                TextButton(onClick = { IslandShown.forget(key); wantOpen = false }) { Text(IslandTexts.VIEW_CODE) }
+                OrbButton(IslandTexts.VIEW_CODE, { IslandShown.forget(key); wantOpen = false }, kind = OrbButtonKind.Ghost)
             }
             else -> {
                 val label = if (kind == IslandKind.Mermaid) IslandTexts.VIEW_DIAGRAM else IslandTexts.VIEW_FORMULA

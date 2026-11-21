@@ -13,6 +13,9 @@ interface NotePoster {
     /** Says how a button ended, in place of the notification it was on. */
     fun say(job: NoteJob, text: String, goneAfterMs: Long?)
 
+    /** Takes one notification away (its notice was read from a button). */
+    fun cancel(id: Int)
+
     /** Removes every notice of the chats (the app is in front again and shows them itself). */
     fun clearNotes()
 }
@@ -36,6 +39,9 @@ class Notifier(
     internal fun handle(event: LinkEvent) {
         if (isForeground()) return
         val note = PcNotes.parse(event.payload) ?: return
+        // The PC decides what stays silent (a muted chat, a schedule told not to notify) and sends nothing then; if a note
+        // still says so, it is not shown.
+        if (note.quiet) return
         poster.show(NotePlanner.plan(note, settings()))
         log("aviso ${note.kind}")
     }

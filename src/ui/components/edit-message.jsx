@@ -10,19 +10,24 @@ import { useT, t } from '@/lib/i18n.js';
 
 const textOf = (body) => (typeof body === 'string' ? body : body?.text ?? '');
 
-async function edit(sessionId, item) {
+// rewind: «Volver atrás…» of a turn card. That path only ever ends in sessions.editRewind: it does not open when the files cannot
+// be put back (an edit alone would resend the message with the files as they are), and its box is ticked and locked. Nothing is
+// done until the dialog is accepted.
+async function edit(sessionId, item, { rewind = false } = {}) {
+  if (rewind && !fullPc()) return;
   let info;
   try { info = await call('sessions.rewindInfo', { id: sessionId, item: item.id }); } catch (error) { notifyError(error); return; }
   if (!info.canEdit) { notifyError(new Error(info.editWhy)); return; }
-  await form(t('edit.title'), {
-    description: t('edit.desc'), initial: { text: textOf(item.body), rewind: false }, wide: true,
+  if (rewind && !info.canRewind) { notifyError(new Error(t('edit.rewindOff', { why: info.rewindWhy ?? t('msg.edit.noPhoto') }))); return; }
+  await form(rewind ? t('edit.rewindTitle') : t('edit.title'), {
+    description: rewind ? t('edit.rewindDesc') : t('edit.desc'), initial: { text: textOf(item.body), rewind }, wide: true,
     body: (v, set) => (
       <div className="flex flex-col gap-3">
         <Textarea value={v.text} onChange={(e) => set({ text: e.target.value })} className="min-h-28" autoFocus data-testid="edit-text" />
         {item.body?.images?.length ? <p className="text-muted-foreground text-xs" data-testid="edit-images">{t('edit.imagesKept', { n: item.body.images.length })}</p> : null}
         {fullPc() ? <>
         <label className={`flex items-start gap-2 text-control ${info.canRewind ? '' : 'opacity-60'}`}>
-          <Checkbox checked={Boolean(v.rewind) && info.canRewind} disabled={!info.canRewind} onCheckedChange={(on) => set({ rewind: on === true })} className="mt-0.5" data-testid="edit-rewind" />
+          <Checkbox checked={rewind || (Boolean(v.rewind) && info.canRewind)} disabled={rewind || !info.canRewind} onCheckedChange={(on) => set({ rewind: on === true })} className="mt-0.5" data-testid="edit-rewind" />
           <span>{t('edit.rewind')}</span>
         </label>
         {info.canRewind ? <p className="text-xs font-medium" data-testid="edit-commits-kept">{t('edit.commitsKept')}</p> : null}
@@ -30,13 +35,16 @@ async function edit(sessionId, item) {
         </> : null}
       </div>
     ),
-    ok: t('edit.save'),
+    ok: rewind ? t('edit.rewindSave') : t('edit.save'),
     onOk: (v) => {
       if (!String(v.text ?? '').trim()) throw new Error(t('edit.empty'));
+      if (rewind) return call('sessions.editRewind', { id: sessionId, item: item.id, text: v.text });
       return call(v.rewind && info.canRewind && fullPc() ? 'sessions.editRewind' : 'sessions.edit', { id: sessionId, item: item.id, text: v.text });
     },
   });
 }
+
+export const rewindFrom = (sessionId, item) => edit(sessionId, item, { rewind: true });
 
 export function EditButton({ sessionId, item }) {
   const t = useT();

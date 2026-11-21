@@ -23,6 +23,8 @@ export default {
   'compact.busy': 'Compactando…',
   'compact.title': 'Compactar la conversación',
   'compact.tip': 'El contexto está casi lleno. Se resume lo hablado para continuar con más margen; el historial se conserva.',
+  'compact.noRoom': 'Aún hay margen de sobra en el contexto: se podrá compactar cuando pase del 70 %.',
+  'compact.noChat': 'Aún no hay nada que compactar: la conversación empieza cuando escribes.',
   'msg.orch.compactBusy': 'Espera a que termine la respuesta en curso para compactar la conversación.',
   'msg.orch.compacted': 'Conversación compactada. Continúa a partir de un resumen; el historial se conserva.',
   'msg.orch.compactRenewed': 'Conversación compactada. La próxima respuesta parte de un resumen de lo hablado; el historial se conserva.',
@@ -36,7 +38,7 @@ export default {
   'msg.api.reasoningXhigh': 'extra',
   'msg.api.reasoningUnavailable': 'Este modelo no admite el razonamiento Extra.',
   // Ajustes en seis secciones
-  'settings.section.magiclink': 'Magic Link',
+  'settings.section.magiclink': 'Dispositivos',
   'settings.section.agentes': 'Agentes y uso',
   'settings.section.avanzado': 'Avanzado',
   'settings.section.extensiones': 'Skills y MCP',
@@ -46,8 +48,8 @@ export default {
   'settings.sectionDesc.magiclink': 'Dispositivos enlazados con este PC.',
   'settings.sectionDesc.agentes': 'Conversaciones, tareas y límites de uso.',
   'settings.sectionDesc.avanzado': 'Herramientas de los agentes y God mode.',
-  'settings.sectionDesc.extensiones': 'Skills y servidores MCP de los agentes.',
-  'settings.sectionDesc.permisos': 'Qué pueden hacer los agentes sin preguntar, rutas protegidas y tiempo de espera.',
+  'settings.sectionDesc.extensiones': 'Solo se usa lo activado. Lo importado empieza desactivado.',
+  'settings.sectionDesc.permisos': 'Qué pueden hacer los agentes sin preguntar y qué nunca tocan.',
   'settings.sectionDesc.acerca': 'Versión, comentarios y otras aplicaciones.',
   'settings.group.apariencia': 'Apariencia',
   'settings.group.actualizaciones': 'Actualizaciones',
@@ -60,8 +62,7 @@ export default {
   'about.developer': 'Desarrollador',
   'about.license': 'Licencia',
   'about.music': 'Música',
-  'about.musicSummary': '{n} pistas libres (CC0)',
-  'about.musicTrack': '«{title}», de {author}',
+  'about.musicAdaptive': 'La de fondo y la de los minijuegos las crea Orb al momento, sin archivos de audio',
   // Textos que apuntaban a las secciones de antes
   'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones; cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link

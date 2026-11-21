@@ -16,6 +16,8 @@ class KeepAlivePolicyTest {
     private val policy = KeepAlivePolicy({ now }, graceMs = 600_000)
     private val start = KeepAlivePolicy.Decision.Start
     private val stop = KeepAlivePolicy.Decision.Stop
+    private val park = KeepAlivePolicy.Decision.Park
+    private val resume = KeepAlivePolicy.Decision.Resume
     private val none = KeepAlivePolicy.Decision.None
 
     @Test fun startsWhenOnAndLinkedAndDoesNotRestartItself() {
@@ -35,17 +37,34 @@ class KeepAlivePolicyTest {
         assertEquals(stop, policy.evaluate(true, LinkKind.Terminal))
     }
 
-    @Test fun stepsAsideAfterThePcStaysOutOfSight() {
+    @Test fun parksTheLinkAfterThePcStaysOutOfSightButKeepsTheService() {
         policy.evaluate(true, LinkKind.Online)
         assertEquals(none, policy.evaluate(true, LinkKind.Offline))
         assertEquals(600_000L, policy.recheckInMs())
         now += 599_000
         assertEquals(none, policy.evaluate(true, LinkKind.Offline))
         now += 1_000
-        assertEquals(stop, policy.evaluate(true, LinkKind.Offline))
+        assertEquals(park, policy.evaluate(true, LinkKind.Offline))
         assertEquals(null, policy.recheckInMs())
-        // Parked: asking again does not bring it back by itself.
+        // Parked: asking again changes nothing, and the service is never started a second time.
         assertEquals(none, policy.evaluate(true, LinkKind.Offline))
+    }
+
+    @Test fun aParkedLinkResumesWhenThePcIsBackOnline() {
+        policy.evaluate(true, LinkKind.Online)
+        policy.evaluate(true, LinkKind.Offline)
+        now += 600_000
+        assertEquals(park, policy.evaluate(true, LinkKind.Offline))
+        assertEquals(resume, policy.evaluate(true, LinkKind.Online))
+        assertEquals(none, policy.evaluate(true, LinkKind.Online))
+    }
+
+    @Test fun switchingOffWhileParkedStopsTheService() {
+        policy.evaluate(true, LinkKind.Online)
+        policy.evaluate(true, LinkKind.Offline)
+        now += 600_000
+        policy.evaluate(true, LinkKind.Offline)
+        assertEquals(stop, policy.evaluate(false, LinkKind.Offline))
     }
 
     @Test fun comingBackOnlineCancelsTheWait() {
@@ -59,14 +78,22 @@ class KeepAlivePolicyTest {
         assertEquals(600_000L, policy.recheckInMs())
     }
 
-    @Test fun aNetworkChangeBringsAParkedServiceBack() {
+    @Test fun aNetworkChangeBringsAParkedLinkBack() {
         policy.evaluate(true, LinkKind.Online)
         policy.evaluate(true, LinkKind.Offline)
         now += 600_000
         policy.evaluate(true, LinkKind.Offline)
         policy.networkChanged()
-        assertEquals(start, policy.evaluate(true, LinkKind.Offline))
+        assertEquals(resume, policy.evaluate(true, LinkKind.Offline))
+        // A fresh window starts after that.
+        assertEquals(none, policy.evaluate(true, LinkKind.Offline))
         assertEquals(600_000L, policy.recheckInMs())
+    }
+
+    @Test fun aNetworkChangeWithoutAParkedLinkResumesNothing() {
+        policy.evaluate(true, LinkKind.Online)
+        policy.networkChanged()
+        assertEquals(none, policy.evaluate(true, LinkKind.Online))
     }
 
     @Test fun aRefusedStartIsTriedAgainOnTheNextChange() {
@@ -93,6 +120,8 @@ class KeepAliveControllerTest {
         override fun start(): Boolean { events += if (allowed) "start" else "refused"; return allowed }
         override fun stop() { events += "stop" }
     }
+    private val parks = mutableListOf<Boolean>()
+    private var networkTries = 0
 
     private class Network : NetworkWatcher {
         var onChange: (() -> Unit)? = null
@@ -106,7 +135,7 @@ class KeepAliveControllerTest {
     private val network = Network()
 
     private fun kotlinx.coroutines.test.TestScope.controller() =
-        KeepAliveController(KeepAlivePolicy({ testScheduler.currentTime }, 600_000), enabled, kind, network, launcher).start(this)
+        KeepAliveController(KeepAlivePolicy({ testScheduler.currentTime }, 600_000), enabled, kind, network, launcher, park = { parks += it }, onNetwork = { networkTries++ }).start(this)
 
     @Test fun followsTheSettingAndTheLink() = runTest {
         val job = controller()
@@ -125,19 +154,22 @@ class KeepAliveControllerTest {
         assertTrue(network.closed)
     }
 
-    @Test fun parksWhenThePcStaysOfflineAndReturnsWithTheNetwork() = runTest {
+    @Test fun parksTheLinkWhenThePcStaysOfflineAndResumesItWithTheNetworkKeepingTheService() = runTest {
         val job = controller()
         runCurrent()
         kind.value = LinkKind.Offline
         runCurrent()
         advanceTimeBy(599_000)
-        assertEquals(listOf("start"), launcher.events)
+        assertEquals(emptyList<Boolean>(), parks)
         advanceTimeBy(2_000)
         runCurrent()
-        assertEquals(listOf("start", "stop"), launcher.events)
+        assertEquals(listOf(true), parks)
         network.onChange!!.invoke()
         runCurrent()
-        assertEquals(listOf("start", "stop", "start"), launcher.events)
+        assertEquals(listOf(true, false), parks)
+        assertEquals(1, networkTries)
+        // The service was started once and never stopped, so no start from the background is needed to come back.
+        assertEquals(listOf("start"), launcher.events)
         job.cancel()
     }
 

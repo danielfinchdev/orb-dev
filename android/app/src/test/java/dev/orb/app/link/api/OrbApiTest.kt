@@ -39,7 +39,7 @@ class OrbApiTest {
         // the 3.8.4 PC lists them in REMOTE_METHODS; the flag only hides them from older PCs that lack them
         for (m in ApiMethods.all.filter { it.requiresPc != null }) assertTrue(m.name, m.name in remote)
         assertEquals(setOf("pc.screenshot", "conversations.trash", "conversations.restore", "sessions.trash", "sessions.restore", "projects.mergePr",
-            "projects.prs", "projects.pr", "notes.markRead", "inbox.digest", "inbox.digestSeen"),
+            "projects.prs", "projects.pr", "notes.markRead", "inbox.digest", "inbox.digestSeen", "inbox.markUnread", "chat.queue", "chat.editQueued", "sessions.rewindInfo", "notes.list"),
             ApiMethods.all.filter { it.requiresPc != null }.map { it.name }.toSet())
         assertEquals("no method is listed twice", ApiMethods.all.size, ApiMethods.all.map { it.name }.toSet().size)
     }

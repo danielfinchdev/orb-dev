@@ -80,22 +80,61 @@ class TasksViewModelTest {
         assertEquals(2, s.approve) // awaiting approval + held for review
         assertEquals(1, s.running)
         assertEquals(1, s.problems) // the held one is not a problem, it needs a decision
+        assertEquals(1, s.done)
         assertTrue(s.paused)
         assertEquals(1, s.waitingPaused)
         assertTrue(s.loaded)
     }
 
-    @Test fun filtersNarrowTheList() = runTest(dispatcher) {
+    private fun TasksViewModel.ids(section: TaskSection) = state.value.groups.first { it.section == section }.rows.map { it.id }.toSet()
+
+    @Test fun theBoardIsFourNumberedSectionsAndTheViewAddsTheFinishedOnes() = runTest(dispatcher) {
         val vm = vm(FakeTasksBackend(mixed))
-        vm.setFilter(TaskFilter.Approve)
-        runCurrent()
-        assertEquals(setOf(3L, 0L), vm.state.value.tasks.map { it.id }.toSet())
-        vm.setFilter(TaskFilter.Done)
-        runCurrent()
-        assertEquals(listOf(9L), vm.state.value.tasks.map { it.id })
+        assertEquals(listOf(TaskSection.Approve, TaskSection.Running, TaskSection.Queued, TaskSection.Problems), vm.state.value.groups.map { it.section })
+        assertEquals(setOf(3L, 0L), vm.ids(TaskSection.Approve))
+        assertEquals(setOf(2L), vm.ids(TaskSection.Running))
+        assertEquals(setOf(5L, 4L), vm.ids(TaskSection.Queued))
+        assertEquals(setOf(1L), vm.ids(TaskSection.Problems))
         vm.setFilter(TaskFilter.All)
         runCurrent()
-        assertEquals(7, vm.state.value.tasks.size)
+        assertEquals(TaskSection.Done, vm.state.value.groups.last().section)
+        assertEquals(setOf(9L), vm.ids(TaskSection.Done))
+        vm.setFilter(TaskFilter.Done)
+        runCurrent()
+        assertEquals(listOf(TaskSection.Done), vm.state.value.groups.map { it.section })
+    }
+
+    @Test fun aChipChoosesASectionAndTheSameChipGoesBackToAll() = runTest(dispatcher) {
+        val vm = vm(FakeTasksBackend(mixed))
+        assertEquals(null, vm.state.value.section)
+        vm.toggleSection(TaskSection.Running)
+        runCurrent()
+        assertEquals(listOf(TaskSection.Running), vm.state.value.groups.map { it.section })
+        assertEquals(TaskSection.Running, vm.state.value.section)
+        vm.toggleSection(TaskSection.Queued)
+        runCurrent()
+        assertEquals(listOf(TaskSection.Queued), vm.state.value.groups.map { it.section })
+        vm.toggleSection(TaskSection.Queued)
+        runCurrent()
+        assertEquals(4, vm.state.value.groups.size)
+        assertEquals(null, vm.state.value.section)
+    }
+
+    @Test fun changingTheViewForgetsTheChosenChip() = runTest(dispatcher) {
+        val vm = vm(FakeTasksBackend(mixed))
+        vm.toggleSection(TaskSection.Running)
+        vm.setFilter(TaskFilter.All)
+        runCurrent()
+        assertEquals(null, vm.state.value.section)
+        assertEquals(5, vm.state.value.groups.size)
+    }
+
+    @Test fun anEmptySectionIsStillDrawnWithZeroAndFinishedOnesOnlyWhenThereAre() = runTest(dispatcher) {
+        val vm = vm(FakeTasksBackend(listOf(task(1, status = "queued"))))
+        assertEquals(listOf(0, 0, 1, 0), vm.state.value.groups.map { it.rows.size })
+        vm.setFilter(TaskFilter.All)
+        runCurrent()
+        assertEquals(4, vm.state.value.groups.size)
     }
 
     @Test fun aBoardEventReadsTheListAgainOnceAfterTheDebounce() = runTest(dispatcher) {
@@ -138,11 +177,31 @@ class TasksViewModelTest {
     @Test fun resumeShowsAtOnceAndAskedThePc() = runTest(dispatcher) {
         val b = FakeTasksBackend(mixed, paused = true)
         val vm = vm(b)
+        val changes = ArrayList<Boolean>()
+        backgroundScope.launch { vm.queueChanges.collect { changes += it } }
         vm.setPaused(false)
         runCurrent()
         assertEquals(listOf("paused false"), b.calls)
         assertFalse(vm.state.value.paused)
         assertFalse(vm.state.value.queueBusy)
+        // The screen is told so it can offer «Deshacer».
+        assertEquals(listOf(false), changes)
+    }
+
+    @Test fun goingBackFromTheOfferSaysItPlainlyAndOffersNothingMore() = runTest(dispatcher) {
+        val b = FakeTasksBackend(mixed, paused = false)
+        val vm = vm(b)
+        val changes = ArrayList<Boolean>()
+        val seen = ArrayList<String>()
+        backgroundScope.launch { vm.queueChanges.collect { changes += it } }
+        backgroundScope.launch { vm.messages.collect { seen += it } }
+        vm.setPaused(true)
+        runCurrent()
+        vm.setPaused(false, offerUndo = false)
+        runCurrent()
+        assertEquals(listOf("paused true", "paused false"), b.calls)
+        assertEquals(listOf(true), changes)
+        assertEquals(listOf(TaskTexts.QUEUE_RESUMED), seen)
     }
 
     @Test fun aRefusedPauseGoesBackWithTheReason() = runTest(dispatcher) {
@@ -238,6 +297,72 @@ class TasksViewModelTest {
         runCurrent()
         assertNull(vm.state.value.results)
         assertFalse(vm.state.value.searching)
+    }
+
+    private val awaiting = task(3, "Borrar build", status = "awaiting_approval")
+
+    @Test fun rejectingReadsTheTaskForItsFingerprintAndRefuses() = runTest(dispatcher) {
+        val b = FakeTasksBackend(listOf(awaiting))
+        b.details[3] = Result.success(detail(awaiting, previewHash = "h1"))
+        val vm = vm(b)
+        val seen = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { seen += it } }
+        vm.reject(3)
+        runCurrent()
+        assertEquals(listOf("decide 3 false h1"), b.calls)
+        assertEquals(listOf(TaskTexts.REJECTED), seen)
+        assertTrue(vm.state.value.rejecting.isEmpty())
+    }
+
+    @Test fun rejectingNeverSendsAnApproval() = runTest(dispatcher) {
+        val b = FakeTasksBackend(listOf(awaiting))
+        b.details[3] = Result.success(detail(awaiting, previewHash = "h1"))
+        val vm = vm(b)
+        vm.reject(3)
+        runCurrent()
+        assertTrue(b.calls.none { it.startsWith("decide") && !it.contains(" false ") })
+    }
+
+    @Test fun aTaskThatNoLongerWaitsForTheOkIsNotRejected() = runTest(dispatcher) {
+        val b = FakeTasksBackend(listOf(awaiting))
+        b.details[3] = Result.success(detail(task(3, status = "running"), previewHash = "h1"))
+        val vm = vm(b)
+        val seen = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { seen += it } }
+        vm.reject(3)
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+        assertEquals(listOf(TaskTexts.TASK_CHANGED), seen)
+    }
+
+    @Test fun rejectingOfflineOrWithoutTheMethodDoesNothing() = runTest(dispatcher) {
+        val b = FakeTasksBackend(listOf(awaiting))
+        b.details[3] = Result.success(detail(awaiting, previewHash = "h1"))
+        val vm = vm(b)
+        b.connectionState.value = ConnectionState.Offline(null, null)
+        runCurrent()
+        vm.reject(3)
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+        b.unavailable = setOf(ApiMethods.TASKS_APPROVE.name)
+        b.connectionState.value = ConnectionState.Online("http://pc", "PC", dev.orb.app.link.net.PcVersions(1, 1, "3.8.4"))
+        runCurrent()
+        assertFalse(vm.state.value.canReject)
+        vm.reject(3)
+        runCurrent()
+        assertTrue(b.calls.isEmpty())
+    }
+
+    @Test fun aRefusedRejectionSaysWhy() = runTest(dispatcher) {
+        val b = FakeTasksBackend(listOf(awaiting))
+        b.details[3] = Result.success(detail(awaiting, previewHash = "h1"))
+        b.actionResult = Result.failure(LinkException(LinkError.Offline))
+        val vm = vm(b)
+        val seen = ArrayList<String>()
+        backgroundScope.launch { vm.messages.collect { seen += it } }
+        vm.reject(3)
+        runCurrent()
+        assertTrue(seen.single().startsWith(TaskTexts.ACTION_FAILED))
     }
 
     @Test fun refreshWhileReadingDoesNotReadTwice() = runTest(dispatcher) {

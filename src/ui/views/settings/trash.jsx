@@ -2,11 +2,11 @@
 // The card draws nothing when the engine has no trash (trash.list unknown), so it degrades on older engines.
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
+import { Block, Panel, Stack, Hint } from './rows.jsx';
 
 export function TrashCard() {
   const t = useT();
@@ -25,14 +25,13 @@ export function TrashCard() {
     load();
   };
   return (
-    <Card data-testid="trash-card">
-      <CardHeader><CardTitle>{t('trash.title')}</CardTitle><CardDescription>{t('trash.desc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-1">
+    <Block title={t('trash.title')} note={t('trash.desc')} data-testid="trash-card">
+      <Panel>
         {items.length ? items.map((it) => (
-          <ListRow key={`${it.kind}:${it.id}`} title={it.title} meta={ago(it.trashedAt)}
-            trailing={<Button size="sm" variant="outline" onClick={() => restore(it)} data-testid="trash-restore">{t('trash.restore')}</Button>} />
-        )) : <p className="text-muted-foreground text-sm" data-testid="trash-empty">{t('trash.empty')}</p>}
-      </CardContent>
-    </Card>
+          <ListRow key={`${it.kind}:${it.id}`} className="border-border rounded-none not-first:border-t" title={it.title} meta={ago(it.trashedAt)}
+            trailing={<Button size="xs" variant="outline" onClick={() => restore(it)} data-testid="trash-restore">{t('trash.restore')}</Button>} />
+        )) : <Stack><Hint data-testid="trash-empty">{t('trash.empty')}</Hint></Stack>}
+      </Panel>
+    </Block>
   );
 }

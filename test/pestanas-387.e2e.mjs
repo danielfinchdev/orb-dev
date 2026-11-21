@@ -80,7 +80,7 @@ try {
   assert.equal(await tabs().count(), 2);
 
   // the themes keep the bar readable (look at the pictures)
-  for (const skin of ['cristal', 'grafito', 'orb']) {
+  for (const skin of ['cristal', 'predeterminado', 'orb']) {
     await call('config.save', { patch: { ui: { skin } } });
     await page.reload();
     await page.locator('[data-testid=chat-tabs]').waitFor();
@@ -97,6 +97,11 @@ try {
   assert.deepEqual(errors, [], 'no page errors');
   console.log('pestañas: OK');
 } finally {
-  await browser.close(); child.kill();
-  fs.rmSync(t.home, { recursive: true, force: true });
+  await browser.close();
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  child.kill();
+  await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5000))]);
+  // The engine may still hold the folder for an instant: retry, and a cleanup failure never turns a green run red.
+  try { fs.rmSync(t.home, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }); }
+  catch (e) { console.warn(`aviso: no se pudo borrar ${t.home}: ${e.message}`); }
 }

@@ -18,15 +18,28 @@ object NoteIntents {
     const val REPLY_KEY = "orb-reply"
 }
 
+/**
+ * Flags of the notice buttons' PendingIntents. A reply is filled in by Android (the typed text), so it must stay mutable: from
+ * Android 12 that is said with FLAG_MUTABLE, and before it a PendingIntent is mutable simply by not being marked immutable.
+ */
+internal fun pendingFlags(mutable: Boolean, sdk: Int): Int = PendingIntent.FLAG_UPDATE_CURRENT or when {
+    !mutable -> PendingIntent.FLAG_IMMUTABLE
+    sdk >= 31 -> PendingIntent.FLAG_MUTABLE
+    else -> 0
+}
+
 object NotifyChannels {
     const val STATUS_ID = 19_001
 
-    /** Creates the three channels (the id «orb-chats» of the messages is kept from the old app). */
+    /**
+     * Creates the three channels of the mock-ups (Mensajes, Aprobaciones, Estado; the id «orb-chats» of the messages is kept from
+     * the old app). Creating one that exists only refreshes its visible name: the importance and the sound the person chose stay.
+     */
     fun ensure(context: Context) {
         if (Build.VERSION.SDK_INT < 26) return
         val nm = context.getSystemService(NotificationManager::class.java) ?: return
         fun make(c: NoteChannel, name: String, importance: Int) {
-            if (nm.getNotificationChannel(c.id) == null) nm.createNotificationChannel(NotificationChannel(c.id, name, importance))
+            nm.createNotificationChannel(NotificationChannel(c.id, name, importance))
         }
         make(NoteChannel.Messages, NotifyTexts.CHANNEL_MESSAGES, NotificationManager.IMPORTANCE_HIGH)
         make(NoteChannel.Approvals, NotifyTexts.CHANNEL_APPROVALS, NotificationManager.IMPORTANCE_HIGH)
@@ -42,11 +55,15 @@ object NotifyChannels {
 class AndroidNotePoster(
     private val context: Context,
     private val jobs: NoteJobs,
+    // What the person chose for the lock screen; «nothing» also applies to the result notices.
+    private val lockScreen: () -> LockScreenNotice = { LockScreenNotice.Generic },
+    // True while the phone itself is locked: the Android setting that hides private content is not under our control, so with
+    // «Solo "Orb"» the real text must never be handed to the system at all.
+    private val deviceLocked: () -> Boolean = { false },
     // True while the Orb lock is on: the result notice then carries no chat title.
     private val hideTitles: () -> Boolean = { false },
 ) : NotePoster {
-    private fun flags(mutable: Boolean) =
-        PendingIntent.FLAG_UPDATE_CURRENT or (if (mutable && Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE)
+    private fun flags(mutable: Boolean) = pendingFlags(mutable, Build.VERSION.SDK_INT)
 
     private fun openApp(id: Int, slot: Int, job: NoteJob): PendingIntent {
         val intent = Intent(context, MainActivity::class.java)
@@ -64,22 +81,37 @@ class AndroidNotePoster(
             .setContentText(text)
             .setAutoCancel(true)
 
+    /** Android lets this app show notices; without it nothing is built, no button is kept and nothing is posted. */
+    private fun allowed(): Boolean = try {
+        NotificationManagerCompat.from(context).areNotificationsEnabled()
+    } catch (e: Exception) {
+        false
+    }
+
     override fun show(plan: NotificationPlan) {
+        if (!allowed()) return
         NotifyChannels.ensure(context)
         jobs.drop(plan.id)
-        val b = base(plan.channel, plan.title, plan.text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(plan.text))
+        // Posted as content, with no real text and no button that could reveal it, like the Orb lock does in the planner.
+        val bare = plan.lockScreen == LockScreenNotice.Generic && deviceLocked()
+        val title = if (bare) plan.publicTitle else plan.title
+        val text = if (bare) plan.publicText else plan.text
+        val b = base(plan.channel, title, text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(openApp(plan.id, 0, plan.tap))
         if (plan.silent) b.setSilent(true)
-        if (plan.lockScreenPublic) {
-            b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-        } else {
-            b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
-            b.setPublicVersion(base(plan.channel, plan.publicTitle, plan.publicText).build())
+        when (plan.lockScreen) {
+            LockScreenNotice.Full -> b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            LockScreenNotice.Generic -> {
+                b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                b.setPublicVersion(base(plan.channel, plan.publicTitle, plan.publicText).build())
+            }
+            // SECRET: nothing at all while locked; no public version is given, so there is nothing to show instead.
+            LockScreenNotice.Hidden -> b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
         }
-        plan.actions.forEachIndexed { i, a ->
+        (if (bare) emptyList() else plan.actions).forEachIndexed { i, a ->
             val slot = i + 1
             if (!a.job.acts) {
                 b.addAction(0, a.label, openApp(plan.id, slot, a.job))
@@ -89,7 +121,8 @@ class AndroidNotePoster(
                 .setAction("dev.orb.app.NOTE_ACTION.${plan.id}.$i")
                 .putExtra(NoteIntents.EXTRA_TOKEN, jobs.keep(a.job))
             val pending = PendingIntent.getBroadcast(context, plan.id * 8 + slot, intent, flags(mutable = a.input))
-            val action = NotificationCompat.Action.Builder(0, a.label, pending).setAuthenticationRequired(true)
+            // Marking a notice read changes nothing on the PC and shows nothing: it needs no unlocking, unlike a button that acts there.
+            val action = NotificationCompat.Action.Builder(0, a.label, pending).setAuthenticationRequired(!a.job.local)
             if (a.input) action.addRemoteInput(RemoteInput.Builder(NoteIntents.REPLY_KEY).setLabel(a.label).build()).setAllowGeneratedReplies(false)
             b.addAction(action.build())
         }
@@ -97,15 +130,30 @@ class AndroidNotePoster(
     }
 
     override fun say(job: NoteJob, text: String, goneAfterMs: Long?) {
+        if (!allowed()) return
         NotifyChannels.ensure(context)
-        val title = if (hideTitles()) "Orb" else job.title
+        val title = if (hideTitles() || (deviceLocked() && lockScreen() == LockScreenNotice.Generic)) "Orb" else job.title
         val tap = NoteJob(job.group, "tap", title, target = job.target)
         val b = base(NoteChannel.Messages, title, text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setSilent(true)
             .setContentIntent(openApp(job.group, 0, tap))
+        // The chat's name never shows on the lock screen unless the person chose so; «Enviado» alone says nothing.
+        when (lockScreen()) {
+            LockScreenNotice.Full -> b.setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            LockScreenNotice.Generic -> {
+                b.setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                b.setPublicVersion(base(NoteChannel.Messages, "Orb", text).build())
+            }
+            LockScreenNotice.Hidden -> b.setVisibility(NotificationCompat.VISIBILITY_SECRET)
+        }
         if (goneAfterMs != null) b.setTimeoutAfter(goneAfterMs)
         notify(job.group, b)
+    }
+
+    override fun cancel(id: Int) {
+        jobs.drop(id)
+        context.getSystemService(NotificationManager::class.java)?.cancel(id)
     }
 
     override fun clearNotes() {

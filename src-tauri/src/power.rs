@@ -75,7 +75,9 @@ fn lock_master(wait: bool) {
     return;
   }
   let call = async move {
-    if let Err(e) = engine.call("master.lock", serde_json::json!({}), Duration::from_millis(if wait { 1500 } else { 5000 })).await {
+    // `wait` is the suspend path (WM_POWERBROADCAST); the other one is Windows' own lock. The lock screen says which.
+    let reason = if wait { "sleep" } else { "windows" };
+    if let Err(e) = engine.call("master.lock", serde_json::json!({ "reason": reason }), Duration::from_millis(if wait { 1500 } else { 5000 })).await {
       engine.log_line(&format!("master.lock al bloquear o suspender: {e}"));
     }
   };

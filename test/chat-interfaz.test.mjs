@@ -157,7 +157,7 @@ test('57: la actividad en palabras, sin nombres internos ni JSON', () => {
   assert.equal(activityLabel(t, 'task.usage'), 'Uso de la tarea');
   assert.equal(activityLabel(t, 'evento.raro'), 'evento.raro');
   assert.equal(activityDetail(t, { kind: 'task.usage', detail: '{"minutes":1,"tokens":0,"costUsd":null}' }, 'es-ES'), '1 min');
-  assert.equal(activityDetail(t, { kind: 'task.launch_options', detail: '{"agent":"cursor","model":"composer-2.5","reasoning":"low"}' }, 'es-ES', { cursor: 'Cursor' }), 'Cursor · composer-2.5 · razonamiento bajo');
+  assert.equal(activityDetail(t, { kind: 'task.launch_options', detail: '{"agent":"cursor","model":"composer-2.5","reasoning":"low"}' }, 'es-ES', { cursor: 'Cursor' }), 'Cursor · modelo composer-2.5 · razonamiento bajo');
   assert.equal(activityDetail(t, { kind: 'checkpoint', detail: 'foto de la carpeta antes de la tarea (refs/orb/t24-1791970229048)' }, 'es-ES'), 'foto de la carpeta antes de la tarea');
 });
 

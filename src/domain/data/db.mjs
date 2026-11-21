@@ -118,6 +118,22 @@ CREATE TABLE IF NOT EXISTS devices (
   created_at TEXT NOT NULL,
   last_seen TEXT
 );
+-- 3.8.8: the last notices sent to the linked phones, so a phone can ask for the ones it missed (src/domain/notes/recent.mjs).
+-- Only what was delivered (text as shown, destination); never an action token.
+CREATE TABLE IF NOT EXISTS mobile_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  hidden INTEGER NOT NULL DEFAULT 0,
+  route TEXT,
+  target TEXT,
+  line INTEGER,
+  conversation_id INTEGER
+);
+CREATE INDEX IF NOT EXISTS mobile_notes_at ON mobile_notes (at);
 -- 2.3: messages waiting for a running turn (sent in order when it ends, or steered into it).
 CREATE TABLE IF NOT EXISTS session_queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -259,6 +275,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'parent_id', 'INTEGER'], ['tasks', 'limited_until', 'TEXT'], ['tasks', 'review_of', 'INTEGER'], ['tasks', 'schedule_id', 'INTEGER'],
   // how hard the task is (simple / normal / complejo), for Orb to choose its model and reasoning.
   ['tasks', 'level', 'TEXT'],
+  // tokens an agent read from its cache in a turn (usage_ledger), apart from the ones it paid for.
+  ['usage_ledger', 'tokens_cache', 'INTEGER'],
   // the task's permission level («auto» or «preguntar»; null = the global one) and what the user's own message asked
   // for (JSON list: ["publish"]), src/domain/tasks/board.mjs › createTask.
   ['tasks', 'autonomy', 'TEXT'], ['tasks', 'user_asked', 'TEXT'],
@@ -279,12 +297,21 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['conversations', 'bot_id', 'INTEGER'], ['conversations', 'group_id', 'INTEGER'],
   // the direct conversation (session) that claimed a manual task: only that one may work on it.
   ['tasks', 'claimed_session', 'TEXT'],
+  // the direct conversation (session) whose agent created the task (orb_create_task); older tasks have none.
+  ['tasks', 'origin_session', 'TEXT'],
   // the task a worker's message comes from (task_id is then the task it is for: its own, or a sibling's).
   ['messages', 'from_task', 'INTEGER'],
   // a chat snoozed until then (hidden from the list; the scheduler brings it back).
   ['inbox_items', 'snoozed_until', 'TEXT'],
+  // a chat the user marked as unread by hand (it counts as one unread line until it is read again).
+  ['inbox_items', 'marked_unread', 'INTEGER NOT NULL DEFAULT 0'],
+  // a mute that ends at that time (ISO); none = muted until the user lifts it.
+  ['inbox_items', 'muted_until', 'TEXT'],
   // a schedule whose runs all go to one chat (made on its first run, or the one that asked for it).
   ['schedules', 'same_chat', 'INTEGER NOT NULL DEFAULT 0'], ['schedules', 'conversation_id', 'INTEGER'],
+  // a schedule's own zone (IANA; none = Orb's), the day of the month of «monthly», the permission level its runs take
+  // (none = Ajustes') and whether the phone is told when a run ends (on, as it always was).
+  ['schedules', 'tz', 'TEXT'], ['schedules', 'month_day', 'INTEGER'], ['schedules', 'autonomy', 'TEXT'], ['schedules', 'notify_mobile', 'INTEGER NOT NULL DEFAULT 1'],
   // The person's own notes on a chat (shown in its info panel) and the chat lines they pinned (when, null = not pinned).
   ['conversations', 'notes', 'TEXT'], ['chat', 'pinned_at', 'TEXT']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8

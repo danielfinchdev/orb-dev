@@ -4,7 +4,8 @@
 // the approval…); a task's screen reads them from tasks.get. The plain reply keeps every field.
 import { Feed } from '../shared/feed.mjs';
 
-const TASK_DETAIL_ONLY = ['description', 'result', 'workdir', 'project_path', 'approved_by', 'run_account', 'schedule_id', 'claimed_session', 'depends_on', 'pid', 'launch', 'priority'];
+// schedule_id stays in the list: Programadas tells a schedule's runs apart by it («Últimas ejecuciones»).
+const TASK_DETAIL_ONLY = ['description', 'result', 'workdir', 'project_path', 'approved_by', 'run_account', 'claimed_session', 'depends_on', 'pid', 'launch', 'priority'];
 export const compactTask = (task) => { for (const f of TASK_DETAIL_ONLY) delete task[f]; return task; };
 // params: the parameters that change the list, normalised as the method reads them; any other is ignored, so stray or
 // differently spelled parameters (limit 200 / "200", an unknown key) share one feed instead of filling the cache.

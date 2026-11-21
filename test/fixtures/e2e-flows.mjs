@@ -16,10 +16,10 @@ export { TEST_MASTER };
 // The backups (%LOCALAPPDATA%\Orb\copias), the 3.7 bridge folder (%LOCALAPPDATA%\OrbPuente) and adb stay out of the test.
 export const sandboxEnv = (tmp) => ({ ORB_NO_ADB: '1', ORB_BACKUP_ROOT: path.join(tmp, 'copias'), ORB_BRIDGE_DIR: path.join(tmp, 'puente') });
 
-const SCREENS = { layout: '[data-testid=layout-review]', master: '[data-testid=master-create]', prepare: '[data-testid=setup-prepare]' };
+const SCREENS = { theme: '[data-testid=setup-theme]', layout: '[data-testid=layout-review]', master: '[data-testid=master-create]', prepare: '[data-testid=setup-prepare]' };
 
 // thorough: also the strength meter, a repeat that does not match and the button waiting for the box.
-export async function createMaster(page, { password = TEST_MASTER, thorough = false } = {}) {
+export async function createMaster(page, { password = TEST_MASTER, thorough = false, onCode = null } = {}) {
   assert.ok([...password].length >= 10, 'MASTER_MIN: at least 10 characters');
   await page.waitForSelector(SCREENS.master);
   const ok = page.locator('[data-testid=master-create-ok]');
@@ -40,10 +40,21 @@ export async function createMaster(page, { password = TEST_MASTER, thorough = fa
   assert.equal(await page.getAttribute('[data-testid=master-ack]', 'data-state'), 'checked');
   await ok.click();
   await page.locator(SCREENS.master).waitFor({ state: 'detached', timeout: 20000 });
+  // A profile without a recovery code gets one right here, shown once: the card waits for «Lo he guardado» (or, when the
+  // code could not be made, for «Crearlo luego»). A profile that already had a code goes straight on.
+  const card = page.locator('[data-testid=master-code-card]');
+  if (await card.waitFor({ timeout: 4000 }).then(() => true, () => false)) {
+    if (onCode) await onCode(page);
+    if (await page.locator('[data-testid=master-code-kept]').count()) {
+      await page.click('[data-testid=master-code-kept]');
+      await page.click('[data-testid=master-code-continue]');
+    } else await page.click('[data-testid=master-code-later]');
+    await card.waitFor({ state: 'detached', timeout: 20000 });
+  }
 }
 
 // ready: the selector of the app itself. onScreen(name, page): before each screen is passed (e.g. a screenshot); name is
-// 'layout', 'master' or 'prepare'. layout: 'apply' (the choices it proposes) or 'keep' («Dejar todo como está»).
+// 'theme', 'layout', 'master', 'code' (the recovery code shown after the password is made) or 'prepare'. layout: 'apply' (the choices it proposes) or 'keep' («Dejar todo como está»).
 // → the screens seen, in order.
 export async function throughStart(page, { ready = '[data-testid=sidebar-home]', password = TEST_MASTER, onScreen = null, layout = 'apply', thorough = false, timeout = 60000 } = {}) {
   const seen = [];
@@ -64,8 +75,11 @@ export async function throughStart(page, { ready = '[data-testid=sidebar-home]',
     if (name === 'layout') {
       await page.click(layout === 'keep' ? '[data-testid=layout-keep-all]' : '[data-testid=layout-apply]');
       await page.locator(SCREENS.layout).waitFor({ state: 'detached', timeout: 20000 });
+    } else if (name === 'theme') {
+      await page.click('[data-testid=setup-theme-continue]');
+      await page.locator(SCREENS.theme).waitFor({ state: 'detached', timeout: 20000 });
     } else if (name === 'master') {
-      await createMaster(page, { password, thorough });
+      await createMaster(page, { password, thorough, onCode: onScreen ? (p) => onScreen('code', p) : null });
     } else {
       await page.click('[data-testid=setup-continue]');
       await page.locator(SCREENS.prepare).waitFor({ state: 'detached', timeout: 20000 });

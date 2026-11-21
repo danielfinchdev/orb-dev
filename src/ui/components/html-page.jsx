@@ -36,7 +36,7 @@ function Choices({ pageId, sessionId, choices }) {
   );
 }
 
-function HtmlPage({ p, paused, sessionId }) {
+function HtmlPage({ p, paused, sessionId, withChoices }) {
   const t = useT();
   const [big, setBig] = useState(false);
   const internet = p.internet === true;
@@ -53,7 +53,7 @@ function HtmlPage({ p, paused, sessionId }) {
       {paused
         ? <div className="text-muted-foreground bg-muted/40 rounded-md border px-3 py-6 text-center text-xs" data-testid="html-paused">{t('htmlpage.pausedNote')}</div>
         : <PageFrame p={p} className="h-[320px]" testid="html-frame" />}
-      {paused ? null : <Choices pageId={p.id} sessionId={sessionId} choices={p.choices} />}
+      {paused || !withChoices ? null : <Choices pageId={p.id} sessionId={sessionId} choices={p.choices} />}
       <div className="flex items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-xs font-medium" title={t('htmlpage.internetHint')}>
           <Switch checked={internet} onCheckedChange={(on) => act(call('htmlPages.setInternet', { ...refOf(p), internet: on === true }))} aria-describedby={`html-help-${p.id}`} data-testid="html-internet" />
@@ -74,21 +74,25 @@ function HtmlPage({ p, paused, sessionId }) {
 }
 
 // The pages of one conversation.
-export function HtmlPages({ sessionId }) {
+// `sessionIds` shows the pages of several sessions as ONE list (so the internet rule sees them all); `choices={false}` hides the
+// answer buttons where the engine would refuse them (they need a chat, not a task's session).
+export function HtmlPages({ sessionId, sessionIds, choices = true }) {
   const [list, setList] = useState([]);
+  const key = sessionIds ? sessionIds.join(',') : String(sessionId);
   useEffect(() => {
     if (!fullPc()) return undefined;
     let alive = true;
     setList([]);
-    const mine = (p) => p?.session === String(sessionId);
+    const wanted = new Set(key.split(',').filter(Boolean));
+    const mine = (p) => wanted.has(p?.session);
     const put = (p) => setList((prev) => (prev.some((x) => x.id === p.id) ? prev.map((x) => (x.id === p.id ? p : x)) : [...prev, p]));
     call('htmlPages.list').then((all) => { if (alive) setList((all ?? []).filter(mine)); }).catch(quiet);
     const offPage = bridge.on('html:page', (p) => { if (mine(p)) put(p); });
     const offUpdate = bridge.on('html:update', (p) => { if (mine(p)) put(p); });
     const offClosed = bridge.on('html:closed', (p) => setList((prev) => prev.filter((x) => x.id !== p?.id)));
     return () => { alive = false; offPage(); offUpdate(); offClosed(); };
-  }, [sessionId]);
+  }, [key]);
   if (!list.length) return null;
   const live = mountable(list);
-  return <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-5 pb-2">{list.map((p) => <HtmlPage key={p.id} p={p} paused={!live.has(p.id)} sessionId={sessionId} />)}</div>;
+  return <div className="mx-auto grid w-full max-w-3xl shrink-0 gap-2 px-5 pb-2">{list.map((p) => <HtmlPage key={p.id} p={p} paused={!live.has(p.id)} sessionId={p.session} withChoices={choices} />)}</div>;
 }

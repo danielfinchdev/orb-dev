@@ -24,7 +24,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.OrbButtonKind
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -118,7 +119,7 @@ fun LocalWebView(page: String, dark: Boolean, background: Color, bridge: Any?, o
         if (errorContent != null) { errorContent { gone = false; generation++ }; return }
         Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
             Text(WhiteboardTexts.GONE_TITLE, style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
-            TextButton(onClick = { gone = false; generation++ }, Modifier.padding(top = 8.dp)) { Text(WhiteboardTexts.RELOAD) }
+            OrbButton(WhiteboardTexts.RELOAD, { gone = false; generation++ }, Modifier.padding(top = 8.dp), kind = OrbButtonKind.Ghost)
         }
         return
     }

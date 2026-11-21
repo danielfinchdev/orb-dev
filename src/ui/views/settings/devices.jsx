@@ -2,17 +2,18 @@
 import { useEffect, useState } from 'react';
 import { notifyInfo } from '@/lib/notify.js';
 import QRCode from 'qrcode';
-import { FolderOpen, Smartphone, Globe, PictureInPicture2 } from 'lucide-react';
+import { FolderOpen, Smartphone, PictureInPicture2, QrCode, Play, ExternalLink, Copy } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
-import { Select, Switch, BubbleTip } from '@/components/ui/overlay.jsx';
+import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field, Input, PathText, Spinner } from '@/components/ui/basic.jsx';
+import { ListRow } from '@/components/ui/primitives.jsx';
+import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
-import { save, Row, PREVIEWS, previewOf } from './rows.jsx';
+import { save, Row, previewOf, MoreOptions, Block, Panel, Setting, Stack, CardFoot, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 // the pairing of «Emparejar móvil»: Android's QR (Depuración inalámbrica) that the engine waits for on the
@@ -90,100 +91,111 @@ export function AndroidCard() {
   if (!st) return null;
   const label = st.ready ? t('settings.android.ready') : st.state === 'downloading' ? t('settings.android.downloading') : st.state === 'error' ? t('settings.android.error', { error: st.error }) : t('settings.android.missing');
   return (
-    <Card data-testid="android-card">
-      <CardHeader><CardTitle>{t('settings.android')}</CardTitle><CardDescription>{t('settings.androidDesc')}</CardDescription></CardHeader>
-      <CardContent className="grid gap-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="grid min-w-0 flex-1"><div className={cn('text-sm', st.state === 'error' && 'text-destructive')}>{label}</div><PathText path={st.dir} className="text-muted-foreground text-xs" /></div>
-          {st.ready ? <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
-            : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : null}
-        </div>
-        <div className="grid gap-1" data-testid="android-phones">
-          {phones.length ? phones.map((p) => (
-            <div key={`${p.guid ?? ''}${p.serial ?? p.host}`} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
-              <Smartphone className="text-muted-foreground size-4 shrink-0" />
-              <div className="grid min-w-0 flex-1"><span className="truncate text-sm">{p.model ?? p.host}</span><span className={cn('text-xs', p.connected ? 'text-success' : 'text-muted-foreground')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span></div>
-              {p.connected ? <Button size="sm" variant="ghost" onClick={async () => { await act(call('android.disconnect', { serial: p.serial })); loadPhones(); }}>{t('settings.android.disconnect')}</Button> : null}
-              <Button size="sm" variant="ghost" onClick={() => forget(p)}>{t('settings.android.forget')}</Button>
+    <>
+      <Block title={t('settings.android')} note={t('settings.androidDesc')} data-testid="android-card">
+        <Panel>
+          <Setting label="adb" hint={<><span className={cn(st.state === 'error' && 'text-destructive')}>{st.ready ? t('settings.adbHint') : label}</span><PathText path={st.dir} className="block" /></>}>
+            {st.ready ? (
+              <>
+                <Badge variant="success">{t('settings.android.ready')}</Badge>
+                <BubbleTip title={t('settings.open')}><Button size="icon-sm" variant="ghost" onClick={() => act(bridge.openPath(st.dir))} aria-label={t('settings.open')}><FolderOpen /></Button></BubbleTip>
+              </>
+            ) : st.state !== 'downloading' ? <Button size="sm" variant="outline" onClick={async () => { setSt({ ...st, state: 'downloading' }); const r = await act(call('android.install')); if (r) setSt(r); else load(); }}>{t('settings.android.download')}</Button> : <Spinner />}
+          </Setting>
+          <div className="border-border border-t" data-testid="android-phones">
+            {phones.length ? phones.map((p) => (
+              <ListRow key={`${p.guid ?? ''}${p.serial ?? p.host}`} className="border-border rounded-none not-first:border-t" leading={<Smartphone className="text-muted-foreground size-4 shrink-0" />} title={p.model ?? p.host}
+                meta={<span className={cn(p.connected && 'text-success')}>{t(p.connected ? 'settings.android.connected' : 'settings.android.offline')}</span>}
+                trailing={(
+                  <div className="flex items-center gap-1.5">
+                    {p.connected ? <Button size="xs" variant="outline" onClick={async () => { await act(call('android.disconnect', { serial: p.serial })); loadPhones(); }}>{t('settings.android.disconnect')}</Button> : null}
+                    <Button size="xs" variant="outline" onClick={() => forget(p)}>{t('settings.android.forget')}</Button>
+                  </div>
+                )} />
+            )) : <Stack><Hint>{t('settings.android.noDevices')}</Hint></Stack>}
+          </div>
+          <Setting label={t('settings.android.pair')} hint={t('settings.android.pairSteps')} className="border-t"><Button size="sm" onClick={pair} data-testid="android-pair"><QrCode />{t('settings.android.pair')}</Button></Setting>
+          {emus ? (
+            <div className="border-border border-t" data-testid="android-emulators">
+              {!emus.sdk ? <Stack><Hint>{t('settings.android.noEmulator')}</Hint></Stack>
+                : emus.avds.length ? emus.avds.map((avd) => (
+                  <Setting key={avd} label={t('settings.android.emulators')} hint={avd.replace(/_/g, ' ')} className="not-first:border-t">
+                    <Button size="sm" variant="outline" onClick={() => startEmulator(avd)}><Play />{t('settings.android.startEmulator')}</Button>
+                  </Setting>
+                )) : <Stack><Hint>{t('settings.android.noAvds')}</Hint></Stack>}
             </div>
-          )) : <span className="text-muted-foreground text-sm">{t('settings.android.noDevices')}</span>}
-        </div>
-        {emus ? (
-          <div className="grid gap-1" data-testid="android-emulators">
-            <span className="text-muted-foreground mt-1 text-xs font-medium">{t('settings.android.emulators')}</span>
-            {!emus.sdk ? <span className="text-muted-foreground text-sm">{t('settings.android.noEmulator')}</span>
-              : emus.avds.length ? emus.avds.map((avd) => (
-                <div key={avd} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2">
-                  <Smartphone className="text-muted-foreground size-4 shrink-0" />
-                  <span className="min-w-0 flex-1 truncate text-sm">{avd.replace(/_/g, ' ')}</span>
-                  <Button size="sm" variant="ghost" onClick={() => startEmulator(avd)}>{t('settings.android.startEmulator')}</Button>
-                </div>
-              )) : <span className="text-muted-foreground text-sm">{t('settings.android.noAvds')}</span>}
-          </div>
-        ) : null}
-        {tools ? (
-          <div className="grid gap-1" data-testid="dev-tools">
-            <span className="text-muted-foreground mt-1 text-xs font-medium">{t('settings.devtools.title')}</span>
+          ) : null}
+        </Panel>
+      </Block>
+      {tools ? (
+        <Block title={t('settings.devtools.title')} data-testid="dev-tools">
+          <Panel>
             {tools.map((x) => (
-              <div key={x.id} className="flex min-w-0 items-center gap-2 rounded-lg border px-3 py-2" data-testid="dev-tool" data-found={x.path ? 'yes' : 'no'}>
-                <div className="grid min-w-0 flex-1">
-                  <span className="truncate text-sm">{x.label} · <span className={x.path ? 'text-success' : 'text-muted-foreground'}>{t(x.path ? 'settings.devtools.installed' : x.inCore ? 'settings.devtools.inCore' : 'settings.devtools.missing')}</span></span>
-                  {x.path ? <PathText path={x.path} className="text-muted-foreground text-xs" /> : null}
-                  {x.missing.map((m) => <span key={m} className="text-muted-foreground truncate text-xs">{t('settings.devtools.gone', { path: m })}</span>)}
-                </div>
-                {x.path ? null : <Button size="sm" variant="ghost" onClick={() => bridge.openExternal(x.url)}>{t('settings.devtools.how')}</Button>}
-              </div>
+              <Setting key={x.id} label={x.label} data-testid="dev-tool" data-found={x.path ? 'yes' : 'no'}
+                hint={x.path || x.missing.length ? <>{x.path ? <PathText path={x.path} className="block" /> : null}{x.missing.map((m) => <span key={m} className="block truncate">{t('settings.devtools.gone', { path: m })}</span>)}</> : (x.inCore ? t('settings.devtools.inCore') : null)}>
+                <Badge variant={x.path ? 'success' : 'warning'}>{t(x.path ? 'settings.devtools.installed' : x.inCore ? 'settings.devtools.inCore' : 'settings.devtools.missing')}</Badge>
+                {x.path ? null : <Button size="sm" variant="outline" onClick={() => bridge.openExternal(x.url)}><ExternalLink />{t('settings.devtools.how')}</Button>}
+              </Setting>
             ))}
-          </div>
-        ) : null}
-      </CardContent>
-      <CardFooter><Button size="sm" onClick={pair} data-testid="android-pair"><Smartphone />{t('settings.android.pair')}</Button></CardFooter>
-    </Card>
+          </Panel>
+        </Block>
+      ) : null}
+    </>
   );
 }
 
-// Phone access: on/off and the addresses (wifi, Tailscale). the QR and the linked devices are in Magic Link.
-export function MobileCard() {
+// Phone access, as the mock-up draws it: the on/off, each way in with its address and a button to copy it, and what a locked
+// phone shows. The switches that turn each way on (and the screenshots) are in «Más opciones», next to the pairing options
+// that arrive in `more`; the QR and the linked devices are in Magic Link, above.
+export function MobileCard({ more = null }) {
   const t = useT();
   const [st, setSt] = useState(null);
   const load = () => call('remote.status').then(setSt).catch(quiet);
   useEffect(() => { load(); }, []);
   const configure = async (patch) => { const r = await act(call('remote.configure', patch)); if (r) setSt(r); };
-  if (!st) return null;
+  if (!st) return <MoreOptions testid="link-more-options">{more}</MoreOptions>;
   const route = (kind) => st.routes?.find((r) => r.kind === kind);
   const via = (kind) => {
     const r = route(kind);
-    // the local network shows its address; Tailscale, what it allows (its address is in the QR dialog).
-    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? (r?.url ?? t('settings.mobileWifiHint')) : t('settings.mobileTsHint');
+    const usable = st.enabled && st[kind] && r?.url;
+    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? t('settings.mobileWifiHint') : t('settings.mobileTsHint');
     return (
-      <Row label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
-        <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
-      </Row>
+      <Setting key={kind} label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
+        {usable ? <><code className="text-muted-foreground font-mono text-caption cursor-text select-text" data-testid={`mobile-${kind}-address`}>{r.url.replace(/^https?:\/\//, '')}</code><Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(r.url).then(() => notifyInfo(t('settings.addressCopied'))).catch(quiet)} data-testid={`mobile-${kind}-copy`}><Copy />{t('settings.copyAddress')}</Button></> : null}
+      </Setting>
     );
   };
   return (
-    <Card data-testid="mobile-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.mobile')}</CardTitle><CardDescription>{t('settings.mobileDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
-        <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : null}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
-        {st.enabled ? <div className="grid gap-1">{via('wifi')}{via('tailscale')}</div> : null}
-        {st.enabled && st.error && st.running ? <p className="text-muted-foreground text-xs">{st.error}</p> : null}
-        {/* the QR, the short code and the linked devices are in Magic Link, below. the firewall is mentioned
-            only when linking over the local network fails (app.linkOfflineWifi, on the device). */}
+    <>
+      <Block title={t('settings.mobile')} note={t('settings.mobileDesc')} data-testid="mobile-card">
+        <Panel>
+          <Row label={t('settings.mobileAccess')} hint={st.enabled && !st.running ? st.error : t('settings.mobileAccessHint')}><Switch checked={st.enabled} onCheckedChange={async (enabled) => { const r = await act(call('remote.enable', { enabled })); if (r) setSt(r); }} /></Row>
+          {st.enabled ? <>{via('wifi')}{via('tailscale')}</> : null}
+          {st.enabled && st.error && st.running ? <Stack className="border-border border-t"><Hint>{st.error}</Hint></Stack> : null}
+          {/* a switch: on shows the start of the message, off shows nothing; the values saved are the same two */}
+          {st.enabled ? (
+            <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
+              <Switch checked={previewOf(st.preview) === 'chat'} onCheckedChange={(on) => configure({ preview: on ? 'chat' : 'none' })} data-testid="mobile-preview" aria-label={t('settings.mobilePreview')} />
+            </Row>
+          ) : null}
+        </Panel>
+      </Block>
+      <MoreOptions testid="link-more-options">
+        {more}
         {st.enabled ? (
-          <Row label={t('settings.mobileScreenshot')} hint={t('settings.mobileScreenshotHint')}>
-            <Switch data-testid="mobile-screenshot" checked={st.screenshot !== false} onCheckedChange={(screenshot) => configure({ screenshot })} />
-          </Row>
+          <Panel>
+            {['wifi', 'tailscale'].map((kind) => (
+              <Row key={kind} label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={t('settings.mobileWayHint')}>
+                <Switch data-testid={`mobile-${kind}`} checked={st[kind]} onCheckedChange={(on) => configure({ [kind]: on })} />
+              </Row>
+            ))}
+            <Row label={t('settings.mobileScreenshot')} hint={t('settings.mobileScreenshotHint')}>
+              <Switch data-testid="mobile-screenshot" checked={st.screenshot !== false} onCheckedChange={(screenshot) => configure({ screenshot })} />
+            </Row>
+          </Panel>
         ) : null}
-        {/* what notifications show when locked. */}
-        {st.enabled ? (
-          <Row label={t('settings.mobilePreview')} hint={t(`settings.mobilePreview.${previewOf(st.preview)}Hint`)}>
-            <Select value={previewOf(st.preview)} onValueChange={(preview) => configure({ preview })} data-testid="mobile-preview" title={t('settings.mobilePreview')}
-              options={PREVIEWS.map((v) => ({ value: v, label: t(`settings.mobilePreview.${v}`) }))} />
-          </Row>
-        ) : null}
-      </CardContent>
-    </Card>
+      </MoreOptions>
+    </>
   );
 }
 
@@ -196,7 +208,7 @@ function PhoneCard() {
   const installed = p.installed();
   return (
     <Card data-testid="phone-card">
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary size-5" /><div><CardTitle>{t('settings.phone')}</CardTitle><CardDescription>{installed ? t('settings.phoneInstalled') : t(p.ios() ? 'settings.phoneInstallIos' : 'settings.phoneInstallAndroid')}</CardDescription></div></CardHeader>
+      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Smartphone className="text-primary-text size-5" /><div><CardTitle>{t('settings.phone')}</CardTitle><CardDescription>{installed ? t('settings.phoneInstalled') : t(p.ios() ? 'settings.phoneInstallIos' : 'settings.phoneInstallAndroid')}</CardDescription></div></CardHeader>
       <CardContent className="grid gap-2">
         {p.supported() && (installed || !p.ios()) ? (
           <Row label={t('settings.phonePush')} hint={t(p.whenClosed?.() === false ? 'settings.phonePushHintApp' : 'settings.phonePushHint')}>
@@ -213,14 +225,26 @@ export function BrowserCard({ c }) {
   const t = useT();
   const on = c.browser?.enabled !== false; const pip = c.ui?.pip !== false;
   return (
-    <Card>
-      <CardHeader className="flex-row items-start gap-3 [&>svg]:mt-0.5 [&>svg]:shrink-0"><Globe className="text-primary size-5" /><div><CardTitle>{t('settings.browser')}</CardTitle><CardDescription>{t('settings.browserDesc')}</CardDescription></div></CardHeader>
-      <CardContent className="grid gap-4">
+    <Block title={t('settings.browser')} note={t('settings.browserDesc')}>
+      <Panel>
         <Row label={t('settings.browse')} hint={t('settings.browseHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ browser: { enabled } })} /></Row>
         <Row label={t('settings.pip')} hint={t('settings.pipHint')}><Switch checked={pip} disabled={!on} onCheckedChange={(v) => save({ ui: { pip: v } })} /></Row>
-      </CardContent>
-      {bridge.showBrowser ? <CardFooter><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) notifyInfo(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFooter> : null}
-    </Card>
+      </Panel>
+    </Block>
+  );
+}
+
+// The button that brings the agents' live browser window forward: Orb's own, not drawn by the mock-up, so it sits under «Más opciones».
+export function LiveWindowCard({ c }) {
+  const t = useT();
+  const on = c.browser?.enabled !== false; const pip = c.ui?.pip !== false;
+  if (!bridge.showBrowser) return null;
+  return (
+    <Block title={t('settings.pip')} data-testid="live-window">
+      <Panel>
+        <CardFoot className="justify-start border-t-0"><Button size="sm" variant="outline" disabled={!on || !pip} onClick={async () => { const r = await bridge.showBrowser(); if (!r?.tabs?.length) notifyInfo(t('settings.noBrowserUse')); }}><PictureInPicture2 />{t('settings.showPip')}</Button></CardFoot>
+      </Panel>
+    </Block>
   );
 }
 
@@ -229,7 +253,7 @@ export function PhoneView() {
   const t = useT();
   return (
     <>
-      <PageHeader icon={<Smartphone className="text-primary size-5" />} title={t('settings.phone')} />
+      <PageHeader icon={<Smartphone className="text-primary-text size-5" />} title={t('settings.phone')} />
       <PageBody><div className="mx-auto grid max-w-xl gap-4"><PhoneCard /></div></PageBody>
     </>
   );

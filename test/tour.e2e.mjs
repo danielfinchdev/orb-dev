@@ -23,7 +23,7 @@ fs.mkdirSync(OUT, { recursive: true });
 for (const f of fs.readdirSync(OUT)) if (/\.(png|md)$/.test(f)) fs.rmSync(path.join(OUT, f));
 const RENDERER = path.join(ROOT, 'src', 'renderer');
 if (!fs.existsSync(path.join(RENDERER, 'index.html'))) throw new Error('compila antes la interfaz (npm run build)');
-const SKINS = ['orb', 'vaporwave', 'retro', 'profesional', 'nube']; // src/shared/appearance.mjs
+const SKINS = ['orb', 'predeterminado', 'cristal', 'vaporwave', 'candy', 'retro']; // src/shared/appearance.mjs, with the one the tour starts on first
 const ONLY = process.env.TOUR_ONLY ? new Set(process.env.TOUR_ONLY.split(',')) : null; // e.g. TOUR_ONLY=pc,phone (debugging)
 
 // ---- the engine
@@ -181,7 +181,6 @@ async function setLook(page, { dark, skin = 'orb' }) {
   await page.reload(); await loaded(page);
 }
 const dialog = (page) => page.waitForSelector('[role=dialog], [role=alertdialog]', { state: 'visible' });
-const footerOpen = async (page) => { if ((await page.locator('[data-testid=sidebar-footer]').getAttribute('data-open')) !== 'true') await page.click('[data-testid=sidebar-footer-toggle]'); };
 
 // What each view is (route view → [label, component]).
 const SRC = {
@@ -244,6 +243,8 @@ try {
     await pc.click('[data-testid=setup-folder]');
     await shot(pc, { area: 'wizard', screen: 'datos', state: 'filled', src: W, desc: 'Welcome, filled in (the folder chosen)' });
     await pc.click('[data-testid=setup-create]');
+    // «Tu tema» comes right after the folder: it is left as it is (the default theme)
+    await pc.locator('[data-testid=setup-theme-continue]').click({ timeout: 20000 });
     await pc.locator('[data-testid=master-create], [data-testid=layout-review]').first().waitFor({ timeout: 20000 });
     if (await pc.locator('[data-testid=layout-review]').isVisible()) {
       await shot(pc, { area: 'wizard', screen: 'layout', state: 'default', src: 'src/ui/views/layout.jsx', desc: 'Welcome: «Ordenar carpetas» (folders of an earlier Orb)' });
@@ -357,7 +358,8 @@ try {
     for (const [title, label] of [['Portada nueva', 'done'], ['Arreglar el formulario', 'failed'], ['Publicar la web', 'awaiting-approval'], ['Comprimir las fotos', 'running'], ['Subir las fotos', 'queued'], ['Traducir la web', 'cancelled']]) {
       await attempt(page, `task detail ${label}`, async () => {
         await page.getByRole('tab', { name: /Todas/ }).click();
-        await page.getByRole('button', { name: new RegExp(title) }).first().click();
+        // The PC rows open from their title button, the phone's rows are the button themselves; the row's own buttons (Reintentar…) are never the target.
+        await page.locator('[data-testid=task-open], [data-testid=task-row]:not(:has([data-testid=task-open]))').filter({ hasText: title }).first().click();
         await page.waitForSelector('[data-testid=task-detail]');
         await shot(page, { area: 'orb', screen: 'task-detail', state: `${label}-${state}`, src: 'src/ui/views/tasks.jsx (detail) + components/task-approval.jsx', desc: `Task detail, status ${label}`, scroll: true });
         await nav(page, { view: 'tasks' });
@@ -382,8 +384,8 @@ try {
       await attempt(P, 'session approval', async () => { await nav(P, { view: 'session', id: s2.id }); await P.waitForSelector('[data-testid=approval-card]', { timeout: 15000 }); await shot(P, { area: 'orb', screen: 'session', state: 'approval-card-pending', src: 'src/ui/views/session.jsx (ApprovalCard)', desc: 'Conversation with Codex waiting for permission (approval card)' }); });
       await tasksDetail(P, st);
       await attempt(P, 'project selected', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await shot(P, { area: 'orb', screen: 'projects', state: 'selected-mi-web', src: 'src/ui/views/projects.jsx', desc: 'Projects, «mi-web» selected (git, actions)', scroll: true }); });
-      await attempt(P, 'rename dialog', async () => { await P.locator('main').getByText('notas', { exact: true }).first().click(); await P.click('[data-testid=project-rename]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'rename-project', state: 'open', src: 'src/ui/views/projects.jsx + components/dialogs.jsx (form)', desc: 'Rename project form' }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'review dialog', async () => { await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await P.click('[data-testid=project-review]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'project-review', state: 'open', src: 'src/ui/views/projects.jsx (askReview) + components/dialogs.jsx', desc: 'Task Review of a project, who reviews' }); await P.keyboard.press('Escape'); });
+      await attempt(P, 'rename dialog', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('notas', { exact: true }).first().click(); await P.click('[data-testid=project-more]'); await P.click('[data-testid=project-rename]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'rename-project', state: 'open', src: 'src/ui/views/projects.jsx + components/dialogs.jsx (form)', desc: 'Rename project form' }); await P.keyboard.press('Escape'); });
+      await attempt(P, 'review dialog', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('mi-web', { exact: true }).first().click(); await P.click('[data-testid=project-tab-tareas]'); await P.click('[data-testid=project-new-task-more]'); await P.click('[data-testid=project-review]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'project-review', state: 'open', src: 'src/ui/views/projects.jsx (askReview) + components/dialogs.jsx', desc: 'Task Review of a project, who reviews' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'new project dialog', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=chats-new]'); await P.click('[data-testid=sidebar-new-project]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-project', state: 'empty', src: 'src/ui/components/project-actions.jsx (createProjectFlow)', desc: 'New project dialog (platforms, name, about)' });
         await P.locator('[role=dialog] input').first().fill('mi-web'); await P.waitForTimeout(300);
         await shot(P, { area: 'dialog', screen: 'new-project', state: 'name-taken', src: 'src/ui/components/project-actions.jsx', desc: 'New project dialog with a name that already exists (inline error)' });
@@ -392,20 +394,20 @@ try {
         await P.keyboard.press('Escape'); });
       await attempt(P, 'project picker', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=project-picker]'); await P.waitForTimeout(400); await shot(P, { area: 'menu', screen: 'project-picker', state: 'open', src: 'src/ui/components/project-actions.jsx (ProjectPicker)', desc: 'Working-project picker in the composer' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'notice center', async () => { await P.click('[data-testid=bar-notices]'); await P.waitForSelector('[data-testid=notice-center]'); await shot(P, { area: 'menu', screen: 'notice-center', state: 'open', src: 'src/ui/components/notification-center.jsx', desc: 'Notification bell, past notices' }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'sidebar footer', async () => { await footerOpen(P); await shot(P, { area: 'menu', screen: 'sidebar-footer', state: 'expanded', src: 'src/ui/components/sidebar.jsx (footer)', desc: 'Sidebar footer expanded (settings, agents, bitácoras, tutorials)' }); await P.click('[data-testid=sidebar-footer-toggle]'); });
+      await attempt(P, 'sidebar footer', async () => { await P.locator('[data-testid=sidebar-footer]').waitFor(); await shot(P, { area: 'menu', screen: 'sidebar-footer', state: 'expanded', src: 'src/ui/components/sidebar.jsx (footer)', desc: 'Sidebar footer expanded (settings, agents, bitácoras, tutorials)' }); });
       await attempt(P, 'sidebar search', async () => { await P.fill('[data-testid=sidebar-search-input]', 'web'); await P.waitForTimeout(500); await shot(P, { area: 'menu', screen: 'sidebar-search', state: 'results', src: 'src/ui/components/sidebar.jsx (search)', desc: 'Sidebar search results for «web»' }); await P.fill('[data-testid=sidebar-search-input]', ''); });
       await attempt(P, 'sidebar filter', async () => { await P.click('[data-testid=sidebar-filter]'); await P.waitForTimeout(400); await shot(P, { area: 'menu', screen: 'sidebar-filter', state: 'open', src: 'src/ui/components/sidebar.jsx (filter)', desc: 'Sidebar filter popover' }); await P.keyboard.press('Escape'); });
       await attempt(P, 'sidebar collapsed', async () => { await P.click('[data-testid=sidebar-collapse]'); await shot(P, { area: 'menu', screen: 'sidebar', state: 'collapsed', src: 'src/ui/components/theme-toggle.jsx + components/page.jsx', desc: 'Sidebar folded away, the screen takes the whole width' }); await P.click('[data-testid=sidebar-expand]'); });
       await attempt(P, 'games', async () => { await nav(P, { view: 'chat' }); await P.click('[data-testid=orb-chat-more]'); await P.click('[data-testid=bar-games]'); await P.waitForSelector('[data-testid=games-dialog]'); await shot(P, { area: 'games', screen: 'games', state: 'list', src: 'src/ui/games/games.jsx', desc: 'Mini games dialog' });
-        for (const g of ['snake', 'chess', 'tetris']) { await attempt(P, `game ${g}`, async () => { if (await P.getByRole('button', { name: 'Volver a los juegos' }).isVisible().catch(() => false)) await P.getByRole('button', { name: 'Volver a los juegos' }).click(); await P.click(`[data-testid=game-${g}]`); await P.waitForTimeout(1200); await shot(P, { area: 'games', screen: g, state: 'playing', src: `src/ui/games/${g}.jsx`, desc: `Game: ${g}` }); }); }
+        for (const g of ['snake', 'chess', 'tetris']) { await attempt(P, `game ${g}`, async () => { if (await P.getByRole('button', { name: 'Volver a los juegos' }).first().isVisible().catch(() => false)) await P.getByRole('button', { name: 'Volver a los juegos' }).first().click(); await P.click(`[data-testid=game-${g}]`); await P.waitForTimeout(1200); await shot(P, { area: 'games', screen: g, state: 'playing', src: `src/ui/games/${g}.jsx`, desc: `Game: ${g}` }); }); }
         await P.keyboard.press('Escape'); });
       await attempt(P, 'new schedule', async () => { await nav(P, { view: 'schedules' }); await P.click('[data-testid=new-schedule]'); await dialog(P); await shot(P, { area: 'dialog', screen: 'new-schedule', state: 'open', src: 'src/ui/views/schedules.jsx', desc: 'New scheduled task', scroll: true }); await P.keyboard.press('Escape'); });
-      await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR, short code and the PC\'s fingerprint («Para qué es»)', scroll: true }); await P.keyboard.press('Escape'); });
+      await attempt(P, 'magic link qr', async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'magiclink' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-magiclink]'); await P.click('[data-testid=link-make]'); await P.waitForSelector('[data-testid=link-qr]'); await shot(P, { area: 'dialog', screen: 'magic-link', state: 'qr', src: 'src/ui/views/magic-link.jsx (MagicLinkPanel)', desc: 'Magic Link QR, short code and the PC\'s fingerprint («Para qué es»)', scroll: true }); });
       await attempt(P, 'whiteboard panel', async () => { await nav(P, { view: 'board' }); await P.waitForTimeout(1500); if (await P.locator('[data-testid=whiteboard-show-panel]').isVisible().catch(() => false)) await P.click('[data-testid=whiteboard-show-panel]'); await shot(P, { area: 'orb', screen: 'board', state: 'panel', src: 'src/ui/views/whiteboard.jsx + components/excalidraw-board.jsx', desc: 'Whiteboard with its side panel' }); });
       await attempt(P, 'expert populated', async () => { await nav(P, { view: 'expert' }); await P.waitForTimeout(1200); await shot(P, { area: 'orb', screen: 'expert', state: 'project-mi-web', src: 'src/ui/views/expert.jsx', desc: 'God mode with mi-web (tree, git, system)' }); });
       await attempt(P, 'tutorials faq', async () => { await nav(P, { view: 'tutorials' }); await P.locator('[data-testid^=faq-]').first().click(); await shot(P, { area: 'orb', screen: 'tutorials', state: 'faq-open', src: 'src/ui/views/tutorials.jsx', desc: 'Tutorials, a question opened', scroll: true }); });
       await attempt(P, 'update card', async () => { await P.evaluate(() => localStorage.setItem('tour.update', JSON.stringify({ state: 'available', version: '3.7.0' }))); await P.reload(); await loaded(P); await P.waitForSelector('[data-testid=update-card]'); await shot(P, { area: 'notice', screen: 'update-card', state: 'available', src: 'src/ui/components/update-card.jsx', desc: 'New version available card' }); await P.evaluate(() => localStorage.removeItem('tour.update')); await P.reload(); await loaded(P); });
-      await attempt(P, 'success toast', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('app-tienda', { exact: true }).first().click(); await P.getByRole('button', { name: 'Trabajar aquí' }).first().click(); await P.waitForTimeout(500); await shot(P, { area: 'toast', screen: 'success', state: 'working-project', src: 'src/ui/main.jsx (ThemedToaster) + lib/notify.js', desc: 'Success toast (working project changed)', toasts: true }); await call('projects.setActive', { name: 'mi-web' }); });
+      await attempt(P, 'success toast', async () => { await nav(P, { view: 'projects' }); await P.locator('main').getByText('app-tienda', { exact: true }).first().click(); await P.click('[data-testid=project-more]'); await P.click('[data-testid=project-set-active]'); await P.waitForTimeout(500); await shot(P, { area: 'toast', screen: 'success', state: 'working-project', src: 'src/ui/main.jsx (ThemedToaster) + lib/notify.js', desc: 'Success toast (working project changed)', toasts: true }); await call('projects.setActive', { name: 'mi-web' }); });
       // The other visual themes.
       for (const skin of SKINS.slice(1)) {
         if (!look.dark && darkOnlySkin(skin)) continue; // Retro only exists in dark
@@ -413,7 +415,7 @@ try {
         await setLook(P, { ...look, skin });
         await views(P, ['chat', 'tasks', 'projects'], st, { scroll: false });
         await attempt(P, `conversation ${skin}`, async () => { await nav(P, { view: 'chat', id: conv.id }); await shot(P, { area: 'orb', screen: 'chat', state: 'conversation', src: 'src/ui/views/chat.jsx + themes.css', desc: `Orb chat, conversation, skin ${skin}` }); });
-        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.click('[data-testid=settings-sub-apariencia]'); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings/index.jsx + components/skin-preview.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
+        await attempt(P, `settings ${skin}`, async () => { await P.evaluate(() => window.__orbFire('ui:navigate', { view: 'settings', section: 'apariencia' })); await P.waitForSelector('[data-testid=settings-dialog]'); await P.click('[data-testid=settings-nav-general]'); await P.evaluate(() => document.getElementById('settings-apariencia')?.scrollIntoView({ block: 'start' })); await P.waitForTimeout(250); await shot(P, { area: 'settings', screen: 'apariencia', state: st, src: 'src/ui/views/settings/index.jsx', desc: `Settings › Appearance, skin ${skin}` }); await P.keyboard.press('Escape'); });
       }
       await setLook(P, { ...look, skin: 'orb' });
     }
@@ -443,7 +445,7 @@ try {
 } finally {
   // ---- INDEX.md
   const lines = ['# Orb — visual tour', '', `Generated by \`test/tour.e2e.mjs\` on ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC (fake agents, sample data, headless Edge). ${index.length} screenshots.`, '',
-    'Name: `NNN-area-screen-state-theme-device.png`. Theme: light / dark, prefixed with the skin when not the default (vaporwave, retro, profesional, nube). Device: `pc` = the PC window (1440x900), `web` = a linked computer browser (1440x900), `phone` = a linked phone (390x844).', '',
+    'Name: `NNN-area-screen-state-theme-device.png`. Theme: light / dark, prefixed with the skin when not the default (cristal, vaporwave, candy, retro). Device: `pc` = the PC window (1440x900), `web` = a linked computer browser (1440x900), `phone` = a linked phone (390x844).', '',
     '| File | What it shows | Component |', '|---|---|---|',
     ...index.map((x) => `| [${x.file}](${x.file}) | ${x.desc.replace(/\|/g, '/')} | \`${x.src}\` |`), '',
     '## Not reached', '', ...(misses.length ? misses.map((m) => `- ${m}`) : ['- (nothing)']), '',

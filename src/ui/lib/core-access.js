@@ -18,6 +18,8 @@ export const keepUnlock = (r) => { held = r?.unlock ? { unlock: r.unlock, until:
 export const dropUnlock = () => { held = null; };
 // Still good for a few seconds more (the call that uses it must arrive in time).
 export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
+// When the held unlock ends (ms), or null when there is none: read-only, for «desbloqueado, quedan N min». The token itself is never exposed.
+export const heldUntil = (now = Date.now()) => (held && held.until - 5000 > now ? held.until : null);
 
 // action: 'open' | 'restore' | 'backupFolder' | 'recovery' | 'legacy' | 'secrets' | 'connector' | 'protected' | 'unlink' |
 // 'deleteProject' | 'removeExtension' | 'previousKey' | 'androidPair' | 'androidEmulator' | 'fullAccess' | 'android' |
@@ -27,7 +29,7 @@ export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now
 // a secret an agent asked for in the vault or using the one saved, any change to a rail (rails) and putting back or
 // changing a shipped text rule (ruleSeed).
 // «Acceso total» and the Android phone take the usual 5-minute unlock, like editing a rule of your own (rules).
-export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'secretSave', 'secretSaved', 'rails', 'ruleSeed']);
+export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'secretSave', 'secretSaved', 'rails', 'ruleSeed', 'newKey']);
 export async function unlockCore(action) {
   const fresh = FRESH_ACTIONS.includes(action);
   const have = fresh ? null : heldUnlock();
@@ -49,6 +51,17 @@ export function passwordStrength(password, min = MASTER_MIN) {
   if (kinds >= 3) score++;
   if (/^(.)\1+$/.test(p) || /^(?:0?123456789|qwerty|password|contrase(?:ñ|n)a)/i.test(p)) score = 1;
   return Math.max(1, Math.min(4, score));
+}
+// What the strength line says about what was typed: words (pieces split by spaces that hold a letter), digits, numbers (groups
+// of digits) and characters, counted in NFC like the engine. Counted here only; nothing leaves the window.
+export function passwordShape(password) {
+  const p = String(password ?? '').normalize('NFC');
+  return {
+    words: p.split(/\s+/).filter((w) => /\p{L}/u.test(w)).length,
+    digits: (p.match(/\d/g) ?? []).length,
+    numbers: (p.match(/\d+/g) ?? []).length,
+    chars: [...p].length
+  };
 }
 
 // → { body, vars, passphrase, restore, fresh, folder }: the text (key and values), whether the recovery code is asked,

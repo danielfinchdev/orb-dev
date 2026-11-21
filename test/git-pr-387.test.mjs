@@ -331,10 +331,10 @@ test('CI watch: never merges, comments or pushes; it needs an open PR and an edi
 
 // ---- interface -----------------------------------------------------------------------------------------------------------
 
-test('interface: the header button, the PR bar and the style card exist, in both languages', () => {
+test('interface: the menu item, the PR tab and the style card exist, in both languages', () => {
   const read = (...p) => fs.readFileSync(path.join(ROOT, 'src', ...p), 'utf8');
-  assert.match(read('ui', 'views', 'session.jsx'), /<CommitButton project=\{s\.project\}/);
-  assert.match(read('ui', 'views', 'session.jsx'), /<PrBar session=\{s\}/);
+  assert.match(read('ui', 'views', 'session.jsx'), /<CommitMenuItem onOpen=/);
+  assert.match(read('ui', 'views', 'session.jsx'), /<PrPanel session=\{s\}/);
   const bar = read('ui', 'components', 'pr-card.jsx');
   for (const id of ['pr-fix-comments', 'pr-fix-conflicts', 'pr-watch']) assert.match(bar, new RegExp(id));
   assert.match(read('ui', 'components', 'commit-dialog.jsx'), /commit-push/);

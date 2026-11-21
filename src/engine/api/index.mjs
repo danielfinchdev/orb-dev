@@ -13,13 +13,15 @@ import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { CATEGORIES } from '../../platform/paths.mjs';
 import { accountsOf, accountDir } from '../../domain/usage/accounts.mjs';
 import { usageReport, usageHistory, modelName } from '../../domain/usage/budget.mjs';
-import { syncProjects } from '../../domain/projects/projects.mjs';
+import { syncProjects, projectHasWork } from '../../domain/projects/projects.mjs';
+import { guardedCore } from '../desktop-home.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { quickRun } from '../../agents/index.mjs';
 import { AUTONOMY } from '../../domain/security/guard.mjs';
-import { readLog, writeLog, logFiles } from '../../domain/journal/journal.mjs';
+import { approvalWaitMinutes } from '../../domain/rules/rails.mjs';
+import { readLog, writeLog, writeHandEntry, logFiles, countLogEntries } from '../../domain/journal/journal.mjs';
 import { ofUserLabel, userLabel, userName } from '../../domain/tasks/board.mjs';
 import { createAndroid } from '../host/android.mjs';
 import { grantMethods } from '../security/grants.mjs';
@@ -44,7 +46,6 @@ import { keysMethods } from './keys.mjs';
 import { mcpExtMethods } from './mcp-ext.mjs';
 import { masterMethods, checkUnlock } from './master.mjs';
 import { appMethods } from './app.mjs';
-import { musicMethods } from '../host/music.mjs';
 import { sealConnectors } from '../../domain/security/connector-secrets.mjs';
 import { createFeeds } from '../feeds.mjs';
 import { projectMethods } from './projects.mjs';
@@ -54,6 +55,8 @@ import { workMethods } from './work.mjs';
 import { ChatWorktrees } from '../chat-worktrees.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
+import { listRecent } from '../../domain/notes/recent.mjs';
+import { pushPreview } from '../transport/remote-calls.mjs';
 
 export { fail, str, int, oneOf } from './common.mjs';
 
@@ -213,7 +216,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       // kept, the finished tasks the user brought back (a finished task goes to «Completadas» by itself).
       completed: board.settingJson('sidebar_completed') ?? [], kept: board.settingJson('sidebar_kept') ?? [],
       // the agents this PC can run now (installed, on, with an account): the lists of the window offer only these.
-      agentsAvailable: board.availableAgents()
+      agentsAvailable: board.availableAgents(),
+      // minutes a permission waits for an answer before it is denied (0 = for ever: the rail is paused)
+      approvalWaitMinutes: approvalWaitMinutes()
     }),
     // the data-migration state (3.7 data updated, or never 3.7): engine.mjs answers these two itself while they could not be.
     'app.migrationState': () => ({ failed: false }),
@@ -296,23 +301,39 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       emit('notes:read', { ...(ids ? { ids } : {}), at: Date.now() });
       return { ok: true };
     },
-    'logs.list': () => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size }; }),
+    // The notices the PC sent to the phones lately (at most 100 and 7 days), newest first: what a phone missed while away.
+    // Read only; the text is the one that was delivered (the preview setting already applied).
+    'notes.list': ({ since, limit } = {}) => {
+      if (since != null && !Number.isFinite(Number(since))) fail(tr('msg.api.badList'));
+      if (limit != null && !Number.isFinite(Number(limit))) fail(tr('msg.api.badList'));
+      return { notes: listRecent(board, { since, limit, preview: pushPreview(ctx.config), hiddenText: tr('msg.remote.pushHidden'), assistantName: ctx.config.assistantName ?? 'Orb' }) };
+    },
+    // `dir` (where the logs live) is for the window only: the phone never gets this PC's folders
+    'logs.list': (_params, principal) => logFiles(board).map(([name, file]) => { let size = 0; try { size = fs.statSync(file).size; } catch { /* empty */ } return { name, size, entries: countLogEntries(file), ...(principal?.channel === 'desktop' && name === 'general' ? { dir: path.dirname(file) } : {}) }; }),
     'logs.read': ({ project: name, whole }) => readLog(board, str(name, 'bitácora', 200), { whole: Boolean(whole), chars: 40000 }),
+    // «Escribir entrada»: the user adds a signed entry at the end of a project's logbook (this PC only; append-only).
+    'logs.addEntry': ({ project: name, title, body }) => { writeHandEntry(board, project(str(name, 'bitácora', 200)).name, { title, body }); board.changed('logs'); return { ok: true }; },
 
     // Only q/limit: the events array the window has always had. Any other filter: the paged reader of every source
     // ({ items, next }, src/domain/activity/activity.mjs).
     'activity.list': (params, principal) => {
       const { q, limit } = params;
+      // before/after of a setting may be objects or lists: every string inside is swapped.
+      const hideDeep = (v, depth = 0) => (typeof v === 'string' ? hidePcPaths(v) : depth < 6 && Array.isArray(v) ? v.map((x) => hideDeep(x, depth + 1))
+        : depth < 6 && v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, hideDeep(x, depth + 1)])) : v);
       if (['sources', 'level', 'project', 'from', 'to', 'cursor'].some((k) => params[k] !== undefined)) {
         const page = readActivity(board, params);
         // the phone gets places, not this PC's folders (the same swap as in the report)
         if (principal?.channel === 'desktop') return page;
-        const hide = (v) => (typeof v === 'string' ? hidePcPaths(v) : v);
-        return { ...page, items: page.items.map((it) => ({ ...it, text: hide(it.text), ...(it.before !== undefined ? { before: hide(it.before) } : {}), ...(it.after !== undefined ? { after: hide(it.after) } : {}) })) };
+        const hide = hideDeep;
+        return { ...page, items: page.items.map((it) => ({ ...it, text: hide(it.text), detail: hide(it.detail), title: hide(it.title), ...(it.before !== undefined ? { before: hide(it.before) } : {}), ...(it.after !== undefined ? { after: hide(it.after) } : {}) })) };
       }
       const rows = board.recentEvents(Math.min(Number(limit) || 300, 2000));
       const needle = String(q ?? '').toLowerCase().trim();
-      return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => ({ ...r, detail: redactSecrets(r.detail) }));
+      return (needle ? rows.filter((r) => `${r.actor} ${r.kind} ${r.detail} ${r.title ?? ''}`.toLowerCase().includes(needle)) : rows).map((r) => {
+        const out = { ...r, detail: redactSecrets(r.detail) };
+        return principal?.channel === 'desktop' ? out : { ...out, detail: hideDeep(out.detail), title: hideDeep(out.title) };
+      });
     },
     'activity.report': ({ at, lines }, principal) => buildReport(board, { at, lines, version, remote: principal?.channel !== 'desktop' }),
     // only the accounts of the agents this PC can run (not every agent Orb knows).
@@ -320,8 +341,14 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // the usage page: what was spent in the last 7, 30 or 90 days, by day, agent and model (names as the selector
     // shows them).
     'usage.history': ({ days }) => {
-      const out = usageHistory(board, { days: oneOf(days, [7, 30, 90], 'días', 30) });
-      return { ...out, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+      const out = usageHistory(board, { days: oneOf(days, [1, 7, 30, 90], 'días', 30) });
+      // the same ledger rows by the project of their task, agent session or chat ('' = none), for «Por proyecto»
+      const byProject = board.all(`SELECT COALESCE(t.project, s.project, c.project, '') AS project, COALESCE(SUM(u.tokens_in), 0) AS tin, COALESCE(SUM(u.tokens_out), 0) AS tout, COALESCE(SUM(u.usd), 0) AS usd
+        FROM usage_ledger u LEFT JOIN tasks t ON t.id = u.task_id LEFT JOIN sessions s ON s.id = u.session_id LEFT JOIN conversations c ON c.id = u.conversation_id
+        WHERE u.day >= ? AND u.day <= ? GROUP BY 1`, out.from, out.to);
+      const projects = byProject.map((p) => ({ project: p.project, tokensIn: p.tin, tokensOut: p.tout, usd: p.usd })).filter((p) => p.tokensIn + p.tokensOut || p.usd)
+        .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
+      return { ...out, projects, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
     },
     // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
@@ -351,9 +378,37 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // The palette's Ctrl+P and Ctrl+Shift+F (PC only): a file or a text of the project (rg when this PC has it).
     'projects.findFiles': async ({ project: name, q }) => (await finder()).findFiles(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
     'projects.searchText': async ({ project: name, q }) => (await finder()).searchText(project(name).path, str(q, 'búsqueda', 200, { optional: true })),
+    // «Nuevo archivo» (window only): an empty file, never over an existing one, in a folder of a registered project that is
+    // not core and has nothing working in it (a task's before/after snapshot would take the file as the task's own).
+    'expert.createFile': async ({ project: name, dir, name: fileName }) => {
+      const p = project(name);
+      if (guardedCore(ctx.home, p.path)) fail(tr('msg.expert.createCore'));
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.expert.createBusy', { name: p.name }));
+      return (await exp()).createFile(p.path, str(dir, 'carpeta', 1000, { optional: true }), str(fileName, 'nombre', 200));
+    },
     'expert.status': async ({ project: name }) => (await exp()).gitStatus(project(name).path),
     'expert.diff': async ({ project: name, path: file }) => (await exp()).gitDiff(project(name).path, str(file, 'archivo', 1000, { optional: true })),
     'expert.log': async ({ project: name, limit }) => (await exp()).gitLog(project(name).path, limit),
+    // God mode's git panel. Reads: local branches and the last save. Changes (window only): switching branch, a new branch and
+    // undoing the last unpublished save; each refuses while anything works in the project (the same check as «Sincronizar»)
+    // and runs with the project held. None of them can lose work (see host/expert.mjs).
+    'expert.branches': async ({ project: name }) => (await exp()).listBranches(project(name).path),
+    'expert.lastCommit': async ({ project: name }) => (await exp()).lastCommit(project(name).path),
+    'expert.switchBranch': async ({ project: name, branch }) => {
+      const p = project(name); const b = str(branch, 'rama', 255);
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.projects.syncBusy'));
+      return holding(p.name, async () => (await exp()).switchBranch(p.path, b));
+    },
+    'expert.createBranch': async ({ project: name, name: branch, switch: to }) => {
+      const p = project(name); const b = str(branch, 'rama', 255);
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.projects.syncBusy'));
+      return holding(p.name, async () => (await exp()).createBranch(p.path, b, { switchTo: to === true }));
+    },
+    'expert.undoCommit': async ({ project: name, hash }) => {
+      const p = project(name); const h = str(hash, 'commit', 64, { optional: true });
+      if (scheduler.held(p.name) || coordinatorBusy(p.name) || projectHasWork(board, p.name)) fail(tr('msg.projects.syncBusy'));
+      return holding(p.name, async () => (await exp()).undoCommit(p.path, h || undefined));
+    },
     'expert.system': async () => ({ ...(await exp()).systemStats(ctx.home), running: sessions.runningCount(), byAgent: Object.fromEntries(AGENT_IDS.map((a) => [a, sessions.runningCount(a)])) }),
     'control.pause': () => { board.setting('paused', '1'); board.changed('settings'); return true; },
     'control.resume': () => { board.setting('paused', '0'); board.changed('settings'); return true; },
@@ -401,8 +456,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'terminal.close': ({ id }) => terminals.close({ id: int(id, 'terminal') }),
     ...extensionMethods(shared),
     ...rulesMethods(shared), // the text rules and the rails (core/normas, orb.json rails)
-    ...appMethods({ home: ctx.home, version }), // this PC's tools (terminal, editors, feedback…)
-    ...musicMethods({ log }) // the music's tracks, downloaded the first time (src/engine/host/music.mjs)
+    ...appMethods({ home: ctx.home, version, folders: () => [...board.projects().map((p) => p.path), ...board.all('SELECT DISTINCT workdir FROM tasks WHERE workdir IS NOT NULL').map((x) => x.workdir)] }), // this PC's tools (terminal, editors, feedback…)
   };
   const feeds = createFeeds();
   return {

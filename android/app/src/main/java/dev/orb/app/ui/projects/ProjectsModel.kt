@@ -11,6 +11,9 @@ import kotlinx.serialization.json.JsonObject
 /** The folders Orb sorts projects into; `multi` is a project with a folder per platform. */
 val ProjectCategories = listOf("windows", "linux", "ios", "android", "web", "multi")
 
+/** The order the new-project sheet offers them in: the mockup's own two first, then the rest. */
+val NewProjectCategories = listOf("web", "android", "windows", "linux", "ios", "multi")
+
 @Immutable
 data class ProjectItem(
     val name: String,
@@ -18,8 +21,10 @@ data class ProjectItem(
     val active: Boolean,
     /** Tasks that are queued, waiting for approval or running. */
     val open: Int,
-    /** A `data:` URL of the project's icon, when it has one. */
-    val icon: String?,
+    /** Of those, the ones waiting for the person's OK; known only while the PC's task list could be read. */
+    val approve: Int = 0,
+    /** The branch and the number of files git says changed; null for a project without git, without folder or not read yet. */
+    val git: ProjectGit? = null,
 )
 
 @Immutable
@@ -33,14 +38,26 @@ data class ProjectsData(val projects: List<ProjectItem>, val finished: List<Fini
 }
 
 object ProjectsParser {
-    fun list(el: JsonElement?, icons: JsonElement?): List<ProjectItem> {
-        val iconMap = icons as? JsonObject
-        return (el as? JsonArray).orEmpty().mapNotNull { x ->
+    fun list(el: JsonElement?, approvals: Map<String, Int> = emptyMap()): List<ProjectItem> =
+        (el as? JsonArray).orEmpty().mapNotNull { x ->
             val o = x as? JsonObject ?: return@mapNotNull null
             val name = o.str("name") ?: return@mapNotNull null
-            ProjectItem(name, o.str("category"), o.bool("active"), o.int("open") ?: 0, iconMap?.str(name)?.takeIf { it.startsWith("data:") })
+            ProjectItem(name, o.str("category"), o.bool("active"), o.int("open") ?: 0, approvals[name.lowercase()] ?: 0)
+        }
+
+    /** `projects.list({withGit:true})`: only the rows that came with `changes` have git data; the rest are left out. */
+    fun git(el: JsonElement?): Map<String, ProjectGit> = buildMap {
+        for (x in (el as? JsonArray).orEmpty()) {
+            val o = x as? JsonObject ?: continue
+            val name = o.str("name") ?: continue
+            val changes = o.int("changes") ?: continue
+            put(name, ProjectGit(o.str("branch")?.takeIf { it.isNotBlank() }, changes, null, null))
         }
     }
+
+    /** How many tasks wait for the person's OK, per project (lower case, like the PC compares names). */
+    fun approvals(tasks: List<dev.orb.app.ui.tasks.TaskRow>): Map<String, Int> =
+        tasks.filter { it.needsApproval && it.project != null }.groupingBy { it.project!!.lowercase() }.eachCount()
 
     fun finished(el: JsonElement?): List<FinishedProject> = (el as? JsonArray).orEmpty().mapNotNull { x ->
         val o = x as? JsonObject ?: return@mapNotNull null
@@ -58,6 +75,10 @@ data class ProjectDetailData(
     val tasks: List<dev.orb.app.ui.tasks.TaskRow>,
     /** Null when the folder is no git repository or the PC cannot say. */
     val git: ProjectGit?,
+    val category: String? = null,
+    /** The key to reopen it with, when the project is one of the finished ones (it is then not in the active list). */
+    val finishedKey: String? = null,
+    val finishedAt: String? = null,
 )
 
 object ProjectInfoParser {

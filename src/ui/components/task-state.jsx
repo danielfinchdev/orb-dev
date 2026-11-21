@@ -14,21 +14,24 @@ import { STATUS } from '@/lib/labels.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { confirm } from './dialogs.jsx';
 import { call, act, go, setState } from '@/lib/store.js';
-import { cn } from '@/lib/utils.js';
-import { useT } from '@/lib/i18n.js';
+import { cn, shortPath } from '@/lib/utils.js';
+import { useT, currentLocale } from '@/lib/i18n.js';
 import { Note } from './ui/primitives.jsx';
 
 export { needsApproval };
 
 // The state of a task, drawn the same everywhere (list, detail, chat, sidebar, search): «Deshecha» when undone, «Por
 // aprobar» when held for review, why it waits when queued, else the status. `plain`: just the text, no badge.
-export function TaskStatus({ task, status, undone, plain = false, className }) {
+// `board`: the words and tones of the Tareas screen (Trabajando, Fallo, Por aprobar), the same in its list and its panel.
+const BOARD = { running: ['tasks.state.running', 'info'], failed: ['tasks.state.failed', 'destructive'], awaiting_approval: ['tasks.held.badge', 'warning'], queued: ['status.queued', 'secondary'] };
+export function TaskStatus({ task, status, undone, plain = false, className, board = false }) {
   const t = useT();
   const st = task?.status ?? status;
   const label = (variant, text, extra) => (plain ? <span className={className} {...extra}>{text}</span> : <Badge variant={variant} className={className} {...extra}>{text}</Badge>);
   if (undone ?? task?.undone) return plain ? <span className={className} data-testid="task-undone">{t('tasks.undone')}</span> : <Badge variant="secondary" className={className} data-testid="task-undone"><Undo2 />{t('tasks.undone')}</Badge>;
   if (task?.held) return label('warning', t('tasks.held.badge'), { 'data-testid': 'task-held-badge' });
-  if (st === 'queued' && task?.waiting) return label(task.waiting.kind === 'paused' ? 'warning' : STATUS.queued[1], waitText(t, task), { title: task.waiting.text });
+  if (st === 'queued' && task?.waiting) return label(task.waiting.kind === 'paused' ? 'warning' : board ? BOARD.queued[1] : STATUS.queued[1], waitText(t, task), { title: task.waiting.text });
+  if (board && BOARD[st]) return label(BOARD[st][1], t(BOARD[st][0]));
   return label(STATUS[st]?.[1] ?? 'secondary', STATUS[st]?.[0] ?? st);
 }
 
@@ -80,10 +83,37 @@ export function PausedNote({ className }) {
   );
 }
 
-const acceptHeld = (t, task) => act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
-async function undoHeld(t, task) {
-  if (await confirm(t('tasks.undo.title'), t('tasks.undo.body'), { ok: t('tasks.undo.ok'), danger: true })) act(call('tasks.undo', { id: task.id }));
+// Accepting a held task keeps what the guard stopped: it asks first, showing the reason it was held, then makes the same call as ever.
+export async function acceptHeld(t, task) {
+  const h = task.held;
+  const why = h?.folder ? `${h.reasons} (${h.folder})` : (h?.reasons ?? '');
+  if (!(await confirm(t('tasks.held.acceptTitle', { id: task.id }), t('tasks.held.acceptBody', { title: task.title, why }), { ok: t('tasks.held.accept'), warn: true }))) return undefined;
+  return act(call('tasks.accept', { id: task.id }), t('tasks.held.accepted'));
 }
+// What «Deshacer» says it will do: the task and, when the task's events are at hand, the time of the snapshot it goes back to.
+// `finalPhoto === false` (tasks.get): no photo of the end of the task, so the whole folder goes back, later changes included.
+export function undoBody(t, task) {
+  if (task.finalPhoto === false) return t('tasks.undo.bodyNoFinal', { id: task.id });
+  const at = task.events?.find((e) => e.kind === 'checkpoint')?.at;
+  return at ? t('tasks.undo.bodyPhoto', { id: task.id, time: new Date(at).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) }) : t('tasks.undo.body', { id: task.id });
+}
+// The confirmation focuses Cancel (danger) but its accept button is the neutral main one, as in the mock-up. The buttons behind
+// are not locked while it is open, so one undo per task at a time is enforced here: a second click shares the open dialog's
+// answer and must not undo twice.
+const undoing = new Set();
+// `during`: how the caller locks its other buttons while the engine undoes (after the answer, so nothing looks disabled
+// behind the open dialog).
+export async function undoTask(t, task, during = (fn) => fn()) {
+  if (undoing.has(task.id)) return undefined;
+  undoing.add(task.id);
+  try {
+    // a row of a list does not carry whether the end photo exists: ask the detail, and fall back to the plain text if it fails
+    if (task.finalPhoto === undefined) { try { task = { ...task, finalPhoto: (await call('tasks.get', { id: task.id }))?.finalPhoto }; } catch { /* the dialog keeps its usual text */ } }
+    if (await confirm(t('tasks.undo.title'), undoBody(t, task), { ok: t('tasks.undo.ok'), danger: true, tone: 'primary' })) return await during(() => act(call('tasks.undo', { id: task.id })));
+    return undefined;
+  } finally { undoing.delete(task.id); }
+}
+export const undoHeld = undoTask;
 
 // A task Orb held for review: what it did, where, and the two ways out. `link`: a button to its detail (the chat).
 export function HeldCard({ task, link = false, className }) {
@@ -96,7 +126,7 @@ export function HeldCard({ task, link = false, className }) {
         <ShieldAlert className="text-warning-ink mt-0.5 size-4 shrink-0" />
         <div className="min-w-0 flex-1">
           {link ? <div className="font-semibold">{t('orbchats.taskN', { id: task.id })} · <span className="font-normal">{task.title}</span></div> : null}
-          <div className="break-words">{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: h.folder }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>
+          <div className="[overflow-wrap:anywhere]" title={h.folder || undefined}>{h.folder ? t('tasks.held.line', { reasons: h.reasons, folder: shortPath(h.folder) }) : t('tasks.held.lineNoFolder', { reasons: h.reasons })}</div>
         </div>
       </div>
       <div className="flex flex-wrap gap-2 pl-6">

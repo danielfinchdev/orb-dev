@@ -6,7 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.orb.app.ui.theme.OrbTheme
-import dev.orb.app.ui.theme.ThemeChoice
+import dev.orb.app.ui.theme.OrbPaletteChoice
 import dev.orb.app.ui.web.LocalWebPolicy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -104,7 +104,7 @@ class IslandBlockTest {
     @get:Rule val rule = createComposeRule()
 
     private fun show(kind: IslandKind, source: String) = rule.setContent {
-        OrbTheme(ThemeChoice.Orbita, dark = false, dynamic = false) {
+        OrbTheme(OrbPaletteChoice.Grafito, dark = false) {
             IslandBlock(kind, source, dark = false) { Text("CODE:$source") }
         }
     }

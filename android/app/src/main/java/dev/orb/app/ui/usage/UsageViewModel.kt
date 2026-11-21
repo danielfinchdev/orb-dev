@@ -42,6 +42,12 @@ data class UsageState(
     val canGuide: Boolean = false,
 ) {
     val loaded get() = accounts.answered || history.answered || agents.answered || guide.answered
+
+    /** Every section the PC offers has answered and none has anything to show. */
+    val isEmpty
+        get() = loaded && (!canUsage || accounts.answered) && (!canAgents || agents.answered) && (!canHistory || history.answered) &&
+            accounts.data.orEmpty().isEmpty() && agents.data.orEmpty().isEmpty() && guide.data.orEmpty().isEmpty() &&
+            history.data.let { it == null || (it.turns == 0 && it.usd == 0.0) }
     val allFailed get() = !loaded && (accounts.failed || history.failed || agents.failed || guide.failed)
 }
 

@@ -1,7 +1,7 @@
 // Snake: eat to grow, do not bite yourself. Easy: slow and the walls let you through; hard: fast.
 // The snake slides between cells (the logic still moves one cell per tick); it has eyes, the food glows and bursts.
 import { useEffect, useRef } from 'react';
-import { useKeys, useLoop, palette, setupCanvas, tint, mix, shade, Particles, backdrop, reducedMotion, font } from './kit.js';
+import { useKeys, useLoop, palette, setupCanvas, tint, mix, shade, Particles, backdrop, reducedMotion, font, skin } from './kit.js';
 import { sfx } from './sfx.js';
 
 const N = 20; const CELL = 21; const SIZE = N * CELL;
@@ -10,6 +10,48 @@ const DIRS = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRig
 
 const freeCell = (body) => { for (;;) { const c = [Math.floor(Math.random() * N), Math.floor(Math.random() * N)]; if (!body.some(([x, y]) => x === c[0] && y === c[1])) return c; } };
 const centre = (c) => (c + 0.5) * CELL;
+
+// Points popping up where it ate.
+function popup(ctx, s, p) {
+  if (s.bite > 0) { ctx.globalAlpha = Math.min(1, s.bite / 200); ctx.fillStyle = p.warning; ctx.font = font(p, 13, 700); ctx.textAlign = 'center'; ctx.fillText('+10', s.biteAt[0], s.biteAt[1] - 14 - (600 - s.bite) / 40); ctx.globalAlpha = 1; }
+}
+
+// The flat board of the Predeterminado theme (the approved design): a muted tray of square dots, the snake in blocks
+// with a dark head, and a round red apple. The theme's own tokens, read once per palette refresh; the dots are painted
+// once on a layer of their own so a frame only copies it.
+const flat = { colors: null, key: null, layer: null };
+function flatColors(p) {
+  if (flat.key === p) return flat.colors;
+  const css = getComputedStyle(document.documentElement);
+  const v = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+  flat.colors = { muted: v('--muted', '#eee'), secondary: v('--secondary', '#f4f4f4'), snake: v('--primary-text', '#c2410c'), head: v('--primary', '#111'), apple: v('--destructive', '#d92d20') };
+  flat.key = p; flat.layer = null;
+  return flat.colors;
+}
+function flatLayer(c) {
+  if (flat.layer) return flat.layer;
+  const ratio = window.devicePixelRatio || 1;
+  const layer = document.createElement('canvas'); layer.width = Math.round(SIZE * ratio); layer.height = Math.round(SIZE * ratio);
+  const ctx = layer.getContext('2d'); ctx.scale(ratio, ratio);
+  ctx.fillStyle = c.muted; ctx.fillRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = c.secondary;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { ctx.beginPath(); ctx.roundRect(x * CELL + 0.5, y * CELL + 0.5, CELL - 1, CELL - 1, 5); ctx.fill(); }
+  flat.layer = layer;
+  return layer;
+}
+function paintFlat(ctx, s, p, pts) {
+  const c = flatColors(p);
+  ctx.drawImage(flatLayer(c), 0, 0, SIZE, SIZE);
+  ctx.fillStyle = c.apple; ctx.beginPath(); ctx.arc(centre(s.food[0]), centre(s.food[1]), CELL / 2 - 0.5, 0, Math.PI * 2); ctx.fill();
+  // the blocks fill their whole cell (no gap between them), the nearest to the mock-up's big blocks the 20 × 20 grid allows.
+  // tail first, so the head ends on top; a segment across the wall is drawn where it is
+  for (let i = pts.length - 1; i >= 0; i--) {
+    ctx.fillStyle = i === 0 ? (s.over ? p.danger : c.head) : c.snake;
+    ctx.beginPath(); ctx.roundRect(pts[i][0] - CELL / 2, pts[i][1] - CELL / 2, CELL, CELL, 5); ctx.fill();
+  }
+  popup(ctx, s, p);
+  s.sparks.draw(ctx);
+}
 
 export default function Snake({ level, onScore, onOver, paused }) {
   const canvas = useRef(null);
@@ -37,8 +79,9 @@ export default function Snake({ level, onScore, onOver, paused }) {
   const draw = () => {
     const ctx = canvas.current?.getContext('2d'); if (!ctx) return;
     const p = palette(); const s = g.current;
-    backdrop(ctx, SIZE, SIZE, p, { grid: CELL });
     const t = s.over ? 1 : Math.min(1, s.acc / SPEED[level]);
+    if (p.skin === 'predeterminado') { paintFlat(ctx, s, p, points(s, t)); return; }
+    backdrop(ctx, SIZE, SIZE, p, { grid: CELL });
     // The food: a glowing berry that breathes.
     const pulse = reducedMotion() ? 0 : Math.sin(s.time / 180) * 1.5;
     const fx = centre(s.food[0]); const fy = centre(s.food[1]);
@@ -75,7 +118,7 @@ export default function Snake({ level, onScore, onOver, paused }) {
     }
     if (s.over) { ctx.strokeStyle = '#1a1a2e'; ctx.lineWidth = 1.5; for (const sgn of [-1, 1]) { const ex = hx + dx * 3.5 + side[0] * sgn * 4.6; const ey = hy + dy * 3.5 + side[1] * sgn * 4.6; ctx.beginPath(); ctx.moveTo(ex - 2.5, ey - 2.5); ctx.lineTo(ex + 2.5, ey + 2.5); ctx.moveTo(ex + 2.5, ey - 2.5); ctx.lineTo(ex - 2.5, ey + 2.5); ctx.stroke(); } }
     // Points popping up where it ate.
-    if (s.bite > 0) { ctx.globalAlpha = Math.min(1, s.bite / 200); ctx.fillStyle = p.warning; ctx.font = font(p, 13, 700); ctx.textAlign = 'center'; ctx.fillText('+10', s.biteAt[0], s.biteAt[1] - 14 - (600 - s.bite) / 40); ctx.globalAlpha = 1; }
+    popup(ctx, s, p);
     s.sparks.draw(ctx);
   };
   useEffect(() => { setupCanvas(canvas.current, SIZE, SIZE); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -106,5 +149,5 @@ export default function Snake({ level, onScore, onOver, paused }) {
     }
     draw();
   }, !paused);
-  return <canvas ref={canvas} className="rounded-2xl shadow-lg ring-1 ring-black/5 dark:ring-white/10" aria-label="Snake" />;
+  return <canvas ref={canvas} className={skin() === 'predeterminado' ? 'rounded-card border-border border' : 'rounded-2xl shadow-lg ring-1 ring-black/5 dark:ring-white/10'} aria-label="Snake" />;
 }

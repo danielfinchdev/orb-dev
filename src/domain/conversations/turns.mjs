@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { git, gitAsync, REF_PREFIX, isGitRepoAsync, repoRootAsync } from '../../platform/git.mjs';
-import { snapshotCommitAsync, diffBetween, RAW_GIT, RAW_INDEX, caseRenamed, indexId } from '../tasks/checkpoints.mjs';
+import { snapshotCommitAsync, diffBetween, statBetweenAsync, RAW_GIT, RAW_INDEX, caseRenamed, indexId } from '../tasks/checkpoints.mjs';
 import { isSecretPath } from '../../shared/secrets-scan.mjs';
 
 const TURNS = `${REF_PREFIX}/turnos`;
@@ -153,12 +153,16 @@ export const snapshotAfterTurn = (cwd, sid, alive) => serial(sid, () => take(cwd
 export async function listTurns(cwd, sid) {
   if (!cwd || !(await isGitRepoAsync(cwd))) return { available: false, turns: [] };
   const repo = await repoRootAsync(cwd);
+  // A read that arrives while a photo is being taken (the engine marks the chat idle before it ends) waits for it, so the
+  // turn that just finished is listed. The stored link never rejects, so this cannot hang or throw.
+  await chains.get(sid);
   const refs = await listRefs(repo, sid);
   return { available: refs.length > 1, turns: refs.filter((t) => t.n > 0).map((t) => ({ n: t.n, at: t.at })) };
 }
 
 // scope: 'last' | 'all' | 'turn' (with n) | 'head' (the last photo against the current HEAD commit).
-export async function turnDiff(cwd, sid, { scope = 'last', n } = {}) {
+// stat: only the line counts per file (statBetween), no patches.
+export async function turnDiff(cwd, sid, { scope = 'last', n, stat = false } = {}) {
   if (!cwd || !(await isGitRepoAsync(cwd))) return { available: false, files: [], more: 0 };
   const repo = await repoRootAsync(cwd);
   const refs = await listRefs(repo, sid);
@@ -176,7 +180,7 @@ export async function turnDiff(cwd, sid, { scope = 'last', n } = {}) {
     if (!head) return { available: false, files: [], more: 0 };
     a = { commit: head }; label = 'head';
   } else { a = refs[refs.length - 2]; label = last.n; }
-  return { available: true, scope: label, ...diffBetween(repo, a.commit, b.commit) };
+  return { available: true, scope: label, ...(stat ? await statBetweenAsync(repo, a.commit, b.commit) : diffBetween(repo, a.commit, b.commit)) };
 }
 
 // An archived or deleted conversation leaves nothing behind. Sync on purpose: it runs where the conversation is removed.

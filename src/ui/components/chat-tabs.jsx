@@ -3,8 +3,12 @@
 // setting off, it draws the screen as it always was. The chat on screen is always the one of the pane that has the focus,
 // so the sidebar, the info pane and every shortcut keep talking about «the chat I am in».
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Columns2, MessageSquare, Plus, X } from 'lucide-react';
+import { Columns2, LoaderCircle, MessageSquare, Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
+import { IconButton } from '@/components/ui/primitives.jsx';
+import { BubbleTip } from '@/components/ui/overlay.jsx';
+import { AgentIcon } from '@/components/agent-icon.jsx';
+import { WindowControlsSlot } from '@/components/window-controls.jsx';
 import { cn } from '@/lib/utils.js';
 import { t as t0, useT } from '@/lib/i18n.js';
 import { useStore, getState, go, phoneLayout, newChat } from '@/lib/store.js';
@@ -15,10 +19,8 @@ import * as T from '../../shared/tabs.mjs';
 
 // Below this width two chats do not fit: the split stays saved, but only the pane with the focus is shown.
 const SPLIT_MIN_WIDTH = 900;
-const SHORT_TITLE = 18;
 
 const itemKey = (tab) => (tab.startsWith('session:') ? tab : `conversation:${tab.slice(5)}`);
-const short = (s) => (s.length > SHORT_TITLE ? `${s.slice(0, SHORT_TITLE - 1)}…` : s);
 
 // A click with Ctrl (or ⌘) on a chat of the list opens it in a tab of its own: this only notes it, the click goes on.
 let ctrlAt = 0;
@@ -36,11 +38,12 @@ function syncedWith(state, key, mode) {
 const goKey = (key) => { const r = T.routeOfKey(key); if (r) go(r); };
 const focused = (s) => (s.split && s.focus === 'right' ? s.right : s.active);
 
+// What a tab says about its chat: working (the spinner), waiting for you or unread (a dot).
 function Dot({ item, t }) {
   const kind = !item ? null : item.asks || item.asking ? 'needs' : item.busy ? 'working' : item.unread > 0 ? 'unread' : null;
   if (!kind) return null;
-  const tone = { needs: 'bg-warning', working: 'bg-info animate-pulse motion-reduce:animate-none', unread: 'bg-primary' }[kind];
-  return <span className={cn('size-2 shrink-0 rounded-full', tone)} role="img" aria-label={t(`tabs.state.${kind}`)} />;
+  if (kind === 'working') return <LoaderCircle className="otab-spin size-3.5 shrink-0 animate-spin motion-reduce:animate-none" role="img" aria-label={t('tabs.state.working')} />;
+  return <span className={cn('size-2 shrink-0 rounded-full', kind === 'needs' ? 'bg-warning' : 'bg-primary-text')} role="img" aria-label={t(`tabs.state.${kind}`)} />;
 }
 
 function TabBar({ state, canSplit, narrow }) {
@@ -67,33 +70,36 @@ function TabBar({ state, canSplit, narrow }) {
   const shown = new Set([state.active, state.split ? state.right : null]);
   const splitTip = state.split ? t('tabs.unsplit') : state.tabs.length < 2 ? t('tabs.splitNeeds') : !canSplit ? t('tabs.splitNarrow') : t('tabs.split');
   return (
-    <div className="theme-band bg-sidebar flex h-9 shrink-0 items-end gap-1 border-b px-2" data-testid="chat-tabs">
-      <div ref={list} role="tablist" aria-label={t('tabs.label')} className="flex min-w-0 flex-1 items-end gap-0.5 overflow-x-auto">
+    // One 56 px strip over the chat and its panel, so both headers keep the same line; the window's buttons live here.
+    <div className="tabs-strip theme-band app-titlebar" data-testid="chat-tabs">
+      <div ref={list} role="tablist" aria-label={t('tabs.label')} className="tabs-list">
         {state.tabs.map((tab) => {
           const on = tab === focused(state);
           const title = titleOf(tab);
+          const item = byKey.get(itemKey(tab));
           return (
-            <div key={tab} className={cn('group relative flex h-8 max-w-[14rem] shrink-0 items-center rounded-t-md border border-b-0 border-transparent', on ? 'bg-background border-border text-foreground border-t-2 border-t-primary' : shown.has(tab) ? 'bg-accent/50 text-foreground' : 'text-muted-foreground hover:bg-accent/40')}>
-              <button type="button" role="tab" data-tab={tab} aria-selected={on} tabIndex={on ? 0 : -1} title={title} onClick={() => select(tab)} onKeyDown={(e) => onKey(e, tab)}
-                className="focus-visible:ring-ring flex min-w-0 cursor-pointer items-center gap-1.5 rounded-t-md py-1 pr-1 pl-2.5 text-control focus-visible:ring-2 focus-visible:outline-none">
-                <Dot item={byKey.get(itemKey(tab))} t={t} />
-                <span className="truncate">{short(title)}</span>
+            <div key={tab} className="otab" data-on={on} data-shown={shown.has(tab)}>
+              <button type="button" role="tab" data-tab={tab} aria-selected={on} tabIndex={on ? 0 : -1} title={title} onClick={() => select(tab)} onKeyDown={(e) => onKey(e, tab)} className="otab-main">
+                {item?.agent ? <AgentIcon agent={item.agent} /> : null}
+                <span className="otab-title">{title}</span>
+                <Dot item={item} t={t} />
               </button>
-              <button type="button" tabIndex={-1} aria-label={t('tabs.close', { title })} onClick={() => close(tab)}
-                className="hover:bg-accent mr-1 grid size-5 shrink-0 cursor-pointer place-items-center rounded opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 data-[on=true]:opacity-100" data-on={on}>
-                <X className="size-3" />
-              </button>
+              <IconButton small tabIndex={-1} label={t('tabs.close', { title })} onClick={() => close(tab)} className="otab-x"><X /></IconButton>
             </div>
           );
         })}
-        <button type="button" aria-label={t('tabs.new')} title={t('tabs.new')} onClick={() => { actTabs((s) => T.openTab(s, 'chat:new', { mode: 'new' })); go({ view: 'chat' }); }}
-          className="text-muted-foreground hover:bg-accent focus-visible:ring-ring mb-0.5 grid size-7 shrink-0 cursor-pointer place-items-center rounded-md focus-visible:ring-2 focus-visible:outline-none"><Plus className="size-4" /></button>
+        <BubbleTip title={t('tabs.new')}>
+          <IconButton label={t('tabs.new')} onClick={() => { actTabs((s) => T.openTab(s, 'chat:new', { mode: 'new' })); go({ view: 'chat' }); }}><Plus /></IconButton>
+        </BubbleTip>
       </div>
-      <button type="button" aria-pressed={state.split} aria-disabled={!state.split && (state.tabs.length < 2 || !canSplit)} title={splitTip}
-        onClick={() => { if (state.split || (state.tabs.length >= 2 && canSplit)) { actTabs(T.toggleSplit); goKey(focused(tabsState())); } }}
-        className={cn('hover:bg-accent focus-visible:ring-ring mb-0.5 flex h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-2 text-control focus-visible:ring-2 focus-visible:outline-none aria-disabled:cursor-not-allowed aria-disabled:opacity-50', state.split && 'bg-accent')}>
-        <Columns2 className="size-4" />{narrow ? null : <span>{state.split ? t('tabs.unsplit') : t('tabs.split')}</span>}
-      </button>
+      <BubbleTip title={splitTip}>
+        <Button type="button" variant="ghost" aria-pressed={state.split} aria-disabled={!state.split && (state.tabs.length < 2 || !canSplit)} aria-label={narrow ? splitTip : undefined}
+          onClick={() => { if (state.split || (state.tabs.length >= 2 && canSplit)) { actTabs(T.toggleSplit); goKey(focused(tabsState())); } }}
+          className={cn('shrink-0 aria-disabled:cursor-not-allowed aria-disabled:opacity-45', state.split && 'bg-accent text-foreground')}>
+          <Columns2 className="size-3.5" />{narrow ? null : <span>{state.split ? t('tabs.unsplit') : t('tabs.split')}</span>}
+        </Button>
+      </BubbleTip>
+      <WindowControlsSlot />
     </div>
   );
 }
@@ -109,7 +115,7 @@ function Divider({ ratio, onChange, boxRef }) {
   };
   const key = (e) => { const d = e.key === 'ArrowLeft' ? -5 : e.key === 'ArrowRight' ? 5 : 0; if (d) { e.preventDefault(); onChange(ratio + d); } else if (e.key === 'Home') onChange(T.MIN_RATIO); else if (e.key === 'End') onChange(T.MAX_RATIO); };
   return <div role="separator" aria-orientation="vertical" aria-label={t('tabs.divider')} aria-valuenow={ratio} aria-valuemin={T.MIN_RATIO} aria-valuemax={T.MAX_RATIO} tabIndex={0} onPointerDown={drag} onKeyDown={key}
-    className="hover:bg-primary/40 focus-visible:bg-primary/60 bg-border w-1.5 shrink-0 cursor-col-resize touch-none outline-none" data-testid="split-divider" />;
+    className="hover:bg-primary-text/40 focus-visible:bg-primary-text/60 bg-border w-1.5 shrink-0 cursor-col-resize touch-none outline-none" data-testid="split-divider" />;
 }
 
 function Empty({ onNew }) {
@@ -161,6 +167,8 @@ export function ChatTabs({ route, render }) {
 
   const fresh = () => { setEmpty(false); actTabs((s) => T.openTab(s, 'chat:new', { mode: 'new' })); newChat(); };
   useShortcut('tabs.new', (e) => { if (!enabled) return; e.preventDefault(); fresh(); }, { capture: true });
+  // a second key for the same action (the «+» menu shows this one)
+  useShortcut('chat.new', (e) => { if (!enabled) return; e.preventDefault(); fresh(); }, { capture: true });
   useShortcut('tabs.close', (e) => {
     const k = focused(tabsState()); if (!enabled || !k) return;
     e.preventDefault(); actTabs((s) => T.closeTab(s, k));
@@ -180,7 +188,7 @@ export function ChatTabs({ route, render }) {
   const pick = (side) => { if (!eff.split || eff.focus === side) return; actTabs(T.focusOther); goKey(focused(tabsState())); };
   const pane = (side, r, label) => (
     <section key={side} data-testid={`pane-${side}`} aria-label={label || undefined} onMouseDownCapture={() => pick(side)} onFocusCapture={() => pick(side)}
-      className={cn('flex min-h-0 min-w-0 flex-col', right && eff.focus === side && 'ring-primary/30 ring-1 ring-inset')}
+      className={cn('flex min-h-0 min-w-0 flex-col', right && eff.focus === side && 'ring-ring/30 ring-1 ring-inset')}
       style={right ? { flexBasis: `${side === 'right' ? 100 - eff.ratio : eff.ratio}%`, flexGrow: 0, flexShrink: 1 } : { flex: '1 1 0%' }}>
       {render(r)}
     </section>

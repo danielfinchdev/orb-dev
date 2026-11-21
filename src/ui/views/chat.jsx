@@ -3,13 +3,20 @@
 // it, the brain (agent and model), the reasoning (brain button) and, for a new conversation, the orchestrator (icon and a
 // small switch: on = with the assistant, who coordinates the agents; off = directly with the agent chosen).
 // each conversation is its own (route.id), several at once.
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { orbTurnTails } from '@/lib/turn-cards.js';
+import { onTerminalPaste } from '@/lib/terminal-paste.js';
+import { TerminalPanel } from '@/components/terminal-panel.jsx';
+import { SecretCards } from '@/components/secret-card.jsx';
+import { HtmlPages } from '@/components/html-page.jsx';
+import { sideSessionIds } from '@/lib/html-mount.js';
 import { useDraft } from '@/lib/draft.js';
-import { Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare } from 'lucide-react';
+import { PanelRight, FolderPlus, NotebookPen, Gauge, ShieldQuestion, LoaderCircle, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare, SquareTerminal } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
 import { ProjectPicker } from '@/components/project-actions.jsx';
+import { ProjectChip } from '@/components/conversation/project-chip.jsx';
 import { useLiveTasks, liveOf, ProgressBar, elapsed } from '@/components/live-tasks.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ChatBar, BackToList } from '@/components/chat-bar.jsx';
@@ -22,32 +29,35 @@ import { Button } from '@/components/ui/button.jsx';
 import { TaskStatus, WaitLabel, HeldCard, resumeQueue, setQueuePaused } from '@/components/task-state.jsx';
 import { Badge } from '@/components/ui/basic.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
-import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
-import { notify } from '@/lib/notify.js';
+import { bridge, useStore, call, act, setState, getState, go, newChat, openGames, fullPc, initTestOfTheDay, dismissTest, runTest, chatOf, refresh, refreshSoon, navTicket, stillHere, openOrbInfo, closeOrbInfo, loadOrbInboxSoon, phoneLayout, plainSkin, robotSkin, addPending, movePending, dropPending, pendingShown, usePending } from '@/lib/store.js';
+import { notify, notifyError } from '@/lib/notify.js';
+import { AttachMenu } from '@/components/conversation/attach-menu.jsx';
+import { AttachIcon, AttachedFiles } from '@/components/conversation/attach-chip.jsx';
+import { StoppedCard } from '@/components/conversation/stopped-card.jsx';
+import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
-import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
-import { BrainPicker, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel } from '@/components/brain-picker.jsx';
+import { BrainPicker, BrainChip, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel, modelLabel } from '@/components/brain-picker.jsx';
 import { favoriteBrains } from '@/lib/favorite-brains.js';
 import { stepFavorite } from '../../shared/favorite-brains.mjs';
 import { useShortcut } from '@/lib/keys.js';
 import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
-import { cn } from '@/lib/utils.js';
+import { baseName, cn } from '@/lib/utils.js';
 import { DECISION, AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
-import { MessageBox } from '@/components/conversation/message-box.jsx';
+import { MessageBox, TurnActions } from '@/components/conversation/message-box.jsx';
 import { ColdNotice } from '@/components/conversation/cold-notice.jsx';
 import { BarPause, COMPACT_AT, CompactButton } from '@/components/conversation/bar.jsx';
 import { ContextMeter } from '@/components/conversation/context-meter.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { quiet } from '@/lib/quiet.js';
-import { MoreButton } from '@/components/ui/primitives.jsx';
+import { MoreButton, IconButton } from '@/components/ui/primitives.jsx';
 import { ConversationTrail, useTrailScroll } from '@/components/conversation/trail.jsx';
 
 
@@ -79,7 +89,7 @@ const Message = memo(function Message({ m, name, user, onChanges, tail, onPin })
   );
   // the person's and the assistant's saved messages can be pinned (one still on its way has no saved line yet)
   const pin = onPin && m.pinned_at !== undefined ? { pinned: Boolean(m.pinned_at), onToggle: () => onPin(m) } : undefined;
-  if (m.role === 'usuario') return <MessageBox user id={`msg-${m.id}`} pin={pin} name={user || t('chat.you')} at={m.at}>{m.body}</MessageBox>;
+  if (m.role === 'usuario') return <MessageBox user id={`msg-${m.id}`} pin={pin} name={user || t('chat.you')} at={m.at}>{m.body}<AttachedFiles files={m.meta?.images} /></MessageBox>;
   if (m.role === 'orb') {
     const report = m.meta?.kind === 'report' && m.meta.tasks?.length ? m.meta : null;
     const actions = report ? (
@@ -106,6 +116,8 @@ const Message = memo(function Message({ m, name, user, onChanges, tail, onPin })
   );
   // the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
   if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
+  // Orb ended a turn itself (the guard, a time limit): the reason, and the task's own «Ver tarea» / «Deshacer».
+  if (m.meta?.kind === 'turn-stopped') return <StoppedCard m={m} name={name} />;
   // a finished task says it in one line; what the agent reported (technical) unfolds on request.
   if (m.meta?.kind === 'task-end' && m.meta.result) return (
     <div className="bg-muted/70 text-muted-foreground mx-auto max-w-[88%] rounded-xl px-3.5 py-2 text-center text-control">
@@ -197,6 +209,16 @@ function TaskApprovalLine({ m }) {
   );
 }
 
+// What the agents of this conversation's tasks ask or show (a private secret, an isolated HTML page), over the box as under an
+// agent's own chat: they are the same cards, read from the agent's session of each task.
+function TaskSideCards({ conversation }) {
+  const ids = useStore((s) => sideSessionIds(s.tasks, conversation).join(','));
+  if (!ids || !fullPc()) return null;
+  const list = ids.split(',');
+  // one list of pages for all the sessions: the internet rule (html-mount.js) must see the whole set at once
+  return <>{list.map((sid) => <SecretCards key={sid} sessionId={sid} />)}<HtmlPages sessionIds={list} choices={false} /></>;
+}
+
 // the tasks of this conversation that are running or waiting their turn, each as one live line in the
 // conversation (agent, «Tarea #3», what it is doing now, a small bar and the time); a click opens it in Tareas. The
 // agent's own conversation and «Cancelar» stay a click away, as in the block they replace.
@@ -246,9 +268,10 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   const t = useT();
   return (
     <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
-      <label className={cn('flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
-        <OrchestratorIcon className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} aria-hidden="true" />
-        <Switch size="sm" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
+      <label className={cn('flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
+        <span className={cn('max-sm:hidden', on ? 'text-foreground' : 'text-muted-foreground')}>{t('chat.orchestrator')}</span>
+        {/* locked is a fixed fact of the conversation, not a switched-off control: it keeps the full accent (no dimming) */}
+        <Switch size="sm" className="disabled:opacity-100" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
     </BubbleTip>
   );
@@ -272,6 +295,28 @@ function LiveAnswer({ id, name }) {
   );
 }
 
+// Orbe's own mark: the robot's head in the Orb theme (the only one with the robot), a dot in the accent of the assistant in
+// the others.
+function OrbeMark({ size = 16 }) {
+  if (robotSkin(useStore((s) => s.app?.config?.ui?.skin))) return <Robot size={size} head still className="shrink-0" />;
+  return <span className="text-info shrink-0 leading-none" style={{ fontSize: Math.round(size * 0.9) }} aria-hidden="true">●</span>;
+}
+const SUGGESTION_ICON = { 'chat.suggestion1': FolderPlus, 'chat.suggestion2': ListChecks, 'chat.suggestion4': NotebookPen, 'chat.suggestion5': Gauge };
+// «2 tareas en curso · 1 espera tu aprobación» under the greeting: what is going on, and the link to the tasks.
+function HeroStatus() {
+  const t = useT();
+  const running = useStore((s) => s.tasks.filter((x) => x.status === 'running').length);
+  const waiting = useStore((s) => s.tasks.filter(needsApproval).length);
+  if (!running && !waiting) return null;
+  return (
+    <div className="text-muted-foreground text-control flex flex-wrap items-center justify-center gap-1.5" data-testid="chat-status">
+      {running ? <span className="inline-flex items-center gap-1.5"><LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />{t(`chat.statusRunning.${running === 1 ? 'one' : 'many'}`, { n: running })}</span> : null}
+      {running && waiting ? <span className="text-faint-foreground" aria-hidden="true">·</span> : null}
+      {waiting ? <span className="inline-flex items-center gap-1.5"><ShieldQuestion className="text-warning-ink size-3.5" aria-hidden="true" /><button type="button" className="text-primary-text cursor-pointer hover:underline" onClick={() => go('tasks')}>{t(`chat.statusWaiting.${waiting === 1 ? 'one' : 'many'}`, { n: waiting })}</button></span> : null}
+    </div>
+  );
+}
+
 // onConversation / project: inside God mode, a new conversation stays there (in its project) instead of navigating.
 export function ChatView({ route, onConversation, project: inProject }) {
   const t = useT();
@@ -281,6 +326,19 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const conv = useStore((s) => (id == null ? null : s.conversations.find((c) => c.id === id) ?? null));
   const [rows, setRows] = useState([]);
   const box = useDraft();
+  // what is attached to the message being written (absolute paths, at most 10), as in an agent's chat (views/session.jsx)
+  const [images, setImages] = useState([]);
+  const addImages = (paths) => setImages((prev) => [...new Set([...prev, ...(paths ?? []).filter(Boolean)])].slice(0, 10));
+  const capture = async () => {
+    try {
+      const dataUrl = await captureFrame(); if (!dataUrl) return;
+      const saved = await act(call('images.mark', { dataUrl })); if (saved?.path) addImages([saved.path]);
+    } catch { notifyError(t('session.captureFailed')); }
+  };
+  const fromTransfer = (dt) => Promise.all([...(dt?.files ?? [])].filter((f) => !bridge.mobile || /^image\//.test(f.type)).map((f) => bridge.pathForFile(f))).then((p) => p.filter(Boolean));
+  // files attached in one conversation never travel to another one
+  useEffect(() => { setImages([]); }, [id]);
+  const idNow = useRef(id); idNow.current = id;
   // text sent here by the project search (Ctrl+P / Ctrl+Shift+F) or by «Añadir al chat»
   useAddToChat((text) => box.set((prev) => appendToBox(prev, text)));
   // the Android app: what was shared from another app («Compartir con Orb») is waiting in the text box to be sent.
@@ -331,8 +389,17 @@ export function ChatView({ route, onConversation, project: inProject }) {
   useOrbInbox();
   const item = useStore((s) => (id == null ? null : (s.orbInbox?.items ?? []).find((x) => x.key === `conversation:${id}`) ?? null));
   const unread = item?.unread ?? 0;
+  // A chat the user marks as unread while it is on screen stays so until a new line arrives: only the moment it opens
+  // or a line that comes after the mark reads it.
+  const openAt = useRef({ id: null, at: 0 });
+  if (openAt.current.id !== id) openAt.current = { id, at: Date.now() };
+  const keep = useRef({ rows: null });
+  const settled = Date.now() - openAt.current.at > 2500;
+  if (!item?.markedUnread) keep.current.rows = null;
+  else if (settled && keep.current.rows == null) keep.current.rows = rows.length;
+  const keptUnread = Boolean(item?.markedUnread) && settled && rows.length <= keep.current.rows;
   useEffect(() => {
-    if (id == null || !unread) return undefined;
+    if (id == null || !unread || keptUnread) return undefined;
     const run = () => { if (document.visibilityState === 'visible') call('inbox.markRead', { kind: 'conversation', id }).then(() => loadOrbInboxSoon(0)).catch(quiet); };
     const timer = setTimeout(run, 350);
     document.addEventListener('visibilitychange', run);
@@ -353,6 +420,12 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const bubble = useUsageBubble(catalog, brain);
   const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
   const [sending, setSending] = useState(false);
+  // the terminal under the chat (PC): in the project's folder, or in Orb's when the conversation has none
+  const [terminal, setTerminal] = useState(false);
+  const [termDraft, setTermDraft] = useState('');
+  // only the pane the command was pasted from reacts: a split view has two chats, each with its own folder
+  useEffect(() => (fullPc() && !onConversation ? onTerminalPaste((line, from) => { const pane = from?.closest?.('[data-paste-chat]'); if (from && pane?.getAttribute('data-paste-chat') !== String(id ?? 'new')) return; setTerminal(true); setTermDraft(line); }) : undefined), [id]);
+  useEffect(() => { setTerminal(false); setTermDraft(''); }, [id]);
   // in God mode, a new conversation goes to the project chosen there, and the bar says that one.
   const projects = useStore((s) => s.projects);
   const workProject = inProject ? projects.find((p) => p.name === inProject) ?? { name: inProject } : app.activeProject ?? null;
@@ -366,13 +439,18 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
   const send = async () => {
-    const msg = box.message().trim(); if (!msg || sending) return;
-    box.set(''); box.clearBlocks();
+    const typed = box.message().trim(); if ((!typed && !images.length) || sending) return;
+    // only files: the same line an agent's chat sends
+    const msg = typed || t('session.lookAtFiles'); const sentImages = images;
+    box.set(''); box.clearBlocks(); setImages([]);
     dismissTest();
     const mine = addPending(id == null ? 'new' : `chat:${id}`, msg, lastId);
+    const files = sentImages.length ? { images: sentImages } : {};
+    // the files go back only to the conversation they were attached in (God mode keeps this view through a change of chat)
+    const giveBack = () => { if (typed) box.set((now) => (now.trim() ? now : typed)); if (idNow.current === id) setImages((now) => (now.length ? now : sentImages)); };
     if (id != null) {
       // The send failed: the message goes back to the box (unless something else was written there meanwhile).
-      if ((await act(call('chat.send', { text: msg, conversation: id }))) === undefined) { dropPending(mine); box.set((now) => (now.trim() ? now : msg)); }
+      if ((await act(call('chat.send', { text: msg, conversation: id, ...files }))) === undefined) { dropPending(mine); giveBack(); }
       else fetchList();
       return;
     }
@@ -383,8 +461,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
       if (orchestrate) {
         // the first message makes the conversation (in the working folder): then the screen is that conversation.
         const chosen = local && draft ? Object.fromEntries(['agent', 'model', 'reasoning'].filter((k) => draft[k] !== undefined).map((k) => [k, draft[k]])) : {};
-        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}) }));
-        if (!r) { dropPending(mine); if (!moved()) box.set(msg); return; }
+        const r = await act(call('chat.send', { text: msg, ...(inProject ? { project: inProject } : {}), ...(Object.keys(chosen).length ? { brain: chosen } : {}), ...files }));
+        if (!r) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `chat:${r.conversation}`);
         await refresh().catch(quiet);
         if (moved()) { leftBehind({ view: 'chat', id: r.conversation }, getState().conversations.find((c) => c.id === r.conversation)?.title ?? msg.slice(0, 60)); return; }
@@ -394,9 +472,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // (in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
-        if (!s) { dropPending(mine); if (!moved()) box.set(msg); return; }
+        if (!s) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `session:${s.id}`);
-        if ((await act(call('sessions.send', { id: s.id, text: msg }))) === undefined) dropPending(mine);
+        if ((await act(call('sessions.send', { id: s.id, text: msg, ...files }))) === undefined) dropPending(mine);
         await refresh().catch(quiet);
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
         go({ view: 'session', id: s.id });
@@ -446,6 +524,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // The answer that ended the turn goes after the lines until a new read of the conversation brings it.
   const lastId = saved.at(-1)?.id ?? 0;
   const lines = answer && answer.id > lastId ? [...saved, answer] : saved;
+  // copy and the time close each turn once, on the PC (the phone keeps them in each message's header)
+  const lastLine = lines.at(-1)?.id; // the last turn's row goes after the tasks' cards
+  const turnEnds = useMemo(() => (fullPc() ? orbTurnTails(lines, chat.busy || chat.waiting || sending) : new Map()), [lines, chat.busy, chat.waiting, sending]);
   const unsaved = pendingShown(pending, lines.filter((m) => m.role === 'usuario').map((m) => ({ id: m.id, text: m.body })));
   useEffect(() => { for (const p of pending) if (!unsaved.includes(p)) dropPending(p.id); }, [pending, unsaved]);
   // «Compactar» when the conversation's context is at 70 % or more (never while it answers).
@@ -453,6 +534,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const context = live ?? conv?.context ?? null;
   const [compacting, setCompacting] = useState(false);
   const compactable = id != null && !chat.waiting && (compacting || (!chat.busy && context?.size > 0 && context.used / context.size >= COMPACT_AT));
+  const percent = context?.size > 0 ? Math.round((context.used / context.size) * 100) : null;
   const compact = async () => {
     setCompacting(true);
     try { const r = await act(call('chat.compact', { conversation: id })); if (r) refreshSoon(); }
@@ -463,6 +545,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const slim = phoneLayout() && Boolean(conv);
   const infoOpen = useStore((s) => s.orbInfo?.type === 'chat') && !embedded;
   const headProject = conv ? conv.project ?? null : workProject?.name ?? null;
+  const terminalDir = projects.find((p) => p.name === headProject)?.path ?? app?.home ?? '';
+  const brainName = modelLabel(catalog, brain.agent, brain.model);
   const waitingTask = useStore((s) => (id != null ? s.tasks.find((x) => x.conversation_id === id && needsApproval(x)) : undefined));
   const waitingYou = Boolean(waitingTask);
   const chatActions = useOrbActions(conv ? { kind: 'conversation', id: conv.id, title: conv.title, done: conv.status === 'done', pinned: Boolean(item?.pinned), muted: Boolean(item?.muted), unread: 0 } : null);
@@ -471,24 +555,29 @@ export function ChatView({ route, onConversation, project: inProject }) {
     <>
       {/* the bar of a messaging app: (phone: back to the list) the pill with Orbe, the title and, small, the
           project and what it is doing; a click opens the chat's info. On the right: notifications, pause and ⋯. */}
-      <ChatBar back={embedded ? null : <BackToList to="chats" />} testid="orb-chat-bar" className="topbar-chat" title={<>
+      <ChatBar back={embedded ? null : <BackToList to="chats" />} inner={embedded} testid="orb-chat-bar" className="topbar-chat" title={<>
         <h1 className="sr-only">{conv?.title ?? t('orbchats.newChatTitle')}</h1>
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
-          className={cn('press flex min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}
+          className={cn('press flex max-w-full min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1.5 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}
           aria-expanded={conv ? infoOpen : undefined} aria-label={conv ? t('chats.openInfo', { name: conv.title }) : undefined} data-testid="orb-chat-head">
-          <Robot size={36} mark={28} mood={chat.busy ? 'thinking' : 'idle'} still={!chat.busy} />
           <span className="min-w-0">
-            <span className="flex items-center gap-1.5"><span className="truncate text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
-            <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
+            <span className="flex items-center gap-1.5"><span className="truncate font-(family-name:--title) text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
+            <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary-text' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
-              <span className="truncate">{headProject ?? t('orbchats.noProject')} · {chat.busy ? t('chats.working') : waitingYou ? <TaskStatus task={waitingTask} plain /> : name}</span>
+              <span className="truncate">{headProject ?? t('orbchats.noProject')}</span>
+              <span aria-hidden="true">·</span>
+              {chat.busy ? <span className="truncate">{t('chats.working')}</span> : waitingYou ? <span className="truncate"><TaskStatus task={waitingTask} plain /></span> : <>
+                <OrbeMark />
+                <span className="truncate" data-testid="orb-chat-brain">{name}{brainName ? ` · ${brainName}` : ''}</span>
+              </>}
             </span>
           </span>
         </button>
       </>}>
         {/* The phone keeps the bar light: the bell is the system's notifications there, and «Pausar» goes into ⋯. */}
-        {slim ? null : <NotificationBell />}
         {slim ? null : <BarPause />}
+        {slim ? null : <NotificationBell />}
+        {conv && !embedded && !slim ? <BubbleTip title={t('panel.button')} text={t('panel.buttonTip')}><IconButton label={t('panel.button')} active={infoOpen} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))} data-testid="orb-chat-panel"><PanelRight /></IconButton></BubbleTip> : null}
         {/* only the bell and pause stay on the bar; the chat's actions and the games go into ⋯ (also in «Nuevo chat»). */}
         {conv || fullPc() ? (
           <DropdownMenu modal={false}>
@@ -497,6 +586,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
               {conv && !embedded ? <DropdownMenuItem onSelect={() => openOrbInfo({ type: 'chat' })} data-testid="more-info"><Info />{t('orbchats.info')}</DropdownMenuItem> : null}
               {slim ? <DropdownMenuItem onSelect={() => setQueuePaused(!app.paused, t)} data-testid={app.paused ? 'bar-resume' : 'bar-pause'}>{app.paused ? <Play /> : <Pause />}{app.paused ? t('bar.resume') : t('bar.pause')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.id !== 'info' && !a.danger).map((a) => <DropdownMenuItem key={a.id} onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem>)}
+              {fullPc() && !embedded ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
               {fullPc() ? <DropdownMenuItem onSelect={openGames} data-testid="bar-games"><Gamepad2 />{t('bar.games')}</DropdownMenuItem> : null}
               {chatActions.filter((a) => a.danger).map((a) => <div key={a.id}><DropdownMenuSeparator /><DropdownMenuItem variant="destructive" onSelect={a.run} data-testid={`more-${a.id}`}><a.icon />{a.label}</DropdownMenuItem></div>)}
             </DropdownMenuContent>
@@ -504,47 +594,62 @@ export function ChatView({ route, onConversation, project: inProject }) {
         ) : null}
       </ChatBar>
       <div className="relative flex min-h-0 flex-1 flex-col">
-      <div ref={trail.ref} onScroll={scroll.onScroll} className="min-h-0 flex-1 overflow-y-auto">
-        <div className="lazy-lines mx-auto flex max-w-[var(--chat-max-width)] flex-col gap-5 px-5 py-6" data-testid="chat-lines">
+      <div ref={trail.ref} onScroll={scroll.onScroll} className="chat-fade min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        {/* the column is as wide as the text box (its 20 px sides are the padding); the bar's room is taken from the right padding and from the max width, so the text, the bubbles and the box share their edges */}
+        <div className="lazy-lines mx-auto flex min-h-full max-w-[calc(var(--chat-max-width)+2.5rem-var(--sb-w))] flex-col gap-5 py-6 pr-[calc(1.25rem-var(--sb-w))] pl-5" data-testid="chat-lines" data-paste-chat={String(id ?? 'new')}>
           {more ? <Button variant="ghost" size="sm" className="text-muted-foreground mx-auto" onClick={loadOlder} disabled={loading} data-testid="chat-older"><History />{t('chat.older')}</Button> : null}
           {id == null && !sending ? (
-            <div className="flex flex-col items-center gap-3 pt-10 text-center">
-              <Robot size={130} mark={56} mood="hello" live />
+            <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-3 py-6 text-center" data-testid="empty-chat">
+              {robotSkin(app.config.ui?.skin) ? <Robot size={130} mood="hello" live /> : <span className="bg-secondary grid size-12 place-items-center rounded-full"><OrbeMark size={20} /></span>}
               <div className="chat-glass chat-hero flex flex-col items-center gap-3">
                 <h2 className="hero-title mt-2 text-2xl" data-testid="chat-greeting">{userName ? t(greeting.key, { ...greeting, user: userName, name }) : t('chat.hello', { name })}</h2>
                 <p className="text-muted-foreground max-w-md">{t(greeting.sub)}</p>
               </div>
-              <div className="mt-3 flex max-w-xl flex-wrap justify-center gap-2">{suggestionsFor(workProject?.name).map((s) => <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{t(s)}</Button>)}</div>
+              <HeroStatus />
+              <div className="mt-1 flex max-w-xl flex-wrap justify-center gap-2" role="group" aria-label={t('chat.suggestions')}>{suggestionsFor(workProject?.name).map((s) => { const Icon = SUGGESTION_ICON[s]; return <Button key={s} variant="outline" size="sm" className="h-auto max-w-full shrink rounded-full py-1.5 whitespace-normal" onClick={() => box.set(t(s))}>{Icon ? <Icon /> : null}{t(s)}</Button>; })}</div>
+              <p className="text-faint-foreground max-w-[520px] text-xs">{t('chat.heroHint', { name })}</p>
             </div>
-          ) : lines.map((m) => <Message key={m.id} m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />)}
+          ) : lines.map((m) => (
+            <Fragment key={m.id}>
+              <Message m={m} name={name} user={userName} onChanges={askChanges} tail={`chat:${id}`} onPin={pinLine} />
+              {turnEnds.has(m.id) && m.id !== lastLine ? <TurnActions at={turnEnds.get(m.id).at} text={turnEnds.get(m.id).text} /> : null}
+            </Fragment>
+          ))}
           {unsaved.map((p) => <Message key={p.id} m={{ id: p.id, role: 'usuario', body: p.text, at: p.at }} name={name} user={userName} onChanges={askChanges} />)}
           <TaskLines conversation={id} />
+          {lastLine != null && turnEnds.has(lastLine) ? <TurnActions at={turnEnds.get(lastLine).at} text={turnEnds.get(lastLine).text} /> : null}
           {chat.busy || chat.waiting || sending ? <LiveAnswer id={id} name={name} /> : null}
         </div>
       </div>
       <ConversationTrail scrollRef={trail.node} />
       </div>
+      <TaskSideCards conversation={id} />
+      {terminal && fullPc() && !embedded ? <TerminalPanel dir={terminalDir} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       <Composer draft={box} onSend={send} onStop={id != null ? () => act(call('chat.stop', { conversation: id })) : undefined} busy={chat.busy} disabled={sending} testid="chat-input"
+        attached={images.length > 0}
+        onPaste={(e) => { fromTransfer(e.clipboardData).then((f) => { if (f.length) addImages(f); }); }}
+        onDrop={(e) => { fromTransfer(e.dataTransfer).then(addImages); }}
+        top={images.length ? <div className="flex min-w-0 flex-wrap items-center gap-2">{images.map((p) => <Badge key={p} variant="secondary" className="gap-1.5 font-normal"><AttachIcon file={p} />{baseName(p)}<button className="cursor-pointer" onClick={() => setImages(images.filter((x) => x !== p))} aria-label={t('session.remove')}><X className="size-3" /></button></Badge>)}</div> : null}
         placeholder={chat.busy ? t('chat.placeholderBusy', { name }) : orchestrate ? t('chat.placeholder', { name }) : t('chat.placeholderDirect', { agent: AGENT[brain.agent] ?? brain.agent })}
-        top={<>
-          {/* in God mode a new conversation takes the project chosen at the top of God mode. */}
-          {inProject && id == null ? null : <ProjectPicker conversation={id} />}
-          <ContextSlot items={[
+        above={<>
+          {/* the row over the box (project and «Compactar»), outside it like under an agent's chat. In God mode a new conversation takes the project chosen at the top of God mode. */}
+          {inProject && id == null ? null : fullPc() ? <ProjectChip conversation={id} /> : <ProjectPicker conversation={id} />}
+          {/* on the PC «Compactar · 62 %» is always on the right (disabled, with its reason, until it applies); elsewhere it only appears when the context fills up. */}
+          <ContextSlot className="ml-auto" items={[
             // the context is filling up: compact it (the history stays; the assistant goes on from a summary).
-            compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null,
+            compactable && !fullPc() ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} percent={percent} /> } : null,
             // the test of the day (first opening of the day, until the user writes; always in Ajustes › Agentes y uso).
             showTest ? { key: 'test', node: <BubbleTip title={t('test.button')} text={t('test.tip')} side="top"><Button size="xs" variant="soft" onClick={() => runTest(t('test.prompt'))} data-testid="chat-test"><FlaskConical />{t('test.button')}</Button></BubbleTip> } : null
           ]} />
+          {fullPc() ? <CompactButton onCompact={compact} busy={compacting} percent={percent} reason={compactable ? null : id == null ? t('compact.noChat') : chat.busy || chat.waiting ? t('msg.orch.compactBusy') : t('compact.noRoom')} /> : null}
         </>}
         notice={bubble.text ? <UsageBubble text={bubble.text} onClose={bubble.close} /> : id != null ? <ColdNotice id={id} agent={conv?.agent} used={context?.used} lastAt={saved.at(-1)?.at ?? conv?.updated_at} busy={chat.busy || chat.waiting} compacting={compacting} onCompact={compact} onFresh={() => newChat(conv?.project ?? undefined)} /> : null}
         bottom={<>
-          {/* the model and its reasoning stay together; the permission and the orchestrator form the second group;
-              the context meter sits at the far end. Each group wraps as a whole on a narrow window. */}
-          <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
-            <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
-            <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
-          </div>
+          {/* the permission and the orchestrator come first; at the far end the context meter, then the model and its
+              reasoning, which stay together. Each group wraps as a whole on a narrow window. */}
           <div role="group" aria-label={t('session.permissions')} className="flex shrink-0 items-center gap-1.5" data-testid="composer-group-access">
+          {/* «+»: attach a file and, on the PC, capture a window (the system's picker) as a picture, as in an agent's chat. */}
+          <AttachMenu onAttach={async () => addImages(await bridge.pickAttachments())} onCapture={fullPc() && canCapture() ? capture : null} />
           {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
           <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
           {/* whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
@@ -552,7 +657,15 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />
           </div>
           {!orchestrate && id == null ? <WorkspacePills project={inProject ?? app.activeProject?.name ?? null} value={where} onChange={setWhere} /> : null}
-          {context ? <span className="text-muted-foreground ml-auto shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
+          <span className="ml-auto" aria-hidden="true" />
+          {context ? <span className="text-muted-foreground shrink-0 text-xs"><ContextMeter context={context} /></span> : null}
+          <div role="group" aria-label={t('session.model')} className="flex min-w-0 shrink items-center gap-1.5" data-testid="composer-group-brain">
+            {/* the PC: one chip for the agent, its model and its reasoning, as under an agent's chat; the phone keeps the two buttons. */}
+            {fullPc() ? <BrainChip catalog={catalog} value={brain} onChange={pickBrain} onReasoning={(reasoning) => settings({ reasoning })} /> : <>
+              <BrainPicker catalog={catalog} value={brain} onChange={pickBrain} className="min-w-0 shrink" />
+              <ReasoningMenu catalog={catalog} value={brain} onChange={(reasoning) => settings({ reasoning })} />
+            </>}
+          </div>
         </>} />
     </>
   );

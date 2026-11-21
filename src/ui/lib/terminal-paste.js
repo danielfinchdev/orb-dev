@@ -3,10 +3,11 @@
 const targets = new Set();
 
 // The chat on screen listens (views/session.jsx). → whether one took it.
-export function pasteToTerminal(text) {
+// `from` is the element that asked, so a listener can tell its own pane from another one (split view).
+export function pasteToTerminal(text, from) {
   const line = String(text ?? '').replace(/\r?\n+$/, '');
   if (!line || !targets.size) return false;
-  for (const fn of targets) fn(line);
+  for (const fn of targets) fn(line, from);
   return true;
 }
 export function onTerminalPaste(fn) { targets.add(fn); return () => targets.delete(fn); }

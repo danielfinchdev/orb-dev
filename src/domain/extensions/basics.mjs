@@ -7,6 +7,8 @@ export const SKILL_FILE = 'SKILL.md';
 
 export const LIVE_DIR = '.activas'; // in core\skills: what the agents load (exposeSkills)
 
+export const SCOPED_DIR = '.ambitos'; // in coreskills, beside .activas: the plugins of the projects that also get skills scoped to them
+
 export const OLD_DIR = '.anterior'; // in core\mcp: the version before the last «Aplicar cambios»
 
 export const REQUESTS = 'extension_requests'; // board setting: what agents made in core\preparacion
@@ -92,7 +94,7 @@ export class ExtensionError extends Error {
 
 // ---- where
 export function extensionPaths(core) {
-  return { skills: path.join(core, 'skills'), mcp: path.join(core, 'mcp'), staging: path.join(core, 'preparacion'), live: path.join(core, 'skills', LIVE_DIR),
+  return { skills: path.join(core, 'skills'), mcp: path.join(core, 'mcp'), staging: path.join(core, 'preparacion'), live: path.join(core, 'skills', LIVE_DIR), scoped: path.join(core, 'skills', SCOPED_DIR),
     quarantine: path.join(core, 'datos', QUARANTINE) };
 }
 
