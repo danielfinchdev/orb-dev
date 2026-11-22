@@ -39,7 +39,7 @@ export default {
   'session.contextTip': 'Cuanto más lleno está, más tokens gasta cada respuesta.',
   'session.usage.open': 'Contexto al {pct} % y uso de los planes',
   'session.usage.context': 'Ventana de contexto',
-  'session.usage.brain': 'Asistente',
+  'session.usage.brain': 'Principal',
   'session.usage.session': 'Límite de sesión',
   'session.usage.weekly': 'Semanal · todos los modelos',
   'session.usage.weeklyOf': 'Semanal · {model}',
