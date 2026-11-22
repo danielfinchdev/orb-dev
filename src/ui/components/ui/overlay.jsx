@@ -221,7 +221,8 @@ export function DropdownMenuRadioItem({ className, children, ...props }) {
     </DropdownPrimitive.RadioItem>
   );
 }
-export function DropdownMenuSeparator() { return <DropdownPrimitive.Separator className="bg-border my-1 h-px" />; }
+// A border, not a 1px-tall box: a box at a fractional position (125 % / 150 % scale, scrolled menu) paints 1 or 2 device pixels, a border always paints 1.
+export function DropdownMenuSeparator() { return <DropdownPrimitive.Separator className="border-border my-1 h-0 shrink-0 border-t" />; }
 export function DropdownMenuLabel({ className, ...props }) { return <DropdownPrimitive.Label className={cn('lab text-faint-foreground px-2 pt-1.5 pb-0.5 text-micro', className)} {...props} />; }
 
 // ---- switch and checkbox

@@ -109,7 +109,7 @@ export function AutonomySwitch({ value, onChange, more = [], extra = [], main = 
         <PopoverContent align="start" side="top" className="w-[280px] p-1">
           <div id={list} onKeyDown={key}>
             {first.length ? <div role="listbox" aria-label={t('session.permissions')}>{first.map((o, i) => option(o, i))}</div> : null}
-            {main.length > 0 && group ? <hr className="bg-border my-1 h-px border-0" /> : null}
+            {main.length > 0 && group ? <hr className="border-border my-1 h-0 shrink-0 border-0 border-t" /> : null}
             {main.length > 0 && group ? (
               <button type="button" aria-expanded={expanded} aria-controls={`${list}-group`} onClick={() => setExpanded(!expanded)} data-testid={`${testid}-options`}
                 className="hover:bg-accent focus-visible:bg-accent text-control flex w-full cursor-pointer items-center gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 text-left outline-none">
@@ -119,7 +119,7 @@ export function AutonomySwitch({ value, onChange, more = [], extra = [], main = 
             ) : null}
             {showRest ? <div id={`${list}-group`} className={cn(main.length > 0 && 'pl-2')} data-testid={`${testid}-group`}>
               {rest.length ? <div role="listbox" aria-label={main.length > 0 ? t('session.moreOptions') : t('session.permissions')}>{rest.map((o, i) => option(o, first.length + i))}</div> : null}
-              {extra.length ? <hr className="bg-border my-1 h-px border-0" /> : null}
+              {extra.length ? <hr className="border-border my-1 h-0 shrink-0 border-0 border-t" /> : null}
               {extra.length ? <div ref={extras} role="group" aria-label={t('session.extraAccess')}>
                 {extra.map(({ key: k, testid: id, Icon, label: name, tip, checked, onToggle }) => (
                   <div key={k} className="flex w-full items-start gap-2 rounded-[var(--r-ctl)] px-2 py-1.5">
