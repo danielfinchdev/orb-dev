@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -291,11 +292,11 @@ private fun MessageList(
                 }
             }
             items(state.liveTasks, key = { "t:${it.id}" }, contentType = { "task-live" }) { t ->
-                LiveTaskCard(t, Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)))
+                LiveTaskCard(t, liveRowMotion())
             }
             if (liveInfo != null) item(key = "live", contentType = "live") {
                 val live by vm.liveText.collectAsStateWithLifecycle()
-                LiveBubble(liveInfo, text = { live.text }, modifier = Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)))
+                LiveBubble(liveInfo, text = { live.text }, modifier = liveRowMotion())
             }
         }
         AnimatedVisibility(
@@ -307,6 +308,14 @@ private fun MessageList(
     }
 }
 
+
+/**
+ * Motion of the row that shows the answer while it is being written. It must leave the instant the finished message takes its
+ * place: a fading-out row stays drawn at its old offset, on top of the message that replaced it, and the two texts overlap.
+ * Placement is not animated either, because the list is pinned to its end while the row grows.
+ */
+internal fun LazyItemScope.liveRowMotion(): Modifier =
+    Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), placementSpec = null, fadeOutSpec = null)
 
 internal suspend fun LazyListState.toEnd() {
     val last = layoutInfo.totalItemsCount - 1
