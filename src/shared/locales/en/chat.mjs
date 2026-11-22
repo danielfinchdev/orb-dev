@@ -17,7 +17,7 @@ export default {
   'chat.suggestionProject2': 'What was left pending in this project?',
   'chat.startedIn': 'Your message is in the conversation “{title}”',
   'chat.startedInBody': 'It is already being handled. Open it whenever you like from here or from the menu.',
-  'chat.orchestratorCursor': 'With Cursor as the brain you talk to it directly. Turning the Orchestrator on moves {name} to Claude or Codex, which can coordinate the agents.',
+  'chat.orchestratorCursor': 'With Cursor as the agent you talk to it directly. Turning the Orchestrator on moves {name} to Claude or Codex, which can coordinate the agents.',
   'chat.orchestratorSwitched': '{name} will use {agent} to coordinate: with Cursor it cannot hand out the work.',
   'chat.orchestratorNoBrain': '{name} needs Claude or Codex to coordinate the agents. Install one in Agents.',
   'chat.accessDirect': 'Access levels and the phone belong to a direct conversation: the Orchestrator is now off.',
@@ -99,7 +99,7 @@ export default {
   'chat.placeholderBusy': 'Write another message: {name} will read it when done…',
   'chat.placeholder': 'Message {name}… @ to mention · / for commands',
   // the choice of brain (agent + model)
-  'brain.title': 'Brain: agent and model',
+  'brain.title': 'Agent and model',
   'brain.titleText': 'Who thinks for the assistant, and with which model.',
   'brain.none': 'There are no installed agents with an active account. Install them in Agents.',
   'brain.defaultOf': '{agent} default',

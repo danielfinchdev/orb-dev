@@ -17,7 +17,7 @@ export default {
   'chat.suggestionProject2': '¿Qué quedó pendiente en este proyecto?',
   'chat.startedIn': 'Tu mensaje está en la conversación «{title}»',
   'chat.startedInBody': 'Ya se está atendiendo. Ábrela cuando quieras desde aquí o desde el menú.',
-  'chat.orchestratorCursor': 'Con Cursor como cerebro hablas directamente con él. Al activar el Orquestador, {name} pasa a Claude o Codex, que sí coordinan a los agentes.',
+  'chat.orchestratorCursor': 'Con Cursor como agente hablas directamente con él. Al activar el Orquestador, {name} pasa a Claude o Codex, que sí coordinan a los agentes.',
   'chat.orchestratorSwitched': '{name} usará {agent} para coordinar: con Cursor no puede repartir el trabajo.',
   'chat.orchestratorNoBrain': '{name} necesita Claude o Codex para coordinar a los agentes. Instala uno en Agentes.',
   'chat.accessDirect': 'Los niveles de acceso y el móvil son de una conversación directa: el Orquestador se ha apagado.',
@@ -99,7 +99,7 @@ export default {
   'chat.placeholderBusy': 'Escribe otro mensaje: {name} lo leerá al terminar…',
   'chat.placeholder': 'Escribe a {name}… @ para mencionar · / para comandos',
   // elección del cerebro (agente + modelo)
-  'brain.title': 'Cerebro: agente y modelo',
+  'brain.title': 'Agente y modelo',
   'brain.titleText': 'Quién piensa por el asistente y con qué modelo.',
   'brain.none': 'No hay agentes instalados con una cuenta activa. Instálalos en Agentes.',
   'brain.defaultOf': 'Predeterminado de {agent}',

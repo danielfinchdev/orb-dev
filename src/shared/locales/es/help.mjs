@@ -31,7 +31,7 @@ export default {
   'help.tut.chat.l4': 'Escribe @ para adjuntar como contexto un extracto de una tarea, una conversación o una bitácora.',
   'help.tut.chat.go': 'Ir al chat',
 
-  'help.tut.brain.title': 'Elegir el cerebro',
+  'help.tut.brain.title': 'Elegir el agente',
   'help.tut.brain.l1': 'Bajo el cuadro de mensaje eliges el agente (Claude, Codex, Gemini…) y su modelo. «Recomendados» reúne los más habituales.',
   'help.tut.brain.l2': 'El razonamiento (bajo, medio o alto) define cuánto piensa {name} en cada respuesta. El alto gasta bastante más uso. El de cada tarea lo elige Orb según su dificultad (Ajustes › Agentes y uso).',
   'help.tut.brain.l3': 'El aviso «Cuidado» aparece cuando la elección puede agotar el uso de la cuenta: razonamiento alto, un modelo de alto consumo o una cuenta por encima del 75 %.',
@@ -40,7 +40,7 @@ export default {
   'help.tut.brain.go': 'Ir al chat',
 
   'help.tut.newchat.title': 'Conversaciones',
-  'help.tut.newchat.l1': '«Nuevo chat» abre una conversación propia, con su título y su proyecto. El proyecto, el cerebro y el razonamiento se eligen en el cuadro de mensaje.',
+  'help.tut.newchat.l1': '«Nuevo chat» abre una conversación propia, con su título y su proyecto. El proyecto, el agente y el razonamiento se eligen en el cuadro de mensaje.',
   'help.tut.newchat.l2': 'Con «Orquestador» hablas con {name}, que reparte el trabajo en tareas; sin él, hablas directamente con el agente y el modelo que elijas. Puedes tener varias conversaciones a la vez.',
   'help.tut.newchat.l3': 'Todas tus conversaciones están en el menú, en «Conversaciones» y dentro de cada proyecto. Pulsa una para volver a ella.',
   'help.tut.newchat.l4': 'En la conversación de una tarea ves la respuesta en directo, los comandos y los archivos modificados. Intro corrige sobre la marcha; Ctrl+Intro deja el mensaje en cola.',
@@ -190,7 +190,7 @@ export default {
   'help.tour.chat.text': 'Cuéntame qué necesitas: lo convierto en tareas para los agentes, las superviso y te aviso al terminar. Intro envía, Mayús+Intro añade una línea y @ adjunta contexto.',
   'help.tour.project.title': 'Proyecto',
   'help.tour.project.text': 'Elige en qué proyecto trabajamos o crea uno nuevo. Cada proyecto es una carpeta dentro de windows, linux, ios, android, web o multi.',
-  'help.tour.brain.title': 'Cerebro',
+  'help.tour.brain.title': 'Agente y modelo',
   'help.tour.brain.text': 'El agente y el modelo que trabajan por mí. Si una elección puede agotar tu uso, te aviso.',
   'help.tour.reasoning.title': 'Razonamiento',
   'help.tour.reasoning.text': 'Bajo, medio o alto: cuánto pienso al contestarte y al planificar. El alto gasta bastante más uso. El de cada tarea lo elige Orb según lo difícil que sea.',

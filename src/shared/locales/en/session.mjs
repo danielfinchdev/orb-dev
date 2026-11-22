@@ -39,7 +39,7 @@ export default {
   'session.contextTip': 'The fuller it is, the more tokens each response uses.',
   'session.usage.open': 'Context at {pct}% and plan usage',
   'session.usage.context': 'Context window',
-  'session.usage.brain': 'Brain',
+  'session.usage.brain': 'Assistant',
   'session.usage.session': 'Session limit',
   'session.usage.weekly': 'Weekly · all models',
   'session.usage.weeklyOf': 'Weekly · {model}',

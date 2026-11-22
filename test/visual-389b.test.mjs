@@ -57,3 +57,21 @@ test('51: the agent and model line shows only where they change', async () => {
   assert.deepEqual(out.map((b) => b.item.id), [2, 4, 5, 6, 7], 'the first and the repeats go; the change and other notices stay');
   assert.match(src('views', 'session.jsx'), /dropRepeatedAgent\(toBlocks\(items, tb\)\)/);
 });
+
+test('52: «cerebro» / «brain» is nowhere in the texts the user reads, on the PC or on Android', async () => {
+  const bad = /cerebro|\bbrains?\b/i;
+  for (const lang of ['es', 'en']) {
+    const dir = path.join(ROOT, 'src', 'shared', 'locales', lang);
+    for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.mjs'))) {
+      const table = (await import(`../src/shared/locales/${lang}/${f}`)).default;
+      for (const [key, value] of Object.entries(table ?? {})) assert.doesNotMatch(String(value), bad, `${lang}/${f} › ${key}`);
+    }
+  }
+  const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : e.name.endsWith('.kt') ? [path.join(d, e.name)] : []));
+  for (const file of walk(path.join(ROOT, 'android', 'app', 'src', 'main'))) {
+    for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+      for (const lit of line.match(/"(?:[^"\\]|\\.)*"/g) ?? []) assert.doesNotMatch(lit, /cerebro/i, `${path.basename(file)}: ${lit}`);
+    }
+  }
+  assert.match(fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', 'es', 'chat.mjs'), 'utf8'), /'brain\.title': 'Agente y modelo'/);
+});

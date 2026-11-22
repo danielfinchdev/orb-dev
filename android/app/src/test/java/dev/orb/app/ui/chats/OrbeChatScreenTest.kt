@@ -213,7 +213,7 @@ class OrbeChatScreenTest {
         assertEquals(0, rule.onAllNodesWithText("Preguntar").fetchSemanticsNodes().size)
         rule.onNodeWithContentDescription("Permisos de las tareas: Preguntar").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Preguntar: te pido el OK antes de cada cambio.").fetchSemanticsNodes().size)
-        rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Agente de este chat: Opus · alto").assertIsDisplayed()
         rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsNotEnabled()
         assertTrue(b.brainReads > 0)
     }
@@ -241,7 +241,7 @@ class OrbeChatScreenTest {
 
     @Test fun withoutWhatThePcSaysTheBrainIsNotInvented() {
         screen(FakeOrbeChatBackend(thread))
-        rule.onNodeWithContentDescription("Cerebro de este chat: El del PC").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Agente de este chat: El del PC").assertIsDisplayed()
     }
 
     @Test fun offlineSaysSoAndStillAcceptsText() {

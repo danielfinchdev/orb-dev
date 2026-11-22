@@ -30,7 +30,7 @@ export default {
   'help.tut.chat.l4': 'Type @ to attach an excerpt of a task, conversation or log as context.',
   'help.tut.chat.go': 'Go to chat',
 
-  'help.tut.brain.title': 'Choosing the brain',
+  'help.tut.brain.title': 'Choosing the agent',
   'help.tut.brain.l1': 'Below the message box, choose the agent (Claude, Codex, Gemini…) and its model. "Recommended" groups the most common ones.',
   'help.tut.brain.l2': 'Reasoning (low, medium or high) sets how much {name} thinks in each answer. High uses much more usage. Each task’s reasoning is chosen by Orb from how hard it is (Settings › Agents and usage).',
   'help.tut.brain.l3': 'A "Careful" notice appears when your choice could drain your quota: high reasoning, a heavy model or an account above 75 %.',
@@ -39,7 +39,7 @@ export default {
   'help.tut.brain.go': 'Go to chat',
 
   'help.tut.newchat.title': 'Conversations',
-  'help.tut.newchat.l1': '“New chat” opens a conversation of its own, with its title and project. Choose the project, brain and reasoning in the message box.',
+  'help.tut.newchat.l1': '“New chat” opens a conversation of its own, with its title and project. Choose the project, agent and reasoning in the message box.',
   'help.tut.newchat.l2': 'With “Orchestrator” you talk to {name}, who splits the work into tasks; without it, you talk directly to the agent and model you choose. You can have several conversations at once.',
   'help.tut.newchat.l3': 'All your conversations are in the menu, under “Conversations” and inside each project. Click one to go back to it.',
   'help.tut.newchat.l4': 'In a task’s conversation you see the answer, commands and changed files live. Enter corrects it on the fly; Ctrl+Enter queues the message.',
@@ -189,7 +189,7 @@ export default {
   'help.tour.chat.text': 'Tell me what you need: I turn it into tasks for the agents, supervise them and let you know when they’re done. Enter sends, Shift+Enter adds a line and @ attaches context.',
   'help.tour.project.title': 'Project',
   'help.tour.project.text': 'Choose which project we work on or create a new one. Each project is a folder inside windows, linux, ios, android, web or multi.',
-  'help.tour.brain.title': 'Brain',
+  'help.tour.brain.title': 'Agent and model',
   'help.tour.brain.text': 'The agent and model that work for me. If a choice could drain your quota, I’ll let you know.',
   'help.tour.reasoning.title': 'Reasoning',
   'help.tour.reasoning.text': 'Low, medium or high: how much I think when I answer you and plan. High uses much more usage. Each task’s reasoning is chosen by Orb from how hard it is.',

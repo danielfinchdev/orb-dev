@@ -143,7 +143,7 @@ object ChatTexts {
     const val NEW_CHAT_RECOMMENDED = "Recomendado"
     const val NEW_CHAT_PROJECT = "Proyecto"
     const val NEW_CHAT_NEW_PROJECT = "Nuevo"
-    const val NEW_CHAT_BRAIN = "Cerebro"
+    const val NEW_CHAT_BRAIN = "Agente y modelo"
     const val NEW_CHAT_BRAIN_AUTO = "El que usa el PC"
     const val NEW_CHAT_BRAIN_AGENT = "Con quién piensa"
     const val NEW_CHAT_MODEL = "Modelo"
@@ -159,7 +159,7 @@ object ChatTexts {
     const val NEW_CHAT_FAILED = "No se pudo crear el chat en el PC"
     const val NEW_CHAT_LOADING = "Leyendo lo que ofrece el PC…"
     const val NEW_CHAT_OPTIONS_FAILED = "No se pudo leer lo que ofrece el PC. Puedes hablar con Orbe igualmente."
-    const val NEW_CHAT_OLD_PC = "Este PC tiene una versión antigua de Orb: actualízala para elegir agente y cerebro. Puedes hablar con Orbe igualmente."
+    const val NEW_CHAT_OLD_PC = "Este PC tiene una versión antigua de Orb: actualízala para elegir agente y modelo. Puedes hablar con Orbe igualmente."
     const val NEW_CHAT_NO_AGENTS = "El PC no tiene ningún agente listo para hablar directo."
     const val NEW_CHAT_OFFLINE = "Sin conexión con el PC. Para empezar un chat hace falta conexión."
     const val NEW_CHAT_PROJECT_TITLE = "Nuevo proyecto"
@@ -230,7 +230,7 @@ object ChatTexts {
 
     // Writing box
     const val BRAIN_UNKNOWN = "El del PC"
-    const val BRAIN_DESC = "Cerebro de este chat"
+    const val BRAIN_DESC = "Agente de este chat"
     const val MIC = "Dictar por voz"
     const val MIC_NONE = "Este móvil no tiene dictado por voz"
     const val MENTION_TITLE = "Mencionar"

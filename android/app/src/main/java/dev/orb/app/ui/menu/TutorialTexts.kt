@@ -37,7 +37,7 @@ object TutorialTexts {
             ),
         ),
         Tutorial(
-            "brain", "Elegir el cerebro",
+            "brain", "Elegir el agente",
             listOf(
                 "Bajo el cuadro de mensaje eliges el agente (Claude, Codex, Gemini…) y su modelo. «Recomendados» reúne los más habituales.",
                 "El razonamiento (bajo, medio o alto) define cuánto piensa {name} en cada respuesta. El alto gasta bastante más uso. El de cada tarea lo elige Orb según su dificultad (Ajustes › Agentes y uso).",
@@ -49,7 +49,7 @@ object TutorialTexts {
         Tutorial(
             "newchat", "Conversaciones",
             listOf(
-                "«Nuevo chat» abre una conversación propia, con su título y su proyecto. El proyecto, el cerebro y el razonamiento se eligen en el cuadro de mensaje.",
+                "«Nuevo chat» abre una conversación propia, con su título y su proyecto. El proyecto, el agente y el razonamiento se eligen en el cuadro de mensaje.",
                 "Con «Orquestador» hablas con {name}, que reparte el trabajo en tareas; sin él, hablas directamente con el agente y el modelo que elijas. Puedes tener varias conversaciones a la vez.",
                 "Todas tus conversaciones están en el menú, en «Conversaciones» y dentro de cada proyecto. Pulsa una para volver a ella.",
                 "En la conversación de una tarea ves la respuesta en directo, los comandos y los archivos modificados.",

@@ -26,7 +26,7 @@ export default {
   'settings.motionOn': 'Animaciones completas',
   'settings.motionOff': 'Animaciones mínimas',
   'settings.chatCard': 'Conversación con el asistente',
-  'settings.chatCardDesc': 'El cerebro, el razonamiento y el Orquestador se eligen en el chat.',
+  'settings.chatCardDesc': 'El agente, el razonamiento y el Orquestador se eligen en el chat.',
   'settings.brainAccount': 'Cuenta que usa el asistente',
   'settings.maxTurns': 'Mensajes por conversación',
   'settings.maxTurnsHint': 'Reiniciar reduce el uso. Tareas y bitácoras se conservan.',
