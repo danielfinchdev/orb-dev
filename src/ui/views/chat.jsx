@@ -560,9 +560,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
         <button type="button" disabled={!conv || embedded} onClick={() => (infoOpen ? closeOrbInfo() : openOrbInfo({ type: 'chat' }))}
           className={cn('press flex max-w-full min-w-0 items-center gap-2.5 rounded-xl py-1 pr-3 pl-1.5 text-left', conv && !embedded && 'cursor-pointer', infoOpen ? 'bg-accent' : conv && !embedded ? 'hover:bg-accent/60' : '')}
           aria-expanded={conv ? infoOpen : undefined} aria-label={conv ? t('chats.openInfo', { name: conv.title }) : undefined} data-testid="orb-chat-head">
-          <span className="min-w-0">
-            <span className="flex items-center gap-1.5"><span className="truncate font-(family-name:--title) text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
-            <span className={cn('flex min-w-0 items-center gap-1 text-caption', chat.busy ? 'text-primary-text' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
+          <span className="flex min-w-0 flex-col items-center text-center">
+            <span className="flex max-w-full items-center justify-center gap-1.5"><span className="truncate font-(family-name:--title) text-card-title font-semibold" data-testid="bar-title-text">{conv?.title ?? t('orbchats.newChatTitle')}</span>{item?.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}</span>
+            <span className={cn('flex max-w-full min-w-0 items-center justify-center gap-1 text-caption', chat.busy ? 'text-primary-text' : waitingYou ? 'text-warning-ink' : 'text-muted-foreground')} data-testid="orb-chat-status">
               {headProject ? <ProjectIcon name={headProject} size={14} /> : <Folder className="size-3 shrink-0" aria-hidden="true" />}
               <span className="truncate">{headProject ?? t('orbchats.noProject')}</span>
               <span aria-hidden="true">·</span>
