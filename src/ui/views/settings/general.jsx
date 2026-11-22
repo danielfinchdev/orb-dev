@@ -125,7 +125,8 @@ if (robot.listo) console.log('Tarea hecha');`}</code></pre>
   );
 }
 
-// What the mock-up does not draw of the music (its style, whether it follows what happens in Orb, or keeps one intensity): under «Más opciones».
+// What the mock-up does not draw of the music (its style, whether it follows what happens in Orb, or keeps one intensity): a second
+// panel under the music rows, without its own «Más opciones» heading (General already ends with that one).
 function MusicMore() {
   const t = useT();
   useStore((s) => s.app?.config?.ui?.music);
@@ -133,8 +134,8 @@ function MusicMore() {
   const [level, setLevel] = useState(prefs.intensity);
   const keepLevel = () => setMusicIntensity(level, { save: true });
   return (
-    <MoreOptions testid="more-options-music">
-      <Panel>
+    <>
+      <Panel data-testid="more-options-music">
         <Setting label={t('appearance.musicTheme')}>
           <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
         </Setting>
@@ -146,7 +147,7 @@ function MusicMore() {
           </Setting>
         )}
       </Panel>
-    </MoreOptions>
+    </>
   );
 }
 
