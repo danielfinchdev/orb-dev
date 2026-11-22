@@ -10,7 +10,10 @@ const UPLOADS_TOTAL = 300 * 1024 * 1024; // phone pictures kept at most (oldest 
 const UPLOADS_DAYS = 7;
 const STREAM_BACKLOG = 1024 * 1024; // a live-event stream that stops reading is dropped instead of filling the memory
 const STREAMS_PER_DEVICE = 3;
-const NETWORK_CHECK_MS = 60_000; // the Wi-Fi address can change (another network, DHCP): checked every minute
+const NETWORK_CHECK_MS = 15_000; // the entries are looked at this often (src/engine/transport/remote-watch.mjs)
+// a phone declares a stream dead after 40 s of silence: a ping well inside that. Both can be shortened by tests.
+const PING_MS = Number(process.env.ORB_REMOTE_PING_MS) || 15_000;
+const CALL_MS = Number(process.env.ORB_REMOTE_CALL_MS) || 60_000; // a /api/call is answered within this, or with a timeout error
 const now = () => new Date().toISOString();
 
 // What a phone or a browser may call: the methods src/domain/security/permissions.mjs marks 'remote'. Never by the kind a device
@@ -22,4 +25,4 @@ const PAIR_FAILS_MAX = 20; // wrong attempts (all addresses together) that cance
 // wrong master passwords one code allows (they do not use it up); then a new code is needed.
 export const PAIR_PASSWORD_TRIES = 5;
 
-export { NETWORK_CHECK_MS, PAIR_FAILS_MAX, PAIR_MINUTES, RENDERER, SESSION_DAYS, STREAMS_PER_DEVICE, STREAM_BACKLOG, UPLOADS_DAYS, UPLOADS_TOTAL, UPLOAD_MAX, now };
+export { CALL_MS, NETWORK_CHECK_MS, PING_MS, PAIR_FAILS_MAX, PAIR_MINUTES, RENDERER, SESSION_DAYS, STREAMS_PER_DEVICE, STREAM_BACKLOG, UPLOADS_DAYS, UPLOADS_TOTAL, UPLOAD_MAX, now };

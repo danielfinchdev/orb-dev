@@ -143,3 +143,12 @@ export function sniffUpload(b, hint = '') {
   if (want === 'json') { try { JSON.parse(text); return 'json'; } catch { return 'txt'; } }
   return TEXT_KINDS.has(want) ? want : 'txt';
 }
+
+// Runs `work` and gives up waiting after `ms` with the error `onTimeout` makes. The work itself cannot be stopped from here
+// (and its late result or failure is dropped), so a caller must answer the timeout as final and never run it again.
+export function withDeadline(work, ms, onTimeout) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(onTimeout()), ms);
+    Promise.resolve().then(work).then(resolve, reject).finally(() => clearTimeout(timer));
+  });
+}

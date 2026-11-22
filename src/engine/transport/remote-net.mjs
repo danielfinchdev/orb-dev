@@ -85,6 +85,15 @@ export async function tailscaleAddress() {
   return null;
 }
 
+// Whether a Tailscale network adapter with its address is up: an in-process look, with no command run, so the watcher can
+// ask it every few seconds.
+export function tailscaleAdapterUp() {
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    if (/tailscale/i.test(name) && (list ?? []).some((x) => x.family === 'IPv4' && !x.internal && inCgnat(x.address))) return true;
+  }
+  return false;
+}
+
 // This PC's addresses on the local network (home Wi-Fi or cable): private IPv4 only, without virtual adapters (WSL,
 // Hyper-V, VirtualBox, Docker…) or VPNs. The Wi-Fi or Ethernet one first: it is the one the QR shows.
 export function lanAddresses() {
