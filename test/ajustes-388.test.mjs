@@ -39,7 +39,7 @@ test('the six themes, each with the sentence of the mock-up, in both languages',
     assert.ok(en[`appearance.skinDesc.${skin}`], `${skin} in English`);
   }
   assert.match(general, /t\(`appearance\.skinDesc\.\$\{skin\}`\)/);
-  assert.doesNotMatch(general, /SkinPreview/, 'icon, name and sentence: no thumbnail');
+  assert.match(general, /<SkinPreview skin=\{skin\} palette=\{ui\.palette\} \/>/, 'thumbnail, icon, name and sentence');
   assert.match(general, /const SKIN_ICON = \{ predeterminado: LayoutDashboard, cristal: Gem, orb: Bot, vaporwave: Waves, candy: Candy, retro: Terminal \}/);
   assert.match(general, /data-testid=\{`skin-\$\{skin\}`\}/);
 });
