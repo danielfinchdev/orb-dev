@@ -153,6 +153,7 @@ test('8: a hand join that failed halfway shows as partial and can be cleaned up 
   sched.folderWorkspace(board.task(info.by), project);
   fs.writeFileSync(path.join(dir, 'c.txt'), 'half\n');
   board.patch(info.by, { status: 'failed' }, 'orb', 'task.failed');
+  await sched.afterFolderTask(board.task(info.by)); // its end photo
   sched.joinedBy(board.task(task.id), info);
   const got = await call('tasks.get', { id: task.id }, PHONE);
   assert.equal(got.joinState, 'partial'); assert.equal(got.joinWrote, true); assert.equal(got.joinTask, info.by);
@@ -169,4 +170,32 @@ test('8: a hand join that failed halfway shows as partial and can be cleaned up 
   const again = board.settingJson(`integrate:${task.id}`);
   assert.ok(again?.by && again.by !== info.by, 'a new join task');
   assert.equal((await call('tasks.get', { id: task.id }, PHONE)).joinState, 'byhand');
+});
+
+test('8b: the half-done join is only settled while its join task is still the one that failed', async () => {
+  const mk = async () => {
+    const ctx = setup(); const { board, task, sched, dir, project } = ctx;
+    const info = await conflicted(ctx);
+    sched.folderWorkspace(board.task(info.by), project);
+    fs.writeFileSync(path.join(dir, 'c.txt'), 'half\n');
+    board.patch(info.by, { status: 'failed' }, 'orb', 'task.failed');
+    return { ctx, info };
+  };
+  // cut short without an end photo: the phone is told to settle it on the PC instead of reverting later work
+  const a = await mk();
+  a.ctx.sched.joinedBy(a.ctx.board.task(a.ctx.task.id), a.info);
+  await assert.rejects(a.ctx.call('tasks.undoJoin', { id: a.ctx.task.id }, PHONE), /estado final|final state|final/i);
+  assert.ok(fs.existsSync(path.join(a.ctx.dir, 'c.txt')));
+  // the join task was run again and ended well: nothing is half-done any more
+  const b = await mk();
+  await b.ctx.sched.afterFolderTask(b.ctx.board.task(b.info.by));
+  b.ctx.sched.joinedBy(b.ctx.board.task(b.ctx.task.id), b.info);
+  b.ctx.board.patch(b.info.by, { status: 'queued' }, 'orb', 'task.retry');
+  b.ctx.board.patch(b.info.by, { status: 'running' }, 'orb', 'task.launched', 'queued');
+  b.ctx.board.patch(b.info.by, { status: 'done' }, 'orb', 'task.done');
+  const got = await b.ctx.call('tasks.get', { id: b.ctx.task.id }, PHONE);
+  assert.equal(got.joinSettleable, false);
+  await assert.rejects(b.ctx.call('tasks.undoJoin', { id: b.ctx.task.id }, PHONE), /unión a medias|half-done/i);
+  await assert.rejects(b.ctx.call('tasks.retryJoin', { id: b.ctx.task.id }, PHONE), /unión a medias|half-done/i);
+  assert.ok(fs.existsSync(path.join(b.ctx.dir, 'c.txt')));
 });

@@ -21,7 +21,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { abandonSettled, joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { abandonSettled, joinAbandoned, partialJoin, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 // Folders compared as the engine writes them: either separator, any case, no trailing separator.
@@ -58,10 +58,17 @@ function assertPointCurrent(board, taskId, { files = true } = {}) {
 }
 // Where a join of this task's copy stands, for the phone and the window: 'byhand' (a task joins it in the folder now),
 // 'partial' (that task failed or was cancelled; joinWrote says whether it left files in the folder).
+function guardJoinUndo(board, taskId) {
+  const partial = partialJoin(board, taskId) ?? fail(tr('msg.scheduler.noPartialJoin'));
+  if (!board.settingJson(`checkpoint:${partial.by}`)?.before) return;
+  if (finalPhotoOf(board, partial.by) === false) fail(tr('msg.undo.noFinalState'));
+  assertPointCurrent(board, partial.by);
+}
 function joinStateOf(board, taskId) {
   if (joinAbandoned(board, taskId)) {
-    const partial = board.settingJson(`joinpartial:${taskId}`);
-    return { joinState: 'partial', joinTask: partial?.by ?? null, joinWrote: Boolean(partial && board.settingJson(`checkpoint:${partial.by}`)?.before), joinSettleable: Boolean(partial) };
+    const partial = partialJoin(board, taskId);
+    const stored = board.settingJson(`joinpartial:${taskId}`);
+    return { joinState: 'partial', joinTask: stored?.by ?? null, joinWrote: Boolean(partial && board.settingJson(`checkpoint:${partial.by}`)?.before), joinSettleable: Boolean(partial) };
   }
   return board.settingJson(`integrate:${taskId}`)?.by ? { joinState: 'byhand', joinTask: board.settingJson(`integrate:${taskId}`).by } : { joinState: null };
 }
@@ -223,8 +230,9 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     },
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
     // A hand join left half-done (tasks.get › joinState 'partial'): put the folder back as it was before it, and optionally try again.
-    'tasks.undoJoin': ({ id }) => scheduler.settleJoin(int(id, 'tarea')),
-    'tasks.retryJoin': ({ id }) => scheduler.settleJoin(int(id, 'tarea'), { retry: true }),
+    // They undo the join task's own writes, so they get the guards of a remote «tasks.undo» on that task.
+    'tasks.undoJoin': ({ id }) => { guardJoinUndo(board, int(id, 'tarea')); return scheduler.settleJoin(int(id, 'tarea')); },
+    'tasks.retryJoin': ({ id }) => { guardJoinUndo(board, int(id, 'tarea')); return scheduler.settleJoin(int(id, 'tarea'), { retry: true }); },
 
     // «/goal», «/plan», «/review» and «/debug» (modes.mjs): none of them changes the chat's permission.
     'sessions.modes': ({ id }) => { const sid = str(id, 'conversación', 64); sessions.must(sid); return { goal: goalOf(board, sid), debug: debugOn(board, sid) }; },

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { gitAsync, repoRootAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { integrateIntoAsync } from '../../domain/tasks/checkpoints.mjs';
-import { lastLaunchId, mergedByHand, joinAbandoned } from './run-id.mjs';
+import { lastLaunchId, mergedByHand, partialJoin } from './run-id.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export class FoldersPart {
@@ -127,8 +127,8 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
   // joins the copy again. Without the cleanup first, a retry would pile a second join over the half-done one.
   async settleJoin(taskId, { retry = false } = {}) {
     const { board } = this;
-    const task = board.task(taskId); const partial = board.settingJson(`joinpartial:${taskId}`);
-    if (!task || !partial || !joinAbandoned(board, taskId)) throw new Error(tr('msg.scheduler.noPartialJoin'));
+    const task = board.task(taskId); const partial = partialJoin(board, taskId);
+    if (!task || !partial) throw new Error(tr('msg.scheduler.noPartialJoin'));
     if (retry && !task.branch) throw new Error(tr('msg.scheduler.noBranch'));
     const wrote = Boolean(board.settingJson(`checkpoint:${partial.by}`)?.before);
     if (wrote) await this.undo(partial.by); // refuses while something runs in the folder; nothing else changes then
@@ -150,7 +150,7 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
       this.board.event(task.id, 'orb', 'integrate.skipped', by ? `la tarea #${by.id} que la unía terminó en ${by.status}` : `la tarea #${info.by} que la unía ya no existe`);
       // What the join task already wrote stays in the folder, mixed with the rest: kept so it can be cleaned up or tried again.
       const wrote = Boolean(by && this.board.settingJson(`checkpoint:${by.id}`)?.before);
-      this.board.settingJson(`joinpartial:${task.id}`, { by: info.by, base: info.base ?? null });
+      this.board.settingJson(`joinpartial:${task.id}`, { by: info.by, base: info.base ?? null, run: by ? lastLaunchId(this.board, by.id) : null });
       this.board.notice(tr(wrote ? 'msg.scheduler.joinGaveUpPartial' : 'msg.scheduler.joinGaveUp', { id: task.id, join: info.by, branch: task.branch ?? '?' }), 'warning');
       return;
     }
