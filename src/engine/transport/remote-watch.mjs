@@ -47,3 +47,12 @@ export function createLinkWatcher(d) {
   }
   return { tick };
 }
+
+// Lets stop() wait for a repair that is in the middle of opening something.
+export function createRepairGate() {
+  const running = new Set();
+  return {
+    run(fn) { const p = Promise.resolve().then(fn); running.add(p); const done = () => running.delete(p); p.then(done, done); return p; },
+    idle: async () => { while (running.size) await Promise.allSettled([...running]); },
+  };
+}

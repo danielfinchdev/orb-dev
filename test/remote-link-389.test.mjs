@@ -113,7 +113,7 @@ test('eventos numerados: reanuda sin hueco, avisa con resync si no puede y manda
   await until(() => garbage.items.some((x) => x.e === 'resync'), 'resync por un id roto');
   // a fresh connection (no id) gets neither replay nor resync
   const fresh = await p.stream(); await wait(200);
-  assert.ok(!fresh.items.some((x) => x.id || x.e === 'resync'));
+  assert.ok(!fresh.items.some((x) => x.e === 'resync'), 'sin resync (y lo que llegue es en vivo)');
   for (const s of [live, back, viaQuery, other, future, garbage, fresh]) s.close();
 });
 
@@ -172,4 +172,42 @@ test('el búfer de eventos: 500 como mucho, 10 minutos como mucho, y resync si y
   assert.equal(j.since(j.idOf(7)).resync, true, 'pasaron 10 minutos');
   assert.equal(j.since('bbbbbbbbbbbb.2').resync, true, 'otro arranque');
   assert.equal(j.since(undefined).resync, true);
+});
+
+test('el búfer guarda solo el último estado de cada chat, en orden, y no pide resync por ello', () => {
+  const j = createJournal({ max: 50, boot: 'aaaaaaaaaaaa' });
+  const a1 = j.add({ e: 'chat:state', p: 'a1' }, 'chat:A');
+  j.add({ e: 'notice', p: 'x' });
+  const b1 = j.add({ e: 'chat:state', p: 'b1' }, 'chat:B');
+  j.add({ e: 'chat:state', p: 'a2' }, 'chat:A');
+  j.add({ e: 'chat:state', p: 'a3' }, 'chat:A');
+  const back = j.since(a1);
+  assert.deepEqual(back.items.map((x) => x.value.p), ['x', 'b1', 'a3'], 'un solo estado por chat, el último, en orden de id');
+  assert.ok(back.items.every((x, i, l) => !i || Number(x.id.split('.')[1]) > Number(l[i - 1].id.split('.')[1])));
+  assert.deepEqual(j.since(b1).items.map((x) => x.value.p), ['a3']);
+});
+
+test('una repetición sin respuesta guardada da 410 gone (no 401 ni 409)', async () => {
+  const p = phone(); await link(p);
+  const first = p.box('call', { method: 'app.state' });
+  assert.equal((await p.post('/api/call', first)).status, 200);
+  assert.equal((await p.post('/api/call', first)).status, 200, 'mientras se guarda, la misma respuesta');
+  for (let i = 0; i < 205; i++) assert.equal((await p.post('/api/call', p.box('call', { method: 'app.state' }))).status, 200);
+  const res = await p.post('/api/call', first);
+  assert.equal(res.status, 410, 'la primera ya no se guarda');
+  assert.equal((await res.json()).reason, 'gone');
+  assert.equal((await p.post('/api/call', p.box('call', { method: 'app.state' }))).status, 200, 'y el móvil sigue vinculado');
+});
+
+test('la puerta de reparaciones: stop() espera a la que está abriendo algo', async () => {
+  const { createRepairGate } = await import('../src/engine/transport/remote-watch.mjs');
+  const gate = createRepairGate();
+  let release; let finished = false;
+  gate.run(() => new Promise((r) => { release = r; }).then(() => { finished = true; }));
+  let idle = false; const waiting = gate.idle().then(() => { idle = true; });
+  await wait(30);
+  assert.equal(idle, false, 'sigue esperando');
+  release(); await waiting;
+  assert.equal(finished && idle, true);
+  await gate.idle(); // nothing running: returns at once
 });

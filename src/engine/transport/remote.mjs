@@ -30,7 +30,7 @@ import { guardCall, withDeadline, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUp
 import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, tailscaleAdapterUp, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 import { createJournal } from './remote-events.mjs';
-import { createLinkWatcher } from './remote-watch.mjs';
+import { createLinkWatcher, createRepairGate } from './remote-watch.mjs';
 
 export { PAIR_KINDS, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
 export { PREVIEWS, guardCall, phoneConfig, pushPreview, shapeResult, withoutPaths } from './remote-calls.mjs';
@@ -266,11 +266,13 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const msg = openRequest(device, box, what);
     if (!msg) return send(res, 401, { error: tr('msg.remote.notLinked') });
     if (msg.clock) return clockOff(res);
-    touch(device, req);
     if (msg.again) {
+      // A resent call does not count as the device being seen again (its address is not updated from it).
       const sealed = await msg.again.done;
-      return sealed ? send(res, 200, sealed) : send(res, 401, { error: tr('msg.remote.notLinked') });
+      // The answer was not kept (too big, or pushed out): 410, never 401 (which unlinks the phone) or 409 (the clock).
+      return sealed ? send(res, 200, sealed) : send(res, 410, { error: tr('msg.remote.gone'), reason: 'gone' });
     }
+    touch(device, req);
 
     if (what === 'me') {
       // this device's name here, and the versions of both sides (the client says its own).
@@ -298,15 +300,20 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
     let mine = answers.get(device.id); if (!mine) answers.set(device.id, (mine = new Map()));
     for (const [n, a] of mine) if (a.exp < Date.now()) mine.delete(n);
-    while (mine.size >= ANSWERS_PER_DEVICE) mine.delete(mine.keys().next().value);
-    let settle; const entry = { exp: Date.now() + 2 * CLOCK_SKEW_MS, done: new Promise((r) => { settle = r; }) };
+    // Only answers already given are pushed out, and the nonce stays as an empty mark (a resend then gets 410).
+    for (const a of mine.values()) { if ([...mine.values()].filter((x) => x.held).length < ANSWERS_PER_DEVICE) break; if (a.held) { a.held = false; a.done = Promise.resolve(null); } }
+    let settle; const entry = { exp: Date.now() + 2 * CLOCK_SKEW_MS, held: false, done: new Promise((r) => { settle = r; }) };
     mine.set(msg.nonce, entry);
+    let answered = false;
     const answer = (dev, nonce, value) => {
       const sealed = seal(keyOf(dev), { r: nonce, ...value }, AAD.response(dev.id));
+      answered = true;
       settle(sealed);
-      if (JSON.stringify(sealed).length > ANSWER_KEEP_MAX) mine.delete(nonce); // waiting retries still get it; later ones are refused as before
+      // the ones already waiting get it; later resends of a very big one get 410
+      if (JSON.stringify(sealed).length > ANSWER_KEEP_MAX) entry.done = Promise.resolve(null); else entry.held = true;
       send(res, 200, sealed);
     };
+    try {
     const deny = (error) => answer(device, msg.nonce, { ok: false, status: 403, error });
     const principal = principalOf({ device });
     // which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
@@ -324,6 +331,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       return answer(device, msg.nonce, { ok: true, result });
     }
     catch (error) { return answer(device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
+    } finally {
+      // Something failed before any answer: those waiting on this nonce must not wait for ever.
+      if (!answered) { settle(null); mine.delete(msg.nonce); }
+    }
   }
 
   // what a device that has only the short code needs to know (only while a code is on screen). urls: the other
@@ -734,6 +745,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return state;
   }
   // The watcher's repairs: each redoes one entry and leaves the other (and every phone connected to it) alone.
+  const repairs = createRepairGate();
   const portOf = () => ctx.config.mobile?.port ?? 3131;
   async function reopenWifi() {
     const mine = generation;
@@ -792,7 +804,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
       const value = { e: event, p: event === 'config:changed' ? null : withoutPaths(payload) };
       // Kept even with no phone connected: the one that comes back asks for what it missed.
-      const id = journal.add(value);
+      const id = journal.add(value, event === 'chat:state' && payload?.conversation != null ? `chat:${payload.conversation}` : null);
       for (const c of clients) {
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         // the streamed answer as deltas to a client that asked for them; the whole text to the others.
@@ -814,7 +826,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
           wifiOn: () => ctx.config.mobile?.wifi !== false, tailscaleOn: () => ctx.config.mobile?.tailscale !== false,
           lanKey: () => lanAddresses().join(','), openedLan: () => state.lan ?? '',
           tsOpen: () => Boolean(parts.tailscale?.routes.length), tsServed: () => served !== null, tsAdapter: tailscaleAdapterUp,
-          reopenWifi, openTailscale: reopenTailscale, tsServeAlive: () => serveAlive(served), reserve,
+          reopenWifi: () => repairs.run(reopenWifi), openTailscale: () => repairs.run(reopenTailscale), tsServeAlive: () => serveAlive(served), reserve: () => repairs.run(reserve),
           seen: (kind) => { if (entries[kind]?.abierta) note(kind, { ok: true }); } });
         watcher = setInterval(() => { if (!starting) lw.tick(); }, NETWORK_CHECK_MS);
         watcher.unref?.();
@@ -825,6 +837,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     async stop() {
       generation++;
       clearInterval(watcher); watcher = null;
+      await repairs.idle(); // a repair still opening a server or `serve` finishes first, so nothing is left open after this
       await starting?.catch(() => {}); // a start() still waiting for the network gives up and closes what it bound
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
       clients.clear(); await closeAll(); pairing = null; state = { running: false, routes: [], error: null };
