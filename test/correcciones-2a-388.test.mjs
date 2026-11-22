@@ -63,7 +63,7 @@ test('8: the permission menu texts are short', () => {
 });
 
 test('9: with God mode the four places keep their names and «Más» is a narrow column of its own', () => {
-  assert.match(inbox, /more\.length \? 'grid-cols-\[repeat\(4,minmax\(0,1fr\)\)_1\.75rem\]' : 'grid-cols-\[repeat\(4,minmax\(0,1fr\)\)\]', 'gap-x-\[3px\]'/);
+  assert.ok(inbox.includes("minmax(0, 1fr))${more.length ? ' 1.75rem' : ''}"));
   assert.match(inbox, /<span className="max-w-full truncate">\{t\(label\)\}<\/span>/);
   assert.doesNotMatch(inbox, /iconsOnly/);
 });

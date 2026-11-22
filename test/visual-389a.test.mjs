@@ -49,6 +49,15 @@ test('25: the places row has a fixed gap and a faint hover', () => {
   assert.match(src('main.jsx'), /grid-cols-\[repeat\(4,minmax\(0,1fr\)\)\] gap-x-\[3px\]/);
 });
 
+test('25: what does not fit with a fixed gap goes behind the «…» button', async () => {
+  const { placesFit } = await import('../src/ui/lib/places-fit.js');
+  assert.equal(placesFit(330, 4), 4);
+  assert.equal(placesFit(240, 4), 2); // 2 places, the gap and the button
+  assert.equal(placesFit(330, 4, { forceMore: true }), 4);
+  assert.equal(placesFit(100, 4), 1);
+  assert.match(src('views', 'orb', 'inbox.jsx'), /placesFit[(]el[.]clientWidth/);
+});
+
 test('26: every menu separator is a border of the same colour, never a box that may paint 1 or 2 pixels', () => {
   const overlay = src('components', 'ui', 'overlay.jsx');
   assert.match(overlay, /function DropdownMenuSeparator\(\) \{ return <DropdownPrimitive\.Separator className="border-border my-1 h-0 shrink-0 border-t" \/>/);
