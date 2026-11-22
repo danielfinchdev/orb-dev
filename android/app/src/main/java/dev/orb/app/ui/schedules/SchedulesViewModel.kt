@@ -197,13 +197,13 @@ class SchedulesViewModel(
         if (a.loading || a.failed || !backend.available(ApiMethods.SCHEDULES_UPDATE)) return
         if (ui.value.busy) return
         ui.update { it.copy(approval = null) }
-        act(SchedulesTexts.APPROVED) { backend.update(a.item.id, SchedulePatch(approve = true)) }
+        act(SchedulesTexts.APPROVED) { backend.update(a.item.id, SchedulePatch(approve = true, hash = a.item.previewHash)) }
     }
 
     /** The screen asks for the confirmation first. */
     fun run(s: ScheduleItem) {
         if (!backend.available(ApiMethods.SCHEDULES_RUN)) return
-        act(SchedulesTexts.RUN_DONE) { backend.run(s.id) }
+        act(SchedulesTexts.RUN_DONE) { backend.run(s.id, if (s.approved) null else s.previewHash) }
     }
 
     fun openNew() {

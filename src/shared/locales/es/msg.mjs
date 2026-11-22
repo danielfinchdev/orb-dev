@@ -521,7 +521,7 @@ export default {
   "msg.schedules.monthly": "el día {day} de cada mes a las {time}",
   "msg.schedules.noProject": "no existe el proyecto {project}",
   "msg.schedules.needsHash": "para aprobarla hace falta la huella de lo que ves; ábrela de nuevo y vuelve a aprobar",
-  "msg.schedules.changedSince": "esta programada ha cambiado desde que la abriste; ábrela de nuevo para revisarla",
+  "msg.schedules.changedSince": "esta programada ha cambiado desde que la abriste; revísala otra vez",
   "msg.schedules.approveAlone": "esta programada se aprueba sola, sin cambiar nada más a la vez",
   "msg.schedules.noSchedule": "esa tarea programada ya no existe",
   "msg.schedules.once": "una vez, el {date} a las {time}",
