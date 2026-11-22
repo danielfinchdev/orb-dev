@@ -265,6 +265,8 @@ private fun LinkCard(s: ThisPhoneState) {
                     Kv(OrbIcons.Monitor, ThisPhoneTexts.LINK_PC, s.pcName?.takeIf { it.isNotBlank() } ?: ThisPhoneTexts.NO_NAME)
                     Kv(OrbIcons.Fingerprint, ThisPhoneTexts.LINK_FINGERPRINT, s.fingerprint ?: ThisPhoneTexts.NO_FINGERPRINT, mono = true)
                     Kv(OrbIcons.Route, ThisPhoneTexts.LINK_ROUTE, ThisPhoneTexts.route(s))
+                    // Every way to the PC with the last time it worked, so a failure can be told apart (home Wi-Fi or Tailscale).
+                    s.paths.forEach { Kv(OrbIcons.Route, it.label, it.text) }
                 }
             }
         }

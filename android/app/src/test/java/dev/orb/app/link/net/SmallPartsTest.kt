@@ -84,7 +84,7 @@ class SmallPartsTest {
     fun `the sse reader keeps comments, joins data lines and ignores other fields`() {
         val lines = sse(": hola\n\n: ping\n\ndata: abc\n\ndata: x\ndata: y\n\nevent: z\ndata:q\n\n")
         assertEquals(
-            listOf(SseLine.Comment, SseLine.Comment, SseLine.Comment, SseLine.Comment, SseLine.Data("abc"), SseLine.Data("xy"), SseLine.Data("q")),
+            listOf(SseLine.Comment, SseLine.Comment, SseLine.Comment, SseLine.Comment, SseLine.Data("abc"), SseLine.Data("xy"), SseLine.Data("q", null, "z")),
             lines,
         )
     }

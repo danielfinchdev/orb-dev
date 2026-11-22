@@ -75,6 +75,17 @@ class FakePc(private val clock: Clock) : Interceptor {
 
     /** Hosts that take the request in and then drop the connection, so the PC may have run it. */
     val resetAfterReceive = HashSet<String>()
+
+    /** Hosts that drop the connection after receiving only the next request; the one after it is served. */
+    val resetOnce = HashSet<String>()
+
+    @Volatile var ranBeforeReset = false
+
+    /** A repeated nonce gets 410 `gone` (the PC no longer keeps the answer) instead of 401. */
+    @Volatile var goneOnReplay = false
+
+    /** What `Last-Event-ID` each stream request carried (null: none). */
+    val lastEventIds = CopyOnWriteArrayList<String?>()
     val seenNonces = HashSet<String>()
     val log = CopyOnWriteArrayList<Seen>()
 
@@ -102,7 +113,11 @@ class FakePc(private val clock: Clock) : Interceptor {
     var onEventsRequest: (() -> Unit)? = null
     private var sink: BufferedSink? = null
 
-    fun emit(e: String, p: JsonElement) = line("data: ${LinkCrypto.sealText(key, buildJsonObject { put("e", e); put("p", p) }, Aad.event(deviceId))}\n\n")
+    fun emit(e: String, p: JsonElement, id: String? = null) =
+        line((if (id != null) "id: $id\n" else "") + "data: ${LinkCrypto.sealText(key, buildJsonObject { put("e", e); put("p", p) }, Aad.event(deviceId))}\n\n")
+
+    /** A raw SSE block as the PC would write it (an unsealed `event: resync`, an id alone...). */
+    fun raw(text: String) = line(text)
     fun ping() = line(": ping\n\n")
     private fun line(text: String) {
         val s = sink ?: return
@@ -154,6 +169,14 @@ class FakePc(private val clock: Clock) : Interceptor {
             log += Seen(host, req.url.encodedPath, null, null)
             throw java.net.SocketException("Connection reset")
         }
+        if (host in resetOnce) {
+            resetOnce.remove(host)
+            val nonce = try { (testJson.parseToJsonElement(String(readBody(req))) as? JsonObject)?.str("n") } catch (e: Exception) { null }
+            log += Seen(host, req.url.encodedPath, null, nonce)
+            // A PC that ran the request and then lost the connection (and, if old, would call its repeat a replay).
+            if (nonce != null && ranBeforeReset) seenNonces += nonce
+            throw java.net.SocketException("Connection reset")
+        }
         pairIntercept(req)?.let { return it }
         val path = req.url.encodedPath
         if (path == "/api/note-action") {
@@ -182,7 +205,7 @@ class FakePc(private val clock: Clock) : Interceptor {
         if (msg == null || msg.str("m") != kind || nonce == null) return json(req, 401, buildJsonObject { put("error", "no vinculado") })
         when (freshness(nonce, (msg["t"] as? JsonPrimitive)?.content?.toDoubleOrNull())) {
             "clock" -> return clockOff(req)
-            "replay" -> return json(req, 401, buildJsonObject { put("error", "no vinculado") })
+            "replay" -> return if (goneOnReplay) json(req, 410, buildJsonObject { put("error", "ya no"); put("reason", "gone") }) else json(req, 401, buildJsonObject { put("error", "no vinculado") })
         }
         return sealedReply(req, nonce, answer(msg["b"] as? JsonObject, nonce))
     }
@@ -215,6 +238,7 @@ class FakePc(private val clock: Clock) : Interceptor {
             "replay" -> return json(req, 401, buildJsonObject { put("error", "no vinculado") })
         }
         eventsRequests.incrementAndGet()
+        lastEventIds += req.header("Last-Event-ID")
         if (eventsMode == EventsMode.ClockOff409) return clockOff(req)
         if (eventsMode == EventsMode.BrokenBody503) {
             // The connection drops while the client reads the answer's body.

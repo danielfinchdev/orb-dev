@@ -248,10 +248,14 @@ class AppContainer(private val app: Application) {
         Unit
     }
 
-    /** Another network: a link that is not up tries again at once, whatever pause it was in the middle of. */
+    /**
+     * Another network: a link that is not up tries again at once, whatever pause it was in the middle of; one that is up
+     * opens a fresh stream, because the path it holds may be the one that just went away (the events missed are replayed).
+     */
     private fun retryLinkNow() = synchronized(runtimeLock) {
         val client = _runtime.value?.client ?: return@synchronized
-        if ((foreground || keepAliveRunning.value) && client.connection.value !is ConnectionState.Online) client.resume()
+        if (!(foreground || keepAliveRunning.value)) return@synchronized
+        if (client.connection.value !is ConnectionState.Online) client.resume() else client.reconnectEvents()
     }
 
     /** The fixed notice of the service: who it is connected to. */

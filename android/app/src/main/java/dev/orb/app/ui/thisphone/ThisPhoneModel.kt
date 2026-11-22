@@ -5,6 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.orb.app.AppContainer
 import dev.orb.app.link.net.ConnectionState
+import dev.orb.app.link.net.PathError
+import dev.orb.app.link.net.PathStatus
+import dev.orb.app.link.net.PcEntry
 import dev.orb.app.link.net.pcDisplayName
 import dev.orb.app.lock.AuthCapability
 import dev.orb.app.lock.AuthResult
@@ -15,6 +18,7 @@ import dev.orb.app.notify.NoteChannel
 import dev.orb.app.notify.NoticeStatus
 import dev.orb.app.notify.NotifySettings
 import dev.orb.app.notify.NotifyTexts
+import dev.orb.app.ui.offline.OfflineTexts
 import dev.orb.app.ui.scan.CameraAccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -35,6 +39,12 @@ import java.util.TimeZone
 interface ThisPhoneBackend {
     val pcName: StateFlow<String?>
     val connection: StateFlow<ConnectionState>
+
+    /** Each address of the PC with the last time it answered; empty when there is no link. */
+    val paths: StateFlow<List<dev.orb.app.link.net.PathStatus>> get() = MutableStateFlow(emptyList())
+
+    /** The PC's own account of its doors, when it gives one. */
+    val pcEntries: StateFlow<List<dev.orb.app.link.net.PcEntry>> get() = MutableStateFlow(emptyList())
     val settings: StateFlow<NotifySettings>
     /** What Android lets the notices do now (permission and channels), read from the system. */
     val noticeStatus: StateFlow<NoticeStatus>
@@ -86,6 +96,12 @@ class RuntimeThisPhoneBackend(private val container: AppContainer) : ThisPhoneBa
 
     override val pcName: StateFlow<String?> = link.map { it.first }.stateIn(container.scope, SharingStarted.Eagerly, null)
     override val connection: StateFlow<ConnectionState> = link.map { it.second }.stateIn(container.scope, SharingStarted.Eagerly, ConnectionState.Connecting)
+    override val paths: StateFlow<List<dev.orb.app.link.net.PathStatus>> = container.runtime.flatMapLatest { rt ->
+        rt?.client?.paths ?: flowOf(emptyList())
+    }.stateIn(container.scope, SharingStarted.Eagerly, emptyList())
+    override val pcEntries: StateFlow<List<dev.orb.app.link.net.PcEntry>> = container.runtime.flatMapLatest { rt ->
+        rt?.client?.pcEntries ?: flowOf(emptyList())
+    }.stateIn(container.scope, SharingStarted.Eagerly, emptyList())
     override val settings get() = container.notifyPrefs.settings
     override val noticeStatus get() = container.notificationAccess.status
     override fun fingerprint(): String? = container.runtime.value?.client?.currentSession?.pc
@@ -118,6 +134,10 @@ fun cameraStateOf(access: CameraAccess): CameraState = when {
     else -> CameraState.NotAllowed
 }
 
+/** One way to the PC for the screen: its name, how it is doing, and whether its last try worked. */
+@Immutable
+data class PathLine(val label: String, val text: String, val ok: Boolean)
+
 @Immutable
 data class ThisPhoneState(
     val pcName: String? = null,
@@ -125,6 +145,8 @@ data class ThisPhoneState(
     val fingerprint: String? = null,
     /** How the phone reaches the PC now; null while there is no connection. */
     val route: RouteKind? = null,
+    /** Each way to the PC with when it last worked: what the phone knows of its own tries, plus what the PC says of its doors. */
+    val paths: List<PathLine> = emptyList(),
     /** The last measured round trip through the link; null before the first one or when it failed. */
     val latencyMs: Long? = null,
     val measuring: Boolean = false,
@@ -148,6 +170,7 @@ class ThisPhoneViewModel(
     private val backend: ThisPhoneBackend,
     // Monotonic clock in ms, injectable for tests.
     private val now: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val wallClock: () -> Long = { System.currentTimeMillis() },
 ) : ViewModel() {
     private val busy = MutableStateFlow(false)
     private val done = MutableStateFlow(false)
@@ -168,6 +191,8 @@ class ThisPhoneViewModel(
         )
     }.combine(combine(backend.lock, lockAvailable, lockMessage) { l, a, m -> Triple(l, a, m) }) { st, (l, a, m) ->
         st.copy(appLock = l.enabled, lockDelay = l.delay, lockAvailable = a, lockMessage = m ?: ThisPhoneTexts.LOCK_AUTO_OFF.takeIf { l.autoOff })
+    }.combine(combine(backend.paths, backend.pcEntries) { p, e -> p to e }) { st, (p, e) ->
+        st.copy(paths = ThisPhoneTexts.pathLines(p, e, wallClock()))
     }.combine(combine(latency, measuring) { l, m -> l to m }) { st, (l, m) ->
         st.copy(latencyMs = l.takeIf { st.online }, measuring = m)
     }.combine(combine(camera, battery) { c, b -> c to b }) { st, (c, b) ->
@@ -366,6 +391,35 @@ object ThisPhoneTexts {
         ConnectionState.Connecting -> "Conectando…"
         else -> "Sin ruta"
     }
+
+    /**
+     * One line per way to the PC: «Wi-Fi» / «Tailscale» with when it last worked, or why not. The PC's own account of that
+     * door (closed, its last error) is added when it gives one; an address the PC does not list is told from the phone's side only.
+     */
+    fun pathLines(paths: List<PathStatus>, entries: List<PcEntry>, now: Long, zone: TimeZone = TimeZone.getDefault()): List<PathLine> =
+        paths.map { p ->
+            val kind = RouteKind.of(p.url)
+            val label = when (kind) { RouteKind.Tailscale -> "Tailscale"; RouteKind.Lan -> "Wi-Fi"; else -> "Internet" }
+            val mine = when {
+                p.lastOkAt != null -> "Funcionó ${OfflineTexts.absolute(p.lastOkAt, now, zone)}"
+                p.lastTryAt == null -> "Aún sin probar"
+                else -> "Nunca ha funcionado"
+            }
+            val why = p.lastError?.let { PATH_ERRORS[it] }
+            val pc = entries.firstOrNull { it.url != null && it.url == p.url }
+            val theirs = when {
+                pc == null -> null
+                pc.open == false -> "cerrada en el PC" + (pc.lastError?.let { ": $it" } ?: "")
+                else -> null
+            }
+            PathLine(label, listOfNotNull(mine, why, theirs).joinToString(" · "), ok = p.lastError == null && p.lastOkAt != null)
+        }
+
+    private val PATH_ERRORS = mapOf(
+        PathError.UNREACHABLE to "no llega",
+        PathError.NO_ANSWER to "no contesta",
+        PathError.REFUSED to "responde que no",
+    )
 
     fun link(c: ConnectionState, zone: TimeZone = TimeZone.getDefault()): String = when (c) {
         is ConnectionState.Online -> "Conectado"

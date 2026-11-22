@@ -13,6 +13,15 @@ object OfflineTexts {
     const val NO_PC_BODY = "Cuando vuelva, tus mensajes en espera saldrán solos."
     const val NOTHING_SAVED = "Todavía no hay nada guardado en el móvil. Se verá en cuanto el PC responda."
 
+    /** After half a minute without a link: what is going on and what to do, never a bare «Conectando…». */
+    const val STUCK = "Tu PC no responde por Wi-Fi ni por Tailscale. ¿Está Orb abierto?"
+
+    /** True when the link has been down long enough that the person should be told what to check. */
+    fun isStuck(c: dev.orb.app.link.net.ConnectionState, now: Long): Boolean {
+        val since = (c as? dev.orb.app.link.net.ConnectionState.Offline)?.since ?: return false
+        return now - since >= dev.orb.app.link.net.STUCK_AFTER_MS
+    }
+
     const val BAND_RETRY = "Reintentar"
     const val BAND_CONNECTED = "Conectado"
 
@@ -24,7 +33,8 @@ object OfflineTexts {
         is dev.orb.app.link.net.ConnectionState.Online -> null
         is dev.orb.app.link.net.ConnectionState.Offline -> {
             val s = c.nextRetryAt?.let { (it - now + 999) / 1000 }
-            if (s != null && s > 0) "Sin conexión con tu PC. Reintento\u00A0en\u00A0$s\u00A0s." else "Sin conexión con tu PC. Reintentando…"
+            val head = if (isStuck(c, now)) STUCK else "Sin conexión con tu PC."
+            if (s != null && s > 0) "$head Reintento\u00A0en\u00A0$s\u00A0s." else "$head Reintentando…"
         }
         dev.orb.app.link.net.ConnectionState.Connecting -> "Sin conexión con tu PC. Conectando…"
         dev.orb.app.link.net.ConnectionState.UpdatePc -> "Hay que actualizar Orb en tu PC. Lo que escribas se queda en este móvil y no sale hasta entonces."

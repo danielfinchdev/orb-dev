@@ -132,4 +132,41 @@ class LinkEventsTest {
         assertEquals(1, r.pc.streamsOpened.get())
         assertEquals(0, r.pc.openStreams.get())
     }
+
+    @Test
+    fun `the last event id is sent back when the stream is opened again`() = live { r, c, got ->
+        c.start()
+        eventually(what = "stream") { r.pc.streamsOpened.get() == 1 }
+        r.pc.emit("notice", chat("text" to "uno"), id = "boot1.4")
+        // A ping carries no id: it must not change what is sent back.
+        r.pc.ping()
+        eventually(what = "event") { got.any { it.name == "notice" } }
+        c.reconnectEvents()
+        eventually(what = "second stream") { r.pc.streamsOpened.get() == 2 }
+        assertEquals(listOf<String?>(null, "boot1.4"), r.pc.lastEventIds.toList())
+    }
+
+    @Test
+    fun `a resync makes the screens read their state again`() = live { r, c, got ->
+        c.start()
+        eventually(what = "stream") { r.pc.streamsOpened.get() == 1 }
+        // Both ways the PC may say it: a sealed event and a bare `event: resync` block.
+        r.pc.emit("resync", chat(), id = "boot2.0")
+        eventually(what = "resync") { got.any { it.name == LinkEvent.RESYNC } }
+        assertTrue(got.any { it.name == "board:changed" } && got.any { it.name == "inbox:changed" })
+        got.clear()
+        r.pc.raw("event: resync\nid: boot2.1\n\n")
+        eventually(what = "bare resync") { got.any { it.name == LinkEvent.RESYNC } }
+        c.reconnectEvents()
+        eventually(what = "second stream") { r.pc.streamsOpened.get() == 2 }
+        assertEquals("boot2.1", r.pc.lastEventIds.last())
+    }
+
+    @Test
+    fun `the silence limit of a stream is 40 seconds and the pc pings every 15`() {
+        assertEquals(40_000L, Timeouts().eventsIdle)
+        assertEquals(4_000L, Timeouts().connect)
+        assertEquals(45_000L, Timeouts().call)
+        assertEquals(8_000L, Timeouts().me)
+    }
 }
