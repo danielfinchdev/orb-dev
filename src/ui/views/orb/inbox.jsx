@@ -471,11 +471,13 @@ function Places() {
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
   const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
+  // The gap is a fixed length in the grid (never a share of the free room), so the columns give way first and the names are
+  // cut with «…». The hover is a faint tint so it is never mistaken for the chosen place.
   // The four places keep their names as the mock-up draws them; «Más» (God mode adds it) is a narrow column of its own
   // with only its icon, so «Programadas» still fits beside it.
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/35 hover:text-foreground');
   return (
-    <nav className={cn('grid px-2 pb-1.5', more.length ? 'grid-cols-[repeat(4,minmax(0,1fr))_1.75rem] gap-0' : 'grid-cols-4 gap-0.5')} aria-label={t('orbchats.places')} data-testid="orb-places">
+    <nav className={cn('grid px-2 pb-1.5', more.length ? 'grid-cols-[repeat(4,minmax(0,1fr))_1.75rem]' : 'grid-cols-[repeat(4,minmax(0,1fr))]', 'gap-x-[3px]')} aria-label={t('orbchats.places')} data-testid="orb-places">
       {places.map(([id, Icon, label]) => (
         <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} data-testid={`nav-${id}`}>
           <span className="relative grid place-items-center">

@@ -549,7 +549,7 @@ function PreviewSidebar() {
       <div className="px-3 pb-2">
         <div className="bg-muted text-muted-foreground flex h-[var(--ctl)] items-center gap-2 rounded-ctl px-3 text-control opacity-70"><Search className="size-4" />{t('orbchats.search')}</div>
       </div>
-      <nav className="grid grid-cols-4 gap-0.5 px-2 pb-1.5">
+      <nav className="grid grid-cols-[repeat(4,minmax(0,1fr))] gap-x-[3px] px-2 pb-1.5">
         {places.map(([Icon, label]) => (
           <div key={label} className="text-muted-foreground flex min-w-0 flex-col items-center gap-[3px] pt-[7px] pb-1.5 text-caption leading-[1.45]"><Icon className="size-5" /><span className="max-w-full truncate">{t(label)}</span></div>
         ))}
