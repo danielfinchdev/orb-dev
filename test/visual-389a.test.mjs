@@ -52,7 +52,7 @@ test('25: the places row has a fixed gap and a faint hover', () => {
 test('25: what does not fit with a fixed gap goes behind the «…» button', async () => {
   const { placesFit } = await import('../src/ui/lib/places-fit.js');
   assert.equal(placesFit(330, 4), 4);
-  assert.equal(placesFit(240, 4), 2); // 2 places, the gap and the button
+  assert.equal(placesFit(240, 4), 3); // 3 places, the gaps and the button
   assert.equal(placesFit(330, 4, { forceMore: true }), 4);
   assert.equal(placesFit(100, 4), 1);
   assert.match(src('views', 'orb', 'inbox.jsx'), /placesFit[(]el[.]clientWidth/);
