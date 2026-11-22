@@ -6,6 +6,7 @@
 // the mark of who answers in its corner (OrbAvatar), the title, the time, its latest progress (a running task,
 // «Esperando tu aprobación», how its last task ended, else its last line) and the unread count. Right click or ⋯ (PC) and
 // a long press (phone) open the chat's menu: info, pin, mute, mark read, complete or reopen, delete.
+import { placesFit } from '@/lib/places-fit.js';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PanelTop, Search, Plus, X, Ellipsis, ChevronRight, Pin, PinOff, BellOff, Bell, Trash2, CheckCheck, Check, ClipboardCheck, FolderGit2, CalendarSync, Presentation, SquareTerminal, MessageSquarePlus, FolderPlus, Info, CircleCheck, Undo2, SlidersHorizontal, PencilLine, AlarmClock, AlarmClockOff, Hand, ArrowUpDown, ChevronDown, LoaderCircle, GitBranch, GitPullRequest, CircleDot } from 'lucide-react';
 import { openPanel } from '@/lib/open-changes.js';
@@ -463,20 +464,33 @@ function OrbNewMenu({ fab = false }) {
 
 // ---- the zone's other places (PC): Tareas (with what waits for approval), Proyectos, Programadas, Pizarra, and «Más»
 // with God mode when it is on (PC only).
-function Places() {
+export function Places() {
   const t = useT();
   const view = useStore((s) => s.route.view);
   const approvals = useStore((s) => s.tasks.filter(needsApproval).length);
   const running = useStore((s) => s.tasks.filter((x) => x.status === 'running').length);
   const config = useStore((s) => s.app?.config);
   const places = [['tasks', ClipboardCheck, 'nav.tasks'], ['projects', FolderGit2, 'nav.projects'], ['schedules', CalendarSync, 'nav.schedules'], ['board', Presentation, 'nav.board']];
-  const more = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
+  const extra = config?.expert?.enabled && fullPc() ? [['expert', SquareTerminal, 'nav.expert']] : [];
+  const nav = useRef(null);
+  const [fit, setFit] = useState(places.length);
+  useEffect(() => {
+    const el = nav.current; if (!el) return undefined;
+    const measure = () => setFit(placesFit(el.clientWidth - 16, places.length, { forceMore: extra.length > 0 }));
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(el);
+    return () => ro.disconnect();
+  }, [extra.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const shown = places.slice(0, fit);
+  const more = [...places.slice(fit), ...extra];
+  // The gap is a fixed length in the grid (never a share of the free room), so the columns give way first and the names are
+  // cut with «…». The hover is a faint tint so it is never mistaken for the chosen place.
   // The four places keep their names as the mock-up draws them; «Más» (God mode adds it) is a narrow column of its own
   // with only its icon, so «Programadas» still fits beside it.
-  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent hover:text-foreground');
+  const cls = (on) => cn('press relative flex min-w-0 cursor-pointer flex-col items-center gap-[3px] rounded-ctl pt-[7px] pb-1.5 text-caption leading-[1.45] transition-colors', on ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/35 hover:text-foreground');
   return (
-    <nav className={cn('grid px-2 pb-1.5', more.length ? 'grid-cols-[repeat(4,minmax(0,1fr))_1.75rem] gap-0' : 'grid-cols-4 gap-0.5')} aria-label={t('orbchats.places')} data-testid="orb-places">
-      {places.map(([id, Icon, label]) => (
+    <nav ref={nav} style={{ gridTemplateColumns: `repeat(${shown.length}, minmax(0, 1fr))${more.length ? ' 1.75rem' : ''}` }} className="grid gap-x-[3px] px-2 pb-1.5" aria-label={t('orbchats.places')} data-testid="orb-places">
+      {shown.map(([id, Icon, label]) => (
         <button key={id} type="button" className={cls(view === id)} onClick={() => go({ view: id })} aria-current={view === id ? 'page' : undefined} data-testid={`nav-${id}`}>
           <span className="relative grid place-items-center">
             <Icon className={cn('size-5', view === id && 'text-primary-text')} />

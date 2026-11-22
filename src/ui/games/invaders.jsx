@@ -146,7 +146,7 @@ export default function Invaders({ level, onScore, onOver, paused }) {
     const s = g.current; sfx('inv.hit'); s.dead = 1100; s.lives--; s.shake = reducedMotion() ? 0 : 8; s.flash = 1; s.bombs = []; s.fire = false;
     s.sparks.burst((s.px + 6) * S, (PLAYER_Y + 4) * S, mix(p.primary, '#ffffff', 0.45), 26, 0.4, 3.5); s.sparks.burst((s.px + 6) * S, (PLAYER_Y + 4) * S, '#ffffff', 10, 0.3, 2);
   };
-  useEffect(() => { screen.current = document.createElement('canvas'); screen.current.width = LW; screen.current.height = LH; setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { screen.current = document.createElement('canvas'); screen.current.width = LW; screen.current.height = LH; setupCanvas(canvas.current, WIDTH, HEIGHT, draw); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current; const p = palette(); const c = colors(p);
     s.time += dt; s.sparks.step(dt); s.shake = Math.max(0, s.shake - dt * 0.03); s.flash = Math.max(0, s.flash - dt / 200);

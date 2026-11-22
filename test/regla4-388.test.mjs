@@ -30,7 +30,9 @@ test('d: Ajustes gathers what the mock-up lacks under one «Más opciones» piec
   // Robot y sonidos: «Música que reacciona» and «Intensidad»
   const general = src('views', 'settings', 'general.jsx');
   const more = general.slice(general.indexOf('function MusicMore'), general.indexOf('function MusicSettings'));
-  assert.match(more, /<MoreOptions testid="more-options-music">/);
+  // no second «Más opciones» heading: General ends with its own
+  assert.ok(!general.slice(general.indexOf('function MusicMore'), general.indexOf('</>', general.indexOf('function MusicMore'))).includes('<MoreOptions'));
+  assert.ok(more.includes('data-testid="more-options-music"'));
   for (const id of ['music-reactive', 'music-intensity']) assert.ok(more.includes(`data-testid="${id}"`), id);
   const main = general.slice(general.indexOf('function MusicSettings'));
   for (const id of ['music-reactive', 'music-intensity']) assert.ok(!main.includes(`data-testid="${id}"`), `${id} left the main rows`);

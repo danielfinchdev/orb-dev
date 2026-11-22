@@ -1,7 +1,7 @@
 // Snake: eat to grow, do not bite yourself. Easy: slow and the walls let you through; hard: fast.
 // The snake slides between cells (the logic still moves one cell per tick); it has eyes, the food glows and bursts.
 import { useEffect, useRef } from 'react';
-import { useKeys, useLoop, palette, setupCanvas, tint, mix, shade, Particles, backdrop, reducedMotion, font, skin } from './kit.js';
+import { useKeys, useLoop, palette, setupCanvas, canvasRatio, tint, mix, shade, Particles, backdrop, reducedMotion, font, skin } from './kit.js';
 import { sfx } from './sfx.js';
 
 const N = 20; const CELL = 21; const SIZE = N * CELL;
@@ -29,14 +29,14 @@ function flatColors(p) {
   return flat.colors;
 }
 function flatLayer(c) {
-  if (flat.layer) return flat.layer;
-  const ratio = window.devicePixelRatio || 1;
+  if (flat.layer && flat.ratio === canvasRatio()) return flat.layer;
+  const ratio = canvasRatio();
   const layer = document.createElement('canvas'); layer.width = Math.round(SIZE * ratio); layer.height = Math.round(SIZE * ratio);
   const ctx = layer.getContext('2d'); ctx.scale(ratio, ratio);
   ctx.fillStyle = c.muted; ctx.fillRect(0, 0, SIZE, SIZE);
   ctx.fillStyle = c.secondary;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { ctx.beginPath(); ctx.roundRect(x * CELL + 0.5, y * CELL + 0.5, CELL - 1, CELL - 1, 5); ctx.fill(); }
-  flat.layer = layer;
+  flat.layer = layer; flat.ratio = ratio;
   return layer;
 }
 function paintFlat(ctx, s, p, pts) {
@@ -121,7 +121,7 @@ export default function Snake({ level, onScore, onOver, paused }) {
     popup(ctx, s, p);
     s.sparks.draw(ctx);
   };
-  useEffect(() => { setupCanvas(canvas.current, SIZE, SIZE); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setupCanvas(canvas.current, SIZE, SIZE, draw); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current;
     s.time += dt; s.sparks.step(dt); if (s.bite > 0) s.bite -= dt;

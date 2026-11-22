@@ -160,7 +160,7 @@ export default function Runner({ level, onScore, onOver, paused }) {
   };
 
   const restart = () => { const s = g.current; reset(s.w); s.attempt += 1; s.sec = 0; s.wait = 0; s.trail = []; s.score = 0; s.parts.list = []; onScore(0); };
-  useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT, draw); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current; const w = s.w; const p = palette(); const rm = reducedMotion();
     s.time += dt; s.parts.step(dt, 0.0014); s.squash *= Math.max(0, 1 - dt / 90); s.shake = Math.max(0, s.shake - dt * 0.03); s.flash = Math.max(0, s.flash - dt / 160);

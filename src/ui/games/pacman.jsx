@@ -6,7 +6,7 @@
 // after enough dots, the maze blinks when cleared and the next level is faster. Sixty frames a second on the grid.
 import { useEffect, useRef } from 'react';
 import { useT } from '@/lib/i18n.js';
-import { useKeys, useLoop, palette, setupCanvas, tint, mix, Particles, reducedMotion, font, corner, label, clamp } from './kit.js';
+import { useKeys, useLoop, palette, setupCanvas, canvasRatio, tint, mix, Particles, reducedMotion, font, corner, label, clamp } from './kit.js';
 import { sfx } from './sfx.js';
 
 const MAP = [
@@ -70,7 +70,7 @@ function move(e, dist, open, arrive) {
 // The maze walls, drawn once per look: each wall tile is a rounded square (round where a corner is free) in the line
 // colour and a smaller one inside in the board colour, so the union leaves only the outlines, as the arcade.
 function paintMaze(mazeCanvas, p, line, board) {
-  const ratio = window.devicePixelRatio || 1;
+  const ratio = canvasRatio();
   mazeCanvas.width = Math.round(WIDTH * ratio); mazeCanvas.height = Math.round(H * T * ratio);
   const ctx = mazeCanvas.getContext('2d'); ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.fillStyle = board; ctx.fillRect(0, 0, WIDTH, H * T);
@@ -174,7 +174,7 @@ export default function Pacman({ level, onScore, onOver, paused }) {
     const s = g.current; const p = palette(); const rm = reducedMotion();
     const board = p.dark ? mix(mix(p.bg, '#000000', 0.55), p.primary, 0.06) : mix('#070a18', p.primary, 0.14);
     const line = p.dark ? mix('#3d5afe', p.primary, 0.45) : mix('#4f6bff', p.primary, 0.45);
-    const key = `${p.skin}|${p.dark}|${s.flashOn}|${window.devicePixelRatio}`;
+    const key = `${p.skin}|${p.dark}|${s.flashOn}|${canvasRatio()}`;
     if (key !== s.mazeKey) { paintMaze(maze.current, p, s.flashOn ? '#ffffff' : line, board); s.mazeKey = key; }
     ctx.save();
     ctx.beginPath(); ctx.roundRect ? ctx.roundRect(0, 0, WIDTH, HEIGHT, corner(p, 14)) : ctx.rect(0, 0, WIDTH, HEIGHT); ctx.clip();
@@ -242,7 +242,7 @@ export default function Pacman({ level, onScore, onOver, paused }) {
     ctx.restore();
   };
 
-  useEffect(() => { maze.current = document.createElement('canvas'); setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { maze.current = document.createElement('canvas'); setupCanvas(canvas.current, WIDTH, HEIGHT, draw); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current; const rm = reducedMotion();
     s.time += dt; s.sparks.step(dt);

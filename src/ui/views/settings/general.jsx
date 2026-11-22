@@ -18,6 +18,7 @@ import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
 import { ADAPTIVE_THEMES } from '../../../shared/music.mjs';
+import { SkinPreview } from '@/components/skin-preview.jsx';
 import { save, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
@@ -73,6 +74,7 @@ export function AppearanceCard({ c }) {
                 {SKINS.map((skin) => (
                   <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
                     className={cn('focus-visible:outline-ring flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-card border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
+                    <span className="block w-full" data-testid={`skin-preview-${skin}`}><SkinPreview skin={skin} palette={ui.palette} /></span>
                     {(() => { const Icon = SKIN_ICON[skin]; return <Icon className="size-4" aria-hidden="true" />; })()}
                     <span className="text-control leading-[1.45] font-medium">{t(`appearance.skin.${skin}`)}</span>
                     <span className="text-muted-foreground text-caption leading-[1.45]">{t(`appearance.skinDesc.${skin}`)}</span>
@@ -125,7 +127,8 @@ if (robot.listo) console.log('Tarea hecha');`}</code></pre>
   );
 }
 
-// What the mock-up does not draw of the music (its style, whether it follows what happens in Orb, or keeps one intensity): under «Más opciones».
+// What the mock-up does not draw of the music (its style, whether it follows what happens in Orb, or keeps one intensity): a second
+// panel under the music rows, without its own «Más opciones» heading (General already ends with that one).
 function MusicMore() {
   const t = useT();
   useStore((s) => s.app?.config?.ui?.music);
@@ -133,8 +136,8 @@ function MusicMore() {
   const [level, setLevel] = useState(prefs.intensity);
   const keepLevel = () => setMusicIntensity(level, { save: true });
   return (
-    <MoreOptions testid="more-options-music">
-      <Panel>
+    <>
+      <Panel data-testid="more-options-music">
         <Setting label={t('appearance.musicTheme')}>
           <Select caret="solid" className="w-52 shrink-0" value={prefs.theme} onValueChange={setMusicTheme} title={t('appearance.musicTheme')} data-testid="music-theme" options={ADAPTIVE_THEMES.map((value) => ({ value, label: t(`appearance.musicTheme.${value}`) }))} />
         </Setting>
@@ -146,7 +149,7 @@ function MusicMore() {
           </Setting>
         )}
       </Panel>
-    </MoreOptions>
+    </>
   );
 }
 
