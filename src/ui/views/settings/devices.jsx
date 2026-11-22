@@ -10,7 +10,7 @@ import { Badge, Card, CardContent, CardHeader, CardTitle, CardDescription, Field
 import { ListRow } from '@/components/ui/primitives.jsx';
 import { Switch, BubbleTip } from '@/components/ui/overlay.jsx';
 import { call, act, bridge } from '@/lib/store.js';
-import { cn } from '@/lib/utils.js';
+import { cn, fmtTime } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { save, Row, previewOf, MoreOptions, Block, Panel, Setting, Stack, CardFoot, Hint } from './rows.jsx';
@@ -158,7 +158,12 @@ export function MobileCard({ more = null }) {
   const via = (kind) => {
     const r = route(kind);
     const usable = st.enabled && st[kind] && r?.url;
-    const hint = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? t('settings.mobileWifiHint') : t('settings.mobileTsHint');
+    const e = st.entries?.find((x) => x.tipo === kind);
+    // how this way in is doing: when it last worked, and the last failure if it is not open now
+    const diag = !st.enabled || !st[kind] || !e ? null : e.abierta ? t('settings.mobileEntryOk', { when: fmtTime(e.ultimoOk) })
+      : `${e.ultimoError ? t('settings.mobileEntryFail', { error: e.ultimoError }) : t('settings.mobileEntryClosed')} ${e.ultimoOk ? t('settings.mobileEntryLast', { when: fmtTime(e.ultimoOk) }) : t('settings.mobileEntryNever')}`;
+    const base = st.enabled && st[kind] && !r ? t('settings.mobileUnavailable') : kind === 'wifi' ? t('settings.mobileWifiHint') : t('settings.mobileTsHint');
+    const hint = diag ? <>{base}<span className="block" data-testid={`mobile-${kind}-status`}>{diag}</span></> : base;
     return (
       <Setting key={kind} label={t(kind === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs')} hint={hint}>
         {usable ? <><code className="text-muted-foreground font-mono text-caption cursor-text select-text" data-testid={`mobile-${kind}-address`}>{r.url.replace(/^https?:\/\//, '')}</code><Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(r.url).then(() => notifyInfo(t('settings.addressCopied'))).catch(quiet)} data-testid={`mobile-${kind}-copy`}><Copy />{t('settings.copyAddress')}</Button></> : null}
