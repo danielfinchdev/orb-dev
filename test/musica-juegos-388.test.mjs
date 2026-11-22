@@ -236,7 +236,7 @@ test('the player: a game\'s music comes from the engine, with the rules of alway
   // Never by itself: only games.jsx starts it, from the click that starts a game (or the game's own music button).
   const games = read('games', 'games.jsx');
   assert.equal(games.match(/startGameMusic\(/g).length, 1);
-  assert.match(games, /const start = \(id\) => \{ stopAll\(\); sfx\('start'\); setGame\(id\); setScore\(0\); setOver\(null\); setRound\(\(r\) => r \+ 1\); startGameMusic\(id\); \};/);
+  assert.match(games, /const start = \(id\) => \{ stopAll\(\); sfx\('start'\); setHelp\(false\); setGame\(id\); setScore\(0\); setOver\(null\); setRound\(\(r\) => r \+ 1\); startGameMusic\(id\); \};/);
   assert.equal(music.match(/startGameMusic\(/g).length, 2, 'its definition and the music button of the games');
   // Stopped when the game is left, when the dialog closes and when Orb locks; its context goes after the fade.
   assert.match(games, /const close = \(\) => \{ stopAll\(\); stopGameMusic\(\);/);

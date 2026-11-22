@@ -268,7 +268,7 @@ test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» 
   // The switch is the sidebar's button: it shows what plays and goes through the same toggle.
   assert.match(settings, /<Switch checked=\{playing\} onCheckedChange=\{\(\) => toggleMusic\(\)\}/);
   // Under «Más opciones»: the style, «Música que reacciona» and the intensity.
-  assert.match(settings, /<Panel>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
+  assert.match(settings, /<Panel[^>]*>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
   assert.match(settings, /value=\{prefs\.theme\} onValueChange=\{setMusicTheme\}/);
   assert.match(settings, /<Switch checked=\{prefs\.reactive\} onCheckedChange=\{setMusicReactive\}/);
   assert.match(settings, /\{prefs\.reactive \? null : \(/, 'the intensity shows only when it does not react');
