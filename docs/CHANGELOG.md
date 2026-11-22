@@ -1,15 +1,42 @@
 ## Download
 
-### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.8/Orb-3.8.8-instalador.exe)
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.9/Orb-3.8.9-instalador.exe)
 
-`Orb-3.8.8-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+`Orb-3.8.9-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
 It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
 installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.8/Orb-3.8.8-android.apk)
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.9/Orb-3.8.9-android.apk)
 
-`Orb-3.8.8-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+`Orb-3.8.9-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
 the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+## What's new in 3.8.9
+
+**A phone link that mends itself.** If the connection between the phone and the PC drops, it comes back on its own, also
+when Tailscale starts late or after the PC wakes from sleep, and the phone says what is wrong after 30 seconds instead
+of staying silent. "This phone" and Settings › Devices show how each way in (Wi-Fi, Tailscale, the tunnel) is doing.
+Messages are neither lost nor sent twice when the link comes back: the phone resumes the live stream where it stopped
+and an answer that got lost is asked for again, not repeated.
+
+**Safer by default.** Windsurf and Zed are only opened when they carry their own publisher's signature. Undo works on
+tasks that were launched again. A scheduled task that was never approved needs what you saw to run, and "accept" only
+takes the point and the run the report shows. A hand-over that stopped half-way shows what is left, and can be undone
+or tried again from the PC and from the phone. A new connection to a fake PC over plain http is refused.
+
+**Android.** The line that shows the agent is writing no longer overlaps the finished answer, the text box sits right
+above the keyboard, the icons of the system bar are readable in the light theme, and the app asks for the local network
+permission the link needs.
+
+**Starts lighter.** Orb opens without the black window and loads the English texts only when they are used.
+
+**Smaller fixes in the app.** Tetris keeps a held direction moving while a piece turns. Places that do not fit go
+behind the "more" button, and the places row has an even gap. Menu separators, repeated titles and the "Worktree"
+tip are tidied up, and the chat title stays centred. The theme thumbnails are back in Settings, and "More options"
+appears once in General. Mini-games are larger and the game is the main thing in each window, also full screen. The
+Orchestrator icon is back in the composer, a new chat has the full permissions menu, completed chats are kept in one
+place and fade out, the agent line shows only where agent or model change, and the pause-all button appears only
+when several agents are working. Everywhere the app says "agent" instead of "brain".
 
 ## What's new in 3.8.8
 
