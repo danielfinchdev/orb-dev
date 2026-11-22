@@ -46,7 +46,7 @@ import { AGENT, PERMISSION, REASONING, DECISION, CAN_STEER as AGENT_CAN_STEER, C
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
-import { toBlocks, subagentState } from '@/lib/session-blocks.js';
+import { toBlocks, dropRepeatedAgent, subagentState } from '@/lib/session-blocks.js';
 import { summaryText } from '@/lib/tool-summary.js';
 import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
@@ -416,7 +416,7 @@ export function SessionView({ route }) {
     return () => { alive = false; offItem(); offReset(); offQueue(); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
-  const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
+  const blocks = useMemo(() => dropRepeatedAgent(toBlocks(items, tb)), [items, tb]);
   // what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
   const pending = usePending(`session:${route.id}`);
   const unsaved = pendingShown(pending, items.filter((it) => it.role === 'user' && it.kind === 'text').map((it) => ({ id: it.id, text: userText(it) })));

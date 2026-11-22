@@ -29,3 +29,31 @@ test('43: the new chat has the full permissions menu and applies it to the chat 
   // a chat without a project groups «Solo lectura» as the main level and the rest under «Más opciones»
   assert.match(src('views', 'session.jsx'), /<AutonomySwitch main=\{\['leer'\]\}/);
 });
+
+test('49: a project with no open chat has no group; the completed ones live in one place, by project; a fresh one lingers', async () => {
+  const M = await import('../src/ui/lib/inbox.js');
+  const at = (m) => new Date(Date.UTC(2026, 0, 1, 0, m)).toISOString();
+  const row = (id, project, min, extra = {}) => ({ key: `conversation:${id}`, kind: 'conversation', id, title: `c${id}`, project, at: at(min), tasks: [], unread: 0, ...extra });
+  const items = [row(1, null, 5, { done: true }), row(2, 'web', 4, { done: true }), row(3, 'web', 3, { done: true }), row(4, 'shop', 9)];
+  const g = M.groupOrb(items);
+  assert.deepEqual(g.groups.map((x) => x.project), ['shop'], 'no group (nor «Ver completados») for a project with only completed chats');
+  assert.equal(g.hidden, 3);
+  assert.deepEqual(g.completed.map((x) => [x.project, x.items.map((y) => y.id)]), [['web', [2, 3]], [null, [1]]]);
+  // just completed: it stays in its group, and no longer counts as completed
+  const l = M.groupOrb(items, { linger: new Set(['conversation:1']) });
+  assert.deepEqual(l.groups.map((x) => x.project), ['shop', null]);
+  assert.equal(l.hidden, 2);
+  const inbox = src('views', 'orb', 'inbox.jsx');
+  assert.match(inbox, /function useLinger/);
+  assert.match(inbox, /data-testid="orb-undo-done"/);
+  assert.match(inbox, /parts\.completed\.map/);
+});
+
+test('51: the agent and model line shows only where they change', async () => {
+  const { dropRepeatedAgent } = await import('../src/ui/lib/session-blocks.js');
+  const st = (id, body) => ({ type: 'item', key: `i${id}`, item: { id, kind: 'status', role: 'system', body } });
+  const text = (id) => ({ type: 'item', key: `i${id}`, item: { id, kind: 'text', role: 'assistant', body: 'hi' } });
+  const out = dropRepeatedAgent([st(1, 'Claude Code · claude-sonnet-5-5'), text(2), st(3, 'Claude Code · claude-sonnet-5-5'), text(4), st(5, 'Claude Code · claude-opus-5-5'), text(6), st(7, 'Settings skipped: hooks'), st(8, 'Claude Code · claude-opus-5-5')]);
+  assert.deepEqual(out.map((b) => b.item.id), [2, 4, 5, 6, 7], 'the first and the repeats go; the change and other notices stay');
+  assert.match(src('views', 'session.jsx'), /dropRepeatedAgent\(toBlocks\(items, tb\)\)/);
+});
