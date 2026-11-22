@@ -58,7 +58,7 @@ object PcOffTexts {
     const val TITLE = "No llego a tu PC"
     const val NOW = "Ahora"
     const val CONNECTING = "Conectando…"
-    const val RETRY_NOTE = "Reintentos a los 3, 6, 12 s… hasta 30 s. Al volver a la app o a la red, al instante."
+    const val RETRY_NOTE = "Reintentos a 1, 2, 5, 10 y 30 s, y luego cada 30 s. Al volver a la app o a la red, al instante."
     const val TAILSCALE = "Fuera de casa: activa Tailscale en el móvil."
     const val SEE_SAVED = "Ver chats guardados"
     const val OTHER_PC = "Vincular con otro PC"
