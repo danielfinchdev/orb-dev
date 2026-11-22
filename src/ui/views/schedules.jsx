@@ -323,7 +323,7 @@ function ScheduleRow({ s, load, catalog, onEdit }) {
         </span>
         <div className="acts flex flex-none items-center gap-1.5">
           {!s.approved
-            ? <><Button size="xs" onClick={() => act(call('schedules.update', { id: s.id, approve: true }), tr('schedules.approve.done')).then(load)} data-testid="schedule-approve"><Check />{tr('schedules.approve')}</Button>
+            ? <><Button size="xs" onClick={() => act(call('schedules.update', { id: s.id, approve: true, hash: s.previewHash }), tr('schedules.approve.done')).then(load)} data-testid="schedule-approve"><Check />{tr('schedules.approve')}</Button>
               <BubbleTip title={tr('schedules.runNow')}><IconButton small label={tr('schedules.runNow')} onClick={run} data-testid="schedule-run"><Play /></IconButton></BubbleTip></>
             : <Button size="xs" variant="outline" onClick={run} data-testid="schedule-run"><Play />{tr('schedules.runNow')}</Button>}
           <BubbleTip title={tr('schedules.edit')}><IconButton small label={tr('schedules.edit')} onClick={() => onEdit(s)} data-testid="schedule-edit"><PencilLine /></IconButton></BubbleTip>
@@ -452,7 +452,7 @@ function SchedulesLegacy() {
                   {s.same_chat && s.conversation_id ? <Button size="sm" variant="ghost" className="mt-1 -ml-2" onClick={() => go({ view: 'chat', id: s.conversation_id })} data-testid="schedule-open-chat"><MessageSquare />{t('schedules.openChat')}</Button> : null}
                 </div>
                 <div className="flex items-center gap-2">
-                  {!s.approved ? <Button size="sm" onClick={() => act(call('schedules.update', { id: s.id, approve: true }), t('schedules.approve.done')).then(load)}><Check />{t('schedules.approve')}</Button>
+                  {!s.approved ? <Button size="sm" onClick={() => act(call('schedules.update', { id: s.id, approve: true, hash: s.previewHash }), t('schedules.approve.done')).then(load)}><Check />{t('schedules.approve')}</Button>
                     : spent(s) ? null : <Switch checked={s.enabled} onCheckedChange={(enabled) => act(call('schedules.update', { id: s.id, enabled })).then(load)} aria-label={t('schedules.enabled')} />}
                   <BubbleTip title={t('schedules.runNow')}><Button size="icon-sm" variant="ghost" aria-label={t('schedules.runNow')} onClick={() => act(call('schedules.run', { id: s.id }), t('schedules.run.done')).then(load)}><Play /></Button></BubbleTip>
                   {/* deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}

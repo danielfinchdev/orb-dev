@@ -7,7 +7,7 @@ import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
 import { slashCommand, modeCommand } from '../../shared/slash.mjs';
 import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf, debugOn } from '../modes.mjs';
-import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
+import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, scheduleHash, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { PERMISSIONS } from '../sessions.mjs';
 import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
@@ -201,7 +201,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const remote = principal?.channel !== 'desktop';
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.accept.rerunSinceSeen'));
       if ((checkpoint != null || remote) && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
-      if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
+      // Also without a checkpointId: a web page or an older phone sends none and must not accept a point of an earlier run.
+      if ((checkpoint != null || remote) && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
       if (remote && checkpoint == null && board.heldInfo(board.task(tid))) fail(tr('msg.accept.held'));
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
@@ -325,14 +326,14 @@ ${block}` : ''}` });
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),
-    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
+    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }), previewHash: scheduleHash(s) })),
     // only this PC's window may loosen the permission level of a schedule (src/domain/schedules/schedules.mjs, clampAutonomy)
     'schedules.create': (p, principal) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
       readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true,
       month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' }),
     // every field create takes may change, checked the same way; absent = unchanged
     'schedules.update': (p, principal) => updateSchedule(board, int(p.id, 'programada'), {
-      enabled: p.enabled, approved: p.approve === true, title: p.title, description: p.description,
+      enabled: p.enabled, approved: p.approve === true, hash: p.hash, title: p.title, description: p.description,
       ...(p.project != null ? { project: project(p.project).name } : {}), ...(p.agent != null ? { agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente') } : {}), ...(p.model !== undefined ? { model: str(p.model, 'modelo', 80, { optional: true }) || null } : {}),
       ...(p.readonly !== undefined ? { readonly: p.readonly === true } : {}), ...(p.every != null ? { every: oneOf(p.every, EVERY, 'frecuencia') } : {}), ...(p.at_time != null ? { at_time: str(p.at_time, 'hora', 16) } : {}),
       ...(p.hours != null ? { hours: Number(p.hours) || 6 } : {}), ...(Array.isArray(p.weekdays) ? { weekdays: p.weekdays.map(Number) } : {}), ...(p.month_day != null ? { month_day: Number(p.month_day) } : {}),
