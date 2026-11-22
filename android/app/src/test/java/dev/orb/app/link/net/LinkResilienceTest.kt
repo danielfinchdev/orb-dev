@@ -4,6 +4,7 @@ import dev.orb.app.ui.offline.OfflineTexts
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.currentTime
@@ -68,6 +69,22 @@ class LinkResilienceTest {
         // The old PC calls the repeat a replay (401): that is no proof the link is gone.
         assertEquals(LinkError.Timeout, c.call("chat.send").error())
         assertFalse(c.connection.value is ConnectionState.Unlinked)
+    }
+
+    @Test
+    fun `a 410 gone on the repeat is an unknown result that never unlinks and reads everything again`() = runTest {
+        val r = rig()
+        r.pc.resetOnce += "orb.tail1234.ts.net"
+        r.pc.ranBeforeReset = true
+        r.pc.goneOnReplay = true
+        val c = client(r)
+        val seen = ArrayList<String>()
+        backgroundScope.launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) { c.events.collect { seen += it.name } }
+        assertEquals(LinkError.Timeout, c.call("chat.send").error())
+        assertFalse(c.connection.value is ConnectionState.Unlinked)
+        runCurrent()
+        assertTrue(LinkEvent.RESYNC in seen)
+        assertEquals(2, r.pc.log.size)
     }
 
     @Test
@@ -238,8 +255,8 @@ class LinkResilienceTest {
         val c = client(r)
         assertTrue(c.me().isSuccess)
         assertTrue(c.pcEntries.value.isEmpty())
-        r.pc.meResult = JsonObject(r.pc.meResult + ("entradas" to JsonArray(listOf(
-            buildJsonObject { put("tipo", "wifi"); put("url", home); put("abierta", true); put("ultimoOk", 1_700_000_000_000L) },
+        r.pc.meResult = JsonObject(r.pc.meResult + ("entries" to JsonArray(listOf(
+            buildJsonObject { put("tipo", "wifi"); put("url", home); put("abierta", true); put("ultimoOk", "2026-11-22T10:00:00.000Z") },
             buildJsonObject { put("tipo", "tailscale"); put("url", ts); put("abierta", false); put("ultimoError", "no responde") },
             JsonPrimitive("junk"),
         ))))
@@ -248,6 +265,14 @@ class LinkResilienceTest {
         assertEquals(listOf("wifi", "tailscale"), e.map { it.type })
         assertEquals(false, e[1].open)
         assertEquals("no responde", e[1].lastError)
+    }
+
+    @Test
+    fun `the pc giving up on a call after its limit is a timeout and is not sent again`() = runTest {
+        val r = rig()
+        r.pc.callResult = { _, _ -> buildJsonObject { put("ok", false); put("status", 504); put("reason", "timeout"); put("error", "tarde") } }
+        assertEquals(LinkError.Timeout, client(r).call("git.push").error())
+        assertEquals(1, r.pc.log.size)
     }
 
     // ---- the reader

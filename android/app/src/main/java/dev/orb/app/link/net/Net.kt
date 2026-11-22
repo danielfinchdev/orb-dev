@@ -149,8 +149,8 @@ object PathError {
 /** What this phone knows of one address of the PC: when it last answered and why the last try failed (null when it has not). */
 data class PathStatus(val url: String, val lastOkAt: Long?, val lastTryAt: Long?, val lastError: String?)
 
-/** One door of the PC as the PC itself reports it in `me.entradas`: `{ tipo, url, abierta, ultimoOk, ultimoError }`. */
-data class PcEntry(val type: String, val url: String?, val open: Boolean?, val lastOk: Long?, val lastError: String?) {
+/** One door of the PC as the PC itself reports it in `entries`: `{ tipo, url, abierta, ultimoOk, ultimoError }`. */
+data class PcEntry(val type: String, val url: String?, val open: Boolean?, val lastOk: String?, val lastError: String?) {
     companion object {
         /** Anything that is not a list of such objects is an empty list: an older PC says nothing and a wrong one must not break the screen. */
         fun parse(raw: JsonElement?): List<PcEntry> = (raw as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { e ->
@@ -160,7 +160,7 @@ data class PcEntry(val type: String, val url: String?, val open: Boolean?, val l
                 type = type.take(16),
                 url = o["url"].str()?.take(200),
                 open = (o["abierta"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { !it.isString }?.content?.let { it == "true" },
-                lastOk = o["ultimoOk"].num()?.toLong(),
+                lastOk = o["ultimoOk"].let { it.str() ?: it.num()?.toLong()?.toString() }?.take(40),
                 lastError = o["ultimoError"].str()?.let { oneLine(it, 80) }?.ifEmpty { null },
             )
         }

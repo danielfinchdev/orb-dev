@@ -28,6 +28,7 @@ class ManifestPermissionsTest {
             "android.permission.INTERNET",
             // Knowing a network came back, to retry the PC at once.
             "android.permission.ACCESS_NETWORK_STATE",
+            "android.permission.ACCESS_LOCAL_NETWORK",
             // Notices (asked on Android 13 and later, after a plain sentence).
             "android.permission.POST_NOTIFICATIONS",
             // «Mantener conectado»: a foreground service of type remote messaging.

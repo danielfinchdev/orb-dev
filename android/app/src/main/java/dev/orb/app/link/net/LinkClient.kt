@@ -92,7 +92,7 @@ class LinkClient(
 
     private val _pcEntries = MutableStateFlow<List<PcEntry>>(emptyList())
 
-    /** The PC's own view of its doors (`me.entradas`), when it says; empty from a PC that does not. */
+    /** The PC's own view of its doors (`entries` of the PC's access status), when it says; empty from a PC that does not. */
     val pcEntries: StateFlow<List<PcEntry>> = _pcEntries.asStateFlow()
 
     private fun notePath(base: String, ok: Boolean, error: String? = null) {
@@ -306,6 +306,11 @@ class LinkClient(
             _connection.value = ConnectionState.Unlinked
             throw LinkException(LinkError.NotLinked)
         }
+        if (res.code == 410 && data["reason"].str() == "gone") {
+            // The PC no longer keeps the answer of the repeated call: whether it ran is unknown, so the screens read their state again.
+            resync()
+            throw LinkException(LinkError.Timeout)
+        }
         val attention = data["attention"].str()
         if (res.code == 503 && attention != null) {
             _connection.value = ConnectionState.Attention(attention)
@@ -424,6 +429,8 @@ class LinkClient(
     private fun unwrap(msg: JsonObject): JsonElement {
         if ((msg["ok"] as? JsonPrimitive)?.content == "true") return msg["result"] ?: JsonNull
         val status = msg["status"].num()?.toInt() ?: 0
+        // The PC gave up on its own work after its limit: no answer in time, not a refusal.
+        if (status == 504 && msg["reason"].str() == "timeout") throw LinkException(LinkError.Timeout)
         val update = msg["update"]
         if (status == 426 || (update != null && update !is JsonNull)) {
             _connection.value = ConnectionState.UpdateApp
@@ -456,7 +463,7 @@ class LinkClient(
         val methods = (result["methods"] as? JsonArray)?.mapNotNull { it.str() }?.toSet()
         val info = PcInfo(result["device"].str(), pcNameOrNull(result["name"].str()), result["pc"].str(), versions, methods, result)
         _info.value = info
-        _pcEntries.value = PcEntry.parse(result["entradas"])
+        _pcEntries.value = PcEntry.parse(result["entries"] ?: result["entradas"])
         val min = result["min"].num()
         if (min != null && updateNeeded(min) != null) {
             _connection.value = ConnectionState.UpdateApp

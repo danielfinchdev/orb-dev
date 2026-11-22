@@ -81,6 +81,9 @@ class FakePc(private val clock: Clock) : Interceptor {
 
     @Volatile var ranBeforeReset = false
 
+    /** A repeated nonce gets 410 `gone` (the PC no longer keeps the answer) instead of 401. */
+    @Volatile var goneOnReplay = false
+
     /** What `Last-Event-ID` each stream request carried (null: none). */
     val lastEventIds = CopyOnWriteArrayList<String?>()
     val seenNonces = HashSet<String>()
@@ -202,7 +205,7 @@ class FakePc(private val clock: Clock) : Interceptor {
         if (msg == null || msg.str("m") != kind || nonce == null) return json(req, 401, buildJsonObject { put("error", "no vinculado") })
         when (freshness(nonce, (msg["t"] as? JsonPrimitive)?.content?.toDoubleOrNull())) {
             "clock" -> return clockOff(req)
-            "replay" -> return json(req, 401, buildJsonObject { put("error", "no vinculado") })
+            "replay" -> return if (goneOnReplay) json(req, 410, buildJsonObject { put("error", "ya no"); put("reason", "gone") }) else json(req, 401, buildJsonObject { put("error", "no vinculado") })
         }
         return sealedReply(req, nonce, answer(msg["b"] as? JsonObject, nonce))
     }
