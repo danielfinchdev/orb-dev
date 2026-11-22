@@ -183,9 +183,7 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
   // «Ejecutar ahora» runs what is saved: with unsaved changes it says so first.
   const runNow = async () => {
     if (dirty && !(await confirm(tr('schedules.runDirty.title'), tr('schedules.runDirty.body'), { ok: tr('schedules.runNow'), tone: 'primary' }))) return;
-    // The fingerprint is read again: the one this dialog opened with is of the schedule before any save.
-    const fresh = (await call('schedules.list').catch(() => []))?.find?.((x) => x.id === schedule.id);
-    await act(call('schedules.run', { id: schedule.id, hash: fresh?.previewHash ?? schedule.previewHash }), tr('schedules.run.done'));
+    await act(call('schedules.run', { id: schedule.id, hash: schedule.previewHash }), tr('schedules.run.done'));
   };
   const zoneField = (
     <Field label={tr('schedules.tz')}>
