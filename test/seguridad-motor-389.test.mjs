@@ -210,3 +210,14 @@ test('9: an unapproved schedule runs only with its fingerprint, and approving ca
   assert.equal((await call('schedules.list', {})).find((x) => x.id === s.id).approved, false);
   await call('schedules.run', { id: s.id, hash }, PHONE);
 });
+
+test('10: the window draws the half-done join with its two actions, in both languages', async () => {
+  const view = fs.readFileSync(path.resolve('src/ui/views/tasks.jsx'), 'utf8');
+  assert.match(view, /joinState !== 'partial' \|\| !t\.joinSettleable/);
+  assert.match(view, /call\('tasks\.undoJoin', \{ id: t\.id \}\)/);
+  assert.match(view, /call\('tasks\.retryJoin', \{ id: t\.id \}\)/);
+  for (const lang of ['es', 'en']) {
+    const text = fs.readFileSync(path.resolve(`src/shared/locales/${lang}/tasks.mjs`), 'utf8');
+    for (const k of ['tasks.partialJoin', 'tasks.partialJoinClean', 'tasks.undoJoin', 'tasks.retryJoin']) assert.ok(text.includes(`'${k}'`), `${lang} ${k}`);
+  }
+});
