@@ -299,9 +299,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const method = String(msg.body?.method ?? '');
     const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
     let mine = answers.get(device.id); if (!mine) answers.set(device.id, (mine = new Map()));
-    for (const [n, a] of mine) if (a.exp < Date.now()) mine.delete(n);
+    mine.held ??= 0; // how many answers this device has stored
+    for (const [n, a] of mine) if (a.exp < Date.now()) { if (a.held) mine.held--; mine.delete(n); }
     // Only answers already given are pushed out, and the nonce stays as an empty mark (a resend then gets 410).
-    for (const a of mine.values()) { if ([...mine.values()].filter((x) => x.held).length < ANSWERS_PER_DEVICE) break; if (a.held) { a.held = false; a.done = Promise.resolve(null); } }
+    for (const a of mine.values()) { if (mine.held < ANSWERS_PER_DEVICE) break; if (a.held) { a.held = false; mine.held--; a.done = Promise.resolve(null); } }
     let settle; const entry = { exp: Date.now() + 2 * CLOCK_SKEW_MS, held: false, done: new Promise((r) => { settle = r; }) };
     mine.set(msg.nonce, entry);
     let answered = false;
@@ -310,7 +311,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       answered = true;
       settle(sealed);
       // the ones already waiting get it; later resends of a very big one get 410
-      if (JSON.stringify(sealed).length > ANSWER_KEEP_MAX) entry.done = Promise.resolve(null); else entry.held = true;
+      if (JSON.stringify(sealed).length > ANSWER_KEEP_MAX) entry.done = Promise.resolve(null); else { entry.held = true; mine.held++; }
       send(res, 200, sealed);
     };
     try {
@@ -333,7 +334,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     catch (error) { return answer(device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
     } finally {
       // Something failed before any answer: those waiting on this nonce must not wait for ever.
-      if (!answered) { settle(null); mine.delete(msg.nonce); }
+      if (!answered) { settle(null); entry.done = Promise.resolve(null); } // the nonce stays as an empty mark: a resend gets 410, not a replay's 401
     }
   }
 
@@ -762,9 +763,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (!t) return;
     settle('tailscale', t); composeState();
   }
-  async function reserve() {
-    if (served === null) return false;
+  async function reserve(mine) {
+    if (served === null || mine !== generation) return false;
     const ok = await serveHttps(served);
+    if (mine !== generation) { await unserve(); return false; } // stop() ran meanwhile: nothing may stay forwarded
     note('tailscale', ok ? { ok: true } : { ok: false, error: 'tailscale serve no responde' });
     return ok;
   }
@@ -822,11 +824,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       // The watcher redoes only the entry that needs it: a Wi-Fi address that changed, Tailscale that was not ready when
       // Orb started, `tailscale serve` that was lost, or whatever a suspended PC left behind.
       if (!watcher && !process.env.ORB_REMOTE_BIND) {
+        const mine = generation;
         const lw = createLinkWatcher({ every: NETWORK_CHECK_MS, log,
           wifiOn: () => ctx.config.mobile?.wifi !== false, tailscaleOn: () => ctx.config.mobile?.tailscale !== false,
           lanKey: () => lanAddresses().join(','), openedLan: () => state.lan ?? '',
           tsOpen: () => Boolean(parts.tailscale?.routes.length), tsServed: () => served !== null, tsAdapter: tailscaleAdapterUp,
-          reopenWifi: () => repairs.run(reopenWifi), openTailscale: () => repairs.run(reopenTailscale), tsServeAlive: () => serveAlive(served), reserve: () => repairs.run(reserve),
+          reopenWifi: () => repairs.run(reopenWifi), openTailscale: () => repairs.run(reopenTailscale), tsServeAlive: () => (mine === generation ? repairs.run(() => serveAlive(served)) : null), reserve: () => (mine === generation ? repairs.run(() => reserve(mine)) : false),
           seen: (kind) => { if (entries[kind]?.abierta) note(kind, { ok: true }); } });
         watcher = setInterval(() => { if (!starting) lw.tick(); }, NETWORK_CHECK_MS);
         watcher.unref?.();
