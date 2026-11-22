@@ -18,7 +18,7 @@ pub enum Expected {
 pub fn expected_signer(which: &str) -> Expected {
   match which {
     "vscode" => Expected::Named(&["Microsoft Corporation"]),
-    "windsurf" => Expected::Named(&["Codeium, Inc.", "Codeium Inc.", "Windsurf, Inc."]),
+    "windsurf" => Expected::Named(&["Exafunction, Inc.", "Codeium, Inc.", "Codeium Inc.", "Windsurf, Inc."]),
     "zed" => Expected::Named(&["Zed Industries, Inc.", "Zed Industries Inc."]),
     "jetbrains" => Expected::Named(&["JetBrains s.r.o."]),
     _ => Expected::Named(&["Anysphere, Inc."]),
