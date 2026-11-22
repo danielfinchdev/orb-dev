@@ -31,9 +31,18 @@ const fakeShot = () => {
 const STRICT = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/;
 const isNewer = (a, b) => { const x = a.split('.').map(Number); const y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
 
+// Same gate as fakeShot: tests drive the capture's rate limiter by writing the fake time (ms) into this file, so they
+// do not depend on how long a loaded machine took between two calls. Without the file, the real clock is used.
+const fakeClock = () => {
+  const file = process.env.ORB_FAKE_AGENTS && process.env.ORB_FAKE_SCREENSHOT_CLOCK;
+  if (!file) return undefined;
+  return () => { try { const n = Number(fs.readFileSync(file, 'utf8')); if (Number.isFinite(n) && n > 0) return n; } catch { /* no file yet */ } return Date.now(); };
+};
+
 export function linkMethods({ emit, remoteRef, log, version }) {
   const run = fakeShot(); // the test hook stands in for the Windows capture, so it also skips the platform check
-  const capture = createScreenshot(run ? { run, platform: 'win32' } : {});
+  const now = fakeClock();
+  const capture = createScreenshot(run ? { run, platform: 'win32', ...(now && { now }) } : {});
   const shotsDir = () => path.join(ctx.paths.internal, SHOT_DIR);
   sweepShots(shotsDir()).catch(() => {}); // leftovers of an engine that stopped before they expired
   return {

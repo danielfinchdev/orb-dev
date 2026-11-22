@@ -14,12 +14,15 @@ import { createScreenshot, runHostScreenshot, SHOT_NAME } from '../src/engine/ho
 import { REMOTE_METHODS } from '../src/domain/security/permissions.mjs';
 
 const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('captura de prueba'), Buffer.from([0xff, 0xd9])]);
+let clock; const setClock = (ms) => fs.writeFileSync(clock, String(ms));
 let A; let t; let phone; let other; let a; let b; let jpg; let uploads;
 before(async () => {
   const port = 20000 + Math.floor(Math.random() * 20000);
   t = tempHome({ mobile: { enabled: true, port, name: 'Casa' } });
   jpg = path.join(t.base, 'fake.jpg'); fs.writeFileSync(jpg, JPEG);
-  A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_FAKE_SCREENSHOT: jpg } });
+  // The engine's capture clock is frozen from the start, so the 5 s gap never depends on how fast the machine runs.
+  clock = path.join(t.base, 'clock.txt'); setClock(Date.now());
+  A = await startEngine(t.home, { env: { ORB_REMOTE_BIND: '127.0.0.1', ORB_FAKE_SCREENSHOT: jpg, ORB_FAKE_SCREENSHOT_CLOCK: clock } });
   await until(async () => (await A.call('remote.status')).running, 'acceso');
   await A.call('master.create', { password: TEST_MASTER });
   phone = createPhone({ name: 'Pixel' });
@@ -174,9 +177,8 @@ test('Settings › Mobile › screenshot: on by default, off refuses the phone, 
   assert.equal(fs.readdirSync(t.home, { recursive: true }).filter((f) => String(f).includes('capturas-movil') && String(f).endsWith('.jpg')).length, before, 'no picture is taken while it is off');
   const on = await A.call('remote.configure', { screenshot: true });
   assert.equal(on.screenshot, true);
-  // past the switch again: it is no longer refused as off. Depending on how long the machine took since the shot
-  // taken earlier in this file, the 5 s gap has either passed or still blocks it; neither is the off refusal.
-  const again = await phone.call(a.id, 'pc.screenshot', {}).then(() => null, (e) => e);
-  // (once the gap has passed the real host runner may fail without an app, so only «desactivada» is excluded)
-  if (again) assert.doesNotMatch(again.message, /desactivada/);
+  // past the switch again: the only thing in the way now is the 5 s limit of the shot taken earlier in this file
+  await assert.rejects(phone.call(a.id, 'pc.screenshot', {}), /Espera un momento/);
+  setClock(Number(fs.readFileSync(clock, 'utf8')) + 6000);
+  assert.match((await phone.call(a.id, 'pc.screenshot', {})).path, SHOT_NAME);
 });
