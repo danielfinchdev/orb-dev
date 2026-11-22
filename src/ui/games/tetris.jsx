@@ -2,7 +2,7 @@
 // Glossy blocks, the ghost of the piece where it would land, a flash when lines go, and a side panel with the next piece.
 import { useEffect, useRef } from 'react';
 import { useT } from '@/lib/i18n.js';
-import { useKeys, useLoop, palette, setupCanvas, roundRect, block, tint, mix, shade, backdrop, label, reducedMotion, Particles, font, corner } from './kit.js';
+import { useKeys, useLoop, keyRepeater, palette, setupCanvas, roundRect, block, tint, mix, shade, backdrop, label, reducedMotion, Particles, font, corner } from './kit.js';
 import { sfx } from './sfx.js';
 
 const W = 10; const H = 20; const CELL = 22; const SIDE = 124; const PAD = 10;
@@ -106,23 +106,43 @@ export default function Tetris({ level, onScore, onOver, paused }) {
     if (!fits(s.piece.cells, s.piece.x, s.piece.y)) { s.over = true; sfx('tetris.top'); onOver(s.score); }
   };
   const move =(dx, dy) => { const s = g.current; if (s.piece && fits(s.piece.cells, s.piece.x + dx, s.piece.y + dy)) { s.piece.x += dx; s.piece.y += dy; return true; } return false; };
-  useKeys((key) => {
-    const s = g.current; if (s.over || paused || !s.piece) return /^(Arrow| )/.test(key) ? true : false;
+  // ← → ↓ repeat from the game's clock (see keyRepeater), so rotating or dropping while one is held never stops the slide.
+  const repeater = useRef(null); if (!repeater.current) repeater.current = keyRepeater();
+  const step = (key) => {
+    const s = g.current;
     if (key === 'ArrowLeft') { if (move(-1, 0)) sfx('tetris.move'); }
     else if (key === 'ArrowRight') { if (move(1, 0)) sfx('tetris.move'); }
     else if (key === 'ArrowDown') { if (!move(0, 1)) lock(); else { s.score += 1; onScore(s.score); sfx('tetris.soft'); } }
-    else if (key === 'ArrowUp' || key === 'x' || key === 'X') {
+  };
+  useKeys((key, e) => {
+    const s = g.current; if (s.over || paused || !s.piece) return /^(Arrow| )/.test(key) ? true : false;
+    if (key === 'ArrowLeft' || key === 'ArrowRight' || key === 'ArrowDown') {
+      if (e?.repeat) return true;
+      // the last horizontal key wins while both are down
+      if (key === 'ArrowLeft') repeater.current.release('ArrowRight'); else if (key === 'ArrowRight') repeater.current.release('ArrowLeft');
+      repeater.current.press(key); step(key);
+    } else if (key === 'ArrowUp' || key === 'x' || key === 'X') {
+      if (e?.repeat) return true;
       const r = rotate(s.piece.cells, s.piece.kind);
       for (const kick of [0, -1, 1, -2, 2]) if (fits(r, s.piece.x + kick, s.piece.y)) { s.piece.cells = r; s.piece.x += kick; if (s.piece.kind !== 'O') sfx('tetris.rotate'); break; }
-    } else if (key === ' ') { let n = 0; while (move(0, 1)) n++; s.score += n * 2; onScore(s.score); lock(true); }
+    } else if (key === ' ') { if (e?.repeat) return true; let n = 0; while (move(0, 1)) n++; s.score += n * 2; onScore(s.score); lock(true); }
     else return false;
     draw(); return true;
   });
-  useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const r = repeater.current;
+    const up = (e) => r.release(e.key);
+    const drop = () => r.clear();
+    window.addEventListener('keyup', up); window.addEventListener('blur', drop);
+    return () => { window.removeEventListener('keyup', up); window.removeEventListener('blur', drop); r.clear(); };
+  }, []);
+  useEffect(() => { if (paused) repeater.current.clear(); }, [paused]);
+  useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT, draw); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current; s.time += dt; s.sparks.step(dt);
     if (s.over) { if (s.sparks.alive) draw(); return; }
     if (s.clearing) { s.clearing.t += dt; if (s.clearing.t >= CLEAR_MS) settle(); draw(); return; }
+    repeater.current.tick(dt, (key) => { if (g.current.piece) step(key); });
     s.acc += dt;
     const speed = Math.max(90, START[level] - s.lines * 25);
     if (s.acc >= speed) { s.acc = 0; if (!move(0, 1)) lock(); }
