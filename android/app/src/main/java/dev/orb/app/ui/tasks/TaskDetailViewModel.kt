@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /** What the person can do with a task now; only what the PC lists and the task's state allow. */
-enum class TaskAction { Approve, AcceptHeld, UndoHeld, LaunchAnyway, Reassign, Followup, Retry, Cancel, Review, SeeChanges }
+enum class TaskAction { Approve, AcceptHeld, UndoHeld, LaunchAnyway, Reassign, Followup, Retry, Cancel, Review, SeeChanges, UndoJoin, RetryJoin }
 
 @Immutable
 data class TaskDetailState(
@@ -58,6 +58,8 @@ object TaskActions {
         if (!held && r.status in RETRYABLE && can(ApiMethods.TASKS_RETRY)) out += TaskAction.Retry
         if (r.status in CANCELLABLE && can(ApiMethods.TASKS_CANCEL)) out += TaskAction.Cancel
         if (r.status == "done" && can(ApiMethods.TASKS_REVIEW)) out += TaskAction.Review
+        if (d.partialJoin?.wrote == true && can(ApiMethods.TASKS_UNDO_JOIN)) out += TaskAction.UndoJoin
+        if (d.partialJoin != null && can(ApiMethods.TASKS_RETRY_JOIN)) out += TaskAction.RetryJoin
         if (d.hasCheckpoint && !r.undone && (r.status == "done" || held) && can(ApiMethods.TASKS_DIFF)) out += TaskAction.SeeChanges
         return out
     }
@@ -208,7 +210,7 @@ class TaskDetailViewModel(
     private class Stale(message: String) : Exception(message)
 
     private fun failureText(e: Throwable): String =
-        (e as? Stale)?.message ?: ChatErrors.pcText(e) ?: "${TaskTexts.ACTION_FAILED}. ${linkErrorText(e)}"
+        (e as? Stale)?.message ?: (if (ChatErrors.notReady(e)) TaskTexts.ACCEPT_NOT_READY else null) ?: ChatErrors.pcText(e) ?: "${TaskTexts.ACTION_FAILED}. ${linkErrorText(e)}"
 
     private var undoAsked = false
     private var undoCheckpoint: String? = null
@@ -246,6 +248,16 @@ class TaskDetailViewModel(
                 onFailure = { _messages.trySend("${TaskTexts.ACTION_FAILED}. ${linkErrorText(it)}") },
             )
         }
+    }
+
+    fun undoJoin() {
+        if (!allowed(TaskAction.UndoJoin)) return
+        act(TaskTexts.JOIN_UNDONE) { backend.undoJoin(id) }
+    }
+
+    fun retryJoin() {
+        if (!allowed(TaskAction.RetryJoin)) return
+        act(TaskTexts.JOIN_RETRIED) { backend.retryJoin(id) }
     }
 
     fun retry() {

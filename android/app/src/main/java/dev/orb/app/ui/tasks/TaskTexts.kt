@@ -40,6 +40,15 @@ object TaskTexts {
     const val ACTION_FAILED = "No se pudo hacer en el PC"
     const val ACCEPT_CHANGED = "La tarea ha cambiado en el PC desde que la viste: revisa lo nuevo antes de aceptarla."
 
+    const val ACCEPT_NOT_READY = "Los cambios de la última ejecución aún no están listos en el PC. Vuelve a abrir la tarea en un momento."
+    const val JOIN_TITLE = "La unión se quedó a medias"
+    const val JOIN_BODY = "Parte del trabajo ya está en la carpeta, mezclada con lo demás. Puedes deshacer lo que escribió o volver a intentarla."
+    const val JOIN_BODY_CLEAN = "La unión no terminó y no escribió nada. El trabajo sigue en su rama."
+    const val JOIN_UNDO = "Deshacer unión"
+    const val JOIN_RETRY = "Reintentar unión"
+    const val JOIN_UNDONE = "Unión deshecha"
+    const val JOIN_RETRIED = "Se vuelve a intentar la unión"
+
     const val NEW_TASK = "Nueva tarea"
     const val NEW_TASK_PROJECT = "Proyecto"
     const val NEW_TASK_TITLE = "Título"

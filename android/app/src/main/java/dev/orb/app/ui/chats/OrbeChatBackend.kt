@@ -294,6 +294,10 @@ object ChatErrors {
     fun queuedChanged(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ha cambiado desde que lo viste", ignoreCase = true) || it.contains("has changed since you saw it", ignoreCase = true) } == true
 
+    /** The PC refused to accept or undo because the last run's changes are not stored yet. */
+    fun notReady(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("aún no están listos", ignoreCase = true) || it.contains("not ready yet", ignoreCase = true) } == true
+
     fun queuedGone(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ya no está en la cola", ignoreCase = true) || it.contains("no longer in the queue", ignoreCase = true) } == true
 

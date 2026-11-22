@@ -48,6 +48,19 @@ class TaskDetailViewModelTest {
         )
     }
 
+    @Test fun aHalfDoneJoinOffersUndoAndRetryOnlyWhenItWroteFiles() = runTest(dispatcher) {
+        val wrote = backend(detail(task(7, status = "done"), partialJoin = PartialJoin(wrote = true)))
+        val vm = vm(wrote)
+        assertTrue(TaskAction.UndoJoin in vm.state.value.actions && TaskAction.RetryJoin in vm.state.value.actions)
+        vm.undoJoin()
+        advanceUntilIdle()
+        assertTrue("undoJoin 7" in wrote.calls)
+        val clean = vm(backend(detail(task(7, status = "done"), partialJoin = PartialJoin(wrote = false))))
+        assertFalse(TaskAction.UndoJoin in clean.state.value.actions)
+        assertTrue(TaskAction.RetryJoin in clean.state.value.actions)
+        assertFalse(TaskAction.RetryJoin in vm(backend(detail(task(7, status = "done")))).state.value.actions)
+    }
+
     // An event of the PC: the decisions go off at once, not after the wait
 
     private fun TestScope.slowVm(b: FakeTasksBackend): TaskDetailViewModel {
