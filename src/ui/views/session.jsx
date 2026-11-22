@@ -629,7 +629,7 @@ export function SessionView({ route }) {
             }} />
               /* without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
                  when Orb locks). Never from the phone. */
-              : <AutonomySwitch main={[]} value={s.permission === 'total' ? 'total' : 'leer'} testid="session-permission" disabled={bridge.mobile} more={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} extra={androidRow} request={permAsk} onChange={async (permission) => {
+              : <AutonomySwitch main={['leer']} value={s.permission === 'total' ? 'total' : 'leer'} testid="session-permission" disabled={bridge.mobile} more={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} extra={androidRow} request={permAsk} onChange={async (permission) => {
                 if (permission !== 'total') { act(call('sessions.revokeGrant', { id: s.id, grant: 'total' }), t('session.permissionsChanged')); return; }
                 const unlock = await unlockCore('fullAccess');
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));

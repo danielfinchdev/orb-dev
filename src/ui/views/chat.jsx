@@ -11,7 +11,7 @@ import { SecretCards } from '@/components/secret-card.jsx';
 import { HtmlPages } from '@/components/html-page.jsx';
 import { sideSessionIds } from '@/lib/html-mount.js';
 import { useDraft } from '@/lib/draft.js';
-import { PanelRight, FolderPlus, NotebookPen, Gauge, ShieldQuestion, LoaderCircle, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare, SquareTerminal } from 'lucide-react';
+import { PanelRight, FolderPlus, NotebookPen, Gauge, ShieldQuestion, LoaderCircle, Square, Pause, Play, Gamepad2, Check, CheckCheck, PencilLine, ShieldAlert, X, ExternalLink, ChevronRight, Presentation, History, FlaskConical, Folder, ListChecks, Info, BellOff, MessageSquare, SquareTerminal, Smartphone } from 'lucide-react';
 import { Robot } from '@/components/robot.jsx';
 import { Markdown, TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
 import { ExtensionRequestCard } from './extensions.jsx';
@@ -46,7 +46,8 @@ import { useAddToChat, appendToBox } from '@/lib/add-to-chat.js';
 import { ContextSlot } from '@/components/context-slot.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
 import { baseName, cn } from '@/lib/utils.js';
-import { DECISION, AGENT } from '@/lib/labels.js';
+import { DECISION, AGENT, PERMISSION, options } from '@/lib/labels.js';
+import { unlockCore } from '@/lib/core-access.js';
 import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
 import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
@@ -436,6 +437,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const projectNow = useRef(inProject); projectNow.current = inProject;
   // a NEW direct chat works in the project's folder («Local») or in a worktree of its own (a branch to start from)
   const [where, setWhere] = useState({ mode: 'local', base: '' });
+  // What the user picked in the permissions menu before the first message: a level beyond «Auto»/«Preguntar» and the phone.
+  // It belongs to the direct chat the first message creates; «Acceso total» and the phone ask for the master password then.
+  const [access, setAccess] = useState({ permission: null, android: false });
   // The user went elsewhere while the first message was on its way: they stay where they are, and a notice says where
   // the message is (one click away).
   const leftBehind = (target, title) => notify({ title: t('chat.startedIn', { title }), body: t('chat.startedInBody'), tone: 'info', go: target, action: { label: t('notice.open'), onClick: () => go(target) } });
@@ -472,9 +476,14 @@ export function ChatView({ route, onConversation, project: inProject }) {
         // «Orquestador» off: the user hands out the work, and the conversation is directly with the agent chosen below
         // (in God mode, in the project chosen there).
         const project = inProject ?? app.activeProject?.name ?? null;
-        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(project ? {} : { permission: 'leer' }), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
+        // «Acceso total» is never sent at creation: it is granted below, with the master password.
+        const level = project ? access.permission : access.permission === 'total' ? 'total' : 'leer';
+        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(!project ? { permission: 'leer' } : level && level !== 'total' ? { permission: level } : {}), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
         if (!s) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `session:${s.id}`);
+        if (level === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) await act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); }
+        if (access.android && level !== 'total') { const unlock = await unlockCore('android'); if (unlock) await act(call('sessions.grantAndroid', { id: s.id, unlock })); }
+        setAccess({ permission: null, android: false });
         if ((await act(call('sessions.send', { id: s.id, text: msg, ...files }))) === undefined) dropPending(mine);
         await refresh().catch(quiet);
         if (!stillHere(ticket)) { leftBehind({ view: 'session', id: s.id }, s.title); return; }
@@ -489,6 +498,25 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // the assistant cannot coordinate with Cursor as its brain (Cursor takes no tools of Orb's): turning the
   // «Orquestador» on moves the brain to Claude (or Codex) and says so, instead of doing nothing.
   const coordinator = ['claude', 'codex'].find((a) => catalog?.some((x) => x.id === a)) ?? null;
+  const setGlobalMode = (p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh());
+  const globalLevel = app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto';
+  const newProject = inProject ?? app?.activeProject?.name ?? null;
+  const fullHere = access.permission === 'total';
+  // a direct chat without a project may only look («Solo lectura») or take «Acceso total al PC»
+  const alone = !orchestrate && !newProject;
+  // The permissions menu of a new chat is the one of a started chat (session.jsx). A level beyond «Auto»/«Preguntar», or the
+  // phone, only exists in a direct chat, so choosing one turns the «Orquestador» off.
+  const newChatAccess = {
+    value: orchestrate || !access.permission ? globalLevel : alone ? (fullHere ? 'total' : 'leer') : access.permission,
+    more: alone ? [{ value: 'leer', label: PERMISSION.leer }, ...(bridge.mobile ? [] : [{ value: 'total', label: t('session.fullPc') }])] : options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total')),
+    ...(alone ? { main: ['leer'] } : {}),
+    extra: bridge.mobile || fullHere ? [] : [{ key: 'android', testid: 'session-android', Icon: Smartphone, label: t('session.android'), tip: access.android ? t('session.androidOn') : t('session.androidOff'), checked: access.android, onToggle: () => { setAccess((a) => ({ ...a, android: !a.android })); if (orchestrate) goDirect(); } }],
+    onChange: (p) => {
+      if (p === 'auto' || p === 'editar') { setAccess((a) => ({ ...a, permission: null })); setGlobalMode(p); return; }
+      setAccess((a) => ({ ...a, permission: p })); if (orchestrate) goDirect();
+    }
+  };
+  const goDirect = async () => { if (await settings({ orchestrate: false })) notify({ title: t('chat.accessDirect'), tone: 'info' }); };
   const toggleOrchestrator = async (checked) => {
     if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk'), danger: true }))) return;
     if (checked && brain.agent === 'cursor') {
@@ -651,8 +679,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
           <div role="group" aria-label={t('session.permissions')} className="flex shrink-0 items-center gap-1.5" data-testid="composer-group-access">
           {/* «+»: attach a file and, on the PC, capture a window (the system's picker) as a picture, as in an agent's chat. */}
           <AttachMenu onAttach={async () => addImages(await bridge.pickAttachments())} onCapture={fullPc() && canCapture() ? capture : null} />
-          {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone). */}
-          <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={(p) => act(call('permissions.setMode', { mode: p === 'auto' ? 'auto' : 'preguntar' }), p === 'auto' ? t('session.autoOn') : t('session.askOn')).then(() => refresh())} />
+          {/* «Auto» / «Preguntar» for the tasks the assistant creates and the new chats (the global level, also from the phone); the other levels and the phone, under «Más opciones», go to the direct chat the first message creates. */}
+          {id == null ? <AutonomySwitch {...newChatAccess} testid="chat-autonomy" /> : <AutonomySwitch value={app?.config?.permissions?.mode === 'preguntar' ? 'editar' : 'auto'} testid="chat-autonomy" onChange={setGlobalMode} />}
           {/* whether a NEW conversation is with the assistant or directly with the agent chosen; a conversation keeps
               the way it started. an icon and a small switch; the tooltip explains it. */}
           <OrchestratorSwitch on={orchestrate} onChange={toggleOrchestrator} name={name} cursor={brain.agent === 'cursor'} locked={id != null} />

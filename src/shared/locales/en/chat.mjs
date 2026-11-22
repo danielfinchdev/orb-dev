@@ -20,6 +20,7 @@ export default {
   'chat.orchestratorCursor': 'With Cursor as the brain you talk to it directly. Turning the Orchestrator on moves {name} to Claude or Codex, which can coordinate the agents.',
   'chat.orchestratorSwitched': '{name} will use {agent} to coordinate: with Cursor it cannot hand out the work.',
   'chat.orchestratorNoBrain': '{name} needs Claude or Codex to coordinate the agents. Install one in Agents.',
+  'chat.accessDirect': 'Access levels and the phone belong to a direct conversation: the Orchestrator is now off.',
   'chat.cursorDirect': 'With Cursor the new conversation is a direct one: Cursor cannot coordinate the agents.',
   'chat.mentionHeader': 'Attach as context (excerpt)',
   'chat.stop': 'Stop',
