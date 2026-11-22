@@ -150,16 +150,18 @@ class LinkEventsTest {
     fun `a resync makes the screens read their state again`() = live { r, c, got ->
         c.start()
         eventually(what = "stream") { r.pc.streamsOpened.get() == 1 }
-        // Both ways the PC may say it: a sealed event and a bare `event: resync` block.
         r.pc.emit("resync", chat(), id = "boot2.0")
         eventually(what = "resync") { got.any { it.name == LinkEvent.RESYNC } }
         assertTrue(got.any { it.name == "board:changed" } && got.any { it.name == "inbox:changed" })
         got.clear()
-        r.pc.raw("event: resync\nid: boot2.1\n\n")
-        eventually(what = "bare resync") { got.any { it.name == LinkEvent.RESYNC } }
+        // An unsealed `event: resync` is anyone on the Wi-Fi: it neither reloads nor moves the resume point.
+        r.pc.raw("event: resync\nid: evil.1\ndata: x\n\n")
+        r.pc.ping()
+        Thread.sleep(200)
+        assertTrue(got.none { it.name == LinkEvent.RESYNC })
         c.reconnectEvents()
         eventually(what = "second stream") { r.pc.streamsOpened.get() == 2 }
-        assertEquals("boot2.1", r.pc.lastEventIds.last())
+        assertEquals("boot2.0", r.pc.lastEventIds.last())
     }
 
     @Test
