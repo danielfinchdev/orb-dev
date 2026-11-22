@@ -238,11 +238,12 @@ test('M2/M3: la pantalla de error del móvil tiene salida y «Vincular con otro 
 
 test('M4: el flujo de eventos del móvil detecta una conexión colgada y vuelve a conectar', () => {
   const web = read('src/ui/lib/web-bridge.js');
-  assert.ok(TIMEOUTS.eventsIdle > 25_000 * 2, 'más que dos pings del PC');
+  assert.ok(TIMEOUTS.eventsIdle > 15_000 * 2, 'más que dos pings del PC');
   assert.match(web, /setTimeout\(\(\) => \{ idle = true; ctrl\.abort\(\); \}, TIMEOUTS\.eventsIdle\)/);
   assert.match(web, /if \(idle\) seen\(false\);/);
   assert.match(web, /if \(ok && session && !live && !connecting\) connect\(\);/, 'al volver el PC, los eventos también');
-  assert.match(read('src/engine/transport/remote.mjs'), /res\.write\(': ping\\n\\n'\)[^\n]*25_000/);
+  assert.match(read('src/engine/transport/remote.mjs'), /res\.write\(': ping\\n\\n'\)[^\n]*PING_MS/);
+  assert.match(read('src/engine/transport/remote-common.mjs'), /PING_MS = [^\n]*15_000/);
 });
 
 test('M5: los avisos del móvil se ofrecen al enlazar y dicen la verdad (en la app, solo con la app viva en segundo plano)', () => {

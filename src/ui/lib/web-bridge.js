@@ -101,7 +101,7 @@ if (!window.orb) {
   const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind, ...(kind === 'events' ? { d: 1 } : {}) }, C.AAD.request(s.id)); };
 
   // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
-  // the PC writes a ping every 25 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
+  // the PC writes a ping every 15 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
   // without a word) means a dead stream: it is dropped, the window hears link:offline and it connects again.
   let stream = null; let live = false; let connecting = false;
   const connect = async (wait = 1000) => {

@@ -4,8 +4,8 @@
 
 // How long each kind of request may take before the next address is tried (ms).
 // A call may do real work on the PC (git, GitHub), so it gets more room than the quick checks.
-// eventsIdle: the live events' stream with nothing at all (not even the PC's ping every 25 s) is taken for dead.
-export const TIMEOUTS = { call: 45_000, me: 8_000, hello: 6_000, pair: 20_000, upload: 60_000, events: 10_000, eventsIdle: 60_000 };
+// eventsIdle: the live events' stream with nothing at all (not even the PC's ping every 15 s) is taken for dead.
+export const TIMEOUTS = { call: 45_000, me: 8_000, hello: 6_000, pair: 20_000, upload: 60_000, events: 10_000, eventsIdle: 40_000 };
 
 // fetch with a time limit, also honouring the caller's own signal. A request that could not connect or ran out of time
 // fails as offline (timeout: true for the second: the PC may have got it, so a request that changes something is not
