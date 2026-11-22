@@ -1,7 +1,7 @@
 // The composer (action slot, reasoning and orchestrator), Settings in six sections
 // and compacting conversations. Loaded last: it also corrects some earlier texts.
 export default {
-  // Reasoning: the brain button and its menu
+  // Reasoning: the agent button and its menu
   'reasoning.xhigh': 'Extra',
   'reasoning.title': 'Reasoning: {level}',
   'reasoning.titleText': 'How much it thinks before answering. More reasoning gives more careful answers and uses more.',

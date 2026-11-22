@@ -60,7 +60,7 @@ class NewChatScreenTest {
         rule.onNodeWithText("api-pagos").assertIsDisplayed()
         rule.onNodeWithText("Sin proyecto").assertIsDisplayed()
         rule.onNodeWithText("Nuevo").assertIsDisplayed()
-        rule.onNodeWithText("Cerebro").assertIsDisplayed()
+        rule.onNodeWithText("Agente y modelo").assertIsDisplayed()
         rule.onNodeWithText("El que usa el PC").assertIsDisplayed()
         rule.onNodeWithText("Cancelar").assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsEnabled()

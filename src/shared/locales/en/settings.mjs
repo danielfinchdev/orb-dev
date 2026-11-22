@@ -26,7 +26,7 @@ export default {
   'settings.motionOn': 'Full animations',
   'settings.motionOff': 'Minimal animations',
   'settings.chatCard': 'Conversation with the assistant',
-  'settings.chatCardDesc': 'Choose the brain, reasoning and Orchestrator in the chat.',
+  'settings.chatCardDesc': 'Choose the agent, reasoning and Orchestrator in the chat.',
   'settings.brainAccount': 'Account the assistant uses',
   'settings.maxTurns': 'Messages per conversation',
   'settings.maxTurnsHint': 'Restarting reduces usage. Tasks and logs are kept.',

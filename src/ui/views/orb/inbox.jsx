@@ -269,7 +269,13 @@ function OrbSheet({ item, onClose }) {
 // ---- a row of the list
 // Memoised: the list is made again on every refresh of the app's state, and hundreds of rows drew again each time (and
 // every row whenever the screen changed). A row draws again when what it shows changes, or when it opens or closes.
-const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false }) {
+// a chat completed a moment ago, still in its place: «Deshacer» puts it back before the list lets it go
+export const undoDone = (item) => act(call(item.kind === 'session' ? 'sidebar.complete' : 'conversations.update', { ...(item.kind === 'session' ? { key: `s${item.id}` } : { id: item.id }), done: false })).then(refreshSoon);
+function UndoDone({ item, className }) {
+  const t = useT();
+  return <button type="button" onClick={() => undoDone(item)} className={cn('text-primary-text hover:bg-accent shrink-0 cursor-pointer rounded-md px-2 py-0.5 text-caption font-medium', className)} data-testid="orb-undo-done">{t('orbchats.undoDone')}</button>;
+}
+const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false, fade = null }) {
   const t = useT();
   const locale = useLocale();
   const active = useStore((s) => isOpen(s.route, item));
@@ -290,11 +296,11 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
     // a chat waiting for the user reads like the mock-up's («Esperando tu aprobación»); what it asks for stays in the tooltip.
     const waitText = needsYou ? t('orbchats.awaiting') : '';
     return (
-      <div className={cn('lazy-row group/row relative rounded-ctl', active ? 'bg-accent' : 'hover:bg-accent')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
+      <div className={cn('lazy-row group/row relative rounded-ctl', fade && 'transition-[opacity,max-height] duration-200 motion-reduce:transition-none', fade === 'on' && 'max-h-16', fade === 'leaving' && 'max-h-0 overflow-hidden opacity-0', active ? 'bg-accent' : 'hover:bg-accent')} data-testid={`orb-row-${item.title}`} data-fade={fade || undefined} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
         <button type="button" onClick={() => openOrbItem(item)} aria-current={active ? 'true' : undefined} className="block w-full min-w-0 cursor-pointer rounded-ctl px-2 py-[7px] text-left" data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
           <span className="flex min-h-5 items-center gap-1.5">
             <span className="grid shrink-0 place-items-center" role="img" aria-label={who || t('orbchats.noProject')} title={who || undefined} data-testid="orb-agent-mark">{!agents[0] && robotSkin(skin) ? <Robot size={16} still /> : <AgentIcon agent={agents[0]} className="size-2.5 opacity-70" />}</span>
-            <span className={cn('min-w-0 flex-1 truncate text-control leading-5', 'font-normal', item.done && 'text-foreground/70')}>{item.title}</span>
+            <span className={cn('min-w-0 flex-1 truncate text-control leading-5', 'font-normal', item.done && 'text-foreground/70', fade && 'text-muted-foreground line-through')}>{item.title}</span>
             {working ? <LoaderCircle className="text-muted-foreground size-3.5 shrink-0 animate-spin" aria-label={t('chats.working')} data-testid="orb-working" /> : null}
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
@@ -319,17 +325,17 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
               )}
           </span>
         </button>
-        <OrbMenu item={item} open={menu} setOpen={setMenu} className="absolute top-[5px] right-2" />
+        {fade ? <UndoDone item={item} className="absolute top-[3px] right-2" /> : <OrbMenu item={item} open={menu} setOpen={setMenu} className="absolute top-[5px] right-2" />}
       </div>
     );
   }
   return (
-    <div className={cn('lazy-row group/row relative flex items-center rounded-xl', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
+    <div className={cn('lazy-row group/row relative flex items-center rounded-xl', fade && 'transition-[opacity,max-height] duration-200 motion-reduce:transition-none', fade === 'on' && 'max-h-24', fade === 'leaving' && 'max-h-0 overflow-hidden opacity-0', active ? 'bg-accent' : 'hover:bg-accent/50')} data-testid={`orb-row-${item.title}`} data-fade={fade || undefined} data-kind={item.kind} data-unread={item.unread || 0} {...press}>
       <button type="button" onClick={() => openOrbItem(item)} className={cn('flex min-w-0 flex-1 cursor-pointer items-center gap-3 px-2.5 text-left', phone ? 'py-2.5' : 'py-2')} data-testid={`item-${item.kind === 'session' ? 's' : 'c'}${item.id}`}>
         <OrbAvatar item={item} size={phone ? 46 : 40} />
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
-            <span className={cn('min-w-0 flex-1 truncate text-card-title compact:text-control', 'font-medium', item.done && 'text-foreground/70')}>{item.title}</span>
+            <span className={cn('min-w-0 flex-1 truncate text-card-title compact:text-control', 'font-medium', item.done && 'text-foreground/70', fade && 'text-muted-foreground line-through')}>{item.title}</span>
             <span className={cn('shrink-0 text-caption tabular-nums', 'text-muted-foreground')}>{time}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">
@@ -348,20 +354,21 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false 
           </span>
         </span>
       </button>
-      {phone ? null : <OrbMenu item={item} open={menu} setOpen={setMenu} className="mr-1" />}
+      {fade ? <UndoDone item={item} className="mr-1" /> : phone ? null : <OrbMenu item={item} open={menu} setOpen={setMenu} className="mr-1" />}
     </div>
   );
-}, (a, b) => a.phone === b.phone && a.showProject === b.showProject && a.onSheet === b.onSheet && a.day === b.day && sameItem(a.item, b.item));
+}, (a, b) => a.phone === b.phone && a.showProject === b.showProject && a.onSheet === b.onSheet && a.day === b.day && a.fade === b.fade && sameItem(a.item, b.item));
 
 // ---- a project's heading: its initials in colour, its name; folds its chats; its ⋯: new chat there, its info
-function ProjectHead({ group, open, phone }) {
+function ProjectHead({ group, open, phone, done = false }) {
   const t = useT();
   const name = group.project;
+  const head = done ? `done-head-${name ?? 'none'}` : `project-head-${name ?? 'none'}`;
   if (!phone) {
     // The PC's heading (the mock-up's .grp): a chevron, the project's 10 px dot, its name, and on hover «+» (its menu).
     return (
       <div className="group/row text-faint-foreground hover:text-foreground flex items-center pr-1">
-        <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-ctl px-2 pt-2.5 pb-[3px] text-left text-caption" data-testid={`project-head-${name ?? 'none'}`}>
+        <CollapsibleTrigger className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 rounded-ctl px-2 pt-2.5 pb-[3px] text-left text-caption" data-testid={head}>
           <ChevronDown className={cn('size-3.5 shrink-0 transition-transform duration-150', !open && '-rotate-90')} />
           {name ? <ProjectIcon name={name} /> : <span className="size-2.5 shrink-0 rounded-full shadow-[inset_0_0_0_1px_var(--faint-foreground)]" aria-hidden="true" />}
           <span className="min-w-0 truncate">{name ?? t('orbchats.noProject')}</span>
@@ -373,7 +380,7 @@ function ProjectHead({ group, open, phone }) {
             <span className="tabular-nums opacity-70">{group.items.length}</span>
           </>}
         </CollapsibleTrigger>
-        {name ? (
+        {name && !done ? (
           <>
           <IconButton small label={t('orbchats.projectNewChat')} className="mt-1.5 opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100 focus-visible:opacity-100" onClick={() => newChat(name)} data-testid={`project-new-${name}`}><Plus /></IconButton>
           <DropdownMenu modal={false}>
@@ -392,7 +399,7 @@ function ProjectHead({ group, open, phone }) {
   }
   return (
     <div className="group/row text-muted-foreground flex items-center pr-1">
-      <CollapsibleTrigger className="hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-micro font-semibold tracking-wide uppercase" data-testid={`project-head-${name ?? 'none'}`}>
+      <CollapsibleTrigger className="hover:text-foreground flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left text-micro font-semibold tracking-wide uppercase" data-testid={head}>
         {name ? <ProjectIcon name={name} size={18} /> : <span className="bg-muted-foreground/30 grid size-[18px] shrink-0 place-items-center rounded-full" aria-hidden="true"><span className="bg-muted-foreground size-1 rounded-full" /></span>}
         <span className="min-w-0 truncate">{name ?? t('orbchats.noProject')}</span>
         {group.waiting ? <span className="bg-warning size-1.5 shrink-0 rounded-full" role="img" aria-label={t('orbchats.awaiting')} /> : group.working ? <span className="bg-primary-text size-1.5 shrink-0 animate-pulse rounded-full" role="img" aria-label={t('chats.working')} /> : null}
@@ -401,7 +408,7 @@ function ProjectHead({ group, open, phone }) {
         {open ? null : <span className="tabular-nums opacity-70">{group.items.length}</span>}
         <ChevronRight className={cn('size-3 shrink-0 opacity-60 transition-transform duration-150', open && 'rotate-90')} />
       </CollapsibleTrigger>
-      {name ? (
+      {name && !done ? (
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
             <button type="button" className={cn('hover:text-foreground hover:bg-accent grid size-7 cursor-pointer place-items-center rounded-md', phone ? '' : 'opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100')} aria-label={t('orbchats.projectMenu', { name })} data-testid={`project-menu-${name}`}><Ellipsis className="size-4" /></button>
@@ -567,6 +574,32 @@ function SortMenu({ filter, setFilter, order, setOrder }) {
 
 const Sub = SectionLabel;
 
+// Chats completed while the list is open stay in their place for a few seconds (struck out, with «Deshacer») and then leave
+// with a short fade, instead of vanishing at once. → { [key]: 'on' | 'leaving' }.
+const LINGER_MS = 6000; const FADE_MS = 220;
+function useLinger(items) {
+  const [linger, setLinger] = useState({});
+  const seen = useRef(null);
+  const timers = useRef(new Map());
+  useEffect(() => () => { for (const id of timers.current.values()) clearTimeout(id); }, []);
+  useEffect(() => {
+    const before = seen.current;
+    seen.current = new Map(items.map((x) => [x.key, Boolean(x.done)]));
+    if (!before) return;
+    const drop = (key) => { clearTimeout(timers.current.get(key)); timers.current.delete(key); setLinger((l) => { if (!(key in l)) return l; const { [key]: _gone, ...rest } = l; return rest; }); };
+    for (const x of items) {
+      if (x.done && before.get(x.key) === false && !timers.current.has(x.key)) {
+        setLinger((l) => ({ ...l, [x.key]: 'on' }));
+        timers.current.set(x.key, setTimeout(() => {
+          setLinger((l) => (x.key in l ? { ...l, [x.key]: 'leaving' } : l));
+          timers.current.set(x.key, setTimeout(() => drop(x.key), FADE_MS));
+        }, LINGER_MS));
+      } else if (!x.done && timers.current.has(x.key)) drop(x.key);
+    }
+  }, [items]);
+  return linger;
+}
+
 export function OrbInbox({ page = false }) {
   const t = useT();
   const phone = page && phoneLayout();
@@ -576,6 +609,7 @@ export function OrbInbox({ page = false }) {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState(FILTER0);
   const [showDone, setShowDone] = useState(false);
+  const linger = useLinger(items);
   const found = useSearch(query);
   const [folded, setFolded] = useFolded();
   const [sheet, setSheet] = useState(null);
@@ -586,7 +620,7 @@ export function OrbInbox({ page = false }) {
   const [frozen, setFrozen] = useState(null);
   const setOrder = (v) => { setOrderState(v); setFrozen(null); try { localStorage.setItem('orb.inbox.order', v); } catch { /* the order is a convenience */ } };
   useEffect(() => { if (order === 'priority' && !frozen && items.length) setFrozen(priorityKeys(items)); }, [order, frozen, items]);
-  const parts = useMemo(() => groupOrb(items, { showDone, filter, order, frozen }), [items, showDone, filter, order, frozen]);
+  const parts = useMemo(() => groupOrb(items, { filter, order, frozen, linger: new Set(Object.keys(linger)) }), [items, filter, order, frozen, linger]);
   // Ctrl+K is named here (the headers carry no magnifier); the key comes from the shortcut table.
   const paletteKey = useKeys().table.get('palette.open')?.key;
   const searchTitle = paletteKey ? `${t('orbchats.search')} (${paletteKey})` : t('orbchats.search');
@@ -603,6 +637,7 @@ export function OrbInbox({ page = false }) {
   // the day: «ayer» and the times of the rows move on at midnight
   const day = useDay();
   const rowProps = { phone, onSheet, day };
+  const fadeOf = (x) => linger[x.key] ?? null;
   const agents = useMemo(() => [...new Set(items.map((x) => x.agent).filter(Boolean))], [items]);
   const shown = useGrowing(parts.pinned.length + parts.groups.reduce((n, g) => n + (folded[g.project ?? ''] ? 0 : g.items.length), 0));
 
@@ -680,7 +715,7 @@ export function OrbInbox({ page = false }) {
           {phone
             ? <div className="text-muted-foreground flex items-center gap-1.5 px-2 py-1.5 text-micro font-semibold tracking-wide uppercase"><Pin className="size-3.5" />{t('chats.pinned')}</div>
             : <div className="text-faint-foreground flex items-center gap-1.5 px-2 pt-2.5 pb-[3px] text-caption"><Pin className="size-3.5" />{t('chats.pinned')}</div>}
-          <div className={cn('grid', phone && 'gap-0.5')}>{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} showProject {...rowProps} />)}</div>
+          <div className={cn('grid', phone && 'gap-0.5')}>{take(parts.pinned).map((x) => <OrbRow key={x.key} item={x} showProject fade={fadeOf(x)} {...rowProps} />)}</div>
         </div>
       ) : null}
       {parts.groups.map((g) => {
@@ -690,8 +725,7 @@ export function OrbInbox({ page = false }) {
           <Collapsible key={id || 'none'} open={open} onOpenChange={(v) => setFolded(id, v)} className={phone ? 'pt-2' : undefined} data-testid={`orb-group-${g.project ?? 'none'}`}>
             {g.flat ? null : <ProjectHead group={g} open={open} phone={phone} />}
             <CollapsibleContent className={cn('grid', phone && 'gap-0.5')}>
-              {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} {...rowProps} />)}
-              {!g.items.length && g.hidden ? <p className="text-muted-foreground px-3 py-1 text-xs">{t('orbchats.showDone', { n: g.hidden })}</p> : null}
+              {(open ? take(g.items) : []).map((x) => <OrbRow key={x.key} item={x} fade={fadeOf(x)} {...rowProps} />)}
             </CollapsibleContent>
           </Collapsible>
         );
@@ -706,6 +740,19 @@ export function OrbInbox({ page = false }) {
           {phone ? null : <ChevronRight className={cn('size-3.5 transition-transform duration-150', showDone && 'rotate-90')} />}
         </button>
       ) : null}
+      {/* the one place for the completed ones: by project, like the open ones, a little dimmer; each opens again from its menu */}
+      {showDone ? parts.completed.map((g) => {
+        const id = `done:${g.project ?? ''}`;
+        const open = !folded[id];
+        return (
+          <Collapsible key={id} open={open} onOpenChange={(v) => setFolded(id, v)} className={cn('opacity-75', phone && 'pt-2')} data-testid={`orb-done-${g.project ?? 'none'}`}>
+            <ProjectHead group={g} open={open} phone={phone} done />
+            <CollapsibleContent className={cn('grid', phone && 'gap-0.5')}>
+              {open ? g.items.map((x) => <OrbRow key={x.key} item={x} {...rowProps} />) : null}
+            </CollapsibleContent>
+          </Collapsible>
+        );
+      }) : null}
     </>
   ); }
 

@@ -9,6 +9,7 @@ export default {
   'orbchats.activity': 'Toda la actividad',
   'orbchats.activityTip': 'Bitácoras › Actividad',
   'orbchats.doneCount': 'Completados · {n}',
+  'orbchats.undoDone': 'Deshacer',
   'orbchats.places': 'Más sitios de Orb',
   'orbchats.noProject': 'Sin proyecto',
   'orbchats.empty': 'Aún no hay chats. Empieza uno con «Nuevo chat».',

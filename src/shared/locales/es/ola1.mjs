@@ -1,7 +1,7 @@
 // El compositor (hueco de acción, razonamiento y orquestador), Ajustes en seis secciones
 // y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
 export default {
-  // Razonamiento: botón del cerebro con su menú
+  // Razonamiento: botón del agente con su menú
   'reasoning.xhigh': 'Extra',
   'reasoning.title': 'Razonamiento: {level}',
   'reasoning.titleText': 'Cuánto piensa antes de responder. A más razonamiento, respuestas más cuidadas y más uso.',
