@@ -145,7 +145,14 @@ test('todo va cifrado; repetir, retrasar o tocar un mensaje no sirve', async () 
   assert.deepEqual(Object.keys(JSON.parse(raw)).sort(), ['c', 'n']);
   // With quotes: base64 never has them, so a random run of letters in the ciphertext (an «Orb» by chance) does not count.
   assert.ok(!raw.includes('"assistantName"') && !raw.includes('"config"'), 'la respuesta no se puede leer por el camino');
-  assert.equal((await p.post('/api/call', box)).status, 401, 'la misma petición dos veces (repetición)');
+  // A call resent with the same nonce (the phone got no answer) is answered with the saved reply, never run again
+  // (test/remote-link-389.test.mjs); any other kind of request with a used nonce is still a replay.
+  const again = await p.post('/api/call', box);
+  assert.equal(again.status, 200, 'la misma llamada dos veces: la respuesta guardada');
+  assert.equal(C.open(p.key, await again.json(), C.AAD.response(p.id)).r, box.n);
+  const meBox = p.box('me', { v: 4 });
+  assert.equal((await p.post('/api/me', meBox)).status, 200);
+  assert.equal((await p.post('/api/me', meBox)).status, 401, 'la misma petición dos veces (repetición)');
   // A request stamped far from the PC's time (a replay, or a phone whose clock is off): refused, but the phone stays
   // paired and gets the PC's time, so its next request, stamped with it, goes through.
   const late = await p.post('/api/call', p.box('call', { method: 'app.state' }, { at: Date.now() - 20 * 60_000 }));
@@ -240,8 +247,9 @@ test('respuesta en directo: deltas al cliente que los pide, el texto entero a lo
           const { value, done } = await reader.read(); if (done) return;
           buf += Buffer.from(value).toString(); let i;
           while ((i = buf.indexOf('\n\n')) >= 0) {
-            const line = buf.slice(0, i); buf = buf.slice(i + 2);
-            if (!line.startsWith('data: ')) continue;
+            // an event is `id: …` then `data: …`
+            const line = buf.slice(0, i).split('\n').find((l) => l.startsWith('data: ')) ?? ''; buf = buf.slice(i + 2);
+            if (!line) continue;
             const e = C.openText(p.key, line.slice(6), C.AAD.event(p.id));
             if (e.e === 'chat:state') { got.states.push(e.p); got.bytes += line.length; }
           }
