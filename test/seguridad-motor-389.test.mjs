@@ -221,3 +221,17 @@ test('10: the window draws the half-done join with its two actions, in both lang
     for (const k of ['tasks.partialJoin', 'tasks.partialJoinClean', 'tasks.undoJoin', 'tasks.retryJoin']) assert.ok(text.includes(`'${k}'`), `${lang} ${k}`);
   }
 });
+
+test('11: a save returns the fingerprint of what it stored, and the dialog runs with the one it saw, never a fresh read', async () => {
+  const { board, call, name } = setup();
+  const s = createSchedule(board, { project: name, title: 'Daily', description: 'check', agent: 'claude', every: 'daily', at_time: '09:00' }, 'orb');
+  const saved = await call('schedules.update', { id: s.id, description: 'check more' }, PHONE);
+  assert.equal(saved.previewHash, (await call('schedules.list', {})).find((x) => x.id === s.id).previewHash);
+  const made = await call('schedules.create', { project: name, title: 'N', description: 'd', every: 'daily', at_time: '10:00' }, PHONE);
+  assert.match(made.previewHash, /^[0-9a-f]{16,}$/);
+  const view = fs.readFileSync(path.resolve('src/ui/views/schedules.jsx'), 'utf8');
+  const runNow = view.slice(view.indexOf('const runNow'), view.indexOf('const zoneField'));
+  assert.match(runNow, /hash: seenHash/);
+  assert.doesNotMatch(runNow, /schedules\.list/);
+  assert.match(view, /setSeenHash\(saved\.previewHash\)/);
+});

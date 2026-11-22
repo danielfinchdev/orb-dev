@@ -56,7 +56,7 @@ test('one dialog creates and edits: unsaved changes, asks before discarding, run
   assert.match(view, /danger: true/);
   assert.match(view, /schedules\.discard\.body/);
   assert.match(view, /data-testid="schedule-dialog-run"/);
-  assert.match(view, /call\('schedules\.run', \{ id: schedule\.id, hash: schedule\.previewHash \}\)/);
+  assert.match(view, /call\('schedules\.run', \{ id: schedule\.id, hash: seenHash }\)/);
   assert.match(view, /if \(dirty && !\(await confirm\(tr\('schedules\.runDirty\.title'\)/, 'with unsaved changes it warns before running what is saved');
   // an edit sends only what changed (a «once» schedule that already ran can still be renamed)
   assert.match(view, /for \(const \[watch, send\] of groups\) if \(changed\(\.\.\.watch\)\)/);

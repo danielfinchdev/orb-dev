@@ -119,6 +119,8 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
   const list = projects ?? [];
   const [first] = useState(() => initialValues(schedule, preset, list, app));
   const [v, setV] = useState(first);
+  // The fingerprint of the schedule as this dialog last saw it (opened or saved): «Ejecutar ahora» sends it, never a fresh read.
+  const [seenHash, setSeenHash] = useState(schedule?.previewHash);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
   const [more, setMore] = useState(() => first.every === 'every_hours' || first.same_chat);
@@ -175,7 +177,7 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
     setBusy(true);
     try {
       const { method, params } = request();
-      if (!editing || Object.keys(params).length > 1) await call(method, params);
+      if (!editing || Object.keys(params).length > 1) { const saved = await call(method, params); if (saved?.previewHash) setSeenHash(saved.previewHash); }
       if (editing) notifyOk(tr('schedules.edit.done'));
       onDone(true);
     } catch (err) { setError(errorText(err)); } finally { setBusy(false); }
@@ -183,7 +185,7 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
   // «Ejecutar ahora» runs what is saved: with unsaved changes it says so first.
   const runNow = async () => {
     if (dirty && !(await confirm(tr('schedules.runDirty.title'), tr('schedules.runDirty.body'), { ok: tr('schedules.runNow'), tone: 'primary' }))) return;
-    await act(call('schedules.run', { id: schedule.id, hash: schedule.previewHash }), tr('schedules.run.done'));
+    await act(call('schedules.run', { id: schedule.id, hash: seenHash }), tr('schedules.run.done'));
   };
   const zoneField = (
     <Field label={tr('schedules.tz')}>
