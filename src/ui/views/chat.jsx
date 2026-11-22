@@ -481,8 +481,21 @@ export function ChatView({ route, onConversation, project: inProject }) {
         const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(!project ? { permission: 'leer' } : level && level !== 'total' ? { permission: level } : {}), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
         if (!s) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `session:${s.id}`);
-        if (level === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) await act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); }
-        if (access.android && level !== 'total') { const unlock = await unlockCore('android'); if (unlock) await act(call('sessions.grantAndroid', { id: s.id, unlock })); }
+        // One unlock (5 minutes) covers both grants. If a grant the user asked for is not given, the message is not sent: it
+        // goes back to the box and the chat already made stays at the lower level.
+        const grants = [];
+        if (level === 'total') grants.push(['fullAccess', 'sessions.grantTotal']);
+        if (access.android && !(!project && level === 'total')) grants.push(['android', 'sessions.grantAndroid']);
+        for (const [action, method] of grants) {
+          const unlock = await unlockCore(action);
+          if (!unlock || (await act(call(method, { id: s.id, unlock }))) === undefined) {
+            dropPending(mine); setAccess({ permission: null, android: false });
+            notify({ title: t('chat.accessNotGiven'), tone: 'warning' });
+            if (!moved()) giveBack();
+            await refresh().catch(quiet);
+            return;
+          }
+        }
         setAccess({ permission: null, android: false });
         if ((await act(call('sessions.send', { id: s.id, text: msg, ...files }))) === undefined) dropPending(mine);
         await refresh().catch(quiet);
@@ -516,7 +529,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
       setAccess((a) => ({ ...a, permission: p })); if (orchestrate) goDirect();
     }
   };
-  const goDirect = async () => { if (await settings({ orchestrate: false })) notify({ title: t('chat.accessDirect'), tone: 'info' }); };
+  const goDirect = async () => { if (await settings({ orchestrate: false })) notify({ title: t('chat.accessDirect'), tone: 'info' }); else setAccess({ permission: null, android: false }); };
   const toggleOrchestrator = async (checked) => {
     if (!checked && !(await confirm(t('chat.freeMode'), t('chat.freeModeBody', { name }), { ok: t('chat.freeModeOk'), danger: true }))) return;
     if (checked && brain.agent === 'cursor') {

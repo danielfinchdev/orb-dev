@@ -85,3 +85,11 @@ test('35/40: the pause button is hidden until two agents work at once, and says 
   assert.match(fn, /s\.sessions\.filter\(\(x\) => x\.status === 'running'\)/);
   assert.match(locale('es'), /'bar\.pauseText': 'Pausa a todos los agentes a la vez\./);
 });
+
+test('43: a refused grant stops the first message and keeps the draft', () => {
+  const chat = src('views', 'chat.jsx');
+  assert.match(chat, /chat\.accessNotGiven/);
+  assert.match(chat, /grants\.push\(\['android', 'sessions\.grantAndroid'\]\)/);
+  assert.match(chat, /access\.android && !\(!project && level === 'total'\)/, 'the phone is kept next to «Total» when there is a project');
+  assert.match(chat, /else setAccess\(\{ permission: null, android: false \}\)/);
+});

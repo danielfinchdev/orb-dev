@@ -20,6 +20,7 @@ export default {
   'chat.orchestratorCursor': 'Con Cursor como agente hablas directamente con él. Al activar el Orquestador, {name} pasa a Claude o Codex, que sí coordinan a los agentes.',
   'chat.orchestratorSwitched': '{name} usará {agent} para coordinar: con Cursor no puede repartir el trabajo.',
   'chat.orchestratorNoBrain': '{name} necesita Claude o Codex para coordinar a los agentes. Instala uno en Agentes.',
+  'chat.accessNotGiven': 'No se ha dado el acceso pedido: el mensaje no se ha enviado. Elige otro nivel o vuelve a intentarlo.',
   'chat.accessDirect': 'Los niveles de acceso y el móvil son de una conversación directa: el Orquestador se ha apagado.',
   'chat.cursorDirect': 'Con Cursor la conversación nueva es directa: Cursor no puede coordinar a los agentes.',
   'chat.mentionHeader': 'Adjuntar como contexto (extracto)',
