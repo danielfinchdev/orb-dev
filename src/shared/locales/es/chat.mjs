@@ -120,7 +120,7 @@ export default {
   'brain.warnUsed': 'Esta cuenta lleva el {pct} % de su uso: a este ritmo puede agotarse pronto.',
   // barra superior del chat (solo iconos, con su globo)
   'bar.pause': 'Pausar tareas',
-  'bar.pauseText': 'Las tareas en curso terminan; las nuevas esperan hasta que reanudes.',
+  'bar.pauseText': 'Pausa a todos los agentes a la vez. Los que ya trabajan terminan lo suyo; las tareas nuevas esperan hasta que reanudes.',
   'bar.resume': 'Reanudar tareas',
   'bar.resumeText': 'Inicia las tareas que estaban en espera.',
   'bar.games': 'Minijuegos',

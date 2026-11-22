@@ -120,7 +120,7 @@ export default {
   'brain.warnUsed': 'This account is at {pct}% of its usage: at this pace it may run out soon.',
   // the chat's top bar (icons only, with their bubble)
   'bar.pause': 'Pause tasks',
-  'bar.pauseText': 'Running tasks finish; new ones wait until you resume.',
+  'bar.pauseText': 'Pauses all agents at once. The ones already working finish what they are doing; new tasks wait until you resume.',
   'bar.resume': 'Resume tasks',
   'bar.resumeText': 'Starts the tasks that were waiting.',
   'bar.games': 'Mini-games',

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { ROOT } from './helpers.mjs';
 
 const src = (...p) => fs.readFileSync(path.join(ROOT, 'src', 'ui', ...p), 'utf8');
+const locale = (lang) => fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', lang, 'chat.mjs'), 'utf8');
 
 test('42: the composer shows the orchestrator icon, lit when on and dim when off', () => {
   const chat = src('views', 'chat.jsx');
@@ -74,4 +75,13 @@ test('52: «cerebro» / «brain» is nowhere in the texts the user reads, on the
     }
   }
   assert.match(fs.readFileSync(path.join(ROOT, 'src', 'shared', 'locales', 'es', 'chat.mjs'), 'utf8'), /'brain\.title': 'Agente y modelo'/);
+});
+
+test('35/40: the pause button is hidden until two agents work at once, and says it pauses them all', () => {
+  const bar = src('components', 'conversation', 'bar.jsx');
+  const fn = bar.slice(bar.indexOf('export function BarPause'), bar.indexOf('export function BarHeading'));
+  assert.match(bar, /export const WORKING_MIN = 2;/);
+  assert.match(fn, /if \(!paused && working < WORKING_MIN\) return null;/);
+  assert.match(fn, /s\.sessions\.filter\(\(x\) => x\.status === 'running'\)/);
+  assert.match(locale('es'), /'bar\.pauseText': 'Pausa a todos los agentes a la vez\./);
 });

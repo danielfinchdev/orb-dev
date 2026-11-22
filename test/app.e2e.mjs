@@ -511,7 +511,7 @@ try {
   // The pill says who answers (assistant and model); the pickers for model and folder live in the composer, not in the bar.
   assert.match(await win.locator('[data-testid=orb-chat-head]').innerText(), /Orbe · Opus/, 'la píldora dice quién responde');
   assert.equal(await win.locator('main header [data-testid=brain-picker], main header [data-testid=project-picker]').count(), 0, 'el modelo y la carpeta se eligen en el compositor');
-  await win.hover('[data-testid=bar-pause]');
+  await win.hover('[data-testid=orb-chat-more]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
   await shot('11b-barra-globo');
