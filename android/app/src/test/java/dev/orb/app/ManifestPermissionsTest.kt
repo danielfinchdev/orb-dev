@@ -60,6 +60,15 @@ class ManifestPermissionsTest {
     }
 
     // An empty affinity keeps another app's activity from being slipped into Orb's task (task hijacking on Android 7-10).
+    /** Pan or no mode at all would lift the whole window while `imePadding` also lifts the box: a gap above the keyboard. */
+    @Test fun theEntryActivityResizesForTheKeyboardSoOnlyTheInsetsMoveTheBox() {
+        val info = context.packageManager.getActivityInfo(android.content.ComponentName(context, "dev.orb.app.MainActivity"), 0)
+        assertEquals(
+            android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE,
+            info.softInputMode and android.view.WindowManager.LayoutParams.SOFT_INPUT_MASK_ADJUST,
+        )
+    }
+
     @Test fun theEntryActivityHasAnEmptyTaskAffinity() {
         // Robolectric reports an empty affinity as null, so the manifest source is what is checked.
         val xml = java.io.File("src/main/AndroidManifest.xml").readText()
