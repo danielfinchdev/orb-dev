@@ -49,6 +49,7 @@ import { baseName, cn } from '@/lib/utils.js';
 import { DECISION, AGENT } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { AutonomySwitch } from '@/components/autonomy-switch.jsx';
+import { OrchestratorIcon } from '@/components/orchestrator-icon.jsx';
 import { keepSame } from '@/lib/memo.js';
 import { useAutoScroll, Composer } from '@/components/conversation/composer.jsx';
 import { MessageBox, TurnActions } from '@/components/conversation/message-box.jsx';
@@ -269,7 +270,7 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   return (
     <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
       <label className={cn('flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
-        <span className={cn('max-sm:hidden', on ? 'text-foreground' : 'text-muted-foreground')}>{t('chat.orchestrator')}</span>
+        <OrchestratorIcon className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} />
         {/* locked is a fixed fact of the conversation, not a switched-off control: it keeps the full accent (no dimming) */}
         <Switch size="sm" className="disabled:opacity-100" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
