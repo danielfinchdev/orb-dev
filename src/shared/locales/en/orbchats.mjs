@@ -8,6 +8,7 @@ export default {
   'orbchats.activity': 'All activity',
   'orbchats.activityTip': 'Logbooks › Activity',
   'orbchats.doneCount': 'Completed · {n}',
+  'orbchats.undoDone': 'Undo',
   'orbchats.places': 'More places in Orb',
   'orbchats.noProject': 'No project',
   'orbchats.empty': 'No chats yet. Start one with «New chat».',
