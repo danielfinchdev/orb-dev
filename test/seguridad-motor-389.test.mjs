@@ -199,3 +199,14 @@ test('8b: the half-done join is only settled while its join task is still the on
   await assert.rejects(b.ctx.call('tasks.retryJoin', { id: b.ctx.task.id }, PHONE), /unión a medias|half-done/i);
   assert.ok(fs.existsSync(path.join(b.ctx.dir, 'c.txt')));
 });
+
+test('9: an unapproved schedule runs only with its fingerprint, and approving carries no other change', async () => {
+  const { board, call, name } = setup();
+  const s = createSchedule(board, { project: name, title: 'Daily', description: 'check things', agent: 'claude', every: 'daily', at_time: '09:00' }, 'orb');
+  const hash = (await call('schedules.list', {})).find((x) => x.id === s.id).previewHash;
+  await assert.rejects(call('schedules.run', { id: s.id }, PHONE), /huella|fingerprint/i);
+  await assert.rejects(call('schedules.run', { id: s.id, hash: 'old' }, PHONE), /cambiado|changed/i);
+  await assert.rejects(call('schedules.update', { id: s.id, approve: true, hash, description: 'other' }, PHONE), /sola|on its own/i);
+  assert.equal((await call('schedules.list', {})).find((x) => x.id === s.id).approved, false);
+  await call('schedules.run', { id: s.id, hash }, PHONE);
+});

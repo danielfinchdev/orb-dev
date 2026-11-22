@@ -522,6 +522,7 @@ export default {
   "msg.schedules.noProject": "project {project} does not exist",
   "msg.schedules.needsHash": "approving needs the fingerprint of what you see; open it again and approve once more",
   "msg.schedules.changedSince": "this scheduled task changed since you opened it; open it again to review it",
+  "msg.schedules.approveAlone": "a scheduled task is approved on its own, without changing anything else at the same time",
   "msg.schedules.noSchedule": "that scheduled task no longer exists",
   "msg.schedules.once": "once, on {date} at {time}",
   "msg.schedules.runTitle": "{title} (scheduled)",

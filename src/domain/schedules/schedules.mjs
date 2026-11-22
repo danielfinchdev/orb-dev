@@ -115,6 +115,8 @@ export function updateSchedule(board, id, patch, { desktop = false } = {}) {
   const fields = {};
   if (patch.enabled !== undefined) fields.enabled = Number(Boolean(patch.enabled));
   if (patch.approved) {
+    // The fingerprint covers the stored schedule, so an approval that also edits it would approve text nobody saw.
+    if (patch.enabled !== undefined || patch.title !== undefined || patch.description !== undefined || EDITABLE.some((k) => given(patch, k))) throw new Error(tr('msg.schedules.approveAlone'));
     if (typeof patch.hash !== 'string' || !patch.hash) throw new Error(tr('msg.schedules.needsHash'));
     if (patch.hash !== scheduleHash(s)) throw new Error(tr('msg.schedules.changedSince'));
     fields.approved = 1;

@@ -183,7 +183,7 @@ function ScheduleDialog({ schedule = null, preset = {}, onDone }) {
   // «Ejecutar ahora» runs what is saved: with unsaved changes it says so first.
   const runNow = async () => {
     if (dirty && !(await confirm(tr('schedules.runDirty.title'), tr('schedules.runDirty.body'), { ok: tr('schedules.runNow'), tone: 'primary' }))) return;
-    await act(call('schedules.run', { id: schedule.id }), tr('schedules.run.done'));
+    await act(call('schedules.run', { id: schedule.id, hash: schedule.previewHash }), tr('schedules.run.done'));
   };
   const zoneField = (
     <Field label={tr('schedules.tz')}>
@@ -300,7 +300,7 @@ function ScheduleRow({ s, load, catalog, onEdit }) {
   const last = s.lastTask;
   const next = s.enabled && s.approved ? when(s.next_run) : spent(s) ? tr('schedules.spent') : tr('schedules.pausedBadge');
   const lastDate = s.last_run ? new Date(s.last_run).toLocaleString(currentLocale(), { day: 'numeric', month: 'short' }) : null;
-  const run = () => act(call('schedules.run', { id: s.id }), tr('schedules.run.done')).then(load);
+  const run = () => act(call('schedules.run', { id: s.id, hash: s.previewHash }), tr('schedules.run.done')).then(load);
   return (
     <ListRow data-testid="schedule-row" className={cn('flex-wrap rounded-none [&>.main]:basis-[16rem]', off && 'off')}
       leading={<ProjectIcon name={s.project} small />}
@@ -454,7 +454,7 @@ function SchedulesLegacy() {
                 <div className="flex items-center gap-2">
                   {!s.approved ? <Button size="sm" onClick={() => act(call('schedules.update', { id: s.id, approve: true, hash: s.previewHash }), t('schedules.approve.done')).then(load)}><Check />{t('schedules.approve')}</Button>
                     : spent(s) ? null : <Switch checked={s.enabled} onCheckedChange={(enabled) => act(call('schedules.update', { id: s.id, enabled })).then(load)} aria-label={t('schedules.enabled')} />}
-                  <BubbleTip title={t('schedules.runNow')}><Button size="icon-sm" variant="ghost" aria-label={t('schedules.runNow')} onClick={() => act(call('schedules.run', { id: s.id }), t('schedules.run.done')).then(load)}><Play /></Button></BubbleTip>
+                  <BubbleTip title={t('schedules.runNow')}><Button size="icon-sm" variant="ghost" aria-label={t('schedules.runNow')} onClick={() => act(call('schedules.run', { id: s.id, hash: s.previewHash }), t('schedules.run.done')).then(load)}><Play /></Button></BubbleTip>
                   {/* deleting a schedule is this PC's (src/domain/security/permissions.mjs). */}
                   {bridge.mobile ? null : <BubbleTip title={t('schedules.remove')}><Button size="icon-sm" variant="danger" aria-label={t('schedules.remove')} onClick={() => removeSchedule(s, load, t)}><Trash2 /></Button></BubbleTip>}
                 </div>

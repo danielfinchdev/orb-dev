@@ -361,7 +361,15 @@ ${block}` : ''}` });
       ...(p.autonomy !== undefined ? { autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', null) } : {})
     }, { desktop: principal?.channel === 'desktop' }),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
-    'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
+    // An unapproved schedule runs only with the fingerprint of what was seen, as approving it does.
+    'schedules.run': ({ id, hash }) => {
+      const s = getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled'));
+      if (!s.approved) {
+        if (typeof hash !== 'string' || !hash) fail(tr('msg.schedules.needsHash'));
+        if (hash !== scheduleHash(s)) fail(tr('msg.schedules.changedSince'));
+      }
+      return runSchedule(board, s, 'usuario');
+    },
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
