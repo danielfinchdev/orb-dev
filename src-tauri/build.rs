@@ -40,6 +40,7 @@ fn main() {
     "app_zoom_step",
     "window_act",
     "window_drag",
+    "window_ready",
     "app_pick_folder",
     "app_pick_program",
     "app_pick_files",
