@@ -5,6 +5,8 @@
 import { tempHome, until, startEngine, fakeLog, wait, railsToken } from './helpers.mjs';
 import { test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
+const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 
 let t; let engine;
 async function fresh(patch = {}) {
@@ -20,15 +22,20 @@ const status = async (call, id, wanted, ms = 20000) => until(async () => { const
 
 test('límite de uso: la tarea queda «limitada» y sigue sola al reiniciarse el uso', async () => {
   const { call } = await fresh();
-  // A wide window (5 s) and long waits: on a busy machine (the whole suite at once) the task may take a while to start,
-  // and with a short window it could reach «limited» and resume between two looks.
-  const task = await call('tasks.create', { project: 'web', title: 'Con límite', description: 'LIMITE 5000', agent: 'claude' });
+  // The reset is one hour away, so the test cannot miss «limited» however slowly a loaded machine starts the task; the
+  // reset itself is fast-forwarded below by moving the stored dates into the past instead of waiting for real time.
+  const task = await call('tasks.create', { project: 'web', title: 'Con límite', description: 'LIMITE', agent: 'claude' });
   const limited = await status(call, task.id, ['limited'], 60_000);
   assert.ok(Date.parse(limited.limited_until) > Date.now() - 1000, 'guarda cuándo se reinicia');
   assert.match(limited.result, /ha alcanzado su límite de uso\. La tarea se reanudará automáticamente a las/);
   assert.ok((await call('chat.list')).some((m) => m.body.includes(`#${task.id}`) && /se reanudará automáticamente/.test(m.body)));
   const usage = (await call('usage.get')).find((u) => u.account === 'claude');
   assert.ok(usage.cooldownUntil > Date.now(), 'la cuenta no recibe nada más hasta el reinicio');
+  const db = new DatabaseSync(path.join(t.home, 'core', 'datos', 'orb.db'));
+  try {
+    db.prepare('UPDATE tasks SET limited_until = ? WHERE id = ?').run(new Date(Date.now() - 1000).toISOString(), task.id);
+    db.prepare("DELETE FROM settings WHERE key IN ('cooldown:claude', 'cooldown_reason:claude', 'cooldown_at:claude', 'rate:claude', 'rates:claude')").run();
+  } finally { db.close(); }
   const done = await status(call, task.id, ['done'], 60_000);
   assert.ok(kinds(done).includes('task.limit_reset') && kinds(done).includes('task.resumed'));
   assert.equal(done.limited_until, null);
