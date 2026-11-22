@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { gitAsync, repoRootAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { integrateIntoAsync } from '../../domain/tasks/checkpoints.mjs';
-import { lastLaunchId, mergedByHand } from './run-id.mjs';
+import { lastLaunchId, mergedByHand, joinAbandoned } from './run-id.mjs';
 import { oneLine } from '../../shared/text.mjs';
 
 export class FoldersPart {
@@ -122,6 +122,24 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     board.event(task.id, 'orb', 'integrate.conflict', `conflicto en ${out.conflicts.slice(0, 20).join(', ')}: lo une la tarea #${join.id}`);
     board.notice(tr('msg.scheduler.joinConflict', { id: task.id, join: join.id, list: oneLine(out.conflicts.slice(0, 5).join(', '), 200) }), 'warning');
   }
+  // A hand join that was given up (its task failed or was cancelled) may have written part of the work in the folder. This
+  // puts the folder back as it was before that join task (what was changed since stays, as in any undo) and, with `retry`,
+  // joins the copy again. Without the cleanup first, a retry would pile a second join over the half-done one.
+  async settleJoin(taskId, { retry = false } = {}) {
+    const { board } = this;
+    const task = board.task(taskId); const partial = board.settingJson(`joinpartial:${taskId}`);
+    if (!task || !partial || !joinAbandoned(board, taskId)) throw new Error(tr('msg.scheduler.noPartialJoin'));
+    if (retry && !task.branch) throw new Error(tr('msg.scheduler.noBranch'));
+    const wrote = Boolean(board.settingJson(`checkpoint:${partial.by}`)?.before);
+    if (wrote) await this.undo(partial.by); // refuses while something runs in the folder; nothing else changes then
+    if (retry) {
+      board.settingJson(`joinpartial:${taskId}`, null);
+      board.settingJson(`integrate:${taskId}`, { base: partial.base });
+      board.event(taskId, 'usuario', 'integrate.retry', 'unión a mano deshecha; se vuelve a intentar');
+    } else board.event(taskId, 'usuario', 'integrate.cleaned', 'unión a mano deshecha; el trabajo sigue en su rama');
+    board.changed('tasks');
+    return { cleaned: wrote, retried: retry };
+  }
   // The task that joins a conflicting copy by hand: once it is done, the copy goes and the dependents may start.
   joinedBy(task, info) {
     const by = this.board.task(info.by);
@@ -130,7 +148,10 @@ No hagas commit, merge, rebase ni cambies de rama: deja los cambios en los archi
     if (!by || ['cancelled', 'failed'].includes(by.status)) {
       this.board.settingJson(`integrate:${task.id}`, null); if (by) this.board.setting(`join_task:${by.id}`, '');
       this.board.event(task.id, 'orb', 'integrate.skipped', by ? `la tarea #${by.id} que la unía terminó en ${by.status}` : `la tarea #${info.by} que la unía ya no existe`);
-      this.board.notice(tr('msg.scheduler.joinGaveUp', { id: task.id, join: info.by, branch: task.branch ?? '?' }), 'warning');
+      // What the join task already wrote stays in the folder, mixed with the rest: kept so it can be cleaned up or tried again.
+      const wrote = Boolean(by && this.board.settingJson(`checkpoint:${by.id}`)?.before);
+      this.board.settingJson(`joinpartial:${task.id}`, { by: info.by, base: info.base ?? null });
+      this.board.notice(tr(wrote ? 'msg.scheduler.joinGaveUpPartial' : 'msg.scheduler.joinGaveUp', { id: task.id, join: info.by, branch: task.branch ?? '?' }), 'warning');
       return;
     }
     if (by.status !== 'done' || by.pid) return;

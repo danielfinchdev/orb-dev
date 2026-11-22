@@ -56,6 +56,15 @@ function assertPointCurrent(board, taskId, { files = true } = {}) {
   if (!cp?.after || !current || !files) return;
   if (runOfAfter(board, taskId, cp, current) == null) fail(tr('msg.undo.runUnknown'));
 }
+// Where a join of this task's copy stands, for the phone and the window: 'byhand' (a task joins it in the folder now),
+// 'partial' (that task failed or was cancelled; joinWrote says whether it left files in the folder).
+function joinStateOf(board, taskId) {
+  if (joinAbandoned(board, taskId)) {
+    const partial = board.settingJson(`joinpartial:${taskId}`);
+    return { joinState: 'partial', joinTask: partial?.by ?? null, joinWrote: Boolean(partial && board.settingJson(`checkpoint:${partial.by}`)?.before), joinSettleable: Boolean(partial) };
+  }
+  return board.settingJson(`integrate:${taskId}`)?.by ? { joinState: 'byhand', joinTask: board.settingJson(`integrate:${taskId}`).by } : { joinState: null };
+}
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
     if (name === 'plan') return planTurn(sessions, s.id, args);
@@ -108,7 +117,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
       const now = board.projectPathNow(d) ?? null;
       const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
-      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), ...joinStateOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -213,6 +222,9 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       return accept([tid]);
     },
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
+    // A hand join left half-done (tasks.get › joinState 'partial'): put the folder back as it was before it, and optionally try again.
+    'tasks.undoJoin': ({ id }) => scheduler.settleJoin(int(id, 'tarea')),
+    'tasks.retryJoin': ({ id }) => scheduler.settleJoin(int(id, 'tarea'), { retry: true }),
 
     // «/goal», «/plan», «/review» and «/debug» (modes.mjs): none of them changes the chat's permission.
     'sessions.modes': ({ id }) => { const sid = str(id, 'conversación', 64); sessions.must(sid); return { goal: goalOf(board, sid), debug: debugOn(board, sid) }; },

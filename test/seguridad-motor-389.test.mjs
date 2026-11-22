@@ -144,3 +144,29 @@ test('7: undoing a joined task keeps later work in the folder', async () => {
   assert.equal(read('b.txt'), 'nuevo\nmas trabajo\n');
   assert.equal(read('a.txt'), 'dos\ntrabajo posterior\n');
 });
+
+test('8: a hand join that failed halfway shows as partial and can be cleaned up or tried again', async () => {
+  const ctx = setup(); const { board, task, sched, dir, project, call } = ctx;
+  const info = await conflicted(ctx);
+  assert.equal((await call('tasks.get', { id: task.id }, PHONE)).joinState, 'byhand');
+  // the join task wrote part of the work in the folder, then failed
+  sched.folderWorkspace(board.task(info.by), project);
+  fs.writeFileSync(path.join(dir, 'c.txt'), 'half\n');
+  board.patch(info.by, { status: 'failed' }, 'orb', 'task.failed');
+  sched.joinedBy(board.task(task.id), info);
+  const got = await call('tasks.get', { id: task.id }, PHONE);
+  assert.equal(got.joinState, 'partial'); assert.equal(got.joinWrote, true); assert.equal(got.joinTask, info.by);
+  // not settled for a join that is not half-done
+  await assert.rejects(call('tasks.undoJoin', { id: ctx.board.createTask({ project: ctx.name, title: 'x', description: 'y', agent: 'claude' }, 'usuario').id }, PHONE), /unión a medias|half-done/i);
+  const out = await call('tasks.undoJoin', { id: task.id }, PHONE);
+  assert.equal(out.cleaned, true);
+  assert.equal(fs.existsSync(path.join(dir, 'c.txt')), false, 'what the join wrote is gone');
+  const after = await call('tasks.get', { id: task.id }, PHONE);
+  assert.equal(after.joinState, 'partial'); assert.equal(after.joinWrote, false);
+  // try again: the copy is joined once more (it conflicts again, so a new join task takes it)
+  await call('tasks.retryJoin', { id: task.id }, PHONE);
+  await sched.integratePending();
+  const again = board.settingJson(`integrate:${task.id}`);
+  assert.ok(again?.by && again.by !== info.by, 'a new join task');
+  assert.equal((await call('tasks.get', { id: task.id }, PHONE)).joinState, 'byhand');
+});
