@@ -226,6 +226,8 @@ class DirectChatViewModel(
     }
 
     private fun onEvent(ev: LinkEvent) {
+        // The PC could not replay what was missed: the open conversation is read again whole.
+        if (ev.name == LinkEvent.RESYNC) { reloads.trySend(Unit); viewModelScope.launch { refreshApprovals() }; return }
         val o = ev.payload as? JsonObject ?: return
         when (ev.name) {
             "session:delta" -> if (o.str("id") == session) {

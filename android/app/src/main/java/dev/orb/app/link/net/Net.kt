@@ -15,7 +15,7 @@ fun interface Clock {
 /**
  * How long each kind of request may take before the next address is tried (ms), as `TIMEOUTS` in the phone client's
  * net.js. A call may do real work on the PC (git, GitHub), so it gets more room than the quick checks.
- * [eventsIdle]: a live stream with no bytes at all (not even the PC's ping every 25 s) is taken for dead.
+ * [eventsIdle]: a live stream with no bytes at all (not even the PC's ping every 15 s) is taken for dead.
  */
 data class Timeouts(
     val call: Long = 45_000,
@@ -24,13 +24,18 @@ data class Timeouts(
     val pair: Long = 20_000,
     val upload: Long = 60_000,
     val events: Long = 10_000,
-    val eventsIdle: Long = 60_000,
+    val eventsIdle: Long = 40_000,
     // A connection that never opens fails fast whatever the request's own limit is.
     val connect: Long = 4_000,
 )
 
-/** The pause before trying again while the PC cannot be reached: 3 s, 6 s, 12 s... up to 30 s. */
-fun retryDelay(attempt: Int): Long = minOf(30_000L, 3_000L * (1L shl attempt.coerceIn(0, 20)))
+private val RETRY_STEPS_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
+
+/** The pause before trying again while the PC cannot be reached: 1, 2, 5, 10 s, then 30 s for as long as it takes. */
+fun retryDelay(attempt: Int): Long = RETRY_STEPS_MS[attempt.coerceIn(0, RETRY_STEPS_MS.size - 1)]
+
+/** How long without a link before the phone stops saying «connecting» and tells the person what is going on. */
+const val STUCK_AFTER_MS = 30_000L
 
 /** What a [LinkClient] request can fail with. The PC's own words ([Refused.error]) are shown as they come. */
 sealed class LinkError {
@@ -112,7 +117,8 @@ fun LinkClient.pcDisplayName(state: ConnectionState = connection.value): String?
 sealed class ConnectionState {
     data object Connecting : ConnectionState()
     data class Online(val base: String, val pcName: String?, val versions: PcVersions) : ConnectionState()
-    data class Offline(val nextRetryAt: Long?, val lastSeen: Long?) : ConnectionState()
+    /** [since]: when the link was lost (first failure in a row), so a screen can tell «still trying» from «something is wrong». */
+    data class Offline(val nextRetryAt: Long?, val lastSeen: Long?, val since: Long? = null) : ConnectionState()
     data object UpdateApp : ConnectionState()
     data object UpdatePc : ConnectionState()
     data object Unlinked : ConnectionState()
@@ -124,8 +130,39 @@ data class LinkEvent(val name: String, val payload: JsonElement) {
     companion object {
         /** Synthetic: a streamed answer lost its place; the conversation (payload `{conversation}`) must be read again. */
         const val RELOAD = "orb:reload"
+
+        /** Synthetic: the PC could not replay what this phone missed, so everything on screen must be read again. */
+        const val RESYNC = "orb:resync"
     }
 }
 
 /** What `me` says about the linked PC. */
 data class PcInfo(val device: String?, val name: String?, val pc: String?, val versions: PcVersions, val methods: Set<String>?, val raw: JsonObject)
+
+/** The words a path's last failure is told with; plain, because they are shown (and never carry an address, key or body). */
+object PathError {
+    const val UNREACHABLE = "unreachable"
+    const val NO_ANSWER = "no-answer"
+    const val REFUSED = "refused"
+}
+
+/** What this phone knows of one address of the PC: when it last answered and why the last try failed (null when it has not). */
+data class PathStatus(val url: String, val lastOkAt: Long?, val lastTryAt: Long?, val lastError: String?)
+
+/** One door of the PC as the PC itself reports it in `me.entradas`: `{ tipo, url, abierta, ultimoOk, ultimoError }`. */
+data class PcEntry(val type: String, val url: String?, val open: Boolean?, val lastOk: Long?, val lastError: String?) {
+    companion object {
+        /** Anything that is not a list of such objects is an empty list: an older PC says nothing and a wrong one must not break the screen. */
+        fun parse(raw: JsonElement?): List<PcEntry> = (raw as? kotlinx.serialization.json.JsonArray).orEmpty().mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            val type = o["tipo"].str() ?: return@mapNotNull null
+            PcEntry(
+                type = type.take(16),
+                url = o["url"].str()?.take(200),
+                open = (o["abierta"] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { !it.isString }?.content?.let { it == "true" },
+                lastOk = o["ultimoOk"].num()?.toLong(),
+                lastError = o["ultimoError"].str()?.let { oneLine(it, 80) }?.ifEmpty { null },
+            )
+        }
+    }
+}
