@@ -80,6 +80,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     deleteProject: (name, unlock, step) => invoke('app_delete_project', { name: String(name ?? ''), unlock: text(unlock), step: ['retry', 'forever', 'cancel'].includes(step) ? step : null }),
     showBrowser: () => invoke('app_show_browser'),
     zoom: (value) => invoke('app_zoom', { value: value ?? null }),
+    // The window is created hidden: this shows it once the page has a first screen (Rust command window_ready).
+    windowReady: () => invoke('window_ready'),
     windowControls: {
       act: windowAct,
       onState: (fn) => {

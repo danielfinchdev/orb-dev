@@ -13,7 +13,7 @@ import { AGENT } from '@/lib/labels.js';
 import { act, call, refresh, bridge, go, openTerminal, closeSettings, fullPc, runTest, darkOnlySkin, lightOnlySkin, useStore } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
-import { LANGUAGES } from '../../../shared/i18n.mjs';
+import { LANGUAGES } from '../../../shared/i18n-core.mjs';
 import { play } from '@/lib/sounds.js';
 import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';

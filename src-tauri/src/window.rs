@@ -18,6 +18,7 @@ pub struct Ui {
   hidden: bool,
   closing: AtomicBool,
   maximized: AtomicBool,
+  shown: AtomicBool,
 }
 
 /// What a test or measurement build (`--features e2e`) may ask: the window's DevTools port and a window that is never
@@ -42,15 +43,25 @@ pub fn e2e(separate_data: bool) -> E2e {
   E2e { cdp_port: None, hidden: false }
 }
 
+/// How long the window stays hidden waiting for the page's first screen.
+pub const REVEAL_LIMIT: Duration = Duration::from_secs(5);
+
+/// Shows the main window once (the page's `window_ready` or the time limit, whichever comes first). A test build with a
+/// hidden window never shows it.
+pub fn reveal(w: &WebviewWindow) {
+  let ui = w.app_handle().state::<Ui>();
+  if !ui.hidden && !ui.shown.swap(true, Ordering::SeqCst) {
+    let _ = w.show();
+  }
+}
+
 const DARK: (u8, u8, u8) = (0x16, 0x15, 0x1d);
 const LIGHT: (u8, u8, u8) = (0xfb, 0xfb, 0xfe);
 
 pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: PathBuf, e2e: E2e) -> tauri::Result<()> {
   let interface_file = user_data.join("interfaz.json");
   let zoom = protocol::read_zoom(&std::fs::read_to_string(&interface_file).unwrap_or_default());
-  app.manage(Ui { zoom: Mutex::new(zoom), interface_file, hidden: e2e.hidden, closing: AtomicBool::new(false), maximized: AtomicBool::new(false) });
-  let shown = Arc::new(AtomicBool::new(false));
-  let on_load = shown.clone();
+  app.manage(Ui { zoom: Mutex::new(zoom), interface_file, hidden: e2e.hidden, closing: AtomicBool::new(false), maximized: AtomicBool::new(false), shown: AtomicBool::new(false) });
   let window = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
     .title("Orb")
     .inner_size(1360.0, 880.0)
@@ -74,12 +85,12 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
       }
       tauri::webview::NewWindowResponse::Deny
     })
+    // The window is not shown here: the page's HTML is loaded long before its scripts have drawn anything, and showing
+    // it now is what made a black empty window sit there. The page asks for it with `window_ready` (reveal) once it has
+    // a first screen; the timer below is the way out if it never does.
     .on_page_load(move |w, payload| {
       if payload.event() == PageLoadEvent::Finished {
         apply_zoom(w.app_handle());
-        if !w.app_handle().state::<Ui>().hidden && !on_load.swap(true, Ordering::SeqCst) {
-          let _ = w.show();
-        }
       }
     })
     .build()?;
@@ -88,14 +99,12 @@ pub fn create_main(app: &AppHandle, user_data: &std::path::Path, webview_data: P
   crate::power::watch(&window);
   let (r, g, b) = if window.theme().ok() == Some(Theme::Dark) { DARK } else { LIGHT };
   let _ = window.set_background_color(Some(tauri::window::Color(r, g, b, 255)));
-  // Shown anyway if the page takes long to load (a broken page must not leave Orb invisible).
+  // Shown anyway if the page never says it is ready (a broken page must not leave Orb invisible).
   if !e2e.hidden {
     let w = window.clone();
     tauri::async_runtime::spawn(async move {
-      tokio::time::sleep(Duration::from_secs(4)).await;
-      if !shown.swap(true, Ordering::SeqCst) {
-        let _ = w.show();
-      }
+      tokio::time::sleep(REVEAL_LIMIT).await;
+      reveal(&w);
     });
   }
   let w = window.clone();

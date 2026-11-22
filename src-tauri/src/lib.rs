@@ -261,6 +261,13 @@ fn pip_action(window: WebviewWindow, action: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn window_ready(window: WebviewWindow) -> Result<(), String> {
+  only_main(&window)?;
+  window::reveal(&window);
+  Ok(())
+}
+
+#[tauri::command]
 fn window_drag(window: WebviewWindow) -> Result<(), String> {
   only_main(&window)?;
   window.start_dragging().map_err(|e| e.to_string())
@@ -362,6 +369,7 @@ pub fn run() {
       app_zoom_step,
       window_act,
       window_drag,
+      window_ready,
       app_pick_folder,
       app_pick_program,
       app_pick_files,

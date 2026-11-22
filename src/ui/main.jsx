@@ -280,6 +280,12 @@ function AppRoot() {
   const [layout, setLayout] = useState(null);
   const [masterState, setMasterState] = useState(null);
   const [resume, setResume] = useState(null); // a welcome left halfway: { step, plan }
+  // The desktop window is born hidden: it is shown when the first real screen (not the blank «loading») has been
+  // committed, so no empty black window is ever seen. Rust shows it anyway after a time limit if this never runs.
+  useEffect(() => {
+    // no wait for an animation frame: a hidden page runs none, and the window's colour already matches the theme
+    if (phase !== 'loading') bridge.windowReady?.()?.catch(quiet);
+  }, [phase]);
   useEffect(() => {
     let alive = true;
     (async () => {
