@@ -285,7 +285,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
       return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint(), push: Boolean(device.push), vapid: own().vapid.publicKey,
         // what this PC accepts from a phone, so a client can offer only that
-        methods: [...REMOTE_METHODS].sort(), uploads: { max: UPLOAD_MAX, types: UPLOAD_TYPES } } });
+        methods: [...REMOTE_METHODS].sort(), uploads: { max: UPLOAD_MAX, types: UPLOAD_TYPES },
+        // how each way in is doing, so «Este móvil» can tell Wi-Fi from Tailscale (sealed to this phone only)
+        entries: Object.values(entries).filter((e) => e && ctx.config.mobile?.[e.tipo] !== false) } });
     }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
