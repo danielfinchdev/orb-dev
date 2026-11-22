@@ -41,7 +41,10 @@ export class SafetyPart {
     const prev = this.board.settingJson(`checkpoint:${task.id}`);
     // Follow-ups, retries and resumes reuse the first checkpoint: a new one would never be used (a whole copy of a folder
     // without git each time).
-    if (prev?.before && (prev.before.kind !== 'copia' || fs.existsSync(prev.before.copy))) {
+    // A point written by a join (joined: true) is of the folder before that join, not before this launch: the new launch
+    // takes its own, or undoing it would go back to before the earlier joined work.
+    const reusable = prev?.before && !prev.joined && (prev.before.kind !== 'copia' || fs.existsSync(prev.before.copy));
+    if (reusable) {
       const isGit = prev.before.kind === 'git';
       this.board.settingJson(`checkpoint:${task.id}`, { before: prev.before, after: null, head: isGit ? git(prev.before.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(prev.before.repo) : null });
       return { workdir: project.path, cwd: project.path, branch: null, isGit, folder: true, notes: [] };
@@ -49,7 +52,7 @@ export class SafetyPart {
     const cp = takeCheckpoint(project.path, `t${task.id}-${Date.now()}`, ctx.paths.checkpoints);
     const isGit = cp.kind === 'git';
     // The first checkpoint is kept: undo goes back to before the task, including later follow-up rounds.
-    this.board.settingJson(`checkpoint:${task.id}`, { before: prev?.before ?? cp, after: null, head: isGit ? git(cp.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(cp.repo) : null });
+    this.board.settingJson(`checkpoint:${task.id}`, { before: reusable ? prev.before : cp, after: null, head: isGit ? git(cp.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(cp.repo) : null });
     this.board.event(task.id, 'orb', 'checkpoint', isGit ? eventKey('sys.events.checkpointGit', { ref: cp.ref }) : eventKey('sys.events.checkpointCopy', { copy: cp.copy }));
     return { workdir: project.path, cwd: project.path, branch: null, isGit, folder: true, notes: [] };
   }
