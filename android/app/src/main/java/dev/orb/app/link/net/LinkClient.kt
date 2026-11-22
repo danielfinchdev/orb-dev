@@ -327,6 +327,11 @@ class LinkClient(
 
     // The answer of one reached address; null when a 409 fixed the clock and the request must go once more.
     private suspend fun settle(reached: Reached, retried: Boolean): Opened? = reached.response.use { res ->
+        if (res.code == 409 && reached.resent) {
+            // The repeat must keep its nonce: sealing it again could run the call twice. Correcting the clock is left to the next request.
+            markOffline()
+            throw LinkException(LinkError.Timeout)
+        }
         if (res.code == 409 && !retried) {
             val data = parseObject(bodyOf(res))
             // Any numeric «now» is retried once, even when another request fixed the clock first.
@@ -595,6 +600,9 @@ class LinkClient(
                     }
                 } else if ((me.exceptionOrNull() as? LinkException)?.error.let { it == LinkError.NotLinked || it is LinkError.Update }) {
                     end = End.Terminal
+                } else if (_connection.value is ConnectionState.Connecting) {
+                    // A PC that answers sealed but with an error leaves no state change behind: still «not up», and the clock for the 30 s message runs.
+                    markOffline()
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -705,11 +713,8 @@ class LinkClient(
                 }
                 val line = got.getOrNull() ?: return@coroutineScope if (got.exceptionOrNull() != null) End.Failed else End.Ended
                 if (line is SseLine.Data) {
-                    line.id?.let { lastEventId = it }
-                    when {
-                        line.event == "resync" -> resync()
-                        line.text.isNotEmpty() -> deliver(line.text)
-                    }
+                    // Only a sealed event that opened vouches for its id; an unsealed block could be anyone on the Wi-Fi.
+                    if (line.text.isNotEmpty() && deliver(line.text)) line.id?.let { lastEventId = it }
                 }
             }
             @Suppress("UNREACHABLE_CODE")
@@ -733,18 +738,20 @@ class LinkClient(
         for (name in RESYNC_EVENTS) _events.tryEmit(LinkEvent(name, empty))
     }
 
-    private fun deliver(text: String) {
-        val msg = try { LinkCrypto.openText(session.key, text, Aad.event(session.id)) as? JsonObject } catch (e: LinkCryptoException) { null } ?: return
-        val name = msg["e"].str() ?: return
+    /** Opens one event and hands it on; false when it did not open with this phone's key. */
+    private fun deliver(text: String): Boolean {
+        val msg = try { LinkCrypto.openText(session.key, text, Aad.event(session.id)) as? JsonObject } catch (e: LinkCryptoException) { null } ?: return false
+        val name = msg["e"].str() ?: return false
         val payload = msg["p"] ?: JsonNull
-        if (name == "resync") return resync()
+        if (name == "resync") { resync(); return true }
         if (name == "chat:state" && payload is JsonObject) {
             val whole = chatStreams.apply(payload)
             val key = (payload["conversation"] as? JsonPrimitive)?.content.orEmpty()
             _events.tryEmit(if (whole == null) ChatStreams.reloadEvent(key) else LinkEvent(name, whole))
-            return
+            return true
         }
         _events.tryEmit(LinkEvent(name, payload))
+        return true
     }
 
     private companion object {
@@ -755,6 +762,6 @@ class LinkClient(
 
         // The PC accepts a request stamped within 5 minutes of its time; a plain-http answer may move this phone's clock
         // only that far past it, never to wherever whoever answered says.
-        const val MAX_PLAIN_SKEW_MS = 10L * 60 * 1000
+        const val MAX_PLAIN_SKEW_MS = 5L * 60 * 1000
     }
 }

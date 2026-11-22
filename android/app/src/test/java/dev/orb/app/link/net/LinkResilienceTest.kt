@@ -210,10 +210,34 @@ class LinkResilienceTest {
     }
 
     @Test
-    fun `a small clock correction over plain http is taken`() = runTest {
+    fun `over plain http a clock past the pcs window is not corrected`() = runTest {
         val r = rig(listOf(home))
-        r.pc.pcOffset = 7 * 60_000L // 7 min: the PC refuses it (5 min window), and it is within what plain http may correct
-        assertTrue(client(r).call("app.state").isSuccess)
+        r.pc.pcOffset = 6 * 60_000L
+        assertEquals(LinkError.Refused(409, "reloj", null), client(r).call("app.state").error())
+    }
+
+    @Test
+    fun `a repeat that gets a 409 is not sealed again`() = runTest {
+        val r = rig()
+        r.pc.resetOnce += "orb.tail1234.ts.net"
+        r.pc.pcOffset = 3_600_000L
+        assertEquals(LinkError.Timeout, client(r).call("chat.send").error())
+        val nonces = r.pc.log.mapNotNull { it.nonce }
+        assertEquals(2, nonces.size)
+        assertEquals(nonces[0], nonces[1])
+    }
+
+    @Test
+    fun `a pc that answers me sealed but with an error is offline and the time runs`() = runTest {
+        val r = rig()
+        r.pc.reply = FakePc.Reply.WrongNonce
+        val c = client(r)
+        c.start()
+        runCurrent()
+        val st = c.connection.value
+        assertTrue(st.toString(), st is ConnectionState.Offline)
+        assertNotNull((st as ConnectionState.Offline).since)
+        c.stop()
     }
 
     @Test

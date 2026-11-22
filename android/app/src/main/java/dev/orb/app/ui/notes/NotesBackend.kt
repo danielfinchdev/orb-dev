@@ -61,9 +61,7 @@ class RuntimeNotesBackend(
     init {
         own.launch { feed.restore() }
         own.launch {
-            runtime.client.events.collect { e ->
-                if (e.name == "note") NotesParser.fromEvent(e.payload, nowMs())?.let(feed::add)
-            }
+            runtime.client.events.collect { e -> onNoteEvent(e, feed, sync, nowMs) }
         }
     }
 
@@ -95,6 +93,12 @@ class RuntimeNotesBackend(
     override fun dismiss(id: String) = feed.dismiss(id)
 
     override fun undoDismiss(id: String) = feed.undoDismiss(id)
+}
+
+/** A live event for the notices: a new one is added; a resync (the PC could not replay what was missed) reads the list again. */
+internal suspend fun onNoteEvent(e: dev.orb.app.link.net.LinkEvent, feed: NotesFeed, sync: NotesSync, nowMs: () -> Long) {
+    if (e.name == "note") NotesParser.fromEvent(e.payload, nowMs())?.let(feed::add)
+    else if (e.name == dev.orb.app.link.net.LinkEvent.RESYNC) sync.run()
 }
 
 /** Reads `notes.list` from the last notice the phone has and merges it; one run at a time, and a failure changes nothing. */
