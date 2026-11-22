@@ -32,7 +32,7 @@ export const STATE_KEYS = Object.freeze({
     'digest_shown:': 'device',
     // a task's (by its id)
     'accepted:': 'task', 'auto_retry:': 'task', 'budget_ok:': 'task', 'checkpoint:': 'task', 'followup:': 'task', 'integrate:': 'task',
-    'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',
+    'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'joinpartial:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',
     'orphan_copy:': 'task', 'pause_offer:': 'task', 'progress:': 'task', 'quiet_notice:': 'task', 'readonly_bitacora:': 'task',
     'resumed_run:': 'task', 'review:': 'task', 'unblock_asked:': 'task', 'undone:': 'task', 'wait_notice:': 'task',
     // an account's or an agent's

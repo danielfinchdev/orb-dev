@@ -79,7 +79,7 @@ export function GamesDialog() {
   // Full screen: the dialog takes the whole window (and the browser's full screen when it lets it). F toggles it.
   const toggleFull = () => {
     const next = !full; setFull(next);
-    try { if (next) shell.current?.requestFullscreen?.().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); } catch { /* the window's own full size is enough */ }
+    try { if (next) shell.current?.requestFullscreen?.().catch(() => { /* refused: the window's own size is used */ }); else if (document.fullscreenElement) document.exitFullscreen().catch(() => { /* already left */ }); } catch { /* the window's own full size is enough */ }
   };
   useEffect(() => {
     if (!open || !game) return undefined;
@@ -91,7 +91,7 @@ export function GamesDialog() {
   useEffect(() => { if (!game) setFull(false); }, [game]);
   // each game's own music (Windows, lib/music.js): made by Orb as the game is played, with its own mute, remembered (ui.gameMusic).
   const music = useStore((s) => s.app?.config?.ui?.gameMusic !== false);
-  const close = () => { stopAll(); stopGameMusic(); setState({ games: false }); setGame(null); setOver(null); setFull(false); if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); };
+  const close = () => { stopAll(); stopGameMusic(); setState({ games: false }); setGame(null); setOver(null); setFull(false); if (document.fullscreenElement) document.exitFullscreen().catch(() => { /* already left */ }); };
   const start = (id) => { stopAll(); sfx('start'); setHelp(false); setGame(id); setScore(0); setOver(null); setRound((r) => r + 1); startGameMusic(id); };
   const back = () => { stopAll(); stopGameMusic(); sfx('select'); setGame(null); setOver(null); };
   // The end of a game: a new record gets a fanfare, otherwise a short falling tune after the game's own crash. Chess
