@@ -45,7 +45,8 @@ interface SchedulesBackend {
 
     /** Only the fields of [patch] that are not null change. */
     suspend fun update(id: Long, patch: SchedulePatch): Result<Unit>
-    suspend fun run(id: Long): Result<Unit>
+    /** [hash]: the fingerprint of an unapproved schedule, which the PC asks for before running it. */
+    suspend fun run(id: Long, hash: String? = null): Result<Unit>
 
     /** How the task of each last run stands (task id to its status), for the «Última: ayer, bien» line; empty when unknown. */
     suspend fun outcomes(): Result<Map<Long, String>> = Result.success(emptyMap())
@@ -113,7 +114,7 @@ class RuntimeSchedulesBackend(private val runtime: LinkRuntime, private val cont
         buildJsonObject {
             put("id", id)
             patch.enabled?.let { put("enabled", it) }
-            if (patch.approve) put("approve", true)
+            if (patch.approve) { put("approve", true); patch.hash?.let { put("hash", it) } }
             patch.title?.let { put("title", it) }
             patch.description?.let { put("description", it) }
             patch.project?.let { put("project", it) }
@@ -145,5 +146,5 @@ class RuntimeSchedulesBackend(private val runtime: LinkRuntime, private val cont
         }
     }
 
-    override suspend fun run(id: Long) = api.schedules.run(buildJsonObject { put("id", id) }).unit()
+    override suspend fun run(id: Long, hash: String?) = api.schedules.run(buildJsonObject { put("id", id); hash?.let { put("hash", it) } }).unit()
 }

@@ -27,11 +27,11 @@ fun detail(
     row: TaskRow, description: String = "Hace algo", accepted: Boolean = false, hasCheckpoint: Boolean = false, previewHash: String? = null,
     events: List<TaskEvent> = emptyList(), dependencies: List<TaskLink> = emptyList(), children: List<TaskLink> = emptyList(),
     facts: dev.orb.app.ui.chats.TaskDetail? = null, checkpointId: String? = null, review: TaskReview? = null,
-    createdBy: String? = "orbe", reasoning: String? = "medium", mode: String? = "carpeta",
+    createdBy: String? = "orbe", reasoning: String? = "medium", mode: String? = "carpeta", partialJoin: PartialJoin? = null,
 ) = TaskDetail(
     row = row, description = description, reasoning = reasoning, mode = mode, branch = null, folder = "C:/p", createdBy = createdBy,
     modelLabel = null, accountLabel = null, accepted = accepted, hasCheckpoint = hasCheckpoint, previewHash = previewHash,
-    dependencies = dependencies, children = children, events = events, facts = facts, checkpointId = checkpointId, review = review,
+    dependencies = dependencies, children = children, events = events, facts = facts, checkpointId = checkpointId, review = review, partialJoin = partialJoin,
 )
 
 class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = false) : TasksBackend {
@@ -91,6 +91,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     override suspend fun reassign(id: Long, agent: String, reasoning: String) = act("reassign $id $agent $reasoning")
     override suspend fun followup(id: Long, text: String) = act("followup $id $text")
     override suspend fun retry(id: Long) = act("retry $id")
+    override suspend fun undoJoin(id: Long) = act("undoJoin $id")
+    override suspend fun retryJoin(id: Long) = act("retryJoin $id")
     override suspend fun cancel(id: Long) = act("cancel $id")
     override suspend fun review(id: Long) = act("review $id")
     override suspend fun securityReview(project: String): Result<Long?> { calls += "security $project"; gate?.await(); return securityResult }

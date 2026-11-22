@@ -40,8 +40,8 @@ test('Programadas: la cabecera común, el vacío y las confirmaciones de siempre
   assert.match(schedules, /data-testid="schedules-more"/);
   assert.match(schedules, /<Empty icon=\{CalendarSync\}[^>]*>[\s\S]*?data-testid="new-schedule"/);
   assert.match(schedules, /confirm\(tr\('schedules\.remove\.title'\)/);
-  assert.match(schedules, /call\('schedules\.update', \{ id: s\.id, approve: true \}\)/);
-  assert.match(schedules, /call\('schedules\.run', \{ id: s\.id \}\)/);
+  assert.match(schedules, /call\('schedules\.update', \{ id: s\.id, approve: true, hash: s\.previewHash \}\)/);
+  assert.match(schedules, /call\('schedules\.run', \{ id: s\.id, hash: s\.previewHash \}\)/);
   assert.match(schedules, /call\('schedules\.remove', \{ id: s\.id \}\)/);
   assert.match(schedules, /schedules\.update'/,'editar usa el mismo diálogo que crear y manda solo lo que cambió');
   assert.match(schedules, /sm:max-w-2xl/, 'el diálogo de crear y editar es el ancho de la maqueta');

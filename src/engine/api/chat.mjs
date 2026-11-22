@@ -17,6 +17,7 @@ import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { phoneText } from '../transport/remote-calls.mjs';
 import { fail, str, int, oneOf, images } from './common.mjs';
+import { lastLaunch, lastLaunchId } from '../scheduler/run-id.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
 import { fold, snippet } from '../../domain/conversations/inbox.mjs';
 
@@ -201,7 +202,16 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       const held = row.conversation_id && principal?.channel === 'desktop' ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
         .map((r) => r.id).filter((tid) => board.heldInfo(board.task(tid))) : [];
       for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
-      const out = accept([...row.meta.tasks, ...held], row.meta.project);
+      // Only the run the report shows: a task launched again after the report is not covered by its OK. Reports written
+      // before `runs` was stored are judged by the time of the task's last launch.
+      const shown = (row.meta.tasks ?? []).filter((tid) => {
+        const run = row.meta.runs?.[tid];
+        if (Number.isInteger(run)) return run === lastLaunchId(board, tid);
+        const launched = Date.parse(lastLaunch(board, tid)?.at);
+        return !(launched > Date.parse(row.at));
+      });
+      if (row.meta.tasks?.length && !shown.length) fail(tr('msg.api.reportRerun'));
+      const out = accept([...shown, ...held], row.meta.project);
       // the OK closes the conversation when nothing of it is still open (written in again, it opens).
       settleConversation(row.conversation_id);
       return out;

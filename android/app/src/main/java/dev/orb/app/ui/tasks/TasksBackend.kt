@@ -63,6 +63,8 @@ interface TasksBackend {
     suspend fun reassign(id: Long, agent: String, reasoning: String): Result<Unit>
     suspend fun followup(id: Long, text: String): Result<Unit>
     suspend fun retry(id: Long): Result<Unit>
+    suspend fun undoJoin(id: Long): Result<Unit>
+    suspend fun retryJoin(id: Long): Result<Unit>
     suspend fun cancel(id: Long): Result<Unit>
     suspend fun review(id: Long): Result<Unit>
 
@@ -157,6 +159,8 @@ class RuntimeTasksBackend(private val container: AppContainer, private val runti
 
     override suspend fun followup(id: Long, text: String) = api.tasks.followup(buildJsonObject { put("id", id); put("text", text) }).unit()
     override suspend fun retry(id: Long) = api.tasks.retry(idOf(id)).unit()
+    override suspend fun undoJoin(id: Long) = api.tasks.undoJoin(idOf(id)).unit()
+    override suspend fun retryJoin(id: Long) = api.tasks.retryJoin(idOf(id)).unit()
     override suspend fun cancel(id: Long) = api.tasks.cancel(idOf(id)).unit()
     override suspend fun review(id: Long) = api.tasks.review(idOf(id)).unit()
     override suspend fun securityReview(project: String): Result<Long?> =

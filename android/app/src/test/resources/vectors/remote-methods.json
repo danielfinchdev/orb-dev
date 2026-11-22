@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "33b868387e233717c4a314858944b273a11a19a7ea60250deffaceb3b689ae27",
+  "source": "084e6d31a644bacc2050227399ea8b0943fe0608695f513f04117fec6bbb4140",
   "methods": [
     "activity.list",
     "activity.report",
@@ -116,9 +116,11 @@
     "tasks.live",
     "tasks.reassign",
     "tasks.retry",
+    "tasks.retryJoin",
     "tasks.review",
     "tasks.search",
     "tasks.undo",
+    "tasks.undoJoin",
     "trash.list",
     "usage.get",
     "usage.history",

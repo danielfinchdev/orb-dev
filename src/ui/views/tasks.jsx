@@ -42,6 +42,21 @@ const reviewers = async () => (await call('agents.status')).filter((a) => a.enab
 const ReviewerField = ({ agents, v, set }) => <Field label={t('tasks.review.reviewer')} hint={t('tasks.review.reviewerHint')}><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: t('tasks.review.auto') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>;
 
 // Task Review: another model (another provider when there is one) audits the work read-only and gives a verdict.
+
+// A hand join that failed after writing part of the work: undo it (the folder goes back to before it) or try again.
+function PartialJoin({ t, tr, className }) {
+  if (t.joinState !== 'partial' || !t.joinSettleable) return null;
+  return (
+    <Note tone="warning" icon={GitMerge} className={className} data-testid="task-partial-join">
+      <div>{tr(t.joinWrote ? 'tasks.partialJoin' : 'tasks.partialJoinClean')}</div>
+      <div className="mt-2 flex gap-2">
+        {t.joinWrote ? <Button size="xs" variant="outline" onClick={() => act(call('tasks.undoJoin', { id: t.id }), tr('tasks.partialJoin.undone'))} data-testid="task-undo-join">{tr('tasks.undoJoin')}</Button> : null}
+        <Button size="xs" variant="outline" onClick={() => act(call('tasks.retryJoin', { id: t.id }), tr('tasks.partialJoin.retried'))} data-testid="task-retry-join">{tr('tasks.retryJoin')}</Button>
+      </div>
+    </Note>
+  );
+}
+
 export async function askReview({ task, project }) {
   const agents = await reviewers();
   return form(task ? t('tasks.review.titleTask', { id: task.id }) : t('tasks.review.titleProject', { project }), {
@@ -175,6 +190,7 @@ function TaskDetail({ id, live }) {
       {t.status === 'queued' && t.waiting?.kind === 'deps' ? <Note className="mx-5" data-testid="task-wait-deps">{waitText(tr, t)}</Note> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <Note icon={Undo2} className="mx-5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
+      <PartialJoin t={t} tr={tr} className="mx-5" />
       {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="mx-5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
       {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-control', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-control">
@@ -370,6 +386,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
       {t.status === 'queued' && t.waiting?.kind === 'notice' && t.waiting.text ? <Note tone="warning" icon={Clock} className="my-2.5" data-testid="task-wait-notice">{t.waiting.text}</Note> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 my-2.5 rounded-card border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <Note icon={Undo2} className="my-2.5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
+      <PartialJoin t={t} tr={tr} className="my-2.5" />
       {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="my-2.5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
 
       {t.status === 'done' && (t.branch || !t.review_of) ? (

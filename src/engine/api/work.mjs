@@ -7,7 +7,7 @@ import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
 import { slashCommand, modeCommand } from '../../shared/slash.mjs';
 import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf, debugOn } from '../modes.mjs';
-import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
+import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, scheduleHash, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { PERMISSIONS } from '../sessions.mjs';
 import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
@@ -21,7 +21,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { abandonSettled, joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { abandonSettled, joinAbandoned, partialJoin, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 // Folders compared as the engine writes them: either separator, any case, no trailing separator.
@@ -55,6 +55,24 @@ function assertPointCurrent(board, taskId, { files = true } = {}) {
   if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail(tr('msg.undo.runNotReady')); return; }
   if (!cp?.after || !current || !files) return;
   if (runOfAfter(board, taskId, cp, current) == null) fail(tr('msg.undo.runUnknown'));
+}
+// Where a join of this task's copy stands, for the phone and the window: 'byhand' (a task joins it in the folder now),
+// 'partial' (that task failed or was cancelled; joinWrote says whether it left files in the folder).
+// What a save returns carries the fingerprint of what it stored, so a caller can keep it for a later run or approval.
+const withHash = (s) => ({ ...s, previewHash: scheduleHash(s) });
+function guardJoinUndo(board, taskId) {
+  const partial = partialJoin(board, taskId) ?? fail(tr('msg.scheduler.noPartialJoin'));
+  if (!board.settingJson(`checkpoint:${partial.by}`)?.before) return;
+  if (finalPhotoOf(board, partial.by) === false) fail(tr('msg.undo.noFinalState'));
+  assertPointCurrent(board, partial.by);
+}
+function joinStateOf(board, taskId) {
+  if (joinAbandoned(board, taskId)) {
+    const partial = partialJoin(board, taskId);
+    const stored = board.settingJson(`joinpartial:${taskId}`);
+    return { joinState: 'partial', joinTask: stored?.by ?? null, joinWrote: Boolean(partial && board.settingJson(`checkpoint:${partial.by}`)?.before), joinSettleable: Boolean(partial) };
+  }
+  return board.settingJson(`integrate:${taskId}`)?.by ? { joinState: 'byhand', joinTask: board.settingJson(`integrate:${taskId}`).by } : { joinState: null };
 }
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -108,7 +126,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
       const now = board.projectPathNow(d) ?? null;
       const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
-      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), ...joinStateOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -201,7 +219,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const remote = principal?.channel !== 'desktop';
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.accept.rerunSinceSeen'));
       if ((checkpoint != null || remote) && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
-      if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
+      // Also without a checkpointId: a web page or an older phone sends none and must not accept a point of an earlier run.
+      if ((checkpoint != null || remote) && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
       if (remote && checkpoint == null && board.heldInfo(board.task(tid))) fail(tr('msg.accept.held'));
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
@@ -212,6 +231,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       return accept([tid]);
     },
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
+    // A hand join left half-done (tasks.get › joinState 'partial'): put the folder back as it was before it, and optionally try again.
+    // They undo the join task's own writes, so they get the guards of a remote «tasks.undo» on that task.
+    'tasks.undoJoin': ({ id }) => { guardJoinUndo(board, int(id, 'tarea')); return scheduler.settleJoin(int(id, 'tarea')); },
+    'tasks.retryJoin': ({ id }) => { guardJoinUndo(board, int(id, 'tarea')); return scheduler.settleJoin(int(id, 'tarea'), { retry: true }); },
 
     // «/goal», «/plan», «/review» and «/debug» (modes.mjs): none of them changes the chat's permission.
     'sessions.modes': ({ id }) => { const sid = str(id, 'conversación', 64); sessions.must(sid); return { goal: goalOf(board, sid), debug: debugOn(board, sid) }; },
@@ -325,22 +348,30 @@ ${block}` : ''}` });
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),
-    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
+    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }), previewHash: scheduleHash(s) })),
     // only this PC's window may loosen the permission level of a schedule (src/domain/schedules/schedules.mjs, clampAutonomy)
-    'schedules.create': (p, principal) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+    'schedules.create': (p, principal) => withHash(createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
       readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true,
-      month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' }),
+      month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' })),
     // every field create takes may change, checked the same way; absent = unchanged
-    'schedules.update': (p, principal) => updateSchedule(board, int(p.id, 'programada'), {
-      enabled: p.enabled, approved: p.approve === true, title: p.title, description: p.description,
+    'schedules.update': (p, principal) => withHash(updateSchedule(board, int(p.id, 'programada'), {
+      enabled: p.enabled, approved: p.approve === true, hash: p.hash, title: p.title, description: p.description,
       ...(p.project != null ? { project: project(p.project).name } : {}), ...(p.agent != null ? { agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente') } : {}), ...(p.model !== undefined ? { model: str(p.model, 'modelo', 80, { optional: true }) || null } : {}),
       ...(p.readonly !== undefined ? { readonly: p.readonly === true } : {}), ...(p.every != null ? { every: oneOf(p.every, EVERY, 'frecuencia') } : {}), ...(p.at_time != null ? { at_time: str(p.at_time, 'hora', 16) } : {}),
       ...(p.hours != null ? { hours: Number(p.hours) || 6 } : {}), ...(Array.isArray(p.weekdays) ? { weekdays: p.weekdays.map(Number) } : {}), ...(p.month_day != null ? { month_day: Number(p.month_day) } : {}),
       ...(p.tz !== undefined ? { tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null } : {}), ...(p.same_chat !== undefined ? { same_chat: p.same_chat === true } : {}), ...(p.notify_mobile !== undefined ? { notify_mobile: p.notify_mobile === true } : {}),
       ...(p.autonomy !== undefined ? { autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', null) } : {})
-    }, { desktop: principal?.channel === 'desktop' }),
+    }, { desktop: principal?.channel === 'desktop' })),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
-    'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
+    // An unapproved schedule runs only with the fingerprint of what was seen, as approving it does.
+    'schedules.run': ({ id, hash }) => {
+      const s = getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled'));
+      if (!s.approved) {
+        if (typeof hash !== 'string' || !hash) fail(tr('msg.schedules.needsHash'));
+        if (hash !== scheduleHash(s)) fail(tr('msg.schedules.changedSince'));
+      }
+      return runSchedule(board, s, 'usuario');
+    },
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),

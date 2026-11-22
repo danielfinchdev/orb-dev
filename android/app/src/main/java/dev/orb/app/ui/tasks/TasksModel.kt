@@ -103,9 +103,15 @@ data class TaskDetail(
     /** The task's point of return as the PC names it now; null without a point or on a PC that does not say. */
     val checkpointId: String? = null,
     val review: TaskReview? = null,
+    /** A hand join of this task's copy that was left half-done and can be settled from the phone. */
+    val partialJoin: PartialJoin? = null,
 ) {
     val id get() = row.id
 }
+
+/** [wrote]: the failed join task left files in the folder (so the undo has something to undo). */
+@Immutable
+data class PartialJoin(val wrote: Boolean)
 
 @Immutable
 data class DiffFile(val status: String, val path: String, val added: Int, val removed: Int, val binary: Boolean, val patch: String, val cut: Boolean)
@@ -246,6 +252,7 @@ object TasksParser {
             },
             facts = dev.orb.app.ui.chats.OrbeParser.approvalFacts(o, row.id), checkpointId = o.str("checkpointId")?.takeIf { it.isNotBlank() },
             review = (o["review"] as? JsonObject)?.let { r -> TaskReview(r.long("task"), r.str("verdict"), r.str("agent"), r.str("at")) },
+            partialJoin = if (o.str("joinState") == "partial" && o.bool("joinSettleable")) PartialJoin(o.bool("joinWrote")) else null,
         )
     }
 

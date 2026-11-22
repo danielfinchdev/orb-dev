@@ -67,3 +67,14 @@ export const abandonSettled = (board, taskId) => givenUp(board, taskId) && lastO
 // True when the task that joined this run by hand failed or was cancelled and the point is still of an earlier run:
 // nothing will ever bring the folder and the stored diff together, so only the PC can settle it (discarding the copy does).
 export const joinAbandoned = (board, taskId) => givenUp(board, taskId) && !abandonSettled(board, taskId);
+
+// True while a given-up hand join is still half-done: its join task is still the one that failed or was cancelled, in the
+// same launch it gave up in. A join task started again (retry) or finished since is no longer a half-done join.
+export function partialJoin(board, taskId) {
+  const partial = board.settingJson(`joinpartial:${taskId}`);
+  if (!partial || !joinAbandoned(board, taskId)) return null;
+  const by = board.task(partial.by);
+  if (!by || !['failed', 'cancelled'].includes(by.status)) return null;
+  if (Number.isInteger(partial.run) && partial.run !== lastLaunchId(board, by.id)) return null;
+  return partial;
+}

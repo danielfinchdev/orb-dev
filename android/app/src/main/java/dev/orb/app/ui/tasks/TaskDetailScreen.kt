@@ -123,6 +123,7 @@ fun TaskDetailScreen(
                             TaskCard(TaskTexts.WHAT_TO_DO) { BodyText(d.description) }
                         }
                         Outcome(d, state.actions, onChanges = { onOpenChanges(d.id) })
+                        PartialJoinCard(d, state.actions, enabled, onUndo = vm::undoJoin, onRetry = vm::retryJoin)
                         if (d.row.undone) TaskCard(TaskTexts.UNDONE) { BodyText(TaskTexts.UNDONE_NOTE, OrbKit.mutedForeground) }
                         Details(d, state.actions)
                     }
@@ -291,6 +292,19 @@ private fun Stopped(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, o
         if (TaskAction.Reassign in actions || TaskAction.Retry in actions) Buttons {
             if (TaskAction.Reassign in actions) OrbButton(TaskTexts.WAIT_ANOTHER, onOther, enabled = enabled)
             if (TaskAction.Retry in actions) OrbButton(TaskTexts.RETRY_TASK, onRetry, kind = OrbButtonKind.Primary, enabled = enabled)
+        }
+    }
+}
+
+/** A hand join left half-done: say so, and offer to undo what it wrote or to try again. */
+@Composable
+private fun PartialJoinCard(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onUndo: () -> Unit, onRetry: () -> Unit) {
+    val join = d.partialJoin ?: return
+    TaskCard(TaskTexts.JOIN_TITLE, OrbIcons.CircleAlert, OrbKit.warning) {
+        BodyText(if (join.wrote) TaskTexts.JOIN_BODY else TaskTexts.JOIN_BODY_CLEAN)
+        if (TaskAction.UndoJoin in actions || TaskAction.RetryJoin in actions) Buttons {
+            if (TaskAction.UndoJoin in actions) OrbButton(TaskTexts.JOIN_UNDO, onUndo, enabled = enabled)
+            if (TaskAction.RetryJoin in actions) OrbButton(TaskTexts.JOIN_RETRY, onRetry, kind = OrbButtonKind.Primary, enabled = enabled)
         }
     }
 }

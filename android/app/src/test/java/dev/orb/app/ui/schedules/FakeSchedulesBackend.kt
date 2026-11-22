@@ -16,12 +16,12 @@ fun schedule(
     every: String = "weekly", atTime: String = "09:00", weekdays: List<Int> = listOf(1), whenText: String = "Cada lunes a las 09:00",
     nextRun: String? = "2026-11-16T08:00:00.000Z", lastRun: String? = null, lastTask: Long? = null, tz: String? = null, monthDay: Int? = null,
     project: String = "app-movil", agent: String = "any", model: String? = null, autonomy: String? = null, notifyMobile: Boolean? = null,
-    sameChat: Boolean = false,
+    sameChat: Boolean = false, previewHash: String? = "h$id",
 ) = ScheduleItem(
     id = id, project = project, title = title, description = "Mira las dependencias", agent = agent, readonly = readonly,
     every = every, atTime = atTime, weekdays = weekdays, enabled = enabled, approved = approved,
     nextRun = nextRun, lastRun = lastRun, lastTask = lastTask, sameChat = sameChat, whenText = whenText,
-    tz = tz, monthDay = monthDay, model = model, autonomy = autonomy, notifyMobile = notifyMobile,
+    tz = tz, monthDay = monthDay, model = model, autonomy = autonomy, notifyMobile = notifyMobile, previewHash = previewHash,
 )
 
 class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : SchedulesBackend {
@@ -37,6 +37,7 @@ class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : Schedule
     var actionResult: Result<Unit> = Result.success(Unit)
     val calls = ArrayList<String>()
     val patches = ArrayList<SchedulePatch>()
+    val runHashes = ArrayList<String?>()
     val created = ArrayList<NewSchedule>()
     var outcomeMap: Result<Map<Long, String>> = Result.success(emptyMap())
 
@@ -68,5 +69,5 @@ class FakeSchedulesBackend(initial: List<ScheduleItem> = emptyList()) : Schedule
 
     override suspend fun outcomes() = outcomeMap
 
-    override suspend fun run(id: Long): Result<Unit> { calls += "run $id"; return actionResult }
+    override suspend fun run(id: Long, hash: String?): Result<Unit> { calls += "run $id"; runHashes += hash; return actionResult }
 }
