@@ -237,7 +237,7 @@ html.has-win-controls:has(.tabs-strip) .bar { --bar-pr: 10px; }
 button.name:hover { background: var(--accent); }
 .bar .sub { max-width: 100%; overflow: hidden; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 12px; color: var(--muted-foreground); }
 /* The room the window's buttons take on the right is not the title's: shifting it by half the difference of the paddings keeps the title in the middle of the panel, not of what is left of it. */
-@container bar (min-width: 900px) { .bar-center { transform: translateX(calc((var(--bar-pr) - var(--bar-pl)) / 2)); max-width: calc(100% - var(--bar-pr) + var(--bar-pl)); } }
+@container bar (min-width: 700px) { .bar-center { transform: translateX(calc((var(--bar-pr) - var(--bar-pl)) / 2)); } }
 .bar-right { justify-self: end; display: flex; align-items: center; gap: 4px; }
 /* the clock: time in the theme's title type and the date under it; a button, the calendar opens on click. */
 .bar-clock { display: flex; flex-direction: column; align-items: flex-start; margin-left: -6px; padding: 3px 6px; border-radius: var(--r-ctl); line-height: 1.15; text-align: left; cursor: pointer; transition: background-color 0.15s; }
