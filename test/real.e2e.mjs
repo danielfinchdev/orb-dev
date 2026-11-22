@@ -72,7 +72,7 @@ try {
     const task = await until(async () => (await call('tasks.list')).find((t) => t.project === 'prueba-real'), 'tarea creada por el asistente');
     note(`asistente creó tarea #${task.id} «${task.title}» para ${task.agent} (${task.status}) en ${Math.round((Date.now() - t0) / 1000)} s`);
     await shot('chat-tarea-creada');
-    if (task.status === 'awaiting_approval') { note('la tarea espera aprobación; la apruebo'); await call('tasks.approve', { id: task.id }).catch((e) => note(`aprobar: ${e.message}`)); }
+    if (task.status === 'awaiting_approval') { note('la tarea espera aprobación; la apruebo'); await call('tasks.approve', { id: task.id, hash: (await call('tasks.get', { id: task.id })).previewHash }).catch((e) => note(`aprobar: ${e.message}`)); }
     const done = await until(async () => { const t = await call('tasks.get', { id: task.id }); return ['done', 'failed', 'blocked', 'cancelled'].includes(t.status) && t; }, 'tarea terminada', 300000);
     note(`tarea #${done.id}: ${done.status} en ${Math.round((Date.now() - t0) / 1000)} s · ${String(done.result ?? '').slice(0, 300)}`);
     await shot('tarea-terminada');

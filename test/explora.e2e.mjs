@@ -465,7 +465,7 @@ try {
     });
     // a run of each schedule (the daily one is read only): the «Últimas ejecuciones» of Programadas
     await attempt('las ejecuciones de las programadas', async () => {
-      for (const s of await call('schedules.list')) await call('schedules.run', { id: s.id });
+      for (const s of await call('schedules.list')) await call('schedules.run', { id: s.id, hash: s.previewHash });
       await until(async () => (await call('tasks.list')).filter((x) => x.schedule_id && ['done', 'failed', 'blocked'].includes(x.status)).length >= 2, 'ejecuciones terminadas', 40000);
     });
     // the finished project goes last: it is gone from every picker of the pictures that follow
