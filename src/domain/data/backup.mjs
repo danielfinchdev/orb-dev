@@ -90,6 +90,8 @@ export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT, sa
   fs.writeFileSync(file, `${JSON.stringify({ v: 1, kdf, kek: sealed, at: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
   return { kdf, at: new Date().toISOString() };
 }
+// The salt of the recovery wrap in a folder, which says which code it was made for (the vault's code file names it).
+const wrapSaltOf = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')).kdf?.salt ?? null; } catch { return null; } };
 export function recoveryOf(home, secret) {
   let raw; try { raw = JSON.parse(fs.readFileSync(recoveryFile(home), 'utf8')); } catch { return null; }
   try { return { kdf: raw.kdf, kek: unwrap(machineKek(secret), raw.kek, 'orbbak:recovery'), at: raw.at }; } catch { return null; }
@@ -596,7 +598,19 @@ export async function settleEnvelopes(home, tmp, keys) {
   if (!(byCode || keys.proof === true || !inUse || sameKey)) { fs.rmSync(staged, { recursive: true, force: true }); return true; }
   // Restored with this PC's own key: this PC's code wrap stays when it is for that data key (the copy's was dropped).
   const own = path.join(current, SECRET_NAMES.code);
-  if (!byCode && sameKey && keyIdOf(own) === openedKey) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+  if (!byCode && sameKey && keyIdOf(own) === openedKey) {
+    // The code file names the copies' wrap it was made with (copyId). A copy from before the code was replaced brings an
+    // older wrap: this PC's code file would then be dropped at its first use and the code the person holds now would stop
+    // working, so this PC's own wrap comes along with it. When neither wrap is the one it names, the copy's decides.
+    const mine = wrapSaltOf(recoveryFile(home)); const brought = wrapSaltOf(recoveryFile(tmp));
+    let copyId = null; try { copyId = JSON.parse(fs.readFileSync(own, 'utf8')).copyId ?? null; } catch { /* unreadable: not taken */ }
+    if (copyId && copyId === brought) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+    else if (copyId && copyId === mine) {
+      fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+      fs.mkdirSync(path.dirname(recoveryFile(tmp)), { recursive: true });
+      fs.copyFileSync(recoveryFile(home), recoveryFile(tmp));
+    }
+  }
   return false;
 }
 
