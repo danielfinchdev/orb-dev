@@ -198,7 +198,8 @@ fn without_hello_there_is_nothing_to_unlock() {
 #[test]
 fn a_changed_entry_fails_closed() {
   let (v, f, dir) = enabled(Mode::Ok);
-  v.lock().unwrap().set(HELLO_ID, json!({ "cuenta": "orb-test", "pub": "AAAA", "alg": ALG, "at": "x" })).unwrap();
+  let key = v.lock().unwrap().key_id().unwrap().to_string();
+  v.lock().unwrap().set(HELLO_ID, json!({ "cuenta": "orb-test", "pub": "AAAA", "alg": ALG, "at": "x", "keyId": key })).unwrap();
   assert_eq!(begin(&mut v.lock().unwrap(), "orb-1", None, NOW).unwrap().err().unwrap()["reason"], json!("changed"));
   assert_eq!(state(&mut v.lock().unwrap(), &f, NOW).unwrap()["valid"], json!(false));
   let _ = std::fs::remove_dir_all(dir);
@@ -352,5 +353,18 @@ fn disabling_keeps_an_enable_that_is_waiting() {
   v.lock().unwrap().hello.enabling = true;
   disable(&mut v.lock().unwrap(), &f).unwrap();
   assert!(v.lock().unwrap().hello.enabling);
+  let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn an_entry_of_another_data_key_does_not_count() {
+  let (v, f, dir) = enabled(Mode::Ok);
+  let mut e = v.lock().unwrap().get(HELLO_ID).unwrap();
+  assert!(e["keyId"].is_string(), "the key it was turned on under is kept");
+  e["keyId"] = json!("otra-clave");
+  v.lock().unwrap().set(HELLO_ID, e).unwrap();
+  assert_eq!(begin(&mut v.lock().unwrap(), "orb-1", None, NOW).unwrap().err().unwrap()["reason"], json!("none"));
+  assert_eq!(state(&mut v.lock().unwrap(), &f, NOW).unwrap()["enabled"], json!(false));
+  assert!(account(&mut v.lock().unwrap()).is_some(), "its OS key can still be deleted");
   let _ = std::fs::remove_dir_all(dir);
 }

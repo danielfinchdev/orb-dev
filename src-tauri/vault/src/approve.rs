@@ -132,6 +132,9 @@ pub fn list(v: &mut Vault) -> Result<Vec<Value>, Code> {
   let mut out = Vec::new();
   for id in v.ids(APPROVE_PREFIX)? {
     let e = v.get(&id)?;
+    if !current(v, &e) {
+      continue;
+    }
     if let Some(device) = id.strip_prefix(APPROVE_PREFIX) {
       if parse_public(&e.get("pub").and_then(Value::as_str).and_then(unb64).unwrap_or_default()).is_some() {
         out.push(json!({ "id": device, "name": e.get("name").cloned().unwrap_or(Value::Null), "at": e.get("at").cloned().unwrap_or(Value::Null) }));
@@ -141,8 +144,16 @@ pub fn list(v: &mut Vault) -> Result<Vec<Value>, Code> {
   Ok(out)
 }
 
+/// Whether a phone's entry was made under the data key now open (an older version's «He olvidado» keeps entries across keys).
+fn current(v: &Vault, e: &Value) -> bool {
+  v.key_id().is_some() && e.get("keyId").and_then(Value::as_str) == v.key_id()
+}
+
 fn public_of(v: &mut Vault, device_id: &str) -> Result<Option<Vec<u8>>, Code> {
   let e = v.get(&id_of(device_id))?;
+  if !current(v, &e) {
+    return Ok(None);
+  }
   Ok(e.get("pub").and_then(Value::as_str).and_then(unb64).filter(|p| parse_public(p).is_some()))
 }
 
@@ -258,7 +269,7 @@ pub fn enroll(v: &mut Vault, device_id: &str, nonce_b64: &str, public_b64: &str,
   if !verify(&public, &p.message, &sig) {
     return Ok(refused("bad"));
   }
-  v.set(&id_of(device_id), json!({ "pub": b64(&public), "name": name, "at": crate::vault::iso(now) }))?;
+  v.set(&id_of(device_id), json!({ "pub": b64(&public), "name": name, "at": crate::vault::iso(now), "keyId": v.key_id() }))?;
   Ok(json!({ "ok": true, "name": name }))
 }
 

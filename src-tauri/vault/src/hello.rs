@@ -155,9 +155,15 @@ fn refused(reason: &str) -> Value {
   json!({ "ok": false, "reason": reason })
 }
 
-fn entry(v: &mut Vault) -> Result<Option<Value>, Code> {
+fn raw_entry(v: &mut Vault) -> Result<Option<Value>, Code> {
   let e = v.get(HELLO_ID)?;
   Ok(if e.is_object() { Some(e) } else { None })
+}
+/// The entry as far as it counts: one made under another data key (it outlived a «He olvidado» done by an older version)
+/// was never proved against this one and is as good as absent.
+fn entry(v: &mut Vault) -> Result<Option<Value>, Code> {
+  let key_id = v.key_id().map(String::from);
+  Ok(raw_entry(v)?.filter(|e| key_id.is_some() && e.get("keyId").and_then(Value::as_str) == key_id.as_deref()))
 }
 fn text<'a>(e: &'a Value, k: &str) -> &'a str {
   e.get(k).and_then(Value::as_str).unwrap_or_default()
@@ -165,7 +171,7 @@ fn text<'a>(e: &'a Value, k: &str) -> &'a str {
 
 /// The account of the key kept here, if any (so the OS key can be deleted when the entry goes).
 pub fn account(v: &mut Vault) -> Option<String> {
-  entry(v).ok().flatten().map(|e| text(&e, "cuenta").to_string()).filter(|a| valid_account(a))
+  raw_entry(v).ok().flatten().map(|e| text(&e, "cuenta").to_string()).filter(|a| valid_account(a))
 }
 
 pub fn state(v: &mut Vault, hello: &dyn Hello, now: u64) -> Result<Value, Code> {
@@ -237,7 +243,7 @@ pub fn enable(vault: &std::sync::Mutex<Vault>, hello: &dyn Hello, account_name: 
       return Ok(refused("changed"));
     }
     v.hello.enabling = false;
-    let r = v.set(HELLO_ID, json!({ "cuenta": account_name, "pub": b64(&key.public), "alg": ALG, "tpm": key.tpm, "at": at }));
+    let r = v.set(HELLO_ID, json!({ "cuenta": account_name, "pub": b64(&key.public), "alg": ALG, "tpm": key.tpm, "at": at, "keyId": key_id }));
     if r.is_ok() {
       v.hello = State::default();
     }
