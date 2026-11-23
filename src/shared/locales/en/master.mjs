@@ -315,6 +315,7 @@ export default {
   'approve.none': 'No linked phone can approve yet.',
   'approve.needsFingerprint': 'This needs a phone with a strong fingerprint or face unlock.',
   'msg.link.codeDead': 'That code is no longer valid (too many wrong tries, or it expired). Ask for a new one on the PC.',
+  'msg.link.codeKilled': 'Someone on your network (address {ip}) tried a wrong link code and the code was cancelled. Make a new one when you want to link.',
   'msg.link.notConfirmed': 'The PC did not confirm the link. Ask for a new code to try again.',
   'msg.link.noKeys': 'This PC cannot link phones yet. Turn on phone access in Settings and try again.',
 };

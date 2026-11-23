@@ -446,11 +446,16 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const m = ctx.master;
     if (!live || !m || Date.now() > live.expires || typeof body.pub !== 'string') return fail();
     if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
+    // One wrong try per address every 2 s, answered before the proof is looked at: three quick fake proofs from one device on
+    // the Wi-Fi cannot burn the code in a blink (the vault's limit of three wrong tries in total stays as it is).
+    const lastWrong = live.lastWrong ??= new Map();
+    if (Date.now() - (lastWrong.get(who) ?? 0) < 2000) return send(res, 429, { error: tr('msg.remote.tooMany') });
     let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
     if (devPub.length !== 32) return fail();
     const wrong = () => { // one more try spent in the vault; at the third the code is gone
+      lastWrong.set(who, Date.now());
       let r = null; try { r = m.linkFail(); } catch { r = null; }
-      if (r?.reason === 'dead' || r?.reason === 'gone') { if (linkLive === live) closeLinkCode(); log('enlace: demasiados intentos; código anulado'); return send(res, 403, { error: tr('msg.link.codeDead'), reason: 'newCode' }); }
+      if (r?.reason === 'dead' || r?.reason === 'gone') { if (linkLive === live) closeLinkCode(); log('enlace: demasiados intentos; código anulado'); board.notice(tr('msg.link.codeKilled', { ip: who }), 'warning'); return send(res, 403, { error: tr('msg.link.codeDead'), reason: 'newCode' }); }
       return fail();
     };
     if (body.step === 'finish') return finishByCode(res, body, devPub, live, { fail, who });
