@@ -243,7 +243,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       // (no id) tells it to reload its whole state. All written in this same tick, so no live event slips in between.
       const lastId = req.headers['last-event-id'] ?? url.searchParams.get('since');
       if (lastId) {
-        const back = journal.since(lastId);
+        const back = journal.since(lastId, { notBefore: Date.parse(device.created_at) || 0 });
         try {
           if (back.resync) res.write(`data: ${sealText(client.key, { e: 'resync', p: null }, AAD.event(device.id))}\n\n`);
           else for (const x of back.items) res.write(`id: ${x.id}\ndata: ${sealText(client.key, x.value, AAD.event(device.id))}\n\n`);
