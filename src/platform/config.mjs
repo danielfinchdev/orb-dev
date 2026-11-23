@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { paths, writeJson } from './paths.mjs';
-import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
+import { merge, AGENT_IDS, DEFAULT_CONFIG, storedConfig } from './config-file.mjs';
 import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
@@ -51,7 +51,7 @@ export function saveConfig(patch) {
   // (an out-of-range round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
   const next = merge(tidyStored(ctx.config), patch);
   validateConfig(next);
-  writeJson(ctx.paths.config, next);
+  writeJson(ctx.paths.config, storedConfig(next));
   if (next.language !== ctx.config.language) relabelEmptyLogs(ctx.home, ctx.config, next);
   ctx.config = next;
   return next;

@@ -56,6 +56,7 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
   if (method === 'initialize') return write({ id, result: { userAgent: 'codex-falso/0.0' } });
   if (method === 'initialized') return;
   if (method === 'thread/start') { threadId = 'hilo-nuevo'; return write({ id, result: { thread: { id: threadId }, model: params.model ?? 'gpt-falso' } }); }
+  if (method === 'thread/resume' && process.env.FAKE_RESUME_ERROR) return write({ id, error: { code: -32600, message: process.env.FAKE_RESUME_ERROR } });
   if (method === 'thread/resume') { threadId = params.threadId; return write({ id, result: { thread: { id: threadId }, model: 'gpt-falso' } }); }
   if (method === 'thread/fork') { threadId = `copia-de-${params.threadId}`; return write({ id, result: { thread: { id: threadId }, model: 'gpt-falso' } }); }
   if (method === 'turn/start') { const turnId = `turno-${++n}`; write({ id, result: { turn: { id: turnId } } }); return void turn(turnId, params.input?.[0]?.text ?? ''); }

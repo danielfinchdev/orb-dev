@@ -128,13 +128,24 @@ test('three wrong tries kill the code, even for the right one after them', async
     const c = await code();
     const base = new URL(c.url).origin;
     const wrong = c.typed[0] === 'A' ? `B${c.typed.slice(1)}` : `A${c.typed.slice(1)}`;
-    for (let i = 0; i < 2; i += 1) assert.ok(await said(newPhone().connect({ code: wrong, address: base })), `try ${i + 1}`);
+    // one wrong try per address every 2 s (the next test), so the tries are spaced
+    for (let i = 0; i < 2; i += 1) { assert.ok(await said(newPhone().connect({ code: wrong, address: base })), `try ${i + 1}`); await wait(2100); }
     assert.ok(await said(newPhone().connect({ code: wrong, address: base })), 'the third');
     const after = await said(newPhone().connect({ code: c.typed, address: base }));
     assert.ok(after, 'the right code is no longer good');
     assert.ok(await said(newPhone().connect({ qr: c.url })), 'nor the QR');
     assert.equal((await e.call('link.devices')).length, 0);
     assert.equal((await fetch(`${base}/api/hello`)).status, 404, 'nothing to type any more');
+  });
+});
+
+test('quick wrong tries from one address do not burn the code', async () => {
+  await withPc(async ({ e, code, newPhone }) => {
+    const c = await code();
+    const base = new URL(c.url).origin;
+    const wrong = c.typed[0] === 'A' ? `B${c.typed.slice(1)}` : `A${c.typed.slice(1)}`;
+    for (let i = 0; i < 4; i += 1) assert.ok(await said(newPhone().connect({ code: wrong, address: base })), `try ${i + 1}`);
+    assert.notEqual((await fetch(`${base}/api/hello`)).status, 404, 'the code is still alive');
   });
 });
 

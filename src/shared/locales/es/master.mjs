@@ -315,6 +315,7 @@ export default {
   'approve.none': 'Ningún móvil enlazado puede aprobar todavía.',
   'approve.needsFingerprint': 'Hace falta un móvil con huella o cara de seguridad alta.',
   'msg.link.codeDead': 'Ese código ya no vale (demasiados fallos o caducó). Pide uno nuevo en el PC.',
+  'msg.link.codeKilled': 'Alguien en tu red (dirección {ip}) probó un código de enlace equivocado y el código se anuló. Genera uno nuevo cuando quieras enlazar.',
   'msg.link.notConfirmed': 'El PC no ha confirmado el enlace. Pide un código nuevo si quieres volver a intentarlo.',
   'msg.link.noKeys': 'Este PC aún no puede enlazar móviles. Activa el acceso desde el móvil en Ajustes y vuelve a probar.',
 };

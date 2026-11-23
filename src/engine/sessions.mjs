@@ -166,10 +166,24 @@ export class Sessions {
     this.suggest = new Suggester(this); // the grey next message in the box, when Ajustes has it on (suggest.mjs)
   }
 
+  // The account problem that holds a chat (its fixed account cannot take the next message) travels with the row, so the chat
+  // shows the notice with its buttons when it is opened again, not only while the problem happens.
   list({ archived = false, kind } = {}) {
-    return this.board.all(`SELECT * FROM sessions WHERE archived = ? AND trashed_at IS NULL ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow);
+    const held = new Map();
+    for (const r of this.board.all("SELECT key, value FROM settings WHERE key LIKE 'account_problem:%'")) { try { const v = JSON.parse(r.value); if (v) held.set(r.key.slice('account_problem:'.length), v); } catch { /* unreadable */ } }
+    return this.board.all(`SELECT * FROM sessions WHERE archived = ? AND trashed_at IS NULL ${kind ? 'AND kind = ?' : ''} ORDER BY updated_at DESC LIMIT 300`, Number(archived), ...(kind ? [kind] : [])).map(parseRow).map((s) => (held.has(s.id) ? { ...s, accountProblem: held.get(s.id) } : s));
   }
-  get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
+  get(id) {
+    const s = parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id)));
+    const problem = s && this.board.settingJson(`account_problem:${s.id}`);
+    return problem ? { ...s, accountProblem: problem } : s;
+  }
+  // The problem is over (the message goes, or the chat changed account): the notice goes with it.
+  clearProblem(id) {
+    if (!this.board.settingJson(`account_problem:${id}`)) return;
+    this.board.settingJson(`account_problem:${id}`, null);
+    this.emit('session:account', { id: String(id), problem: null });
+  }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
   // account: 'auto' (or nothing) or the id of the only account the chat may use; accountFixed overrides what that says (a copy
@@ -211,9 +225,9 @@ export class Sessions {
       return Object.keys(rest).length ? this.update(id, rest) : this.get(id);
     }
     // A change made now replaces one that was waiting for the end of a turn.
-    if (keys.some((k) => k === 'account' || k === 'account_fixed') && !fields.applyPending) this.board.settingJson(`pending_account:${id}`, null);
+    if (keys.some((k) => k === 'account' || k === 'account_fixed') && !fields.applyPending) { this.board.settingJson(`pending_account:${id}`, null); this.board.settingJson(`account_problem:${id}`, null); }
     // Another account: the agent's own conversation lives in the old account's folder, so the chat goes on from its summary.
-    if ('account' in fields && fields.account !== this.get(id)?.account && !('cli_session' in fields)) { fields = { ...fields, cli_session: null, context: null }; keys.push('cli_session', 'context'); }
+    if ('account' in fields && fields.account !== this.get(id)?.account && !('cli_session' in fields)) { this.keepSummary(id, this.get(id)?.account, fields.account); fields = { ...fields, cli_session: null, context: null }; keys.push('cli_session', 'context'); }
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
     const value = (k) => { const v = fields[k]; if (typeof v === 'boolean') return Number(v); if (v && typeof v === 'object') return JSON.stringify(v); return v ?? null; };
     this.board.run(`UPDATE sessions SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...keys.map(value), now(), id);
@@ -352,7 +366,7 @@ export class Sessions {
     const s = this.get(id);
     if (!s || s.kind !== 'chat' || this.running.has(id) || !this.queue(id).length || this.accountFor(s).problem) return;
     const hold = this.holds.get(id); if (hold?.timer) clearTimeout(hold.timer);
-    this.holds.delete(id);
+    this.holds.delete(id); this.clearProblem(id);
     const next = this.takeQueued(id);
     if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
   }
@@ -366,6 +380,16 @@ export class Sessions {
     hold.timer.unref?.();
     this.emit('session:account', { id: String(id), problem: hold.problem, waiting: true });
     return { ok: true };
+  }
+  // The agent's own conversation stays in the old account's folder, so the next turn on another account starts from a bounded
+  // summary of what was said (as handoff() does for another agent). Nothing is written for a chat that never talked.
+  keepSummary(id, fromId, toId) {
+    const s = this.get(id);
+    if (!s || s.kind !== 'chat' || !fromId || fromId === toId) return;
+    const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);
+    if (!rows.length) return;
+    const label = (a) => findAccount(a)?.label ?? a;
+    this.board.settingJson(`handoff_summary:${id}`, buildHandoff(rows, { fromLabel: label(fromId), toLabel: label(toId) }).text);
   }
   // The account change asked for during a turn, now that it has ended.
   applyPendingAccount(id) {
@@ -401,7 +425,8 @@ export class Sessions {
   // A chat fixed to this account, or a task of a chat that is: a missing answer from the agent stops them.
   isFixedFor(id, acc) {
     const s = this.get(id);
-    if (s?.account_fixed) return true;
+    // a task is always stored as fixed to its account; only the account fixed on its chat of origin counts
+    if (s?.account_fixed && !s.task_id) return true;
     const conv = s?.task_id ? this.board.conversationOfTask(s.task_id) : null;
     return fixedAccountOf(this.board, conv)?.id === acc.id;
   }
@@ -720,11 +745,12 @@ export class Sessions {
       if (held) return null;
       throw Object.assign(new Error(line), { problem: res.problem });
     }
-    this.holds.delete(id);
+    this.holds.delete(id); this.clearProblem(id);
     const acc = res.acc;
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     if (res.switched || (s.kind === 'chat' && s.account !== acc.id)) {
       const had = Boolean(s.cli_session);
+      if (res.switched && had) this.keepSummary(id, s.account, acc.id);
       this.update(id, { account: acc.id, ...(res.switched && had ? { cli_session: null, context: null } : {}) });
       if (res.switched) this.addItem(id, 'system', 'status', `${accountSwitchText(res.switched, acc)}${had ? ` ${tr('msg.acct.switchedFresh', { to: acc.label ?? acc.id })}` : ''}`);
       chat = this.must(id); s = planOnly ? { ...chat, permission: 'leer' } : chat;
