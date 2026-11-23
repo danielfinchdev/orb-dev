@@ -44,7 +44,7 @@ pub fn e2e(separate_data: bool) -> E2e {
 }
 
 /// How long the window stays hidden waiting for the page's first screen.
-pub const REVEAL_LIMIT: Duration = Duration::from_secs(5);
+pub const REVEAL_LIMIT: Duration = Duration::from_millis(2500);
 
 /// Shows the main window once (the page's `window_ready` or the time limit, whichever comes first). A test build with a
 /// hidden window never shows it.
