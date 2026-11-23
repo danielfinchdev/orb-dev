@@ -684,7 +684,8 @@ export class Sessions {
       const line = accountProblemText(res.problem);
       const sig = `${res.problem.kind}:${res.problem.account}:${Math.round((res.problem.until ?? 0) / 600_000)}`;
       // what the user typed is not lost: it waits in the chat's queue until the account can take it or the chat is changed
-      const held = showUser && !onFinish && s.kind === 'chat';
+      // Only a plain message can wait: the queue keeps text and pictures, not a prompt, a «/plan» level or what the user asked for.
+      const held = showUser && !onFinish && s.kind === 'chat' && prompt === undefined && !turnPermission && !Array.isArray(asked);
       if (held) this.enqueue(id, text, images);
       if (this.holds.get(id)?.sig !== sig) {
         const old = this.holds.get(id); if (old?.timer) clearTimeout(old.timer);

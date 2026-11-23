@@ -354,6 +354,29 @@ test('a fixed direct chat at its limit can be told to wait: its held messages go
   assert.equal(sessions.holds.has(s.id), false);
 });
 
+test('a fixed chat at its limit: «/plan», goal and context sends fail instead of waiting; a plain one is held', async () => {
+  reset();
+  const s = chat({ account: 'claude-2' });
+  pauseAccount(board, 'claude-2', 3_600_000, '');
+  assert.throws(() => sessions.send(s.id, 'plan', { turnPermission: 'leer' }), /límite/);
+  assert.throws(() => sessions.send(s.id, 'ci', { asked: [] }), /límite/);
+  assert.throws(() => sessions.send(s.id, 'meta', { prompt: 'meta + contexto' }), /límite/);
+  assert.deepEqual(sessions.queue(s.id), [], 'nothing was left in the queue');
+  assert.equal(sessions.send(s.id, 'normal'), null);
+  assert.deepEqual(sessions.queue(s.id).map((q) => q.text), ['normal']);
+  reset();
+});
+
+test('choosing «automática» with another account waiting drops that account from what waits', () => {
+  const c = board.createConversation({ title: 'pend auto', agent: 'claude', account: 'claude', account_fixed: 0 });
+  const lane = orchestrator.lane(c.id);
+  lane.busy = true;
+  lane.change({ account: 'claude-2', account_fixed: 1 });
+  lane.change({ account_fixed: 0 });
+  assert.deepEqual(board.settingJson(`pending_brain:${c.id}`), { account_fixed: 0 });
+  lane.busy = false; lane.pending = null; board.settingJson(`pending_brain:${c.id}`, null);
+});
+
 test('the side chat uses the chat account and says when an automatic chat had to use another', async () => {
   reset();
   const s = chat({ account: 'auto' });

@@ -398,6 +398,8 @@ class Lane {
   change(fields) {
     if (this.busy || this.inflight) {
       this.pending = 'agent' in fields ? { ...fields } : { ...(this.pending ?? {}), ...fields };
+      // «automática» keeps the account in use: a waiting choice of another account is dropped, not made automatic
+      if (!('account' in fields) && fields.account_fixed === 0) delete this.pending.account;
       this.board.settingJson(`pending_brain:${this.id}`, this.pending);
       this.push();
       return { deferred: true };
