@@ -59,16 +59,17 @@ test('the head is the wordmark; the robot is drawn only in the Orb theme', () =>
   assert.match(sidebar, /onPointerDown=\{startResize\}/, 'its edge still drags');
 });
 
-test('the filter sits inside the search box and «+» is an icon button', () => {
+test('the filter sits inside the search box, followed by the «New project» and «New chat» icon buttons', () => {
   const pc = inbox.slice(inbox.indexOf('const pcSearch'), inbox.indexOf('const search = phone'));
   assert.match(pc, /<SearchInput /);
   assert.match(pc, /absolute top-1\/2 right-1[\s\S]*<FilterMenu inline /, 'the filter is a child of the box, at its right end');
-  assert.ok(pc.indexOf('<FilterMenu inline') < pc.indexOf('<OrbNewMenu />'), 'and «+» comes after the box');
-  assert.match(inbox, /<IconButton label=\{t\('chats\.new'\)\}[^>]*data-testid="chats-new"><Plus \/><\/IconButton>/);
+  assert.ok(pc.indexOf('<FilterMenu inline') < pc.indexOf('<OrbNewButtons />'), 'and the two buttons come after the box');
+  assert.match(inbox, /<IconButton label=\{t\('nav\.newChat'\)\}[^>]*onClick=\{startChatFlow\} data-testid="chats-new"><MessageSquarePlus \/><\/IconButton>/);
+  assert.match(inbox, /<IconButton label=\{t\('newchat\.project'\)\}[^>]*onClick=\{newProjectChat\} data-testid="sidebar-new-project">/);
   assert.match(inbox, /<IconButton small label=\{t\('orbchats\.filter'\)\}/);
   // The phone keeps its own search row and the round button.
   assert.match(inbox, /const phoneSearch = \(/);
-  assert.match(inbox, /phone \? <OrbNewMenu fab \/> : null/);
+  assert.match(inbox, /phone \? <OrbNewMenu \/> : null/);
 });
 
 test('the rows of the list: the agent mark (12 px), the working spinner and the ⋯ over the row', () => {
@@ -117,7 +118,7 @@ test('step 5D: icons draw with a 1.75 stroke, the menus have 220 px and 31 px ro
   assert.match(css, /svg\.lucide \{ stroke-width: 1\.75; \}/);
   const overlay = read('components/ui/overlay.jsx');
   assert.ok(overlay.match(/text-control leading-\[1\.45\] outline-hidden/g)?.length >= 3, 'items, ticks and radios: 6 + 18.85 + 6 px');
-  assert.match(inbox, /side=\{fab \? 'top' : 'bottom'\} className="w-\[220px\]"/);
+  assert.match(inbox, /side="top" className="w-\[220px\]"/);
   assert.match(inbox, /<IconButton label=\{t\('orbchats\.sortFilter'\)\} data-testid="sidebar-sort"><ArrowUpDown className="size-3\.5" \/>/, '32 px button, 14 px icon');
 });
 

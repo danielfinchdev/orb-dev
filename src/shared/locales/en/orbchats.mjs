@@ -123,5 +123,9 @@ export default {
   'orbchats.pLog': 'Log',
   'orbchats.pSettings': 'Project settings',
   'orbchats.pGod': 'Open in God mode',
-  'orbchats.pNoPath': 'No folder'
+  'orbchats.pNoPath': 'No folder',
+  'newchat.project': 'New project',
+  'newchat.hint': 'Choose where to start',
+  'newchat.pickHint': "Pick the chat's project, or start without one. Ctrl+1, Ctrl+2… pick directly.",
+  'newchat.search': 'Search projects'
 };

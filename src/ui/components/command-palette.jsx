@@ -9,8 +9,9 @@ import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx'
 import { useSearch } from '@/lib/search.js';
 import { isPaletteKey, paletteGroups, PALETTE_EVENT, FINDER_EVENT, openFinder } from '@/lib/palette.js';
 import { ProjectFinder } from '@/components/project-finder.jsx';
+import { startChatFlow } from '@/components/project-actions.jsx';
 import { useShortcut } from '@/lib/keys.js';
-import { useStore, go, newChat, openSettings, openOrbInfo, fullPc } from '@/lib/store.js';
+import { useStore, go, openSettings, openOrbInfo, fullPc } from '@/lib/store.js';
 import { STATUS } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
@@ -18,7 +19,7 @@ import { cn } from '@/lib/utils.js';
 // The places and actions, in the sidebar's order.
 function commands(t, config) {
   return [
-    { key: 'new-chat', icon: MessageSquarePlus, label: t('nav.newChat'), run: () => newChat() },
+    { key: 'new-chat', icon: MessageSquarePlus, label: t('nav.newChat'), run: startChatFlow },
     { key: 'new-project', icon: FolderPlus, label: t('comp.projects.newTitle'), run: newProjectChat },
     { key: 'tasks', icon: ClipboardCheck, label: t('nav.tasks'), run: () => go({ view: 'tasks' }) },
     { key: 'projects', icon: FolderGit2, label: t('nav.projects'), run: () => go({ view: 'projects' }) },

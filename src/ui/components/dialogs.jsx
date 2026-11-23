@@ -7,6 +7,7 @@ import { FieldError } from '@/components/ui/primitives.jsx';
 import { useStore, setState } from '@/lib/store.js';
 import { errorText, cn } from '@/lib/utils.js';
 import { t } from '@/lib/i18n.js';
+import { NewChatPicker } from '@/components/new-chat-picker.jsx';
 
 let seq = 0;
 // The same dialog asked for again while it is open (a double click, or clicks queued while the app was busy) does not
@@ -34,6 +35,9 @@ export const choose = (title, description, options, { testid, cancel = true, noC
 // body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
 // okDisabled(values): the accept button stays off while it is true (a help for the eye: onOk still checks); okDanger draws it red.
 export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false, noClose = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide, okDisabled, okDanger, noClose });
+
+// the project «New chat» starts in: resolves { project } (null: no project), or null when closed.
+export const pickProject = () => open({ kind: 'pick', title: t('nav.newChat') });
 
 function FormDialog({ d }) {
   const [values, setValues] = useState(d.initial);
@@ -106,7 +110,7 @@ export function DialogHost() {
               <Button variant={d.tone === 'primary' ? 'default' : d.danger ? 'destructive' : d.warn ? 'warn' : 'default'} data-autofocus={d.danger && d.cancel ? undefined : ""} onClick={() => close(d.id, true)}>{d.ok}</Button>
             </DialogFooter>
           </>
-        ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : <FormDialog d={d} />}
+        ) : d.kind === 'choice' ? <ChoiceDialog d={d} /> : d.kind === 'pick' ? <NewChatPicker onChoose={(v) => close(d.id, v)} /> : <FormDialog d={d} />}
       </DialogContent>
     </Dialog>
   ));

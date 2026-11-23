@@ -124,5 +124,9 @@ export default {
   'orbchats.pLog': 'Bitácora',
   'orbchats.pSettings': 'Ajustes del proyecto',
   'orbchats.pGod': 'Abrir en God mode',
-  'orbchats.pNoPath': 'Sin carpeta'
+  'orbchats.pNoPath': 'Sin carpeta',
+  'newchat.project': 'Nuevo proyecto',
+  'newchat.hint': 'Elige dónde empezar',
+  'newchat.pickHint': 'Elige el proyecto del chat, o empieza sin proyecto. Ctrl+1, Ctrl+2… eligen directamente.',
+  'newchat.search': 'Buscar proyecto'
 };
