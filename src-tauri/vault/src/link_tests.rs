@@ -289,3 +289,15 @@ fn the_typed_secret_depends_on_the_pc_key() {
   let salt: Vec<u8> = (1..=16).collect();
   assert_ne!(typed_secret("abcdefgh", &salt, &[1u8; 32]).unwrap().as_str(), typed_secret("abcdefgh", &salt, &[2u8; 32]).unwrap().as_str());
 }
+
+#[test]
+fn a_code_is_not_installed_when_the_pc_keys_changed_during_the_stretch() {
+  let (mut v, dir) = new_vault("rekey-mid");
+  let t = token(&mut v, Strength::Hello, PURPOSE);
+  let prep = prepare(&mut v, &t, NOW).unwrap().ok().unwrap();
+  let typed = stretch(&prep).unwrap();
+  v.set("remote_keys", json!({ "priv": b64(&[6u8; 32]) })).unwrap();
+  assert_eq!(install(&mut v, prep, typed, NOW).err(), Some(Code::Locked));
+  assert_eq!(info(&mut v, NOW)["ok"], json!(false), "no code went live");
+  tidy(&dir);
+}

@@ -95,6 +95,7 @@ pub fn typed_secret(code: &str, salt: &[u8], pc_pub: &[u8]) -> Option<Locked> {
 /// What a new code is made of before its slow part (the typed code's scrypt) is done.
 pub struct Prep {
   pc_pub: [u8; 32],
+  key_id: Option<String>,
   code: Locked,
   secret: Locked,
   salt: Locked,
@@ -109,7 +110,7 @@ pub fn prepare(v: &mut Vault, token: &str, now: u64) -> Result<Result<Prep, Valu
   let Some(pc) = v.pc_private() else { return Ok(Err(json!({ "ok": false, "reason": "noKeys" }))) };
   let Ok(pc_arr) = <[u8; 32]>::try_from(pc.as_slice()) else { return Err(Code::Damaged) };
   let pc_pub = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(pc_arr));
-  Ok(Ok(Prep { pc_pub: *pc_pub.as_bytes(), code: pick(8), secret: crypto::random(16), salt: crypto::random(16) }))
+  Ok(Ok(Prep { pc_pub: *pc_pub.as_bytes(), key_id: v.key_id().map(String::from), code: pick(8), secret: crypto::random(16), salt: crypto::random(16) }))
 }
 /// The slow part, without the vault held.
 pub fn stretch(p: &Prep) -> Option<Locked> {
@@ -117,7 +118,10 @@ pub fn stretch(p: &Prep) -> Option<Locked> {
 }
 /// Step 3, with the vault held again: the code goes live (never after the vault was locked meanwhile). -> its parts, once.
 pub fn install(v: &mut Vault, p: Prep, typed: Locked, now: u64) -> Result<Value, Code> {
-  if !v.unlocked() {
+  // The vault may have been locked, or its data key or the PC's keys changed (a rekey), while the scrypt ran: the typed
+  // secret was made for the old PC key and would not open anything.
+  let same_pc = v.pc_private().and_then(|pc| <[u8; 32]>::try_from(pc.as_slice()).ok()).is_some_and(|a| x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(a)).as_bytes() == &p.pc_pub);
+  if !v.unlocked() || v.key_id().map(String::from) != p.key_id || !same_pc {
     return Err(Code::Locked);
   }
   let qr = Locked::from_slice(b64url(p.secret.as_slice()).as_bytes());
