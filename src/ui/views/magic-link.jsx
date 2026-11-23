@@ -17,6 +17,7 @@ import { cn, ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { notifyError } from '@/lib/notify.js';
 import { quiet } from '@/lib/quiet.js';
+import { allowPhone } from './approve.jsx';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe };
 
@@ -152,6 +153,14 @@ function OutsideGuide() {
 function DevicesCard({ devices, reload, onPair }) {
   const t = useT();
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
+  // The phones that may approve sensitive actions with their fingerprint (id -> true); this PC's window only.
+  const [approving, setApproving] = useState({});
+  const loadApproving = () => { if (!bridge.mobile) call('approve.devices').then((r) => setApproving(Object.fromEntries((r?.phones ?? []).map((p) => [p.id, p.registered])))).catch(quiet); };
+  useEffect(loadApproving, [devices]);
+  const removePhone = async (d) => {
+    const unlock = await unlockCore('unlink'); if (!unlock) return;
+    await act(call('approve.unregister', { id: d.id, unlock }), t('approve.removed')); loadApproving();
+  };
   const revoke = async (d) => {
     if (!(await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true }))) return;
     const unlock = await unlockCore('unlink'); if (!unlock) return;
@@ -175,6 +184,9 @@ function DevicesCard({ devices, reload, onPair }) {
                     <DropdownMenuTrigger asChild><Button size="icon-xs" variant="ghost" aria-label={t('settings.moreOptions')} title={t('settings.moreOptions')} data-testid="link-menu"><Ellipsis /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuItem onSelect={() => rename(d)} data-testid="link-rename"><Pencil />{t('link.rename')}</DropdownMenuItem>
+                      {d.kind === 'phone' && !bridge.mobile ? (approving[d.id]
+                        ? <DropdownMenuItem onSelect={() => removePhone(d)} data-testid="approve-remove"><Smartphone />{t('approve.remove')}</DropdownMenuItem>
+                        : <DropdownMenuItem onSelect={() => allowPhone(d, { reload: loadApproving })} data-testid="approve-allow"><Smartphone />{t('approve.allow', { name: d.name })}</DropdownMenuItem>) : null}
                       <DropdownMenuItem variant="destructive" onSelect={() => revoke(d)} data-testid="link-revoke"><Trash2 />{t('link.revoke')}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
