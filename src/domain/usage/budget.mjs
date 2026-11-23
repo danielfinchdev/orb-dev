@@ -352,6 +352,7 @@ export function accountProblemText(p) {
   const name = nameOf(p.account);
   if (p.kind === 'gone') return tr('msg.acct.gone', { account: p.account });
   if (p.kind === 'nosession') return tr('msg.acct.nosession', { account: name });
+  if (p.kind === 'identity' || p.kind === 'identityNoMail') return tr(p.kind === 'identity' ? 'msg.acct.identityMismatch' : 'msg.acct.identityNoMail', { account: name });
   return p.until ? tr('msg.acct.limit', { account: name, time: untilText(p.until) }) : tr('msg.acct.limitNoTime', { account: name });
 }
 export function accountSwitchText(sw, to) {

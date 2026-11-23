@@ -189,6 +189,12 @@ export class Board {
     // An account chosen on purpose: it must belong to the task's agent.
     if (account && !(ctx.config.accounts ?? []).some((a) => a.id === account && (agent === 'any' || a.agent === agent))) throw new Error(tr('sys.board.accountNotOf', { account, agent }));
     if (account && agent === 'any') agent = (ctx.config.accounts ?? []).find((a) => a.id === account).agent;
+    // A chat fixed to one account hands its tasks to that account: another account of the same agent is refused.
+    const fixed = conversation?.account_fixed && conversation.account ? (ctx.config.accounts ?? []).find((a) => a.id === conversation.account) : null;
+    if (fixed && agent === fixed.agent) {
+      if (account && account !== fixed.id) throw new Error(tr('msg.acct.taskOther', { account: fixed.label ?? fixed.id, agent: fixed.agent }));
+      account = fixed.id;
+    }
     this.checkAvailable(agent);
     if (!['auto', 'manual'].includes(launch)) throw new Error(tr('sys.board.badLaunch'));
     if (!Array.isArray(depends_on) || depends_on.length > 20) throw new Error(tr('sys.board.dependsMax'));

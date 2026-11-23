@@ -647,6 +647,12 @@ export default {
   "msg.acct.badAgent": "that account is not an {agent} one",
   "msg.acct.noSession": "that account is not signed in",
   "msg.acct.pending": "The change to **{to}** will apply when this turn ends.",
+  "msg.acct.identityMismatch": "Does not match: the folder of **{account}** now holds the login of another account. The message was not sent: open Agents and sign in with the right account.",
+  "msg.acct.identityNoMail": "Does not match: **{account}** no longer signs in with a subscription account (an API key or another gateway answers). The message was not sent: open Agents and sign in again.",
+  "msg.acct.apiKey": "**{account}** would spend through an API key, not through the subscription.",
+  "msg.acct.duplicate": "**{a}** and **{b}** are the same account: its usage would be counted twice.",
+  "msg.api.noIdentity": "There is no different login to remember for that account.",
+  "msg.acct.taskOther": "This chat only uses **{account}**: a task of its cannot run on another {agent} account.",
   "msg.api.accountQueued": "this account has messages waiting in a conversation. Wait for them to be answered or remove them",
   "msg.api.holdNone": "this chat is not waiting for an account",
   "msg.api.accountPending": "a change to this account is waiting in a chat for its turn to end. Wait a moment"

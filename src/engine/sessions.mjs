@@ -23,6 +23,7 @@ import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
 import { account as findAccount, accountEnv, brainAccount } from '../domain/usage/accounts.mjs';
 import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
+import { checkIdentity } from './identity.mjs';
 import { pickAccount, recordSpend, resolveAccount, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
 import { browserKey } from './browser/browser-key.mjs';
 import { androidAllowed } from './host/android.mjs';
@@ -395,6 +396,21 @@ export class Sessions {
     }
   }
 
+  // Before the first message of a new process: who the folder is signed in as. A different login (or none by e-mail where
+  // there was one) holds the message back and says so; an API key or a duplicated account is told and the turn goes on.
+  async identityGate(id, acc, entry) {
+    if (entry.identityChecked) return null;
+    const r = await checkIdentity({ acc, live: entry.live, emit: (event, payload) => this.emit(event, payload) });
+    for (const line of r.notes) this.addItem(id, 'system', 'status', line);
+    if (!r.block) { entry.identityChecked = true; return null; }
+    const problem = { kind: r.kind === 'noMail' ? 'identityNoMail' : 'identity', account: acc.id };
+    this.board.settingJson(`account_problem:${id}`, problem);
+    this.addItem(id, 'system', 'status', r.text);
+    this.emit('session:account', { id, problem });
+    this.closeLive(id);
+    return { final: r.text, text: '', isError: true, held: true };
+  }
+
   getLive(s, acc, { taskId, budgetUsd } = {}) {
     const key = this.liveKey(s, acc);
     const existing = this.lives.get(s.id);
@@ -419,7 +435,7 @@ export class Sessions {
     if (s.agent === 'cursor') keepOutOfGit(s.cwd, [`${ATTACH_DIR}/`, ...CURSOR_FILES]);
     // the agent's own API key from the vault (only the names of its table, src/domain/security/agent-keys.mjs): in its
     // process environment and nowhere else; its value is hidden from the agent's log and events (secretValues).
-    const keyEnv = agentKeyEnv(ctx.master, s.agent);
+    const keyEnv = agentKeyEnv(ctx.master, s.agent, acc);
     entry.live = a.createLive({
       promptDir, secretValues: Object.values(keyEnv),
       exe, cwd: s.cwd, model: s.model, reasoning: s.reasoning, permission: s.permission,
@@ -748,14 +764,20 @@ ${body}`;
     if (attached.length) run.last = tr('sys.attach.preparing');
     const prepared = attached.length ? prepareAttachments(attached, { nativeImages, log: (m) => this.log(m) }) : Promise.resolve({ images: [], text: '' });
     // the light photo of the folder for the «Cambios» panel (turns.mjs): the baseline before the first turn, one more when each ends.
-    prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id, alive, { mark: shown?.id }); return p; }).then((p) => (run.stopped ? { final: '', text: '', isError: true } : entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images }))).then((result) => {
+    prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id, alive, { mark: shown?.id }); return p; }).then(async (p) => {
+      if (run.stopped) return { final: '', text: '', isError: true };
+      const held = await this.identityGate(id, acc, entry); // a process of another login never gets the message
+      return held ?? entry.live.send({ text: p.text ? `${body}
+
+${p.text}` : body, images: p.images });
+    }).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);
       try { this.applyPendingAccount(id); } catch (error) { this.log(`cambio de cuenta ${id}: ${error.message}`); }
       const failed = result.isError && !run.stopped;
       // A conversation that cannot be resumed (old or deleted on the agent's side) starts over on the next message.
-      if (failed && resumed && !result.text && /resum|no conversation|not found|malformed|thread|session/i.test(result.final ?? '')) {
+      if (failed && resumed && !result.held && !result.text && /resum|no conversation|not found|malformed|thread|session/i.test(result.final ?? '')) {
         this.update(id, { cli_session: null }); this.closeLive(id);
         this.addItem(id, 'system', 'status', tr('msg.sessions.cannotResume', { label: a.label }));
       }
@@ -775,7 +797,7 @@ ${body}`;
       if (!onFinish && s.kind === 'chat') { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
       if (!onFinish && s.kind === 'chat') { try { this.suggest.after(id, { request: text, result, stopped: run.stopped }); } catch (error) { this.log(`sugerencia ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
-      if (!run.stopped && !limited && !onFinish) {
+      if (!run.stopped && !limited && !result.held && !onFinish) {
         // a fixed chat whose account cannot take it now keeps its queue: send() would say why and the message would be lost
         const blocked = s.kind === 'chat' && this.queue(id).length ? this.accountFor(this.get(id) ?? s).problem : null;
         if (blocked) { this.addItem(id, 'system', 'status', accountProblemText(blocked)); this.emit('session:account', { id, problem: blocked }); }

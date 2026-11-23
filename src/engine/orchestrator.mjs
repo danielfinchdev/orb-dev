@@ -19,6 +19,7 @@ import { mcpServersOf } from './sessions.mjs';
 import { placeAttachments, prepareAttachments } from './host/attachments.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
 import { accountEnv, brainAccount, configuredAccount } from '../domain/usage/accounts.mjs';
+import { checkIdentity } from './identity.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
 import { rememberModels } from './usage/catalog.mjs';
 import { recordRate, resolveAccount, recordSpend, usageBrake, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
@@ -565,6 +566,18 @@ class Lane {
     const prepared = attachments.length ? await prepareAttachments(attachments, { nativeImages: adapter(this.liveAgent).caps?.images === true, log: (m) => this.orch.log(m) }) : null;
     if (generation !== this.generation || this.orch.closing) return undefined;
     const live = this.live; const run = this.inflight;
+    // A new process says who it is signed in as before its first message: another login holds the message back.
+    if (this.identityLive !== live) {
+      const who = await checkIdentity({ acc: { id: this.liveAccount, agent: this.liveAgent }, live, emit: (event, payload) => this.orch.emit(event, payload) });
+      if (generation !== this.generation || this.orch.closing) return undefined;
+      for (const note of who.notes) this.say('system', note);
+      if (who.block) {
+        this.say('system', who.text);
+        if (fresh) this.forget(); else this.closeLive();
+        this.busy = false; this.push(); return { ok: false };
+      }
+      this.identityLive = live;
+    }
     const timer = setTimeout(() => {
       this.say('system', tr('msg.orch.timeLimit'), { kind: 'turn-stopped', cause: 'time' }); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
       setTimeout(() => { if (this.inflight === run && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();

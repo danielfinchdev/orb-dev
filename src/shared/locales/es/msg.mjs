@@ -647,6 +647,12 @@ export default {
   "msg.acct.badAgent": "esa cuenta no es de {agent}",
   "msg.acct.noSession": "esa cuenta no tiene sesión iniciada",
   "msg.acct.pending": "El cambio a **{to}** se aplicará cuando acabe este turno.",
+  "msg.acct.identityMismatch": "No coincide: la carpeta de **{account}** tiene ahora la sesión de otra cuenta. El mensaje no ha salido: abre Agentes e inicia sesión con la cuenta correcta.",
+  "msg.acct.identityNoMail": "No coincide: **{account}** ya no inicia sesión con una cuenta de suscripción (responde una clave de API u otra pasarela). El mensaje no ha salido: abre Agentes e inicia sesión de nuevo.",
+  "msg.acct.apiKey": "**{account}** gastaría por clave de API, no por la suscripción.",
+  "msg.acct.duplicate": "**{a}** y **{b}** son la misma cuenta: el uso se contaría dos veces.",
+  "msg.api.noIdentity": "No hay una sesión distinta que recordar para esa cuenta.",
+  "msg.acct.taskOther": "Este chat usa solo **{account}**: una tarea suya no puede ir con otra cuenta de {agent}.",
   "msg.api.accountQueued": "esta cuenta tiene mensajes en cola en alguna conversación. Espera a que se atiendan o quítalos",
   "msg.api.holdNone": "este chat no está esperando una cuenta",
   "msg.api.accountPending": "un cambio a esta cuenta espera en un chat a que acabe su turno. Espera un momento"

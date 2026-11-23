@@ -9,7 +9,7 @@ import { checkDevTools, devToolsBrief, needsDevTools } from '../../platform/dev-
 import { git } from '../../platform/git.mjs';
 import { prepareWorkdir } from '../../domain/tasks/checkpoints.mjs';
 import { taskBudgetUsd } from '../../domain/usage/budget.mjs';
-import { account as findAccount } from '../../domain/usage/accounts.mjs';
+import { account as findAccount, fixedAccountOf } from '../../domain/usage/accounts.mjs';
 import { oneLine, MAX_DEP_RESULT } from '../../shared/text.mjs';
 import { redactSecrets } from '../../shared/secrets-scan.mjs';
 import { browserOn } from '../sessions.mjs';
@@ -73,8 +73,11 @@ ${deps ? `\n## Hecho antes (ya está en ${folder ? 'la carpeta' : 'tu copia'})\n
   }
 
   launch(task, agent, accountId = agent, { isolate = false, inCopyOf = null } = {}) {
-    const acc = findAccount(accountId);
     const { board } = this;
+    // the chat's fixed account is the one its task runs on, even if the open choice (agent: any) was settled on another one
+    const fixed = fixedAccountOf(board, task.conversation_id);
+    if (fixed && fixed.agent === agent) accountId = fixed.id;
+    const acc = findAccount(accountId);
     const fresh = board.task(task.id);
     // nor one of a project being deleted (its pending tasks were cancelled; this is the last guard).
     if (!fresh || fresh.status !== 'queued' || this.running.has(task.id) || !board.approvalOk(fresh) || board.isDeleting(fresh.project)) return;
