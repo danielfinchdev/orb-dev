@@ -369,7 +369,7 @@ class ThisPhoneTest {
     @Test fun saysWhenTheLockTurnedItselfOff() {
         backend.lock.value = LockSettings(enabled = false, autoOff = true)
         show()
-        rule.onNodeWithText(ThisPhoneTexts.LOCK_AUTO_OFF).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(ThisPhoneTexts.lockAutoOff()).performScrollTo().assertIsDisplayed()
     }
 
     // ------------------------------------------------------------------------------------------------ Desvincular y más opciones

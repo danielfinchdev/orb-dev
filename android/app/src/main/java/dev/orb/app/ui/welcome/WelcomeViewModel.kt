@@ -76,6 +76,9 @@ data class WelcomeUiState(
     // The person said «Ahora no» to notices: the bottom message points to «Este móvil».
     val noticesLater: Boolean = false,
     val noticesOn: Boolean = false,
+    // The offer to lock the app with the fingerprint or face: shown when the phone can do it and it is not on yet; it starts ticked.
+    val protectOffer: Boolean = false,
+    val protect: Boolean = true,
 ) {
     /** How many of the three steps of «Enlazando» really happened: the PC's code, the password, the key saved. */
     val stepsDone: Int get() = when (stage) {
@@ -95,6 +98,16 @@ interface NoticeGate {
     fun request()
 }
 
+/** The app lock as the first-run flow needs it. */
+interface LockOffer {
+    /** True when the phone has a fingerprint, face or PIN to lock the app with. */
+    fun available(): Boolean
+    val enabled: Boolean
+
+    /** Turns the lock on after the system authenticated the person; [onDone] gets whether it is on. */
+    fun enable(onDone: (Boolean) -> Unit)
+}
+
 /** The fingerprint as the groups the person compares with the PC's screen (the same ones the PC shows). */
 fun fingerprintGroups(fp: String): List<String> = fp.split('-', ' ').filter { it.isNotBlank() }
 
@@ -105,6 +118,7 @@ class WelcomeViewModel(
     private val onLinked: (PairOk) -> Unit,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val notices: NoticeGate? = null,
+    private val lockOffer: LockOffer? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(WelcomeUiState())
     val state: StateFlow<WelcomeUiState> = _state.asStateFlow()
@@ -197,7 +211,8 @@ class WelcomeViewModel(
             resolved = null
             val ask = try { notices?.shouldAsk() == true } catch (e: Exception) { false }
             val on = try { notices?.enabled == true } catch (e: Exception) { false }
-            _state.update { it.copy(checking = false, stage = WelcomeStage.Done, passwordLength = 0, noticeDialog = ask, noticesOn = on) }
+            val offer = try { lockOffer?.let { it.available() && !it.enabled } == true } catch (e: Exception) { false }
+            _state.update { it.copy(checking = false, stage = WelcomeStage.Done, passwordLength = 0, noticeDialog = ask, noticesOn = on, protectOffer = offer, protect = true) }
         }
     }
 
@@ -206,6 +221,17 @@ class WelcomeViewModel(
         if (_state.value.checking || _state.value.stage != WelcomeStage.Fingerprint) return
         resolved = null
         _state.update { it.copy(stage = WelcomeStage.Entry, pc = null, password = "", passwordLength = 0, showPassword = false, error = null, passwordError = null) }
+    }
+
+    fun setProtect(on: Boolean) = _state.update { it.copy(protect = on) }
+
+    /** «Ir a Chats»: if the offer is still ticked the system asks for the fingerprint first; the person leaves either way. */
+    fun finish(leave: () -> Unit) {
+        val s = _state.value
+        val offer = lockOffer
+        if (!s.protectOffer || !s.protect || offer == null) return leave()
+        _state.update { it.copy(protectOffer = false) }
+        try { offer.enable { leave() } } catch (e: Exception) { leave() }
     }
 
     /** «Activar» in «¿Avisos de Orb?»: only now does Android's own permission request appear. */

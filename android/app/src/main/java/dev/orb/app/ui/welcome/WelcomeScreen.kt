@@ -58,6 +58,7 @@ import dev.orb.app.ui.kit.OrbKit
 import dev.orb.app.ui.kit.OrbNote
 import dev.orb.app.ui.kit.OrbProgress
 import dev.orb.app.ui.kit.OrbSheet
+import dev.orb.app.ui.kit.OrbSwitch
 import dev.orb.app.ui.kit.OrbSnackbar
 import dev.orb.app.ui.kit.OrbSpinner
 import dev.orb.app.ui.kit.OrbTextField
@@ -66,6 +67,12 @@ import dev.orb.app.ui.kit.OrbWordmark
 import dev.orb.app.ui.theme.OrbFonts
 
 /** What the screens call; the real one is the view model, a picture of a state passes empty ones. */
+object WelcomeTexts {
+    const val PROTECT = "Proteger Orb con tu huella o tu cara"
+    const val PROTECT_EN = "Protect Orb with your fingerprint or face"
+    fun protect(language: String = java.util.Locale.getDefault().language) = if (language == "en") PROTECT_EN else PROTECT
+}
+
 class WelcomeActions(
     val onScan: () -> Unit = {},
     val openSheet: () -> Unit = {},
@@ -84,6 +91,7 @@ class WelcomeActions(
     val done: () -> Unit = {},
     val openThisPhone: () -> Unit = {},
     val dismissError: () -> Unit = {},
+    val setProtect: (Boolean) -> Unit = {},
 )
 
 /** The text on the clipboard, or null when there is none. */
@@ -115,7 +123,7 @@ fun WelcomeScreen(
         onScan = onScan, openSheet = vm::openSheet, closeSheet = vm::closeSheet, setLink = vm::setLink, setCode = vm::setCode,
         setAddress = vm::setAddress, paste = { vm.paste(readClipboard(context)) }, resolve = vm::resolve, back = vm::back,
         setPassword = vm::setPassword, toggleShowPassword = vm::toggleShowPassword, confirm = vm::confirm,
-        activateNotices = vm::activateNotices, declineNotices = vm::declineNotices, done = onDone, openThisPhone = onOpenThisPhone,
+        activateNotices = vm::activateNotices, declineNotices = vm::declineNotices, done = { vm.finish(onDone) }, openThisPhone = onOpenThisPhone, setProtect = vm::setProtect,
         dismissError = vm::dismissError,
     )
     WelcomeContent(state, actions, modifier)
@@ -336,6 +344,12 @@ private fun LinkingPage(state: WelcomeUiState, a: WelcomeActions) {
                 }
             }
             if (state.stage != WelcomeStage.Done) OrbProgress(state.stepsDone / 3f + 1f / 6f, Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp), description = "Enlazando")
+            if (done && state.protectOffer) {
+                Row(Modifier.padding(horizontal = 24.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(WelcomeTexts.protect(), Modifier.weight(1f), color = OrbKit.foreground, fontSize = 15.sp)
+                    OrbSwitch(state.protect, a.setProtect, label = WelcomeTexts.protect())
+                }
+            }
             if (done) OrbFoot(Modifier.padding(top = 24.dp)) {
                 OrbButton("Ir a Chats", a.done, kind = OrbButtonKind.Primary, block = true, big = true)
             }

@@ -374,6 +374,43 @@ class WelcomeViewModelTest {
         assertEquals("orb://enlazar?x=1", vm.state.value.link)
     }
 
+    private class FakeLockOffer(var available: Boolean = true, override var enabled: Boolean = false) : LockOffer {
+        var enableCalls = 0
+        override fun available() = available
+        override fun enable(onDone: (Boolean) -> Unit) { enableCalls++; onDone(true) }
+    }
+
+    private fun linkedWith(offer: LockOffer?) = WelcomeViewModel(FakeLinker(Result.success(ok())), "Test", {}, dispatcher, null, offer).also {
+        it.fillCode(); it.resolve(); it.setPassword("x"); it.confirm()
+    }
+
+    @Test fun theLockIsOfferedAlreadyTickedAndTurnedOnWhenLeaving() {
+        val offer = FakeLockOffer()
+        val vm = linkedWith(offer)
+        assertTrue(vm.state.value.protectOffer)
+        assertTrue(vm.state.value.protect)
+        var left = 0
+        vm.finish { left++ }
+        assertEquals(1, offer.enableCalls)
+        assertEquals(1, left)
+    }
+
+    @Test fun anUntickedOfferLeavesWithoutTouchingTheLock() {
+        val offer = FakeLockOffer()
+        val vm = linkedWith(offer)
+        vm.setProtect(false)
+        var left = 0
+        vm.finish { left++ }
+        assertEquals(0, offer.enableCalls)
+        assertEquals(1, left)
+    }
+
+    @Test fun noOfferWhenThePhoneCannotLockOrItIsAlreadyOn() {
+        assertFalse(linkedWith(FakeLockOffer(available = false)).state.value.protectOffer)
+        assertFalse(linkedWith(FakeLockOffer(enabled = true)).state.value.protectOffer)
+        assertFalse(linkedWith(null).state.value.protectOffer)
+    }
+
     @Test fun noticeDialogIsOfferedOnceLinkedWhenAndroidWouldAsk() {
         val notices = FakeNotices()
         val vm = vm(FakeLinker(Result.success(ok())), notices)
