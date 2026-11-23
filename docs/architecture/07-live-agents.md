@@ -30,3 +30,17 @@ events: item · delta · session · approval · approval_done · context · rate
 2. Its id in `AGENT_IDS` and `DEFAULT_CONFIG.agents` in `src/platform/paths.mjs`.
 3. Its icon in `src/ui/components/agent-icon.jsx`.
 4. Its installer item in `src/engine/host/installer.mjs`.
+
+## Several accounts of the same agent (3.8.10)
+
+Code: `src/domain/usage/accounts.mjs`, `src/engine/api/accounts.mjs`, `src/engine/identity.mjs`, `src/agents/identity.mjs`
+and `src/shared/account-marks.mjs` (initials and colour). Tests: `test/cuentas-3810*.test.mjs`.
+
+- Each chat has an account mode: **fixed** (`account_fixed`, the chat only runs on that account and holds the message with
+  a notice if it cannot) or **automatic** (Orb picks the account with the most margin and switches only while the chat is
+  idle, telling you). A switch asked for during a running turn waits for it (`pending_brain`). Tasks inherit the chat's
+  fixed account, and the assistant cannot create a task on another account.
+- **Identity check.** Before the first message of a session `whoami` asks the agent who is signed in (Claude `accountInfo()`,
+  Codex `account/read`) and compares an e-mail fingerprint and the id with the account chosen; a mismatch blocks the turn.
+- Credentials: vault API keys go only to accounts without a session. Usage is counted per account. The phone can change a
+  chat's account (`chat.settings`) and shows the mark.

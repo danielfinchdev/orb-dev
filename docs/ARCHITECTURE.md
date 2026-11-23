@@ -33,7 +33,7 @@ section numbers (§N) used across the docs and code comments match the file pref
 | 15 | [Task Review](architecture/15-task-review.md) | Read-only review of a task by another model (CORRECT / WITH ISSUES). |
 | 16 | [Scheduled tasks](architecture/16-scheduled-tasks.md) | Recurring tasks: schedules and how they run. |
 | 17 | ["@" to attach context](architecture/17-to-attach-context.md) | Typing `@` to attach tasks, conversations and logs as context. |
-| 18 | [Report, OK and undo](architecture/18-report-ok-and-undo.md) | The final report, the OK and exact undo of a request. |
+| 18 | [Report, OK and undo](architecture/18-report-ok-and-undo.md) | The final report, the OK, exact undo of a request and its preview. |
 | 19 | [Logs](architecture/19-logs.md) | The assistant's logs (bitácoras): general and per project. |
 | 20 | [GitHub](architecture/20-github.md) | GitHub integration through the `gh` CLI. |
 | 21 | [The agents' browser](architecture/21-the-agents-browser.md) | Orb's own browser for agents (`orb_browser_*`) and the mini window. |
@@ -52,4 +52,4 @@ section numbers (§N) used across the docs and code comments match the file pref
 | 34 | [Permissions](architecture/34-permissions.md) | Who may do what (`permissions.mjs`): this PC, a linked phone or browser, and agents. |
 | 35 | [From 3.7 to 3.8 (migration)](architecture/35-from-37-to-38-migration.md) | The one-time migration of 3.5–3.7 data folders to the 3.8 format. |
 | 36 | [The workspace and core](architecture/36-the-workspace-and-core.md) | The workspace (`C:\Orb`): its folders, moving it, backups, a missing `core` and its protection. |
-| 37 | [The master password and Magic Link](architecture/37-the-master-password-and-magic-link.md) | The master password, the vault and Magic Link sign-in. |
+| 37 | [The master password and Magic Link](architecture/37-the-master-password-and-magic-link.md) | The master password, the vault, Magic Link sign-in, Windows Hello, the recovery code and the link code. |

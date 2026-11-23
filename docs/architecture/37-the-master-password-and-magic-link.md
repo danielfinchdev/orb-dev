@@ -240,3 +240,19 @@ What shows, saves or hands out a secret asks for the password, or for the approv
 - **«Lo he olvidado todo»** (no password, no code): Hello's token with the purpose `rebuild-master`, then the registered
   phone signs `master.rebuild`, then a new password and a new generated code are made in one request (`rebuildFinish`). The
   data key stays, so no phone is unlinked. With no registered phone nothing is made.
+
+## Windows Hello, the recovery code and the link code (3.8.10)
+
+- **Windows Hello** (`src-tauri/vault/src/hello.rs`, `windows_hello.rs`, `src/ui/views/hello.jsx`). Hello is a key pair
+  made by Windows (`Orb:<account>`, in the TPM when there is one). The vault keeps only its public half in `master/hello`
+  and asks it to sign a one-use nonce (two minutes); three failures lock it for 30 seconds. A valid signature gives a token
+  weaker than the password's, so Hello opens the lock screen and protected dialogs but never agent secrets: those still
+  need the password, a recovery code or an approval from the phone. `fake_hello.rs` is the test double.
+- **Recovery code** (`code_ops.rs`, `maestra-codigo.json`). A generated code (never a typed phrase) wraps the data key
+  with HKDF over scrypt, with the file header as AAD and the same cost as `maestra.json`. It unlocks the vault on a new PC
+  and is the way back when the password is lost. Regenerating it re-keys by default.
+- **Link code.** A new phone can be linked without the master password: the vault makes an 8-character code and a 128-bit
+  secret for the QR in memory only (new salt per code, five minutes, three failures, one use). The exchange is a PAKE, the
+  PC shows its fingerprint and the name the phone gave and asks you to confirm, and the result never lets the phone
+  approve actions. API: `link.codeNew`, `link.codeAnswer`, `link.codeWaiting`, `link.codeCancel` (`src/engine/api/master.mjs`).
+- Details of the phone approvals and of "I forgot everything" are in the section above.
