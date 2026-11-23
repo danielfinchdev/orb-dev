@@ -358,3 +358,47 @@ fn the_engine_s_generic_ops_never_touch_the_registrations_and_check_names_the_st
   drop(v);
   tidy(&dir);
 }
+
+#[test]
+fn unlinking_a_phone_takes_back_its_tokens_and_its_rebuild_yes() {
+  let (h, dir, _) = new_vault("tokens");
+  let (a, b) = (Phone::new(7), Phone::new(9));
+  let mut v = h.vault.lock().unwrap();
+  enroll_phone(&mut v, "dev-1", &a);
+  enroll_phone(&mut v, "dev-2", &b);
+  let purpose = purpose_of("secrets.connector", &summary_hash(SUMMARY));
+  let mut tokens = Vec::new();
+  for (d, p) in [("dev-1", &a), ("dev-2", &b)] {
+    let c = ask(&mut v, ORB, d, "secrets.connector", SUMMARY, NOW).unwrap();
+    tokens.push(sign(&mut v, d, c["nonce"].as_str().unwrap(), &p.answer(&c), NOW).unwrap()["unlock"].as_str().unwrap().to_string());
+  }
+  let c = ask_rebuild(&mut v, ORB, "dev-1", NOW).unwrap();
+  sign(&mut v, "dev-1", c["nonce"].as_str().unwrap(), &a.answer(&c), NOW).unwrap();
+  forget(&mut v, "dev-1").unwrap();
+  assert!(!v.check_strength(&tokens[0], Some(&purpose), Some(Strength::Mobile), false, NOW), "its token is gone");
+  assert!(v.check_strength(&tokens[1], Some(&purpose), Some(Strength::Mobile), false, NOW), "the other phone's stays");
+  let kid = v.key_id().map(String::from);
+  assert!(!v.approve.take_rebuild(kid.as_deref(), NOW), "its rebuild yes is gone");
+  forget_all(&mut v).unwrap();
+  assert!(!v.check_strength(&tokens[1], Some(&purpose), Some(Strength::Mobile), false, NOW));
+  drop(v);
+  tidy(&dir);
+}
+
+#[test]
+fn a_rebuild_that_cannot_write_the_password_leaves_the_old_code() {
+  let (h, dir, fake) = new_vault("half");
+  let phone = Phone::new(7);
+  {
+    let mut v = h.vault.lock().unwrap();
+    enroll_phone(&mut v, "dev-1", &phone);
+    let c = ask_rebuild(&mut v, ORB, "dev-1", NOW).unwrap();
+    sign(&mut v, "dev-1", c["nonce"].as_str().unwrap(), &phone.answer(&c), NOW).unwrap();
+  }
+  // a directory where maestra.json goes: the password cannot be written
+  std::fs::remove_file(dir.join(crate::vault::MASTER)).unwrap();
+  std::fs::create_dir(dir.join(crate::vault::MASTER)).unwrap();
+  assert!(run_rebuild(&h, &fake, NOW + 1).is_err());
+  assert!(!dir.join(crate::vault::CODE).exists(), "no code was left behind");
+  tidy(&dir);
+}

@@ -49,7 +49,7 @@ struct Pending {
 enum Rebuild {
   #[default]
   Idle,
-  Approved { until: u64, key_id: String },
+  Approved { until: u64, key_id: String, device: String },
 }
 
 /// In memory only: the challenges waiting for their signature and the rebuild's step.
@@ -57,12 +57,14 @@ enum Rebuild {
 pub struct State {
   pending: Vec<Pending>,
   rebuild: Rebuild,
+  /// The mobile tokens each phone made (token, deviceId): unlinking the phone takes them back.
+  issued: Vec<(String, String)>,
 }
 impl State {
   /// The phone's yes to the rebuild is spent here, once: no yes, an old one or one for another data key is refused.
   pub(crate) fn take_rebuild(&mut self, key_id: Option<&str>, now: u64) -> bool {
     match std::mem::take(&mut self.rebuild) {
-      Rebuild::Approved { until, key_id: k } => until > now && key_id == Some(k.as_str()),
+      Rebuild::Approved { until, key_id: k, .. } => until > now && key_id == Some(k.as_str()),
       Rebuild::Idle => false,
     }
   }
@@ -229,10 +231,16 @@ pub fn sign(v: &mut Vault, device_id: &str, nonce_b64: &str, signature_b64: &str
     return Ok(refused("bad"));
   }
   if p.kind == Kind::Rebuild {
-    v.approve.rebuild = Rebuild::Approved { until: now + CHALLENGE_MS, key_id: p.key_id };
+    v.approve.rebuild = Rebuild::Approved { until: now + CHALLENGE_MS, key_id: p.key_id, device: device_id.to_string() };
     return Ok(json!({ "ok": true, "kind": "rebuild" }));
   }
   let mut out = v.issue_with(Some(p.purpose), Strength::Mobile, now);
+  if let Some(t) = out.get("unlock").and_then(Value::as_str) {
+    let t = t.to_string();
+    let alive: Vec<(String, String)> = std::mem::take(&mut v.approve.issued).into_iter().filter(|(k, _)| v.token_alive(k, now)).collect();
+    v.approve.issued = alive;
+    v.approve.issued.push((t, device_id.to_string()));
+  }
   out["ok"] = json!(true);
   out["kind"] = json!("approve");
   Ok(out)
@@ -257,12 +265,20 @@ pub fn enroll(v: &mut Vault, device_id: &str, nonce_b64: &str, public_b64: &str,
 /// A phone that was unlinked (or asked to be forgotten): its key goes, and what was pending for it.
 pub fn forget(v: &mut Vault, device_id: &str) -> Result<Value, Code> {
   v.approve.pending.retain(|p| p.device_id != device_id);
+  let (mine, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut v.approve.issued).into_iter().partition(|(_, d)| d == device_id);
+  v.approve.issued = rest;
+  v.drop_tokens(&mine.into_iter().map(|(t, _)| t).collect::<Vec<_>>());
+  if matches!(&v.approve.rebuild, Rebuild::Approved { device, .. } if device == device_id) {
+    v.approve.rebuild = Rebuild::Idle;
+  }
   v.set(&id_of(device_id), Value::Null)?;
   Ok(json!(true))
 }
 
 /// Every phone's key (every phone was unlinked).
 pub fn forget_all(v: &mut Vault) -> Result<Value, Code> {
+  let all: Vec<String> = v.approve.issued.iter().map(|(t, _)| t.clone()).collect();
+  v.drop_tokens(&all);
   v.approve = State::default();
   for id in v.ids(APPROVE_PREFIX)? {
     v.set(&id, Value::Null)?;
@@ -291,8 +307,17 @@ pub(crate) fn rebuild(req: &Value, h: &Handle, now: u64) -> Result<Value, Code> 
     }
     v.master_file().and_then(|m| m.get("created").and_then(Value::as_str).map(String::from))
   };
-  wrap(h, &next, created, now)?;
+  // The code goes first and comes back if the password cannot be written: never one new and one old.
+  let old_code = std::fs::read(h.vault.lock().unwrap().dir.join(crate::vault::CODE)).ok();
   crate::code_ops::write_code(h, &normal, now)?;
+  if let Err(e) = wrap(h, &next, created, now) {
+    let file = h.vault.lock().unwrap().dir.join(crate::vault::CODE);
+    match old_code {
+      Some(bytes) => drop(std::fs::write(&file, bytes)),
+      None => drop(std::fs::remove_file(&file)),
+    }
+    return Err(e);
+  }
   let mut v = h.vault.lock().unwrap();
   v.clear_tries();
   v.lock();

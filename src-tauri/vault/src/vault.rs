@@ -688,6 +688,15 @@ impl Vault {
   pub fn strength_of(&self, token: &str, now: u64) -> Option<Strength> {
     self.tokens.get(token).filter(|t| t.0 > now).map(|t| t.2)
   }
+  /// Drops these tokens (a phone's approvals when it is unlinked).
+  pub(crate) fn drop_tokens(&mut self, list: &[String]) {
+    for t in list {
+      self.tokens.remove(t);
+    }
+  }
+  pub(crate) fn token_alive(&self, token: &str, now: u64) -> bool {
+    self.tokens.get(token).is_some_and(|t| t.0 > now)
+  }
   pub fn lock(&mut self) {
     self.tokens.clear();
     self.hello.drop_pending();
