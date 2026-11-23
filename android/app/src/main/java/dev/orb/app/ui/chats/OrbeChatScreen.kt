@@ -164,7 +164,7 @@ fun OrbeChatScreen(
                 Composer(
                     online = state.online, busy = liveInfo?.busy == true, mode = state.mode, canSetMode = state.canSetMode,
                     onSend = { stick = true; vm.send(it) }, onStop = vm::stop,
-                    attach = vm.attach, brain = state.brain?.label ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
+                    attach = vm.attach, brain = state.brain?.markedLabel ?: ChatTexts.BRAIN_UNKNOWN, mic = true,
                     mentions = mentions, commands = commands, answer = answer,
                     above = if (answer != null && askerName != null) ({ _, clear -> AnswerBar(askerName, onCancel = { draft.reset(); clear() }) }) else null,
                 )
@@ -230,7 +230,7 @@ private fun ChatTopBar(state: OrbeChatState, live: LiveInfo?, onBack: () -> Unit
                 OrbSheetLabel(ChatTexts.MODE_SELECTOR)
                 if (state.online) ModeSelector(state.mode, onMode) else OrbSheetInfo(ChatTexts.MODE_SELECTOR, OrbIcons.ShieldCheck, meta = ChatTexts.NEEDS_PC)
             }
-            state.brain?.label?.let { OrbSheetInfo(ChatTexts.BRAIN_DESC, OrbIcons.Brain, meta = it) }
+            state.brain?.markedLabel?.let { OrbSheetInfo(ChatTexts.BRAIN_DESC, OrbIcons.Brain, meta = it) }
         }
     }
 }

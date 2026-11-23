@@ -241,7 +241,11 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 
     override suspend fun brain(conversation: Long): Result<BrainInfo?> =
         if (!api.available(ApiMethods.CHAT_SETTINGS)) Result.success(null)
-        else api.chat.settings(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.brain(it) }
+        else api.chat.settings(buildJsonObject { put("conversation", conversation) }).map { settings ->
+            // The mark comes from the catalog; without it the brain is still shown, only unmarked.
+            val catalog = if (api.available(ApiMethods.MODELS_CATALOG)) api.models.catalog().getOrNull() else null
+            OrbeParser.brain(settings, catalog)
+        }
 
     override suspend fun liveTasks(): Result<List<LiveTask>> =
         if (!api.available(ApiMethods.TASKS_LIVE)) Result.success(emptyList()) else api.tasks.live().map { OrbeParser.liveTasks(it) }
