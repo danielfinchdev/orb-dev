@@ -4,7 +4,7 @@ import { ctx, tr } from '../../platform/context.mjs';
 import { REMOTE_METHODS } from '../../domain/security/permissions.mjs';
 
 // Who an account is (the fingerprint and the masked e-mail) stays on this PC: a phone gets neither.
-const withoutIdentity = (a) => { const { who: _who, hint: _hint, ...rest } = a ?? {}; return rest; };
+const withoutIdentity = (a) => { const { who: _who, hint: _hint, foundHint: _found, ...rest } = a ?? {}; return rest; };
 
 // The settings a phone gets: what the interface shows, without connector commands and secrets, login folders or paths
 // of the agents' programs.

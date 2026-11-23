@@ -93,7 +93,7 @@ export class SideChats {
           }
         });
         // the process must be signed in as the account it was made for before any question goes to it
-        const who = await checkIdentity({ acc, live: e.live });
+        const who = await checkIdentity({ acc, live: e.live, fixed: Boolean(s.account_fixed) });
         if (who.block) { try { e.live.close(); } catch { /* gone */ } e.live = null; throw new Error(who.text); }
         e.first = true;
       }

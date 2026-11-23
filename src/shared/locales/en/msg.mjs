@@ -653,6 +653,8 @@ export default {
   "msg.acct.duplicate": "**{a}** and **{b}** are the same account: its usage would be counted twice.",
   "msg.api.noIdentity": "There is no different login to remember for that account.",
   "msg.acct.taskOther": "This chat only uses **{account}**: a task of its cannot run on another {agent} account.",
+  "msg.acct.identityUnknown": "Could not check the account **{account}**. The message was not sent: try again or open Agents.",
+  "msg.acct.identityUnchecked": "Not checked: could not tell which account **{account}** is signed in as; the message goes anyway.",
   "msg.api.accountQueued": "this account has messages waiting in a conversation. Wait for them to be answered or remove them",
   "msg.api.holdNone": "this chat is not waiting for an account",
   "msg.api.accountPending": "a change to this account is waiting in a chat for its turn to end. Wait a moment"

@@ -11,6 +11,8 @@ const states = new Map();
 // account id -> the identity a mismatch found, which «Es correcta, recordar esta» may adopt (this PC only).
 const found = new Map();
 export const identityState = (id) => states.get(id) ?? null;
+// The masked hint of the login a mismatch found (for this PC's «recordar esta»), or null.
+export const foundHint = (id) => found.get(id)?.hint ?? null;
 
 const label = (id) => account(id)?.label ?? id;
 
@@ -45,15 +47,22 @@ export const identityText = (kind, id) => tr(kind === 'noMail' ? 'msg.acct.ident
 // live.whoami() of a fresh process → { block, kind, text, notes }.
 //   block: the message must not go (the folder holds another login, or no e-mail login where there was one).
 //   notes: lines to say in the chat before the turn (it would be paid with an API key; two accounts are the same login).
-export async function checkIdentity({ acc, live, emit = () => {} }) {
+export async function checkIdentity({ acc, live, fixed = false, emit = () => {} }) {
   const none = { block: false, kind: 'ok', text: '', notes: [] };
   if (!acc || typeof live?.whoami !== 'function') return none;
-  let r = null;
-  try { r = await live.whoami(); } catch { r = null; }
+  const ask = async () => { try { return await live.whoami(); } catch { return null; } };
   const me = account(acc.id) ?? acc;
+  let r = await ask();
+  // An account that was checked before and now does not answer: one more try; a fixed chat then does not go on, an automatic one says so.
+  if (!r && me.who) r = await ask();
   // Never could be checked (an old CLI without the call, no answer in time): the turn goes; the own folder and the clean
   // environment are what keep the accounts apart.
-  if (!r) { states.set(acc.id, { state: 'unchecked', viaKey: false, at: Date.now() }); return none; }
+  if (!r) {
+    states.set(acc.id, { state: 'unchecked', viaKey: false, at: Date.now() });
+    if (!me.who) return none;
+    if (fixed) return { block: true, kind: 'unknown', text: tr('msg.acct.identityUnknown', { account: label(acc.id) }), notes: [] };
+    return { ...none, notes: [tr('msg.acct.identityUnchecked', { account: label(acc.id) })] };
+  }
   const notes = [];
   if (r.viaKey) notes.push(tr('msg.acct.apiKey', { account: label(acc.id) }));
   // The account had an e-mail login before and has none now: an API key, a gateway or a cloud provider answers instead.

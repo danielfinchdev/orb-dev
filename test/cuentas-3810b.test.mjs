@@ -154,7 +154,7 @@ test('no answer from the agent (old CLI, timeout): «sin comprobar», the turn g
   assert.equal(acct('claude-2').who, undefined);
   // and one that had a login and does not answer now is not blocked either (nothing was found different)
   answer = { email: MAIL_A }; const d = chat({ account: 'claude-2' }); sessions.send(d.id, 'x'); await idle(d.id); sessions.closeLive(d.id);
-  answer = null; const e = chat({ account: 'claude-2' }); const k = turnsLogged().length;
+  answer = null; const e = chat(); sessions.update(e.id, { account: 'claude-2', account_fixed: 0, cli_session: 'auto-resume-2' }); const k = turnsLogged().length;
   sessions.send(e.id, 'y'); await idle(e.id);
   assert.ok(turnsLogged().length > k);
 });
@@ -270,4 +270,72 @@ test('the list of agents tells each account\'s state of identity', async () => {
   const c = chat({ account: 'claude-2' }); sessions.send(c.id, 'hola'); await idle(c.id);
   const list = await statusAll({ refresh: false });
   assert.ok(list.length > 0);
+});
+
+test('«Compactar» checks the login first, in a chat and in the assistant', async () => {
+  forget();
+  answer = { email: MAIL_A, apiProvider: 'firstParty' };
+  const c = chat({ account: 'claude-2' }); sessions.send(c.id, 'hola'); await idle(c.id);
+  assert.ok(sessions.get(c.id).cli_session);
+  sessions.closeLive(c.id);
+  answer = { email: MAIL_B, apiProvider: 'firstParty' };
+  let sent = turnsLogged().length;
+  await assert.rejects(() => sessions.compact(c.id), /No coincide/);
+  assert.equal(turnsLogged().length, sent, 'no /compact went to the other login');
+  assert.equal(sessions.lives.has(c.id), false);
+  // the assistant
+  forget();
+  answer = { email: MAIL_A, apiProvider: 'firstParty' };
+  const conv = board.createConversation({ title: 'k', agent: 'claude', account: 'claude-2', account_fixed: 1 });
+  orchestrator.ask('hola', '', { conversation: conv.id });
+  await until(() => { const l = orchestrator.lanes.get(conv.id); return l && !l.busy && !l.inflight && board.conversation(conv.id).session_id; }, 'first turn');
+  orchestrator.lane(conv.id).closeLive();
+  answer = { email: MAIL_B, apiProvider: 'firstParty' };
+  sent = turnsLogged().length;
+  await assert.rejects(() => orchestrator.compact(conv.id), /No coincide/);
+  assert.equal(turnsLogged().length, sent);
+  assert.ok(board.chat(conv.id, 50, {}).some((l) => /No coincide/.test(l.body ?? '')));
+});
+
+test('Codex answering with no account counts as «no login»: it does not match where there was one', async () => {
+  assert.deepEqual(identityFromCodex({}), { who: null, hint: null, viaKey: false, external: false, plan: null });
+  forget();
+  answer = { type: 'chatgpt', email: MAIL_A, accountId: 'ws-1' };
+  const x = sessions.create({ agent: 'codex', cwd: project.path, project: 'web', title: 'cx', account: 'codex-2' });
+  sessions.send(x.id, 'hola'); await idle(x.id); sessions.closeLive(x.id);
+  answer = {};
+  const y = sessions.create({ agent: 'codex', cwd: project.path, project: 'web', title: 'cx', account: 'codex-2' });
+  const k = turnsLogged().length; sessions.send(y.id, 'no'); await idle(y.id);
+  assert.equal(turnsLogged().length, k);
+  assert.equal(board.settingJson(`account_problem:${y.id}`).kind, 'identityNoMail');
+});
+
+test('no answer from an account that was checked: a fixed chat retries and stops, an automatic one goes with a line', async () => {
+  forget();
+  answer = { email: MAIL_A, apiProvider: 'firstParty' };
+  const first = chat({ account: 'claude-2' }); sessions.send(first.id, 'uno'); await idle(first.id); sessions.closeLive(first.id);
+  answer = null; asked = 0;
+  const sent = turnsLogged().length;
+  const fixed = chat({ account: 'claude-2' }); sessions.send(fixed.id, 'no'); await idle(fixed.id);
+  assert.ok(asked >= 2, 'one retry');
+  assert.equal(turnsLogged().length, sent);
+  assert.match(JSON.stringify(sessions.items(fixed.id)), /No se pudo comprobar/);
+  assert.equal(board.settingJson(`account_problem:${fixed.id}`).kind, 'identityUnknown');
+  const auto = chat(); sessions.update(auto.id, { account: 'claude-2', account_fixed: 0, cli_session: 'auto-resume-1' }); sessions.send(auto.id, 'va'); await idle(auto.id);
+  assert.ok(turnsLogged().length > sent, 'the turn goes');
+  assert.match(JSON.stringify(sessions.items(auto.id)), /Sin comprobar/);
+});
+
+test('this PC may see which login «recordar esta» would adopt; a phone neither', async () => {
+  forget();
+  answer = { email: MAIL_A, apiProvider: 'firstParty' };
+  const a = chat({ account: 'claude-2' }); sessions.send(a.id, 'uno'); await idle(a.id); sessions.closeLive(a.id);
+  answer = { email: MAIL_B, apiProvider: 'firstParty' };
+  const b = chat({ account: 'claude-2' }); sessions.send(b.id, 'dos'); await idle(b.id);
+  assert.deepEqual(await call('accounts.identityFound', { id: 'claude-2' }), { hint: 'o***@e***.net' });
+  const pc = (await call('agents.status', {})).find((x) => x.id === 'claude').accounts.find((x) => x.id === 'claude-2');
+  assert.equal(pc.foundHint, 'o***@e***.net');
+  const remote = JSON.stringify(shapeResult('agents.status', await call('agents.status', {})));
+  assert.ok(!remote.includes('o***@e***.net'));
+  assert.ok(guardCall(board, 'accounts.identityFound', {}), 'a phone cannot call it');
 });

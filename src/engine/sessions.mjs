@@ -400,10 +400,10 @@ export class Sessions {
   // there was one) holds the message back and says so; an API key or a duplicated account is told and the turn goes on.
   async identityGate(id, acc, entry) {
     if (entry.identityChecked) return null;
-    const r = await checkIdentity({ acc, live: entry.live, emit: (event, payload) => this.emit(event, payload) });
+    const r = await checkIdentity({ acc, live: entry.live, fixed: Boolean(this.get(id)?.account_fixed), emit: (event, payload) => this.emit(event, payload) });
     for (const line of r.notes) this.addItem(id, 'system', 'status', line);
     if (!r.block) { entry.identityChecked = true; return null; }
-    const problem = { kind: r.kind === 'noMail' ? 'identityNoMail' : 'identity', account: acc.id };
+    const problem = { kind: { noMail: 'identityNoMail', unknown: 'identityUnknown' }[r.kind] ?? 'identity', account: acc.id };
     this.board.settingJson(`account_problem:${id}`, problem);
     this.addItem(id, 'system', 'status', r.text);
     this.emit('session:account', { id, problem });
@@ -850,6 +850,9 @@ ${p.text}` : body, images: p.images });
     const acc = res.acc;
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const entry = this.getLive(s, acc);
+    // «Compactar» starts a process too: it is checked like a message before /compact goes
+    const held = await this.identityGate(id, acc, entry);
+    if (held) throw new Error(held.final);
     if (typeof entry.live.compact !== 'function') throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };
     this.running.set(id, run);

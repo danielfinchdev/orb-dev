@@ -653,6 +653,8 @@ export default {
   "msg.acct.duplicate": "**{a}** y **{b}** son la misma cuenta: el uso se contaría dos veces.",
   "msg.api.noIdentity": "No hay una sesión distinta que recordar para esa cuenta.",
   "msg.acct.taskOther": "Este chat usa solo **{account}**: una tarea suya no puede ir con otra cuenta de {agent}.",
+  "msg.acct.identityUnknown": "No se pudo comprobar la cuenta **{account}**. El mensaje no ha salido: reintenta o abre Agentes.",
+  "msg.acct.identityUnchecked": "Sin comprobar: no se pudo saber con qué cuenta está iniciada la sesión de **{account}**; el mensaje sale igualmente.",
   "msg.api.accountQueued": "esta cuenta tiene mensajes en cola en alguna conversación. Espera a que se atiendan o quítalos",
   "msg.api.holdNone": "este chat no está esperando una cuenta",
   "msg.api.accountPending": "un cambio a esta cuenta espera en un chat a que acabe su turno. Espera un momento"

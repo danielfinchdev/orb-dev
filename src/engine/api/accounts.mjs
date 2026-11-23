@@ -12,7 +12,7 @@ import { accountInfo as codexAccountInfo } from '../../agents/codex.mjs';
 import { clearCooldown } from '../../domain/usage/budget.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable, accountIdentity } from '../../agents/index.mjs';
-import { identityState, duplicatesOf, learnIdentity, rememberIdentity } from '../identity.mjs';
+import { identityState, duplicatesOf, learnIdentity, rememberIdentity, foundHint } from '../identity.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../../agents/login.mjs';
 import { translate } from '../../shared/i18n.mjs';
 import { refreshModels, refreshAllModels } from '../usage/catalog.mjs';
@@ -35,7 +35,7 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
   // 'tool' = only the agent's own command can, absent = no session to close) and what the last update check found.
   const decorate = (a) => {
     const update = updateInfo(board, a.id, a.version);
-    const state = (acc) => { const identity = identityState(acc.id); const sameAs = duplicatesOf(acc.id); return { ...(identity ? { identity: identity.state, ...(identity.viaKey ? { viaKey: true } : {}) } : {}), ...(sameAs.length ? { sameAs } : {}) }; };
+    const state = (acc) => { const identity = identityState(acc.id); const sameAs = duplicatesOf(acc.id); const foundHere = foundHint(acc.id); return { ...(foundHere ? { foundHint: foundHere } : {}), ...(identity ? { identity: identity.state, ...(identity.viaKey ? { viaKey: true } : {}) } : {}), ...(sameAs.length ? { sameAs } : {}) }; };
     return { ...a, accounts: a.accounts?.map((acc) => { const logout = logoutKind(acc); return { ...acc, ...state(acc), ...(logout ? { logout } : {}) }; }), ...(update ? { update } : {}) };
   };
   return {
@@ -138,6 +138,8 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
       return out;
     },
     // «Es correcta, recordar esta»: takes the login the folder holds now as the account's own (this PC only).
+    // the masked hint of the other login found, to show what «recordar esta» would adopt (this PC only)
+    'accounts.identityFound': ({ id }) => ({ hint: foundHint(str(id, 'cuenta', 40)) }),
     'accounts.rememberIdentity': ({ id }) => { const ok = rememberIdentity(str(id, 'cuenta', 40), emit); if (!ok) fail(tr('msg.api.noIdentity')); return true; },
     'accounts.update': ({ id, label, enabled }) => {
       const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));

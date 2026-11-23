@@ -75,7 +75,7 @@ export const METHODS = Object.freeze({
   // agents and their accounts
   'agents.status': 'remote', 'agents.check': 'pc', 'agents.login': 'pc', 'agents.loginCode': 'pc', 'agents.loginCancel': 'pc',
   'agents.loginState': 'pc', 'agents.install': 'pc', 'agents.installState': 'pc',
-  'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.rememberIdentity': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc', 'accounts.logout': 'pc', 'agents.checkUpdates': 'pc',
+  'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.rememberIdentity': 'pc', 'accounts.identityFound': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc', 'accounts.logout': 'pc', 'agents.checkUpdates': 'pc',
   // backups
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'backup.previousKey': 'pc', 'backup.newKey': 'pc', 'backup.cancelKey': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
   // the master password and the connectors' keys

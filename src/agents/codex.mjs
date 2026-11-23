@@ -50,8 +50,9 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
-    const id = identityFromCodex(r?.account); if (!id) return null;
-    return id;
+    // an answer without an account (signed out) is not «no answer»: it holds no login
+    if (!r || typeof r !== 'object') return null;
+    return identityFromCodex(r.account ?? {});
   } catch { return null; } finally {
     try { peer?.close(); } catch { /* gone */ }
     try { killTree(child); } catch { /* gone */ }
@@ -424,7 +425,8 @@ export function createLive(o) {
       started ??= start().catch((error) => { live.close(); throw error; });
       await started;
       const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs: 10_000 });
-      return identityFromCodex(r?.account);
+      if (!r || typeof r !== 'object') return null;
+      return identityFromCodex(r.account ?? {});
     } catch { return null; }
   };
   live.isClosed = () => closed;

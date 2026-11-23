@@ -146,6 +146,8 @@ class Lane {
       let live = null;
       try { this.ensureLive(); live = this.live; } catch { live = null; }
       if (typeof live?.compact === 'function') {
+        const who = await this.checkLive(live);
+        if (who.block) { this.closeLive(); throw new Error(who.text); }
         const r = await live.compact({ instructions: COMPACT_FOCUS }).catch((error) => ({ ok: false, error: error.message }));
         if (r?.ok) how = 'compacted'; else this.orch.log(`compactar la conversación ${this.id}: ${r?.error ?? 'sin respuesta'}`);
       }
@@ -154,6 +156,14 @@ class Lane {
     this.say('system', tr(how === 'compacted' ? 'msg.orch.compacted' : 'msg.orch.compactRenewed'), { kind: 'compacted' });
     if (!this.orch.closing) { this.next(); this.orch.kick(); }
     return { ok: true, how };
+  }
+  // Who the process is signed in as, once per process (a message and «Compactar» both start one). A block is said in the chat.
+  async checkLive(live) {
+    if (this.identityLive === live) return { block: false };
+    const who = await checkIdentity({ acc: { id: this.liveAccount, agent: this.liveAgent }, live, fixed: Boolean(this.conv()?.account_fixed), emit: (event, payload) => this.orch.emit(event, payload) });
+    for (const note of who.notes) this.say('system', note);
+    if (who.block) this.say('system', who.text); else this.identityLive = live;
+    return who;
   }
   forget() { this.closeLive(); this.board.updateConversation(this.id, { session_id: null, turns: 0, context: null }); }
   // «/clear»: the coordinator starts a new conversation of its agent in this same chat (the lines stay).
@@ -567,16 +577,11 @@ class Lane {
     if (generation !== this.generation || this.orch.closing) return undefined;
     const live = this.live; const run = this.inflight;
     // A new process says who it is signed in as before its first message: another login holds the message back.
-    if (this.identityLive !== live) {
-      const who = await checkIdentity({ acc: { id: this.liveAccount, agent: this.liveAgent }, live, emit: (event, payload) => this.orch.emit(event, payload) });
-      if (generation !== this.generation || this.orch.closing) return undefined;
-      for (const note of who.notes) this.say('system', note);
-      if (who.block) {
-        this.say('system', who.text);
-        if (fresh) this.forget(); else this.closeLive();
-        this.busy = false; this.push(); return { ok: false };
-      }
-      this.identityLive = live;
+    const who = await this.checkLive(live);
+    if (generation !== this.generation || this.orch.closing) return undefined;
+    if (who.block) {
+      if (fresh) this.forget(); else this.closeLive();
+      this.busy = false; this.push(); return { ok: false };
     }
     const timer = setTimeout(() => {
       this.say('system', tr('msg.orch.timeLimit'), { kind: 'turn-stopped', cause: 'time' }); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
