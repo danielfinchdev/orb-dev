@@ -128,7 +128,7 @@ test('the recovery code: asks for the password or the current code, the box is t
 test('restoring: the copy\'s code and the master password are asked, and a kept-secrets answer is told', () => {
   assert.match(data, /password: v\.password \|\| undefined/);
   assert.match(data, /r\.secretsKept \? 'datos\.restoreKept' : 'datos\.restoreReady'/);
-  assert.match(data, /unlockCore\('restore'\)/);
+  assert.match(data, /unlockCore\('restore', \{ request: \{ method: 'backup\.restore', params \}/);
 });
 
 test('the print sheet hides everything else and stays off the screen', () => {

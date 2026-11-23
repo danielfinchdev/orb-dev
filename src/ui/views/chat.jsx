@@ -505,7 +505,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         if (level === 'total') grants.push(['fullAccess', 'sessions.grantTotal']);
         if (access.android && !(!project && level === 'total')) grants.push(['android', 'sessions.grantAndroid']);
         for (const [action, method] of grants) {
-          const unlock = await unlockCore(action);
+          const unlock = await unlockCore(action, method === 'sessions.grantTotal' ? { request: { method, params: { id: s.id } } } : {});
           if (!unlock || (await act(call(method, { id: s.id, unlock }))) === undefined) {
             dropPending(mine); setAccess({ permission: null, android: false });
             notify({ title: t('chat.accessNotGiven'), tone: 'warning' });

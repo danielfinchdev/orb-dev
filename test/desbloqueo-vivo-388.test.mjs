@@ -38,7 +38,7 @@ test('the lock screen has no new way to unlock: one master.unlock call (plus the
   assert.equal([...locked.matchAll(/call\('/g)].length, 3); // + whether Windows Hello is on (the button)
   assert.match(locked, /call\('master\.state'\)/);
   assert.match(locked, /call\('master\.unlock', \{ password \}\)/);
-  assert.match(locked, /forgotFlow\(\{ canForget \}\)/);
+  assert.match(locked, /forgotFlow\(\{ canForget(?:, lost)? \}\)/);
 });
 
 test('the lock screen shows a failure inline without more than the engine said, and the password is not stored', () => {

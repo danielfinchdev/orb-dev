@@ -88,8 +88,6 @@ function BackupsCard() {
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const now = async () => { setBusy(true); const r = await act(call('backup.now', {}), t('datos.made')); setBusy(false); if (r) load(); };
   const restore = async (b) => {
-    const unlock = await unlockCore('restore');
-    if (!unlock) return;
     const r = await form(t('datos.restoreTitle'), {
       description: t('datos.restoreDesc', { when: when(b.created) }),
       initial: { passphrase: '', password: '' },
@@ -98,7 +96,16 @@ function BackupsCard() {
         <Field label={t('datos.restoreMaster')} hint={t('datos.restoreMasterHint')}><Input type="password" autoComplete="current-password" value={v.password} onChange={(e) => set({ password: e.target.value })} data-testid="restore-password" /></Field>
       </>),
       ok: t('datos.restore'),
-      onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null, unlock }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null, password: v.password || undefined, unlock }); }
+      // The password or the phone's approval comes after the form: the phone approves exactly this restore.
+      onOk: async (v) => {
+        const params = { file: b.name, passphrase: v.passphrase || null, password: v.password || undefined };
+        const info = {};
+        const unlock = await unlockCore('restore', { request: { method: 'backup.restore', params }, info });
+        if (!unlock) return false;
+        // A phone's token is for the restore alone, so the check beforehand (a password's token) is skipped; the restore checks the copy too.
+        if (!info.mobile) await call('backup.verify', { file: b.name, passphrase: v.passphrase || null, unlock });
+        return call('backup.restore', { ...params, unlock });
+      }
     });
     if (r) notifyOk(t(r.secretsKept ? 'datos.restoreKept' : 'datos.restoreReady'), { ms: 10000 });
   };

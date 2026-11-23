@@ -18,7 +18,7 @@ function SecretCard({ r }) {
   const [save, setSave] = useState(false);
   const [busy, setBusy] = useState(false);
   const answer = async (params, action) => {
-    const unlock = action ? await unlockCore(action) : null;
+    const unlock = action ? await unlockCore(action, { request: { method: 'secrets.answer', params: { id: r.id, ...params } } }) : null;
     if (action && !unlock) return;
     setBusy(true);
     try { if (await act(call('secrets.answer', { id: r.id, ...params, ...(unlock ? { unlock } : {}) }))) setValue(''); } finally { setBusy(false); }

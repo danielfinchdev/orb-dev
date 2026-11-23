@@ -51,6 +51,12 @@ export async function newRecoveryCode() {
   // A new data key unlinks the phones; the answer carries the new unlock, kept for what the user does next.
   if (r.rekeyed) keepUnlock(r);
   if (!r.code) { notifyOk(tNow('recovery.phraseDone')); return r; }
+  await showRecoveryCode(r);
+  return r;
+}
+
+// The new code, shown once: to copy or print and keep. r: the engine's answer ({ code, rekeyed?, unlinked?, warn?, copyWrapFailed? }).
+export async function showRecoveryCode(r) {
   await form(tNow('datos.codeTitle'), {
     description: tNow('datos.codeDesc'),
     initial: {},
@@ -69,5 +75,4 @@ export async function newRecoveryCode() {
     ),
     ok: tNow('datos.codeKept')
   });
-  return r;
 }
