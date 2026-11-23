@@ -106,6 +106,7 @@ export default {
   'master.ask.newKey': 'Para empezar con una clave nueva.',
   'master.ask.rails': 'Para cambiar los límites de seguridad de Orb.',
   'master.ask.ruleSeed': 'Para cambiar una norma que viene de serie.',
+  'master.ask.linkCode': 'Para enlazar un móvil sin contraseña.',
   'master.ask.removeExtension': 'Para quitar una skill, un servidor MCP o un conector de Orb.',
   'master.askNote': 'Queda desbloqueado {n} minutos o hasta que bloquees el PC.',
   'master.askEveryTime': 'Para esto Orb la pide siempre.',
@@ -233,6 +234,7 @@ export default {
   'hello.do.removeExtension': 'quitar una skill, un servidor MCP o un conector de Orb',
   'hello.do.rails': 'cambiar los límites de seguridad de Orb',
   'hello.do.ruleSeed': 'cambiar una norma que viene de serie',
+  'hello.do.linkCode': 'enlazar un móvil sin contraseña',
   'hello.do.rules': 'cambiar una norma tuya',
   'hello.do.android': 'dejar que este chat use tu móvil Android',
   'hello.do.androidPair': 'emparejar un móvil Android',
@@ -311,5 +313,8 @@ export default {
   'approve.expired': 'Se acabó el tiempo. Vuelve a intentarlo.',
   'approve.refused': 'El móvil no ha aprobado.',
   'approve.none': 'Ningún móvil enlazado puede aprobar todavía.',
-  'approve.needsFingerprint': 'Hace falta un móvil con huella o cara de seguridad alta.'
+  'approve.needsFingerprint': 'Hace falta un móvil con huella o cara de seguridad alta.',
+  'msg.link.codeDead': 'Ese código ya no vale (demasiados fallos o caducó). Pide uno nuevo en el PC.',
+  'msg.link.notConfirmed': 'El PC no ha confirmado el enlace. Pide un código nuevo si quieres volver a intentarlo.',
+  'msg.link.noKeys': 'Este PC aún no puede enlazar móviles. Activa el acceso desde el móvil en Ajustes y vuelve a probar.',
 };

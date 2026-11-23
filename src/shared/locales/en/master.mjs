@@ -106,6 +106,7 @@ export default {
   'master.ask.newKey': 'To start with a new key.',
   'master.ask.rails': "To change Orb's safety limits.",
   'master.ask.ruleSeed': 'To change a rule that ships with Orb.',
+  'master.ask.linkCode': 'To link a phone without a password.',
   'master.ask.removeExtension': 'To remove a skill, an MCP server or a connector from Orb.',
   'master.askNote': 'It stays unlocked for {n} minutes or until you lock the PC.',
   'master.askEveryTime': 'Orb asks for it every time for this.',
@@ -233,6 +234,7 @@ export default {
   'hello.do.removeExtension': 'remove a skill, an MCP server or a connector from Orb',
   'hello.do.rails': 'change Orb\'s safety limits',
   'hello.do.ruleSeed': 'change a rule that comes with Orb',
+  'hello.do.linkCode': 'link a phone without a password',
   'hello.do.rules': 'change a rule of your own',
   'hello.do.android': 'let this chat use your Android phone',
   'hello.do.androidPair': 'pair an Android phone',
@@ -311,5 +313,8 @@ export default {
   'approve.expired': 'Time ran out. Try again.',
   'approve.refused': 'The phone did not approve.',
   'approve.none': 'No linked phone can approve yet.',
-  'approve.needsFingerprint': 'This needs a phone with a strong fingerprint or face unlock.'
+  'approve.needsFingerprint': 'This needs a phone with a strong fingerprint or face unlock.',
+  'msg.link.codeDead': 'That code is no longer valid (too many wrong tries, or it expired). Ask for a new one on the PC.',
+  'msg.link.notConfirmed': 'The PC did not confirm the link. Ask for a new code to try again.',
+  'msg.link.noKeys': 'This PC cannot link phones yet. Turn on phone access in Settings and try again.',
 };

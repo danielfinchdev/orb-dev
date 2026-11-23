@@ -295,6 +295,21 @@ export class Master {
   // The phone's key confirmation, checked in Rust with the 'pair' waits: → attempt()'s answer (+ pcMac when right), or
   // { ok: false, reason: 'noVerifier' | 'bad' }.
   pairFinish(x) { return this.call('pairFinish', x); }
+  // ---- Linking with a one-use code, no password (src-tauri/vault/src/link.rs): the code lives in Rust; the engine only gets it
+  // once, from linkNew, to show it.
+  // token: one made for LINK_CODE_PURPOSE with Windows Hello or the password. → { ok, code, secret, salt, until } | { ok: false, reason }.
+  linkNew(token) { return this.call('linkNew', { token: String(token ?? '') }); }
+  // → { ok, salt, until } while a code is live (what a phone that only has the typed code needs), else { ok: false }.
+  linkInfo() { return this.call('linkInfo'); }
+  // The key that opens a phone's first message for its way (via: 'link' | 'linkcode'), or { ok: false }.
+  linkProbe(via, devPub) { return this.call('linkProbe', { via, devPub }); }
+  // A first message that did not open: counts toward the three tries. → { ok: false, reason: 'wrong' | 'dead' | 'gone', left }.
+  linkFail() { return this.call('linkFail'); }
+  // The phone's key confirmation: → { ok: true, waiting } (the PC's MAC stays in Rust until linkConfirm says yes) | { ok: false, reason }.
+  linkFinish(x) { return this.call('linkFinish', x); }
+  // The owner's answer at the PC. → { ok: true, pcMac } | { ok: false, reason: 'declined' | 'expired' | 'none' | 'gone' }.
+  linkConfirm(id, devPub, accept) { return this.call('linkConfirm', { id, devPub, accept: accept === true }); }
+  linkCancel() { try { return this.call('linkCancel'); } catch { return false; } }
   // A connector's keys for its launcher only: → { grant, pipe } or null (none, or not tied to this program any more).
   grant(bind, binding, vars) { return this.call('grant', { bind, binding, vars }); }
 }

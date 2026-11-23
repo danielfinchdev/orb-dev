@@ -95,6 +95,17 @@ const field = (x) => { const b = typeof x === 'string' ? enc.encode(x) : x; retu
 export const pakeTranscript = ({ via, devPub, pcPub, sid, kdf }) => sha256(cat(field('orb-pake-v1'), field(String(via)), field(devPub), field(pcPub), field(String(sid)), field(`${kdf.N}/${kdf.r}/${kdf.p}`), field(String(kdf.salt))));
 export const pakeKey = ({ secret, dhDevice, dhPassword, transcript }) => hkdf(sha256, cat(field(String(secret)), field(dhDevice), field(dhPassword)), transcript, enc.encode('orb pake clave v1'), 32);
 export const pakeMac = (key, label) => hmac(sha256, key, enc.encode(String(label)));
+// ---- linking with a one-use code, no master password (src-tauri/vault/src/link.rs). The exchange is the same PAKE without
+// the password's part: K = HKDF(secret ‖ ECDH(phone, PC) ‖ nothing). via 'link' is the QR (its 128-bit secret as is); via
+// 'linkcode' is the 8 characters typed, stretched with scrypt and the code's own salt first. The PC keeps its MAC back until its
+// owner confirms the phone's name at the PC, so the phone may wait for that (and gives up after LINK_GIVE_UP_MS).
+export const LINK_VIAS = Object.freeze(['link', 'linkcode']);
+export const LINK_KDF = Object.freeze({ N: 0, r: 0, p: 0, salt: '' });
+export const LINK_GIVE_UP_MS = 2 * 60_000;
+export const normalLinkCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const LINK_TYPED_KDF = { N: 2 ** 14, r: 8, p: 1, dkLen: 32 };
+export const linkSecret = async (code, saltB64) => `corto4:${b64.enc(await scryptAsync(normalLinkCode(code), b64.dec(saltB64), LINK_TYPED_KDF))}`;
+export const linkSecretSync = (code, saltB64) => `corto4:${b64.enc(scrypt(normalLinkCode(code), b64.dec(saltB64), LINK_TYPED_KDF))}`;
 export const MAC_PHONE = 'orb-pake:movil';
 export const macPc = (id) => `orb-pake:pc:${id}`;
 export function sameBytes(a, b) {
@@ -106,13 +117,23 @@ export function sameBytes(a, b) {
 // The phone's side of linking (the page, the Android app and the tests all use this one). → { id, priv, key (the session
 // key), pc (the PC's fingerprint), info (what the PC said, sealed with the session key), skew }. Errors: { status, reason,
 // left } from the PC (message: its words), or code 'offline' (not reachable at base) / 'badAnswer' (not the PC of the code).
-export async function linkDevice({ base, pcPub, secret, via, name, kind, v, min, password, fetch: get = globalThis.fetch, now = Date.now }) {
+export async function linkDevice({ base, pcPub, secret, via, name, kind, v, min, password, fetch: get = globalThis.fetch, now = Date.now, giveUpMs = LINK_GIVE_UP_MS }) {
+  // A link made with a one-use code asks for no password and must end in two minutes (the PC waits for its owner's yes).
+  if (!LINK_VIAS.includes(via)) return linkDeviceOnce({ base, pcPub, secret, via, name, kind, v, min, password, fetch: get, now });
+  const stop = new AbortController();
+  let timer;
+  const late = new Promise((_, no) => { timer = setTimeout(() => { stop.abort(); no(Object.assign(new Error('timeout'), { code: 'timeout' })); }, giveUpMs); });
+  try { return await Promise.race([linkDeviceOnce({ base, pcPub, secret, via, name, kind, v, min, password: null, fetch: get, now, signal: stop.signal }), late]); }
+  finally { clearTimeout(timer); }
+}
+async function linkDeviceOnce({ base, pcPub, secret, via, name, kind, v, min, password, fetch: get, now, signal }) {
+  const noPassword = LINK_VIAS.includes(via);
   const { priv, pub } = newKeyPair();
   const pubB = b64.enc(pub);
   const codeKey = pairingKey(priv, pcPub, secret);
   const fail = (code) => Object.assign(new Error(code), { code });
   const post = async (body) => {
-    try { return await get(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); }
+    try { return await get(`${base}/api/pair`, { method: 'POST', credentials: 'omit', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), ...(signal ? { signal } : {}) }); }
     catch { throw fail('offline'); }
   };
   const answer = async (res) => {
@@ -127,11 +148,11 @@ export async function linkDevice({ base, pcPub, secret, via, name, kind, v, min,
   if (res.status === 409) { const d = await res.clone().json().catch(() => ({})); if (Number.isFinite(d.now)) { skew = d.now - now(); res = await start(); } }
   const challenge = await answer(res);
   let ch; try { ch = open(codeKey, challenge.box, AAD.pairChallenge); } catch { throw fail('badAnswer'); }
-  if (!ch || ch.sid !== challenge.sid || !pairKdfOk(ch.kdf)) throw fail('badAnswer');
-  const verifier = await verifierOf(password, ch.kdf);
-  const transcript = pakeTranscript({ via, devPub: pub, pcPub, sid: ch.sid, kdf: ch.kdf });
-  const K = pakeKey({ secret, dhDevice: x25519.getSharedSecret(priv, pcPub), dhPassword: x25519.getSharedSecret(verifier.priv, pcPub), transcript });
-  const done = await answer(await post({ step: 'finish', sid: ch.sid, pub: pubB, mac: b64.enc(pakeMac(K, MAC_PHONE)) }));
+  if (!ch || ch.sid !== challenge.sid || (!noPassword && !pairKdfOk(ch.kdf))) throw fail('badAnswer');
+  const verifier = noPassword ? null : await verifierOf(password, ch.kdf);
+  const transcript = pakeTranscript({ via, devPub: pub, pcPub, sid: ch.sid, kdf: noPassword ? LINK_KDF : ch.kdf });
+  const K = pakeKey({ secret, dhDevice: x25519.getSharedSecret(priv, pcPub), dhPassword: verifier ? x25519.getSharedSecret(verifier.priv, pcPub) : new Uint8Array(0), transcript });
+  const done = await answer(await post({ step: 'finish', via, sid: ch.sid, pub: pubB, mac: b64.enc(pakeMac(K, MAC_PHONE)) }));
   // The PC proves it too: only the real one can.
   let mac; try { mac = b64.dec(done.mac); } catch { mac = null; }
   if (typeof done.id !== 'string' || !sameBytes(mac, pakeMac(K, macPc(done.id)))) throw fail('badAnswer');
