@@ -157,12 +157,12 @@ test('step 6C1: the Ficha lists the tasks of the chat with the approval of Tarea
   assert.equal(lastEntry('proyecto: todavía no tiene entradas'), null);
 });
 
-test('step 6C1: the permissions menu lists Preguntar then Auto with shield icons and a grey mark, and «Más opciones» from least to most access', () => {
+test('step 6C1: the permissions menu lists Preguntar then Auto with shield icons and an accent mark, and «Más opciones» from least to most access', () => {
   const menu = read('src/ui/components/autonomy-switch.jsx');
   assert.match(menu, /main = \['editar', 'auto'\]/);
   assert.match(menu, /MORE_ORDER = \['leer', 'probar', 'preguntar', 'total'\]/);
   for (const [level, icon] of [['auto', 'ShieldCheck'], ['editar', 'ShieldQuestion'], ['preguntar', 'ShieldAlert'], ['total', 'ShieldOff']]) assert.match(menu, new RegExp(`${level}: \\{ Icon: ${icon},`));
-  assert.match(menu, /<Check className=\{cn\('text-muted-foreground mt-0\.5/);
+  assert.match(menu, /<Check className=\{cn\('text-primary-text mt-0\.5/);
   // the calls are not in this file: it only draws the options and reports the one chosen
   assert.doesNotMatch(menu, /grantTotal|grantAndroid|revokeGrant|sessions\.update|unlockCore/);
 });
