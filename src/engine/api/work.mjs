@@ -60,8 +60,9 @@ function assertPointCurrent(board, taskId, { files = true } = {}) {
 // 'partial' (that task failed or was cancelled; joinWrote says whether it left files in the folder).
 // What a save returns carries the fingerprint of what it stored, so a caller can keep it for a later run or approval.
 const withHash = (s) => ({ ...s, previewHash: scheduleHash(s) });
-function guardJoinUndo(board, taskId) {
+function guardJoinUndo(board, taskId, checkpoint = null) {
   const partial = partialJoin(board, taskId) ?? fail(tr('msg.scheduler.noPartialJoin'));
+  if (checkpoint != null && checkpoint !== checkpointIdOf(board, taskId)) fail(tr('msg.accept.rerunSinceSeen'));
   if (!board.settingJson(`checkpoint:${partial.by}`)?.before) return;
   if (finalPhotoOf(board, partial.by) === false) fail(tr('msg.undo.noFinalState'));
   assertPointCurrent(board, partial.by);
@@ -233,8 +234,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
     // A hand join left half-done (tasks.get › joinState 'partial'): put the folder back as it was before it, and optionally try again.
     // They undo the join task's own writes, so they get the guards of a remote «tasks.undo» on that task.
-    'tasks.undoJoin': ({ id }) => { guardJoinUndo(board, int(id, 'tarea')); return scheduler.settleJoin(int(id, 'tarea')); },
-    'tasks.retryJoin': ({ id }) => { guardJoinUndo(board, int(id, 'tarea')); return scheduler.settleJoin(int(id, 'tarea'), { retry: true }); },
+    // An optional `checkpoint` (the checkpointId the caller saw) is refused when the task has run again since, as in tasks.accept;
+    // without it they behave as before. It only adds a check: every guard of guardJoinUndo still applies.
+    'tasks.undoJoin': ({ id, checkpoint }) => { const tid = int(id, 'tarea'); guardJoinUndo(board, tid, checkpoint); return scheduler.settleJoin(tid); },
+    'tasks.retryJoin': ({ id, checkpoint }) => { const tid = int(id, 'tarea'); guardJoinUndo(board, tid, checkpoint); return scheduler.settleJoin(tid, { retry: true }); },
 
     // «/goal», «/plan», «/review» and «/debug» (modes.mjs): none of them changes the chat's permission.
     'sessions.modes': ({ id }) => { const sid = str(id, 'conversación', 64); sessions.must(sid); return { goal: goalOf(board, sid), debug: debugOn(board, sid) }; },
