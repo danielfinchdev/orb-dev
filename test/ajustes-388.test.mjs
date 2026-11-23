@@ -106,7 +106,8 @@ test('what asks for a confirmation or the master password still does, with the s
   assert.match(general, /confirm\(t\('settings\.protectedRemoveTitle', \{ name: x \}\), t\('settings\.protectedRemoveBody'\)/);
   assert.match(general, /confirm\(t\('settings\.switchTitle'\)/);
   assert.match(data, /unlockCore\('restore'\)[\s\S]*call\('backup\.verify'[\s\S]*call\('backup\.restore'/);
-  assert.match(data, /unlockCore\('recovery'\)/); assert.match(data, /unlockCore\('backupFolder'\)/); assert.match(data, /unlockCore\('previousKey'\)/);
+  assert.doesNotMatch(data, /unlockCore\('recovery'\)/);
+  assert.match(data, /unlockCore\('backupFolder'\)/); assert.match(data, /unlockCore\('previousKey'\)/);
   assert.match(data, /confirm\(t\('datos\.legacyConfirmTitle'\)[\s\S]*unlockCore\('legacy'\)[\s\S]*call\('legacy\.delete', \{ unlock \}\)/);
   assert.match(data, /unlockCore\('open'\)/);
   assert.match(link, /confirm\(t\('link\.revokeTitle'[\s\S]*unlockCore\('unlink'\)[\s\S]*call\('link\.revoke', \{ id: d\.id, unlock \}\)/);
