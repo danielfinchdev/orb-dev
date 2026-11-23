@@ -44,7 +44,7 @@ import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
 import { FieldError } from '@/components/ui/primitives.jsx';
-import { useT, t as tNow } from '@/lib/i18n.js';
+import { useT, t as tNow, languageReady } from '@/lib/i18n.js';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { ChatView } from '@/views/chat.jsx';
 import { SessionView } from '@/views/session.jsx';
@@ -284,7 +284,8 @@ function AppRoot() {
   // committed, so no empty black window is ever seen. Rust shows it anyway after a time limit if this never runs.
   useEffect(() => {
     // no wait for an animation frame: a hidden page runs none, and the window's colour already matches the theme
-    if (phase !== 'loading') bridge.windowReady?.()?.catch(quiet);
+    // in English it also waits (at most ~300 ms) for the English texts, so the first paint is already in English
+    if (phase !== 'loading') languageReady.then(() => bridge.windowReady?.()?.catch(quiet));
   }, [phase]);
   useEffect(() => {
     let alive = true;

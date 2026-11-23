@@ -24,6 +24,18 @@ function ensure(lang) {
   }, () => loading.delete(lang)));
 }
 
+// The last language is remembered so that a start in English waits (briefly) for its texts before the window is shown,
+// instead of painting Spanish first and switching.
+const SAVED_KEY = 'orb.language';
+const ENGLISH_WAIT_MS = 300;
+export function rememberLanguage(lang) { try { localStorage.setItem(SAVED_KEY, lang); } catch { /* storage unavailable */ } }
+export const languageReady = (() => {
+  let saved = null; try { saved = localStorage.getItem(SAVED_KEY); } catch { /* none */ }
+  if (saved !== 'en' || !LOADERS.en) return Promise.resolve();
+  ensure('en');
+  return Promise.race([loading.get('en'), new Promise((r) => setTimeout(r, ENGLISH_WAIT_MS))]);
+})();
+
 export function useT() {
   const lang = useStore(uiLanguage);
   ensure(lang);
