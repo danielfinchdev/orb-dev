@@ -121,7 +121,7 @@ export function GamesDialog() {
   return (
     <Dialog open={Boolean(open)} onOpenChange={(v) => { if (!v) close(); }}>
       {/* in a game the dialog is as big as the window lets it and the game takes what the one-line bar leaves */}
-      <DialogContent ref={shell} showClose={false} className={cn('max-w-none outline-none sm:max-w-none', game ? 'h-[min(860px,94vh)] w-[min(1180px,97vw)] max-h-[94vh] grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden p-3' : 'max-h-[92vh] w-[min(760px,96vw)] overflow-y-auto', full && 'h-dvh max-h-none w-screen max-w-none rounded-none sm:max-w-none')} data-testid="games-dialog" data-full={full || undefined}>
+      <DialogContent ref={shell} showClose={false} className={cn('max-w-none outline-none sm:max-w-none', game ? 'h-[min(860px,94vh)] w-[min(1180px,97vw,calc(100vw-2*var(--wco-inset)))] max-h-[94vh] grid-rows-[auto_minmax(0,1fr)] gap-2 overflow-hidden p-3' : 'max-h-[92vh] w-[min(760px,96vw)] overflow-y-auto', full && 'h-dvh max-h-none w-screen max-w-none rounded-none sm:max-w-none')} data-testid="games-dialog" data-full={full || undefined}>
         <DialogHeader className={cn('flex-row items-center gap-2 pr-2.5', game && 'min-h-0 flex-wrap border-b-0 p-0')}>
           {game ? <Button variant="ghost" size="icon-sm" onClick={back} aria-label={t('games.back')}><ArrowLeft /></Button> : null}
           <DialogTitle className={cn('min-w-0 text-card-title', game ? 'shrink-0' : 'flex-1')}>{game ? t(`games.${game}`) : t('games.title')}</DialogTitle>
