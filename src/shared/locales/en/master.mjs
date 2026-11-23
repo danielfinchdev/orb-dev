@@ -171,6 +171,7 @@ export default {
   'msg.master.codeRekeyed': 'New recovery code and new data key. {n} devices were unlinked.',
   'msg.master.phraseDropsCode': 'Your code will no longer recover the password. New backups will ask for the phrase.',
   'msg.master.codeKeptKey': 'The previous code no longer opens your vault on this PC, but any backup made before still carries the old wrap: with that backup and the previous code your secrets up to today can be opened. If you think someone has your code, do it again with «Change the data key too» ticked.',
+  'msg.master.codeCopyWrap': 'The new code already opens your keys, but it could not be saved for scheduled backups: make a new code in Settings › Data.',
   'msg.master.forgotDone': 'New master password. {n} devices were unlinked.',
   'msg.master.confirmReset': 'Confirm that you want to delete the secrets and start from scratch.',
   'msg.master.resetDone': 'Secrets deleted and new master password. {n} devices were unlinked; type the keys of your connectors again.',

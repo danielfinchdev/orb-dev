@@ -220,3 +220,36 @@ test('forgetting the password with the generated code keeps the keys; the code, 
   } finally { await e.stop(); }
   t.cleanup();
 });
+
+test('a failure writing the copies\' wrap after the vault changed still shows the code and unlinks the phones', async () => {
+  const t = tempHome({ mcpServers: [GITHUB] });
+  const e = await startEngine(t.home, { secret: crypto.randomBytes(32).toString('hex') });
+  try {
+    await e.call('master.create', { password: PASS });
+    await e.call('backup.recovery', { password: PASS });
+    const wrap = K.recoveryFile(t.home);
+    fs.rmSync(wrap, { force: true }); fs.mkdirSync(wrap); // writing the file now fails
+    const r = await e.call('backup.recovery', { password: PASS, rekey: true });
+    assert.equal(r.rekeyed, true);
+    assert.match(r.code, /^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$/);
+    assert.equal((await e.call('master.state')).hasCode, true, 'the vault has the new code');
+  } finally { await e.stop(); }
+  t.cleanup();
+});
+
+test('a restore without secrets but with wraps is an old wrap too; the vault says which key is the same', async () => {
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-test-envolturas-'));
+  const mk = (name, files) => { const d = path.join(base, name, 'core', 'secretos'); fs.mkdirSync(d, { recursive: true }); for (const [n, k] of Object.entries(files)) fs.writeFileSync(path.join(d, n), JSON.stringify({ keyId: k, wrapped: 'x' })); return path.join(base, name); };
+  const home = mk('home', { [FILES.master]: 'K2', [FILES.vault]: 'K2' });
+  const staged = mk('s1', { [FILES.master]: 'K1' });
+  assert.equal(await K.settleEnvelopes(home, staged, {}), true, 'no secrets, no proof: this PC keeps its own');
+  assert.equal(fs.existsSync(secretsOf(staged)), false);
+  const staged2 = mk('s2', { [FILES.master]: 'K1' });
+  assert.equal(await K.settleEnvelopes(home, staged2, { proof: true }), false);
+  // the plain keyId of the copy's file says K2 but the vault opened K1: not the same key
+  const lying = mk('s3', { [FILES.master]: 'K2', [FILES.vault]: 'K2' });
+  assert.equal(await K.settleEnvelopes(home, lying, { adopt: async () => ({ byCode: false, keyId: 'K1' }) }), true);
+  const same = mk('s4', { [FILES.master]: 'K1', [FILES.vault]: 'K1' });
+  assert.equal(await K.settleEnvelopes(home, same, { adopt: async () => ({ byCode: false, keyId: 'K2' }) }), false);
+  fs.rmSync(base, { recursive: true, force: true });
+});

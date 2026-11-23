@@ -171,6 +171,7 @@ export default {
   'msg.master.codeRekeyed': 'Código de recuperación nuevo y clave de datos nueva. Se han desenlazado {n} dispositivos.',
   'msg.master.phraseDropsCode': 'Tu código dejará de servir para recuperar la contraseña. Las copias nuevas pedirán la frase.',
   'msg.master.codeKeptKey': 'El código anterior deja de abrir tu bóveda en este PC, pero cualquier copia hecha antes sigue llevando la envoltura vieja: con esa copia y el código anterior se pueden abrir tus secretos de hasta hoy. Si crees que alguien tiene tu código, vuelve a hacerlo con la casilla «Cambiar también la clave de datos» marcada.',
+  'msg.master.codeCopyWrap': 'El código nuevo ya abre tus claves, pero no se ha podido guardar para las copias programadas: haz un código nuevo en Ajustes › Datos.',
   'msg.master.forgotDone': 'Contraseña maestra nueva. Se han desenlazado {n} dispositivos.',
   'msg.master.confirmReset': 'Confirma que quieres borrar los secretos y empezar de cero.',
   'msg.master.resetDone': 'Secretos borrados y contraseña maestra nueva. Se han desenlazado {n} dispositivos; vuelve a escribir las claves de tus conectores.',

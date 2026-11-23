@@ -574,21 +574,28 @@ export const pendingDir = (home) => path.join(paths(home).internal, 'restaurar-p
 //    key and the wrap is written again for it, otherwise it goes);
 //  - a copy for another data key than this PC's, with a password or code in use here, is restored only with proof (a right
 //    password, keys.proof, or the copy's code): without it the secrets stay as they are (→ true).
-async function settleEnvelopes(home, tmp, keys) {
+export async function settleEnvelopes(home, tmp, keys) {
   const staged = paths(tmp).secrets; const current = paths(home).secrets;
   const stagedVault = path.join(staged, SECRET_NAMES.vault);
-  if (!fs.existsSync(stagedVault)) { fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true }); return false; }
-  let byCode = false; let settled = false;
-  if (keys.adopt) { try { byCode = (await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : ''))?.byCode === true; settled = true; } catch { byCode = false; } }
+  const nowKey = keyIdOf(path.join(current, SECRET_NAMES.vault));
+  const inUse = fs.existsSync(path.join(current, SECRET_NAMES.master)) || fs.existsSync(path.join(current, SECRET_NAMES.code));
+  if (!fs.existsSync(stagedVault)) {
+    // Wraps without secrets are old wraps all the same: they replace this PC's only with proof.
+    const wraps = [SECRET_NAMES.master, SECRET_NAMES.machine, SECRET_NAMES.code].some((n) => fs.existsSync(path.join(staged, n)));
+    if (wraps && inUse && keys.proof !== true) { fs.rmSync(staged, { recursive: true, force: true }); return true; }
+    fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
+    return false;
+  }
+  let byCode = false; let settled = false; let openedKey = null;
+  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : ''); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; } catch { byCode = false; } }
   // Without the vault's word on it, the copy's code wrap is never taken.
   if (!settled) fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
-  const copyKey = keyIdOf(stagedVault); const nowKey = keyIdOf(path.join(current, SECRET_NAMES.vault));
-  const inUse = fs.existsSync(path.join(current, SECRET_NAMES.master)) || fs.existsSync(path.join(current, SECRET_NAMES.code));
-  const sameKey = Boolean(copyKey) && copyKey === nowKey;
+  // The same data key is what the vault opened, not what the copy's file says it is.
+  const sameKey = Boolean(openedKey) && openedKey === nowKey;
   if (!(byCode || keys.proof === true || !inUse || sameKey)) { fs.rmSync(staged, { recursive: true, force: true }); return true; }
   // Restored with this PC's own key: this PC's code wrap stays when it is for that data key (the copy's was dropped).
   const own = path.join(current, SECRET_NAMES.code);
-  if (!byCode && sameKey && keyIdOf(own) === copyKey) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+  if (!byCode && sameKey && keyIdOf(own) === openedKey) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
   return false;
 }
 

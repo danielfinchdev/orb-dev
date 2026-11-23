@@ -241,10 +241,11 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const wantRekey = !chosen && (typeof rekey === 'boolean' ? rekey : replaces);
       let r;
       try {
-        r = await m.setCode({ code: chosen ? '' : value, drop: chosen, password: typeof p === 'string' ? p : '', current: typeof current === 'string' ? current : '', copy: K.recoveryFile(ctx.home), rekey: wantRekey, keep: keepOnRekey });
+        r = await m.setCode({ code: chosen ? '' : value, drop: chosen, password: typeof p === 'string' ? p : '', current: typeof current === 'string' ? current : '', copy: K.recoveryFile(ctx.home), rekey: wantRekey });
       } catch (error) { throw asUser(error); }
       if (!r.ok) throw refused(r, { code: !password(p) });
-      K.setRecovery(ctx.home, secret, value);
+      // The vault has already changed: whatever fails here, the code is still shown and a new data key still unlinks the phones.
+      try { K.setRecovery(ctx.home, secret, value); } catch (error) { log(`código de recuperación: copia-clave.json: ${error.message}`); board.notice(tr('msg.master.codeCopyWrap'), 'warning'); }
       const at = new Date().toISOString();
       if (r.rekeyed) {
         const unlinked = unlinkAll('código nuevo');
