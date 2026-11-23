@@ -236,9 +236,11 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
     "state" => Ok(v.state()),
     "openMachine" => Ok(json!(v.open_with_machine()?)),
     "sealMachine" => Ok(json!(v.seal_for_machine())),
+    // Hello's entry is the vault's own (hello.rs): the engine can neither read nor write it through the generic ops.
+    "get" | "set" if s(req, "id") == hello::HELLO_ID => Err(Code::Damaged),
     "get" => v.get(s(req, "id")),
     "set" => v.set(s(req, "id"), req.get("value").cloned().unwrap_or(Value::Null)).map(|_| json!(true)),
-    "ids" => Ok(json!(v.ids(s(req, "prefix"))?)),
+    "ids" => Ok(json!(v.ids(s(req, "prefix"))?.into_iter().filter(|i| i != hello::HELLO_ID).collect::<Vec<_>>())),
     "wait" => Ok(json!(v.wait_of(s(req, "channel"), now))),
     "tryBegin" => Ok(v.begin_try(s(req, "channel"), now).map(|t| t.to_json()).unwrap_or(Value::Null)),
     "tryEnd" => Ok(v.end_try(s(req, "channel"), req.get("ok") == Some(&json!(true)), now).to_json()),
@@ -253,8 +255,8 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
     "tokenStrength" => Ok(json!(v.strength_of(s(req, "token"), now).map(Strength::as_str))),
     "issue" => v.issue(req.get("purpose").and_then(Value::as_str).map(String::from), now),
     "check" => {
-      // need: "password" refuses a token that came from Hello (the permissions' SECRET_METHODS).
-      let need = (req.get("need").and_then(Value::as_str) == Some("password")).then_some(Strength::Password);
+      // A Hello token is taken only when the caller says so (need: "hello"); by default only a password's counts.
+      let need = (req.get("need").and_then(Value::as_str) != Some("hello")).then_some(Strength::Password);
       Ok(json!(v.check_strength(s(req, "token"), req.get("purpose").and_then(Value::as_str), need, req.get("consume") == Some(&json!(true)), now)))
     }
     "lock" => {
@@ -431,20 +433,23 @@ fn checked(p: &Locked) -> Result<(), Code> {
 /// check or change must not wait behind a prompt) nor the vault (only the steps before and after it do).
 fn hello_job(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: &impl Fn() -> u64) -> Answer {
   if op == "helloEnable" {
-    // Turning Hello on takes the password: a token of that strength, made by a password check just before.
-    if !h.vault.lock().unwrap().check_strength(s(req, "token"), None, Some(Strength::Password), false, now()) {
+    // Turning Hello on takes the password: a one-use token of that strength made for this, not the window's.
+    if !h.vault.lock().unwrap().check_strength(s(req, "token"), Some(hello::ENABLE), Some(Strength::Password), true, now()) {
       return Err(Code::Locked);
     }
     return hello::enable(&h.vault, hello, s(req, "account"), now);
   }
   let purpose = req.get("purpose").and_then(Value::as_str);
+  if purpose.is_some_and(|p| hello::NO_HELLO_PURPOSES.contains(&p)) {
+    return Ok(json!({ "ok": false, "reason": "purpose" }));
+  }
   let begun = match hello::begin(&mut h.vault.lock().unwrap(), s(req, "orbId"), purpose, now())? {
     Ok(b) => b,
     Err(refusal) => return Ok(refusal),
   };
   let signed = hello.sign(&begun.account, &begun.message);
   // The clock after the prompt: a nonce that waited more than its two minutes is dead.
-  hello::finish(&mut h.vault.lock().unwrap(), signed, now())
+  hello::finish(&mut h.vault.lock().unwrap(), &begun.message, signed, now())
 }
 
 fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: impl Fn() -> u64) -> Answer {
@@ -537,21 +542,31 @@ mod tests {
     let pw = ask("issue", json!({})).unwrap();
     assert_eq!(pw["strength"], json!("password"));
     let token = pw["unlock"].as_str().unwrap().to_string();
+    h.vault.lock().unwrap().may_issue = true;
+    let enable_token = ask("issue", json!({ "purpose": hello::ENABLE })).unwrap()["unlock"].as_str().unwrap().to_string();
     assert_eq!(ask("tokenStrength", json!({ "token": token })).unwrap(), json!("password"));
     assert_eq!(ask("helloState", json!({})).unwrap()["enabled"], json!(false));
 
     let no_token = slow("helloEnable", &json!({ "account": "orb-x", "token": "nope" }), &h, srv.hello.as_ref(), clock);
     assert_eq!(no_token.err(), Some(Code::Locked), "no password token, no Hello");
-    let on = slow("helloEnable", &json!({ "account": "orb-x", "token": token }), &h, srv.hello.as_ref(), clock).unwrap();
+    let on = slow("helloEnable", &json!({ "account": "orb-x", "token": enable_token }), &h, srv.hello.as_ref(), clock).unwrap();
     assert_eq!(on["ok"], json!(true));
     assert_eq!(ask("helloState", json!({})).unwrap()["enabled"], json!(true));
+    assert_eq!(ask("get", json!({ "id": hello::HELLO_ID })).err(), Some(Code::Damaged), "the generic ops do not touch Hello's entry");
+    assert_eq!(ask("set", json!({ "id": hello::HELLO_ID, "value": 1 })).err(), Some(Code::Damaged));
+    let again = slow("helloEnable", &json!({ "account": "orb-x", "token": enable_token }), &h, srv.hello.as_ref(), clock);
+    assert_eq!(again.err(), Some(Code::Locked), "the enabling token is used up");
+    let window = slow("helloEnable", &json!({ "account": "orb-x", "token": token }), &h, srv.hello.as_ref(), clock);
+    assert_eq!(window.err(), Some(Code::Locked), "the window's token does not turn Hello on");
+    let secret = slow("helloUnlock", &json!({ "orbId": "orb-1", "purpose": "secretSave" }), &h, srv.hello.as_ref(), clock).unwrap();
+    assert_eq!(secret["reason"], json!("purpose"));
 
     let unlock = slow("helloUnlock", &json!({ "orbId": "orb-1" }), &h, srv.hello.as_ref(), clock).unwrap();
     assert_eq!(unlock["strength"], json!("hello"));
     let ht = unlock["unlock"].as_str().unwrap().to_string();
-    assert_eq!(ask("check", json!({ "token": ht })).unwrap(), json!(true));
-    assert_eq!(ask("check", json!({ "token": ht, "need": "password" })).unwrap(), json!(false), "not good for the secrets");
-    assert_eq!(ask("check", json!({ "token": token, "need": "password" })).unwrap(), json!(true));
+    assert_eq!(ask("check", json!({ "token": ht })).unwrap(), json!(false), "by default only a password's token counts");
+    assert_eq!(ask("check", json!({ "token": ht, "need": "hello" })).unwrap(), json!(true), "Hello's is taken when asked for");
+    assert_eq!(ask("check", json!({ "token": token })).unwrap(), json!(true));
 
     fake.set_mode(Mode::Cancel);
     let cancelled = slow("helloUnlock", &json!({ "orbId": "orb-1", "purpose": "project.delete" }), &h, srv.hello.as_ref(), clock).unwrap();

@@ -600,6 +600,7 @@ impl Vault {
     self.use_key(crypto::random(32));
     // A new data key never carries Hello over: its public key was authenticated by the old one.
     self.hello = Default::default();
+    self.tokens.clear();
     self.write_items(&kept.0)
   }
   /// «Borrar secretos y empezar de cero»: the sealed files go, a new data key and an empty vault.
@@ -610,6 +611,7 @@ impl Vault {
     self.had_machine = false;
     self.use_key(crypto::random(32));
     self.hello = Default::default();
+    self.tokens.clear();
     self.write_items(&Map::new())
   }
   pub fn clear_tries(&mut self) {
@@ -650,6 +652,7 @@ impl Vault {
   }
   pub fn lock(&mut self) {
     self.tokens.clear();
+    self.hello.drop_pending();
     self.may_issue = false;
   }
 

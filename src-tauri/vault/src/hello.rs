@@ -15,6 +15,7 @@ use rsa::signature::Verifier;
 use rsa::traits::PublicKeyParts;
 use rsa::RsaPublicKey;
 use serde_json::{json, Value};
+use std::sync::Mutex;
 
 pub const HELLO_ID: &str = "master/hello";
 /// The only key Orb takes: RSA-2048, PKCS#1 v1.5, SHA-256.
@@ -26,6 +27,10 @@ pub const FREE_PROMPTS: u64 = 3;
 pub const PROMPT_WAIT_MS: u64 = 30_000;
 /// The purpose of the Hello step of «Lo he olvidado todo»: its token is good for nothing else, and no other way makes it.
 pub const REBUILD: &str = "rebuild-master";
+/// The purpose of the one-use password token that turns Hello on.
+pub const ENABLE: &str = "hello.enable";
+/// Purposes of the secrets (SECRET_PURPOSES in src/domain/security/permissions.mjs): Hello never opens them.
+pub const NO_HELLO_PURPOSES: [&str; 2] = ["secretSave", "secretSaved"];
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum HelloError {
@@ -131,6 +136,13 @@ pub struct State {
   pending: Option<Pending>,
   fails: u64,
   wait_until: u64,
+  /// An enable is waiting for the OS key (one at a time).
+  enabling: bool,
+}
+impl State {
+  pub(crate) fn drop_pending(&mut self) {
+    self.pending = None;
+  }
 }
 
 /// What the signing step needs.
@@ -183,27 +195,48 @@ pub fn enable(vault: &std::sync::Mutex<Vault>, hello: &dyn Hello, account_name: 
   if !valid_account(account_name) {
     return Err(Code::Damaged);
   }
-  let old = {
+  let (old, key_id) = {
     let mut v = vault.lock().unwrap();
     if !v.unlocked() {
       return Err(Code::Locked);
     }
-    account(&mut v)
+    if v.hello.enabling {
+      return Ok(refused("busy"));
+    }
+    v.hello.enabling = true;
+    (account(&mut v), v.key_id().map(String::from))
+  };
+  let done = |v: &Mutex<Vault>| {
+    let mut v = v.lock().unwrap();
+    if v.key_id().map(String::from) == key_id {
+      v.hello.enabling = false;
+    }
   };
   if !hello.available() {
+    done(vault);
     return Ok(refused("unavailable"));
   }
   let key = match hello.create(account_name) {
     Ok(k) => k,
-    Err(e) => return Ok(refused(error_reason(e))),
+    Err(e) => {
+      done(vault);
+      return Ok(refused(error_reason(e)));
+    }
   };
   if key.alg != ALG || parse_public(&key.public).is_none() {
     hello.delete(account_name);
+    done(vault);
     return Ok(refused("alg"));
   }
   let at = crate::vault::iso(now());
   let stored = {
     let mut v = vault.lock().unwrap();
+    // The data key changed while the prompt was open: the key made now belongs to a vault that is gone.
+    if v.key_id().map(String::from) != key_id {
+      hello.delete(account_name);
+      return Ok(refused("changed"));
+    }
+    v.hello.enabling = false;
     let r = v.set(HELLO_ID, json!({ "cuenta": account_name, "pub": b64(&key.public), "alg": ALG, "tpm": key.tpm, "at": at }));
     if r.is_ok() {
       v.hello = State::default();
@@ -252,7 +285,11 @@ pub fn begin(v: &mut Vault, orb_id: &str, purpose: Option<&str>, now: u64) -> Re
 
 /// Step 3: the answer. The nonce is spent whatever it says; only a signature of that very message by the stored key
 /// makes a token. Cancelling or failing counts toward the prompt limit.
-pub fn finish(v: &mut Vault, answer: Result<Vec<u8>, HelloError>, now: u64) -> Result<Value, Code> {
+pub fn finish(v: &mut Vault, begun: &[u8], answer: Result<Vec<u8>, HelloError>, now: u64) -> Result<Value, Code> {
+  // Only the nonce this very answer belongs to is spent; an answer for another one counts for nothing.
+  if v.hello.pending.as_ref().is_none_or(|p| p.message != begun) {
+    return Ok(refused("nonce"));
+  }
   let pending = v.hello.pending.take();
   let fail = |v: &mut Vault, reason: &str| {
     v.hello.fails += 1;
