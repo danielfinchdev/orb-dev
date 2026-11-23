@@ -201,6 +201,8 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
     if r.get("ok") != Some(&json!(true)) {
       return Ok(r);
     }
+    // The check was for this change, not for a window token: whatever fails below must not leave one allowed.
+    h.vault.lock().unwrap().may_issue = false;
   } else if !s(req, "current").is_empty() {
     if rekey {
       return Err(Code::NeedsPassword);
