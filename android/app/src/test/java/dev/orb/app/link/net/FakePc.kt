@@ -79,6 +79,9 @@ class FakePc(private val clock: Clock) : Interceptor {
     /** Hosts that drop the connection after receiving only the next request; the one after it is served. */
     val resetOnce = HashSet<String>()
 
+    /** Hosts that go down for good right after the connection they reset (the phone changed network). */
+    val downAfterReset = HashSet<String>()
+
     @Volatile var ranBeforeReset = false
 
     /** A repeated nonce gets 410 `gone` (the PC no longer keeps the answer) instead of 401. */
@@ -171,6 +174,7 @@ class FakePc(private val clock: Clock) : Interceptor {
         }
         if (host in resetOnce) {
             resetOnce.remove(host)
+            if (host in downAfterReset) down += host
             val nonce = try { (testJson.parseToJsonElement(String(readBody(req))) as? JsonObject)?.str("n") } catch (e: Exception) { null }
             log += Seen(host, req.url.encodedPath, null, nonce)
             // A PC that ran the request and then lost the connection (and, if old, would call its repeat a replay).

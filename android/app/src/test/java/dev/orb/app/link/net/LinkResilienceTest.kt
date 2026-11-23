@@ -53,6 +53,19 @@ class LinkResilienceTest {
     }
 
     @Test
+    fun `a call that may have been sent is never tried on another address with a new nonce`() = runTest {
+        val r = rig(listOf(home, ts))
+        r.pc.resetOnce += "192.168.1.5"
+        r.pc.downAfterReset += "192.168.1.5"
+        var runs = 0
+        r.pc.callResult = { _, _ -> runs++; buildJsonObject { put("ok", true) } }
+        assertEquals(LinkError.Timeout, client(r).call("chat.send").error())
+        assertEquals(1, r.pc.log.mapNotNull { it.nonce }.size)
+        assertEquals(0, runs)
+        assertTrue(r.pc.log.none { it.host == "orb.tail1234.ts.net" })
+    }
+
+    @Test
     fun `a call is repeated only once`() = runTest {
         val r = rig()
         r.pc.resetAfterReceive += "orb.tail1234.ts.net"

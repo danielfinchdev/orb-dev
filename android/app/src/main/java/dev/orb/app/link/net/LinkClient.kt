@@ -169,7 +169,8 @@ class LinkClient(
                     return Reached(res, p.nonce, base, resent)
                 } catch (e: NetFailure) {
                     timedOut = e.timeout
-                    mayHaveSent = e.mayHaveSent
+                    // sticky: a failed resend must not make an already-sent request look unsent
+                    mayHaveSent = mayHaveSent || e.mayHaveSent
                     notePath(base, false, if (e.timeout) PathError.NO_ANSWER else PathError.UNREACHABLE)
                     if (resend && once && mayHaveSent && !resent) {
                         resent = true
