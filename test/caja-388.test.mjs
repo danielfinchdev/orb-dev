@@ -34,7 +34,7 @@ test('the phone keeps its calls and the master password', () => {
 });
 
 test('the permission levels and their calls are the same as before', () => {
-  assert.match(session, /unlockCore\('fullAccess'\)/);
+  assert.match(session, /unlockCore\('fullAccess', \{ request: \{ method: 'sessions\.grantTotal'/);
   assert.match(session, /call\('sessions\.grantTotal', \{ id: s\.id, unlock \}\)/);
   assert.match(session, /call\('sessions\.update', \{ id: s\.id, permission \}\)/);
   assert.match(session, /grant: 'total'/);

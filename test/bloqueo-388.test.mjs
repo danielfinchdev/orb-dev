@@ -106,7 +106,7 @@ test('5: the link «Usar código de recuperación» leads to the code card, whic
   assert.match(locked, /t\(inCode \? 'master\.unlockWithCode' : 'master\.unlock'\)/);
   assert.match(locked, /t\('master\.useMaster'\)/);
   assert.match(locked, /\{inCode \? <p[^>]*>\{t\('master\.codeNote'\)\}<\/p> : null\}/);
-  assert.match(es, /'master\.codeNote': 'Con el código pondrás una contraseña nueva\. Se desenlazarán tus móviles y navegadores\.'/);
+  assert.match(es, /'master\.codeNote': 'Con el código pondrás una contraseña nueva y tus claves se conservan\.'/);
   // no new method: the code goes into the dialog that already exists
   assert.match(locked, /openDialog\(\(\) => forgotWithCode\(code\.trim\(\)\)\)/);
   assert.match(master, /async function forgotWithCode\(code = ''\)/);

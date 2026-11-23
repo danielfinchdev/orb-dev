@@ -39,7 +39,7 @@ test('4: what the mock-up does not draw in Uso stays under «Más opciones»', (
 
 test('5: an account row says its state as Activa / En pausa / Sin sesión, with the plan only when known', () => {
   assert.match(agents, /acc\.login === 'no' \? \[t\('agents\.accountNoLogin'\), 'warning'\] : acc\.enabled === false \? \[t\('agents\.accountPaused'\), 'secondary'\] : acc\.login === 'si' \? \(agentOn \? \[t\('agents\.accountActive'\), 'success'\]/);
-  assert.match(agents, /meta=\{plan \? <span>\{plan\}<\/span> : null\}/);
+  assert.match(agents, /\{plan \? <span>\{plan\}<\/span> : null\}/);
   for (const l of ['es', 'en']) for (const k of ['accountActive', 'accountPaused', 'accountNoLogin']) assert.match(locale(l), new RegExp(`'agents\\.${k}'`));
 });
 
