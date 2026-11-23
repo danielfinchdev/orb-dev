@@ -220,6 +220,22 @@ impl Tried {
   }
 }
 
+/// What proved the person is there. A password token is good for everything; a Hello token is not good for the secrets
+/// (the engine's permissions say which actions: src/domain/security/permissions.mjs), so the strength travels with it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Strength {
+  Password,
+  Hello,
+}
+impl Strength {
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Password => "password",
+      Self::Hello => "hello",
+    }
+  }
+}
+
 enum Cache {
   Unread,
   Empty,
@@ -233,7 +249,9 @@ pub struct Vault {
   dek: Option<Locked>,
   key_id: Option<String>,
   cache: Cache,
-  tokens: HashMap<String, (u64, Option<String>)>,
+  tokens: HashMap<String, (u64, Option<String>, Strength)>,
+  /// Windows Hello: the pending nonce and the limit of prompts (hello.rs); memory only.
+  pub(crate) hello: crate::hello::State,
   fails: HashMap<String, u64>,
   fails_until: HashMap<String, u64>,
   had_machine: bool,
@@ -256,6 +274,7 @@ impl Vault {
       key_id: None,
       cache: Cache::Unread,
       tokens: HashMap::new(),
+      hello: Default::default(),
       fails: HashMap::new(),
       fails_until: HashMap::new(),
       had_machine: false,
@@ -576,9 +595,12 @@ impl Vault {
       return Err(Code::Locked);
     }
     let mut items = self.items()?;
-    let kept: Map<String, Value> = keep.iter().filter_map(|id| items.0.remove(id).map(|v| (id.clone(), v))).collect();
+    let kept: Map<String, Value> = keep.iter().filter(|id| id.as_str() != crate::hello::HELLO_ID).filter_map(|id| items.0.remove(id).map(|v| (id.clone(), v))).collect();
     let kept = Items(kept);
     self.use_key(crypto::random(32));
+    // A new data key never carries Hello over: its public key was authenticated by the old one.
+    self.hello = Default::default();
+    self.tokens.clear();
     self.write_items(&kept.0)
   }
   /// «Borrar secretos y empezar de cero»: the sealed files go, a new data key and an empty vault.
@@ -588,6 +610,8 @@ impl Vault {
     }
     self.had_machine = false;
     self.use_key(crypto::random(32));
+    self.hello = Default::default();
+    self.tokens.clear();
     self.write_items(&Map::new())
   }
   pub fn clear_tries(&mut self) {
@@ -597,25 +621,38 @@ impl Vault {
   }
 
   // ---- the window's unlock tokens (memory only)
+  /// A password (or the recovery code's step) was just checked: the window's token, or a one-use one for `purpose`.
   pub fn issue(&mut self, purpose: Option<String>, now: u64) -> Result<Value, Code> {
-    if !std::mem::take(&mut self.may_issue) {
+    // Only Hello makes the rebuild token (hello.rs › REBUILD): nothing a password checked can ask for it.
+    if purpose.as_deref() == Some(crate::hello::REBUILD) || !std::mem::take(&mut self.may_issue) {
       return Err(Code::Locked);
     }
+    Ok(self.issue_with(purpose, Strength::Password, now))
+  }
+  pub(crate) fn issue_with(&mut self, purpose: Option<String>, strength: Strength, now: u64) -> Value {
     self.tokens.retain(|_, t| t.0 > now);
     let token: String = crypto::random(24).as_slice().iter().map(|b| format!("{b:02x}")).collect();
     let until = now + if purpose.is_some() { FRESH_MS } else { UNLOCK_MS };
-    self.tokens.insert(token.clone(), (until, purpose));
-    Ok(json!({ "unlock": token, "until": until }))
+    self.tokens.insert(token.clone(), (until, purpose, strength));
+    json!({ "unlock": token, "until": until, "strength": strength.as_str() })
   }
   pub fn check_token(&mut self, token: &str, purpose: Option<&str>, consume: bool, now: u64) -> bool {
-    let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose);
+    self.check_strength(token, purpose, None, consume, now)
+  }
+  /// `need`: the weakest strength accepted (Some(Password) refuses a Hello token).
+  pub fn check_strength(&mut self, token: &str, purpose: Option<&str>, need: Option<Strength>, consume: bool, now: u64) -> bool {
+    let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose && need.is_none_or(|n| n == Strength::Hello || t.2 == Strength::Password));
     if ok && consume {
       self.tokens.remove(token);
     }
     ok
   }
+  pub fn strength_of(&self, token: &str, now: u64) -> Option<Strength> {
+    self.tokens.get(token).filter(|t| t.0 > now).map(|t| t.2)
+  }
   pub fn lock(&mut self) {
     self.tokens.clear();
+    self.hello.drop_pending();
     self.may_issue = false;
   }
 
