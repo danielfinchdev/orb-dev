@@ -216,9 +216,10 @@ export class Master {
   // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/domain/security/permissions.mjs): FRESH_MS.
   issue(purpose = null) { return this.call('issue', { purpose: purpose ?? null }); }
   // hello: a Windows Hello token passes too (only where Hello is enough: needsPassword() in permissions.mjs); by default only the password's.
-  checkToken(token, purpose = null, { consume = false, hello = false } = {}) {
+  // mobile: only a phone's one-use approval passes, and only for the purpose it was signed for (approvePurpose in approve.mjs).
+  checkToken(token, purpose = null, { consume = false, hello = false, mobile = false } = {}) {
     if (typeof token !== 'string' || token.length > 200) return false;
-    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume), ...(hello ? { need: 'hello' } : {}) });
+    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume), ...(mobile ? { need: 'mobile' } : hello ? { need: 'hello' } : {}) });
   }
 
   // ---- Windows Hello (the proof is checked in Rust: src-tauri/vault/src/hello.rs). These never go through serial(): they wait
@@ -235,6 +236,23 @@ export class Master {
   tokenStrength(token) { return typeof token === 'string' && token.length <= 200 ? this.call('tokenStrength', { token }) : null; }
   helloDisable(token) { return this.call('helloDisable', { token }); }
   lock() { this.call('lock'); }
+
+  // ---- a phone's fingerprint (the proof is checked in Rust: src-tauri/vault/src/approve.rs). Quick requests; a refusal is { ok: false, reason }.
+  // The registered phones: [{ id, name, at }].
+  approveList() { return this.call('approveList'); }
+  // token: a one-use password token made for it (issue('approve.register')). → the challenge to send the phone, or a refusal.
+  approveBegin({ token, orbId, deviceId, name }) { return this.call('approveBegin', { token, orbId, deviceId, name }); }
+  approveEnroll(deviceId, nonce, pub, sig) { return this.call('approveEnroll', { deviceId, nonce, pub, sig }); }
+  // → { ok, nonce, payload, summary, until, deviceId } (what the phone gets) or { ok: false, reason: 'unknown' | 'noKeys' | 'big' }.
+  approveAsk({ orbId, deviceId, action, summary }) { return this.call('approveAsk', { orbId, deviceId, action, summary }); }
+  // → { ok, kind: 'approve', unlock, until, strength: 'mobile' } | { ok, kind: 'rebuild' } | { ok: false, reason }.
+  approveSign(deviceId, nonce, sig) { return this.call('approveSign', { deviceId, nonce, sig }); }
+  approveForget(deviceId) { return this.call('approveForget', { deviceId }); }
+  approveForgetAll() { return this.call('approveForgetAll'); }
+  // «Lo he olvidado todo», step 2: token is Hello's rebuild token. → the phone's challenge or { ok: false, reason: 'unknown' }.
+  rebuildBegin({ token, orbId, deviceId }) { return this.call('rebuildBegin', { token, orbId, deviceId }); }
+  // Step 3, after the phone said yes: a new password and a new generated code, in this one request. → { ok: true } | { ok: false, reason: 'approval' }.
+  rebuildFinish(next, code) { return this.serial(async () => this.job('rebuildFinish', { next: checkPassword(next), code: normalizeCode(code) })); }
 
   // Changing it: the current one first (the same waits). The data key stays (only wrapped again).
   change(current, next) { return this.serial(async () => { const p = checkPassword(next); return this.job('change', { current: typed(current), next: p }); }); }

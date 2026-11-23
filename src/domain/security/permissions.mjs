@@ -81,6 +81,10 @@ export const METHODS = Object.freeze({
   // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'master.helloState': 'pc', 'master.helloEnable': 'pc', 'master.unlockHello': 'pc', 'master.helloDisable': 'pc',
+  // a phone's fingerprint approves sensitive actions (src/engine/api/master.mjs): this PC registers it, asks and waits; the phone only answers
+  'approve.devices': 'pc', 'approve.register': 'pc', 'approve.unregister': 'pc', 'approve.request': 'pc', 'approve.poll': 'pc',
+  'approve.enroll': 'remote', 'approve.respond': 'remote',
+  'master.rebuildStart': 'pc', 'master.rebuildPoll': 'pc', 'master.rebuildFinish': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
   // the agents' own API keys (Grok, Devin, Droid): the state says only which are saved, saving needs the unlock
   'agentKeys.state': 'pc', 'agentKeys.save': 'pc',
@@ -119,7 +123,7 @@ export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter(
 // password or the current code, checked in the vault; a token is no proof there).
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.previousKey', 'backup.newKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.previousKey', 'backup.newKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'approve.unregister', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid', 'mcpExt.createToken', 'mcpExt.setProjects',
   // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
   // see freshPurpose) and everything about the rails asks for the password every time
@@ -141,7 +145,11 @@ export const RAILS_PURPOSE = 'rails';
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
 // The one-use token that turns Windows Hello on (the vault takes it only when it was made with the password).
 export const HELLO_ENABLE_PURPOSE = 'hello.enable';
-export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES), HELLO_ENABLE_PURPOSE])]);
+// The one-use token that registers a phone to approve (the vault takes it only when it was made with the password).
+export const APPROVE_REGISTER_PURPOSE = 'approve.register';
+// The purpose of the Hello step of «Lo he olvidado todo» (src-tauri/vault/src/hello.rs › REBUILD): its token is good for nothing else.
+export const REBUILD_PURPOSE = 'rebuild-master';
+export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES), HELLO_ENABLE_PURPOSE, APPROVE_REGISTER_PURPOSE])]);
 // Two strengths of token (the vault keeps the strength inside each one): the password's opens everything above; Windows Hello's
 // is only a proof of presence, so it opens none of what shows, saves or hands out a secret, nor a restore of the copies (a
 // copy brings the secrets of another PC). Those ask for the password, or for the phone's approval (a one-use token of that
@@ -151,6 +159,13 @@ export const SECRET_METHODS = Object.freeze(new Set(['secrets.connector', 'secre
   'mcpExt.setProjects']));
 // What changes the keys' own state asks for the password too, always: Hello neither makes a new key nor proves who forgot it.
 export const PASSWORD_ONLY_METHODS = Object.freeze(new Set([...SECRET_METHODS, 'backup.newKey']));
+// What a linked phone's fingerprint may approve: a call that needs the password and is not a new key's (that one is the password's
+// alone). `purpose` is the call's own «ask every time» purpose: only the secrets' own (a card an agent asked) is open to the phone.
+export function mobileMayApprove(method, params, current = {}) {
+  if (method === 'backup.newKey' || !needsPassword(method, params, current)) return false;
+  const purpose = freshPurpose(method, params, { current });
+  return purpose === null || Object.values(SECRET_PURPOSES).includes(purpose);
+}
 // The purposes whose token Hello may make: every action that asks every time, except the secrets' and the new key's.
 export const HELLO_PURPOSES = Object.freeze(Object.values(FRESH_UNLOCK).filter((p) => p !== FRESH_UNLOCK['backup.newKey']));
 // Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
