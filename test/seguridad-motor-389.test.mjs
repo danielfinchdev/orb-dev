@@ -211,6 +211,23 @@ test('8b: the half-done join is only settled while its join task is still the on
   assert.ok(fs.existsSync(path.join(b.ctx.dir, 'c.txt')));
 });
 
+test('8c: undoJoin and retryJoin refuse a checkpoint the task no longer has, and still work without one', async () => {
+  const ctx = setup(); const { board, task, sched, dir, project, call } = ctx;
+  const info = await conflicted(ctx);
+  sched.folderWorkspace(board.task(info.by), project);
+  fs.writeFileSync(path.join(dir, 'c.txt'), 'half\n');
+  board.patch(info.by, { status: 'failed' }, 'orb', 'task.failed');
+  await sched.afterFolderTask(board.task(info.by));
+  sched.joinedBy(board.task(task.id), info);
+  const seen = (await call('tasks.get', { id: task.id }, PHONE)).checkpointId;
+  await assert.rejects(call('tasks.undoJoin', { id: task.id, checkpoint: 'otro-punto' }, PHONE), /vuelto a ejecutar|run again/i);
+  await assert.rejects(call('tasks.retryJoin', { id: task.id, checkpoint: 'otro-punto' }, PHONE), /vuelto a ejecutar|run again/i);
+  assert.ok(fs.existsSync(path.join(dir, 'c.txt')), 'a refused call touches nothing');
+  const out = await call('tasks.undoJoin', { id: task.id, checkpoint: seen }, PHONE);
+  assert.equal(out.cleaned, true);
+  assert.equal(fs.existsSync(path.join(dir, 'c.txt')), false);
+});
+
 test('9: an unapproved schedule runs only with its fingerprint, and approving carries no other change', async () => {
   const { board, call, name } = setup();
   const s = createSchedule(board, { project: name, title: 'Daily', description: 'check things', agent: 'claude', every: 'daily', at_time: '09:00' }, 'orb');
@@ -225,8 +242,8 @@ test('9: an unapproved schedule runs only with its fingerprint, and approving ca
 test('10: the window draws the half-done join with its two actions, in both languages', async () => {
   const view = fs.readFileSync(path.resolve('src/ui/views/tasks.jsx'), 'utf8');
   assert.match(view, /joinState !== 'partial' \|\| !t\.joinSettleable/);
-  assert.match(view, /call\('tasks\.undoJoin', \{ id: t\.id \}\)/);
-  assert.match(view, /call\('tasks\.retryJoin', \{ id: t\.id \}\)/);
+  assert.match(view, /call\('tasks\.undoJoin', \{ id: t\.id, checkpoint: t\.checkpointId \}\)/);
+  assert.match(view, /call\('tasks\.retryJoin', \{ id: t\.id, checkpoint: t\.checkpointId \}\)/);
   for (const lang of ['es', 'en']) {
     const text = fs.readFileSync(path.resolve(`src/shared/locales/${lang}/tasks.mjs`), 'utf8');
     for (const k of ['tasks.partialJoin', 'tasks.partialJoinClean', 'tasks.undoJoin', 'tasks.retryJoin']) assert.ok(text.includes(`'${k}'`), `${lang} ${k}`);

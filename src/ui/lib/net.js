@@ -29,8 +29,10 @@ export const fetchWithin = (ms, get = globalThis.fetch) => (url, init) => timedF
 const offlineError = (cause, timeout = false) => Object.assign(new Error('offline'), { offline: true, timeout, cause });
 export const isOffline = (e) => Boolean(e?.offline);
 
-// The pause before trying again while the PC cannot be reached: 3 s, 6 s, 12 s… up to 30 s.
-export const retryDelay = (attempt) => Math.min(30_000, 3_000 * 2 ** Math.max(0, attempt));
+// The pause before trying again while the PC cannot be reached: 1, 2, 5, 10 and 30 s, then every 30 s (the link contract,
+// the same steps as the Android app).
+const RETRY_STEPS = [1_000, 2_000, 5_000, 10_000, 30_000];
+export const retryDelay = (attempt) => RETRY_STEPS[Math.min(Math.max(0, Math.trunc(attempt) || 0), RETRY_STEPS.length - 1)];
 
 // the tries of the «PC apagado» screen. One at a time (a try asked while another runs is dropped), a growing
 // pause between them (retryDelay), none while the app is hidden (the phone's screen off, another app on top: it tries

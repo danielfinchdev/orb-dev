@@ -252,12 +252,12 @@ class TaskDetailViewModel(
 
     fun undoJoin() {
         if (!allowed(TaskAction.UndoJoin)) return
-        act(TaskTexts.JOIN_UNDONE) { backend.undoJoin(id) }
+        act(TaskTexts.JOIN_UNDONE) { backend.undoJoin(id, ui.value.detail?.checkpointId) }
     }
 
     fun retryJoin() {
         if (!allowed(TaskAction.RetryJoin)) return
-        act(TaskTexts.JOIN_RETRIED) { backend.retryJoin(id) }
+        act(TaskTexts.JOIN_RETRIED) { backend.retryJoin(id, ui.value.detail?.checkpointId) }
     }
 
     fun retry() {

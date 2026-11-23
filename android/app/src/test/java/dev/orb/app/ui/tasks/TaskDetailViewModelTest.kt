@@ -49,12 +49,13 @@ class TaskDetailViewModelTest {
     }
 
     @Test fun aHalfDoneJoinOffersUndoAndRetryOnlyWhenItWroteFiles() = runTest(dispatcher) {
-        val wrote = backend(detail(task(7, status = "done"), partialJoin = PartialJoin(wrote = true)))
+        val wrote = backend(detail(task(7, status = "done"), checkpointId = "cp9", partialJoin = PartialJoin(wrote = true)))
         val vm = vm(wrote)
         assertTrue(TaskAction.UndoJoin in vm.state.value.actions && TaskAction.RetryJoin in vm.state.value.actions)
         vm.undoJoin()
         advanceUntilIdle()
         assertTrue("undoJoin 7" in wrote.calls)
+        assertEquals(listOf<String?>("cp9"), wrote.joinCheckpoints.toList())
         val clean = vm(backend(detail(task(7, status = "done"), partialJoin = PartialJoin(wrote = false))))
         assertFalse(TaskAction.UndoJoin in clean.state.value.actions)
         assertTrue(TaskAction.RetryJoin in clean.state.value.actions)

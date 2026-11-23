@@ -120,7 +120,7 @@ test('peticiones del móvil con tiempo límite: un PC que no contesta es «sin c
   ctrl2.abort();
   assert.equal(res.signal.aborted, true, 'pero quien lee el flujo lo puede cortar');
   assert.ok(isOffline(await fetchWithin(40, never)('http://pc/api/pair', {}).catch((e) => e)));
-  assert.deepEqual([0, 1, 2, 3, 10].map(retryDelay), [3000, 6000, 12000, 24000, 30000]);
+  assert.deepEqual([0, 1, 2, 3, 10].map(retryDelay), [1000, 2000, 5000, 10000, 30000]);
   assert.ok(TIMEOUTS.call >= 30_000 && TIMEOUTS.me <= 10_000 && TIMEOUTS.upload >= 60_000);
   // Every request of the phone's bridge goes through them (no bare fetch left), and linking too.
   const web = read('src/ui/lib/web-bridge.js');
@@ -207,11 +207,11 @@ test('M1: los reintentos del «PC apagado» son un solo bucle: nunca dos a la ve
   loop.now(); loop.now({ reset: true }); // the screen comes back, the network too, while it tries
   assert.equal(calls, 1, 'una sola petición a la vez');
   answer(false); await first;
-  assert.deepEqual(waits.at(-1), [3, false], 'la primera pausa: 3 s');
+  assert.deepEqual(waits.at(-1), [1, false], 'la primera pausa: 1 s');
   assert.equal(intervals.size, 1);
-  tick(3); assert.equal(calls, 2); assert.equal(intervals.size, 0, 'el contador se para antes de reintentar');
+  tick(1); assert.equal(calls, 2); assert.equal(intervals.size, 0, 'el contador se para antes de reintentar');
   answer(false); await Promise.resolve(); await Promise.resolve();
-  assert.deepEqual(waits.at(-1), [6, false], 'la pausa crece');
+  assert.deepEqual(waits.at(-1), [2, false], 'la pausa crece');
   assert.equal(intervals.size, 1);
   // Hidden: the countdown stops and no new try is planned.
   hidden = true; loop.pause();

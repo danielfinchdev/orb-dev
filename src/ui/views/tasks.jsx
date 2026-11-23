@@ -50,8 +50,8 @@ function PartialJoin({ t, tr, className }) {
     <Note tone="warning" icon={GitMerge} className={className} data-testid="task-partial-join">
       <div>{tr(t.joinWrote ? 'tasks.partialJoin' : 'tasks.partialJoinClean')}</div>
       <div className="mt-2 flex gap-2">
-        {t.joinWrote ? <Button size="xs" variant="outline" onClick={() => act(call('tasks.undoJoin', { id: t.id }), tr('tasks.partialJoin.undone'))} data-testid="task-undo-join">{tr('tasks.undoJoin')}</Button> : null}
-        <Button size="xs" variant="outline" onClick={() => act(call('tasks.retryJoin', { id: t.id }), tr('tasks.partialJoin.retried'))} data-testid="task-retry-join">{tr('tasks.retryJoin')}</Button>
+        {t.joinWrote ? <Button size="xs" variant="outline" onClick={() => act(call('tasks.undoJoin', { id: t.id, checkpoint: t.checkpointId }), tr('tasks.partialJoin.undone'))} data-testid="task-undo-join">{tr('tasks.undoJoin')}</Button> : null}
+        <Button size="xs" variant="outline" onClick={() => act(call('tasks.retryJoin', { id: t.id, checkpoint: t.checkpointId }), tr('tasks.partialJoin.retried'))} data-testid="task-retry-join">{tr('tasks.retryJoin')}</Button>
       </div>
     </Note>
   );

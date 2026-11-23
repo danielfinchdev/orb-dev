@@ -40,6 +40,10 @@ try {
   // 3.8: a folder made before the first start has no master password yet: «Crea tu contraseña maestra» once.
   await throughStart(page, { ready: '[data-testid=chat-greeting]' });
   note(`agentes: ${JSON.stringify((await call('agents.status', { refresh: true })).map((a) => ({ id: a.id, installed: a.installed, login: a.login, models: a.models })))}`);
+  // Cursor's login lives under the user's profile (never in the test's sandbox): if this run was started from a shell whose
+  // USERPROFILE / APPDATA differ from the real ones, Cursor asks for `agent login` although Orb saw its config file. Only
+  // whether the folders exist is written, never their content.
+  note(`entorno de la prueba: .cursor ${fs.existsSync(path.join(process.env.USERPROFILE ?? os.homedir(), '.cursor'))} · cursor-agent ${fs.existsSync(path.join(process.env.LOCALAPPDATA ?? '', 'cursor-agent'))} · perfil real ${(process.env.USERPROFILE ?? '') === os.userInfo().homedir}`);
   const project = await call('projects.create', { name: 'prueba-real' });
   note(`proyecto: ${JSON.stringify(project).slice(0, 200)}`);
   await call('projects.setActive', { name: 'prueba-real' }).catch((e) => note(`setActive: ${e.message}`));

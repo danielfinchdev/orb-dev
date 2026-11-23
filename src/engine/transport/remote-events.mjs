@@ -28,12 +28,13 @@ export function createJournal({ max = JOURNAL_MAX, ttlMs = JOURNAL_MS, now = Dat
     idOf: (n) => `${boot}.${n}`,
     // → { items: [{ id, value }] } when everything after `lastId` is still held, or { resync: true } when it is not
     // (another run, an id from the future, or events already dropped): the phone must reload its whole state.
-    since(lastId) {
+    // `notBefore` (ms): a phone never gets events from before it was linked, whatever id it asks from.
+    since(lastId, { notBefore = 0 } = {}) {
       const last = parse(lastId);
       if (!last || last.boot !== boot) return { resync: true };
       prune();
       if (last.n > counter || last.n < floor) return { resync: true };
-      return { items: items.filter((x) => x.n > last.n).map((x) => ({ id: `${boot}.${x.n}`, value: x.value })) };
+      return { items: items.filter((x) => x.n > last.n && x.at >= notBefore).map((x) => ({ id: `${boot}.${x.n}`, value: x.value })) };
     },
   };
 }

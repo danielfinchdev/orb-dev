@@ -45,6 +45,7 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     var unavailable: Set<String> = emptySet()
     val calls = ArrayList<String>()
     val undoCheckpoints = ArrayList<String?>()
+    val joinCheckpoints = ArrayList<String?>()
     val acceptCheckpoints = ArrayList<String?>()
     var actionResult: Result<Unit> = Result.success(Unit)
     var launchResult: Result<Boolean> = Result.success(false)
@@ -91,8 +92,8 @@ class FakeTasksBackend(initial: List<TaskRow> = emptyList(), paused: Boolean = f
     override suspend fun reassign(id: Long, agent: String, reasoning: String) = act("reassign $id $agent $reasoning")
     override suspend fun followup(id: Long, text: String) = act("followup $id $text")
     override suspend fun retry(id: Long) = act("retry $id")
-    override suspend fun undoJoin(id: Long) = act("undoJoin $id")
-    override suspend fun retryJoin(id: Long) = act("retryJoin $id")
+    override suspend fun undoJoin(id: Long, checkpoint: String?) = act("undoJoin $id").also { joinCheckpoints += checkpoint }
+    override suspend fun retryJoin(id: Long, checkpoint: String?) = act("retryJoin $id").also { joinCheckpoints += checkpoint }
     override suspend fun cancel(id: Long) = act("cancel $id")
     override suspend fun review(id: Long) = act("review $id")
     override suspend fun securityReview(project: String): Result<Long?> { calls += "security $project"; gate?.await(); return securityResult }
