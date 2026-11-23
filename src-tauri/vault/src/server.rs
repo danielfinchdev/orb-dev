@@ -5,9 +5,10 @@
 // Every buffer that carried a password or a secret (the request line, the parsed request, the answer) is wiped after use.
 use crate::crypto::{self, b64url, unb64};
 use crate::grants::Grants;
+use crate::hello::{self, Hello};
 use crate::machine::{self, Sealer};
 use crate::locked::{wipe_value, Locked};
-use crate::vault::{self, check_password, Code, Costs, Tried, Vault, PAIR_ID};
+use crate::vault::{self, check_password, Code, Costs, Strength, Tried, Vault, PAIR_ID};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, Read, Write};
@@ -23,6 +24,9 @@ pub struct Server {
   pub grants: Arc<Grants>,
   /// How this PC's secret is sealed (machine.rs): DPAPI in Orb.exe, the fake in the tests' copy.
   pub sealer: Arc<dyn Sealer>,
+  /// Windows Hello (hello.rs): the real one in Orb.exe (hello::Absent until the Windows side exists), the fake in the
+  /// tests' copy (fake_hello.rs, only under --test --fake-hello).
+  pub hello: Arc<dyn Hello>,
 }
 
 struct Handle {
@@ -128,7 +132,7 @@ impl Session<'_> {
         if op == "close" {
           self.vaults.remove(&req["h"].as_u64().unwrap_or(0));
           Ok(json!(true))
-        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset") {
+        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock") {
           return self.start_job(op, req, h);
         } else {
           let now = self.now(req);
@@ -182,10 +186,11 @@ impl Session<'_> {
     let jobs = self.jobs.clone();
     jobs.lock().unwrap().insert(id, Job::Running);
     let caller_clock = self.server.caller_clock;
+    let hello = self.server.hello.clone();
     let op = op.to_string();
     std::thread::spawn(move || {
       let clock = move || if caller_clock { now } else { now_ms() };
-      let a = slow(&op, &req, &h, clock);
+      let a = slow(&op, &req, &h, hello.as_ref(), clock);
       wipe_value(&mut req);
       jobs.lock().unwrap().insert(id, Job::Done(a, h));
     });
@@ -237,8 +242,21 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
     "wait" => Ok(json!(v.wait_of(s(req, "channel"), now))),
     "tryBegin" => Ok(v.begin_try(s(req, "channel"), now).map(|t| t.to_json()).unwrap_or(Value::Null)),
     "tryEnd" => Ok(v.end_try(s(req, "channel"), req.get("ok") == Some(&json!(true)), now).to_json()),
+    "helloState" => hello::state(v, server.hello.as_ref(), now),
+    "helloDisable" => {
+      // The token is the proof (any strength): Hello can switch itself off, as the table of actions says.
+      if !v.check_token(s(req, "token"), None, false, now) {
+        return Err(Code::Locked);
+      }
+      hello::disable(v, server.hello.as_ref())
+    }
+    "tokenStrength" => Ok(json!(v.strength_of(s(req, "token"), now).map(Strength::as_str))),
     "issue" => v.issue(req.get("purpose").and_then(Value::as_str).map(String::from), now),
-    "check" => Ok(json!(v.check_token(s(req, "token"), req.get("purpose").and_then(Value::as_str), req.get("consume") == Some(&json!(true)), now))),
+    "check" => {
+      // need: "password" refuses a token that came from Hello (the permissions' SECRET_METHODS).
+      let need = (req.get("need").and_then(Value::as_str) == Some("password")).then_some(Strength::Password);
+      Ok(json!(v.check_strength(s(req, "token"), req.get("purpose").and_then(Value::as_str), need, req.get("consume") == Some(&json!(true)), now)))
+    }
     "lock" => {
       v.lock();
       Ok(json!(true))
@@ -409,7 +427,30 @@ fn checked(p: &Locked) -> Result<(), Code> {
   check_password(p.as_str().ok_or(Code::Short)?)
 }
 
-fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
+/// Enabling Hello and an unlock wait for the person at the OS prompt, so they never hold the serial lock (a password
+/// check or change must not wait behind a prompt) nor the vault (only the steps before and after it do).
+fn hello_job(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: &impl Fn() -> u64) -> Answer {
+  if op == "helloEnable" {
+    // Turning Hello on takes the password: a token of that strength, made by a password check just before.
+    if !h.vault.lock().unwrap().check_strength(s(req, "token"), None, Some(Strength::Password), false, now()) {
+      return Err(Code::Locked);
+    }
+    return hello::enable(&h.vault, hello, s(req, "account"), now);
+  }
+  let purpose = req.get("purpose").and_then(Value::as_str);
+  let begun = match hello::begin(&mut h.vault.lock().unwrap(), s(req, "orbId"), purpose, now())? {
+    Ok(b) => b,
+    Err(refusal) => return Ok(refusal),
+  };
+  let signed = hello.sign(&begun.account, &begun.message);
+  // The clock after the prompt: a nonce that waited more than its two minutes is dead.
+  hello::finish(&mut h.vault.lock().unwrap(), signed, now())
+}
+
+fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: impl Fn() -> u64) -> Answer {
+  if matches!(op, "helloEnable" | "helloUnlock") {
+    return hello_job(op, req, h, hello, &now);
+  }
   let _one = h.serial.lock().unwrap();
   match op {
     "create" => {
@@ -445,14 +486,20 @@ fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
     "forgot" | "reset" => {
       let next = password(req, "next");
       checked(&next)?;
+      let old_hello;
       {
         let mut v = h.vault.lock().unwrap();
+        old_hello = hello::account(&mut v);
         if op == "forgot" {
           let keep: Vec<String> = req.get("keep").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
           v.rotate(&keep)?;
         } else {
           v.wipe_all()?;
         }
+      }
+      // The new data key left no Hello entry behind; the OS key of the old one goes too.
+      if let Some(a) = old_hello {
+        hello.delete(&a);
       }
       wrap(h, &next, None, now())?;
       let mut v = h.vault.lock().unwrap();
@@ -462,5 +509,62 @@ fn slow(op: &str, req: &Value, h: &Handle, now: impl Fn() -> u64) -> Answer {
       Ok(json!({ "ok": true }))
     }
     _ => Err(Code::Damaged),
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::fake_hello::{Fake, Mode};
+
+  const NOW: u64 = 1_800_000_000_000;
+
+  fn server(fake: Arc<Fake>) -> Server {
+    Server { costs: Costs { test: true }, caller_clock: true, grants: Arc::new(Grants::new("x".into())), sealer: Arc::new(machine::Fake::default()), hello: fake }
+  }
+
+  #[test]
+  fn hello_through_the_engine_s_ops() {
+    let dir = std::env::temp_dir().join(format!("orb-vault-server-hello-{}-{}", std::process::id(), b64url(crypto::random(4).as_slice())));
+    let fake = Arc::new(Fake::new(Mode::Ok));
+    let srv = server(fake.clone());
+    let h = Handle { vault: Mutex::new(Vault::new(dir.clone(), None, Costs { test: true })), serial: Mutex::new(()) };
+    let clock = || NOW;
+    assert_eq!(h.vault.lock().unwrap().open_with_machine(), Ok(true));
+    let ask = |op: &str, req: Value| quick(op, &req, &mut h.vault.lock().unwrap(), NOW, &srv);
+    // a password makes the token Hello is turned on with
+    slow("create", &json!({ "password": "una contraseña larga" }), &h, srv.hello.as_ref(), clock).unwrap();
+    let pw = ask("issue", json!({})).unwrap();
+    assert_eq!(pw["strength"], json!("password"));
+    let token = pw["unlock"].as_str().unwrap().to_string();
+    assert_eq!(ask("tokenStrength", json!({ "token": token })).unwrap(), json!("password"));
+    assert_eq!(ask("helloState", json!({})).unwrap()["enabled"], json!(false));
+
+    let no_token = slow("helloEnable", &json!({ "account": "orb-x", "token": "nope" }), &h, srv.hello.as_ref(), clock);
+    assert_eq!(no_token.err(), Some(Code::Locked), "no password token, no Hello");
+    let on = slow("helloEnable", &json!({ "account": "orb-x", "token": token }), &h, srv.hello.as_ref(), clock).unwrap();
+    assert_eq!(on["ok"], json!(true));
+    assert_eq!(ask("helloState", json!({})).unwrap()["enabled"], json!(true));
+
+    let unlock = slow("helloUnlock", &json!({ "orbId": "orb-1" }), &h, srv.hello.as_ref(), clock).unwrap();
+    assert_eq!(unlock["strength"], json!("hello"));
+    let ht = unlock["unlock"].as_str().unwrap().to_string();
+    assert_eq!(ask("check", json!({ "token": ht })).unwrap(), json!(true));
+    assert_eq!(ask("check", json!({ "token": ht, "need": "password" })).unwrap(), json!(false), "not good for the secrets");
+    assert_eq!(ask("check", json!({ "token": token, "need": "password" })).unwrap(), json!(true));
+
+    fake.set_mode(Mode::Cancel);
+    let cancelled = slow("helloUnlock", &json!({ "orbId": "orb-1", "purpose": "project.delete" }), &h, srv.hello.as_ref(), clock).unwrap();
+    assert_eq!(cancelled["reason"], json!("cancelled"));
+    assert!(cancelled.get("unlock").is_none());
+    fake.set_mode(Mode::Ok);
+
+    // switching off needs a token; forgetting the password takes the key with it
+    assert_eq!(ask("helloDisable", json!({ "token": "nope" })).err(), Some(Code::Locked));
+    assert_eq!(fake.accounts.lock().unwrap().len(), 1);
+    slow("reset", &json!({ "next": "otra contraseña larga" }), &h, srv.hello.as_ref(), clock).unwrap();
+    assert!(fake.accounts.lock().unwrap().is_empty(), "a new data key deletes the OS key too");
+    assert_eq!(ask("helloState", json!({})).unwrap()["enabled"], json!(false));
+    let _ = std::fs::remove_dir_all(dir);
   }
 }

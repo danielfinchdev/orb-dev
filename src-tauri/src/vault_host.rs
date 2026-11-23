@@ -9,7 +9,7 @@ static SERVER: OnceLock<Option<Arc<Server>>> = OnceLock::new();
 
 fn server() -> Option<Arc<Server>> {
   SERVER
-    .get_or_init(|| orb_vault::start_grants(None).ok().map(|grants| Arc::new(Server { costs: Costs { test: false }, caller_clock: false, grants, sealer: Arc::new(orb_vault::machine::Dpapi) })))
+    .get_or_init(|| orb_vault::start_grants(None).ok().map(|grants| Arc::new(Server { costs: Costs { test: false }, caller_clock: false, grants, sealer: Arc::new(orb_vault::machine::Dpapi), hello: Arc::new(orb_vault::hello::Absent) })))
     .clone()
 }
 

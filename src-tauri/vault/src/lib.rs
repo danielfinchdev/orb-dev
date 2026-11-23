@@ -4,7 +4,9 @@
 // the rest of Orb uses, is src/domain/security/master.mjs.
 pub mod crypto;
 pub mod dpapi;
+pub mod fake_hello;
 pub mod grants;
+pub mod hello;
 pub mod locked;
 pub mod machine;
 pub mod server;
