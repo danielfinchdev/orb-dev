@@ -13,3 +13,12 @@ Part of [How Orb works](../ARCHITECTURE.md).
   tasks finished more than 30 days ago (copy or refs `refs/orb/t<id>-*`) and copies no task uses.
 - Safety warnings on finish: if it looks like a push, if it deleted 10 or more files, or if a read-only task changed
   something (`afterFolderTask`).
+
+## Undo preview (3.8.10)
+
+The undo dialog asks the PC first (`tasks.undoPreview`, PC only), which runs `undoCheckpoint(..., { dry: true })` in
+`src/domain/tasks/checkpoints.mjs`: the same decisions with nothing written, returned as a plan with one
+`{ path, action }` per file plus a per-file diff. The plan carries a hash of the snapshot blobs (read with `git ls-tree`,
+not from disk). `tasks.undo` takes that `hash` and writes nothing if the plan changed since the preview, and a file
+modified during the undo is left as it is. Large undos run in batches without freezing the engine
+(`undoCheckpointAsync`).
