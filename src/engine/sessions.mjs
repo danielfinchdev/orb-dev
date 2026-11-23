@@ -401,7 +401,8 @@ export class Sessions {
   // A chat fixed to this account, or a task of a chat that is: a missing answer from the agent stops them.
   isFixedFor(id, acc) {
     const s = this.get(id);
-    if (s?.account_fixed) return true;
+    // a task is always stored as fixed to its account; only the account fixed on its chat of origin counts
+    if (s?.account_fixed && !s.task_id) return true;
     const conv = s?.task_id ? this.board.conversationOfTask(s.task_id) : null;
     return fixedAccountOf(this.board, conv)?.id === acc.id;
   }

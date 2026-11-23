@@ -363,15 +363,21 @@ export function createLive(o) {
 
   const input = (text, images = []) => [{ type: 'text', text, text_elements: [] }, ...images.map((p) => ({ type: 'localImage', path: p }))];
 
+  // The error of a start that failed (e.g. thread/resume of a thread that no longer exists), kept so the first send()
+  // reports it instead of "session closed": that error is what makes the caller drop the old id and start afresh.
+  let startError = null;
+  const startOnce = () => (started ??= start().catch((error) => { startError = error; live.close(); throw error; }));
+  const startFailedFinal = (error) => (/malformed|resume|not found/i.test(error.message) ? tr('sys.agents.resumeFailed', { name: 'Codex', error: error.message }) : `Codex: ${error.message}`);
+  live.startFailed = () => startError;
   live.send = async ({ text, images = [] }) => {
+    if (startError && (!turn || turn.done)) { turn = new Turn(); turn.finish({ isError: true, final: startFailedFinal(startError) }); return turn.promise; }
     if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: 'Codex' }));
     if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn();
     const current = turn;
     try {
       // A start that fails (no reply, thread not found) closes this live: the next message gets a fresh process.
-      started ??= start().catch((error) => { live.close(); throw error; });
-      await started;
+      await startOnce();
       // The answer is only the acknowledgement of the turn; a server that never gives it would leave the turn open for ever.
       const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) }, { timeoutMs: 120_000 });
       // a turn that ended at once (its turn/completed read in the same piece of output as this answer, before this
@@ -379,7 +385,7 @@ export function createLive(o) {
       // never ended (the Ubuntu CI hang).
       if (!current.done) turnId = res?.turn?.id ?? null;
     } catch (error) {
-      current.finish({ isError: true, final: /malformed|resume|not found/i.test(error.message) ? tr('sys.agents.resumeFailed', { name: 'Codex', error: error.message }) : `Codex: ${error.message}` });
+      current.finish({ isError: true, final: startFailedFinal(error) });
     }
     return current.promise;
   };
@@ -399,8 +405,7 @@ export function createLive(o) {
     const current = turn;
     const timer = setTimeout(() => current.finish({ isError: true, final: tr('sys.agents.noReply', { method: 'thread/compact/start' }) }), 10 * 60_000);
     try {
-      started ??= start().catch((error) => { live.close(); throw error; });
-      await started;
+      await startOnce();
       await peer.request('thread/compact/start', { threadId }, { timeoutMs: 60000 });
     } catch (error) { current.finish({ isError: true, final: error.message }); }
     const r = await current.promise;
@@ -422,8 +427,7 @@ export function createLive(o) {
   live.whoami = async () => {
     if (closed) return null;
     try {
-      started ??= start().catch((error) => { live.close(); throw error; });
-      await started;
+      await startOnce();
       const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs: 10_000 });
       if (!r || typeof r !== 'object') return null;
       return identityFromCodex(r.account ?? {});
