@@ -394,12 +394,12 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const r = requests.get(String(id));
       if (!r || r.kind !== 'rebuild' || r.state !== 'done') throw userError('msg.approve.notYet', {}, { reason: 'approval' });
       let next; try { next = checkPassword(password(p)); } catch (error) { throw asUser(error); }
-      const value = K.newRecoveryCode(); const secret = machineSecret();
-      let out; try { out = await m.rebuildFinish(next, value); } catch (error) { throw asUser(error); }
+      const value = K.newRecoveryCode(); const secret = machineSecret(); const copyId = crypto.randomBytes(16).toString('base64');
+      let out; try { out = await m.rebuildFinish(next, value, copyId); } catch (error) { throw asUser(error); }
       if (!out.ok) throw userError('msg.approve.notYet', {}, { reason: 'approval' });
       requests.delete(String(id));
       let copyWrapFailed = false;
-      try { K.setRecovery(ctx.home, secret, value); } catch (error) {
+      try { K.setRecovery(ctx.home, secret, value, { salt: copyId }); } catch (error) {
         copyWrapFailed = true;
         try { fs.rmSync(K.recoveryFile(ctx.home), { force: true, recursive: true }); } catch { /* the notice says it */ }
         log(`código de recuperación: copia-clave.json: ${error.message}`);
@@ -472,14 +472,16 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const replaces = hadCode || K.hasRecovery(ctx.home, secret);
       if (chosen && hadCode && confirm !== true) throw userError('msg.master.phraseDropsCode', {}, { reason: 'dropsCode' });
       const wantRekey = !chosen && (typeof rekey === 'boolean' ? rekey : replaces);
+      // The vault's code file names the copies' wrap made for it by its salt, chosen here before either is written.
+      const copyId = chosen ? '' : crypto.randomBytes(16).toString('base64');
       let r;
       try {
-        r = await m.setCode({ code: chosen ? '' : value, drop: chosen, password: typeof p === 'string' ? p : '', current: typeof current === 'string' ? current : '', copy: K.recoveryFile(ctx.home), rekey: wantRekey });
+        r = await m.setCode({ code: chosen ? '' : value, drop: chosen, password: typeof p === 'string' ? p : '', current: typeof current === 'string' ? current : '', copy: K.recoveryFile(ctx.home), rekey: wantRekey, copyId });
       } catch (error) { throw asUser(error); }
       if (!r.ok) throw refused(r, { code: !password(p) });
       // The vault has already changed: whatever fails here, the code is still shown and a new data key still unlinks the phones.
       let copyWrapFailed = false;
-      try { K.setRecovery(ctx.home, secret, value); } catch (error) {
+      try { K.setRecovery(ctx.home, secret, value, { salt: copyId || null }); } catch (error) {
         // The scheduled copies must not go on with the old code's wrap: without a wrap they go out without a code.
         copyWrapFailed = true;
         try { fs.rmSync(K.recoveryFile(ctx.home), { force: true, recursive: true }); } catch { /* the notice says it */ }

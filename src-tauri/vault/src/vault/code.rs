@@ -40,8 +40,10 @@ pub fn normalize(text: &str) -> (String, bool) {
 
 fn aad_code(m: &Value) -> Option<String> {
   let k = m.get("kdf")?;
+  // copyId (the salt of the copies' recovery wrap this code goes with) is named in the header only when present.
+  let bound = str_of(m, "copyId").map(|c| format!("|copy:{c}")).unwrap_or_default();
   Some(format!(
-    "orb-master:code|v{}|{}|{}|{}|{}|{}|{}|{}",
+    "orb-master:code|v{}|{}|{}|{}|{}|{}|{}|{}{}",
     m.get("v")?.as_u64()?,
     str_of(m, "keyId")?,
     str_of(k, "alg")?,
@@ -49,8 +51,19 @@ fn aad_code(m: &Value) -> Option<String> {
     k.get("r")?.as_u64()?,
     k.get("p")?.as_u64()?,
     str_of(k, "salt")?,
-    str_of(m, "created")?
+    str_of(m, "created")?,
+    bound
   ))
+}
+
+/// The salt of the copies' recovery wrap (copia-clave.json), which says which code it was made for.
+pub fn copy_salt(path: &str) -> Option<String> {
+  let raw: Value = serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()?;
+  str_of(raw.get("kdf")?, "salt").map(String::from)
+}
+/// Whether a code file was made together with the copies' recovery wrap that has this salt.
+pub fn bound_to(m: &Value, salt: &str) -> bool {
+  str_of(m, "copyId") == Some(salt)
 }
 
 /// The cost of maestra-codigo.json: never cheaper than a new one (a planted file cannot make it cheap), never a hang.
@@ -99,9 +112,12 @@ impl Vault {
     self.accept_key(key, key_id)
   }
   /// Writes maestra-codigo.json for the open data key from a KEK made by the caller.
-  pub fn put_code(&mut self, kek: &Locked, kdf: Value, now: u64) -> Result<(), Code> {
+  pub fn put_code(&mut self, kek: &Locked, kdf: Value, copy_id: Option<&str>, now: u64) -> Result<(), Code> {
     let (dek, key_id) = (self.dek.as_ref().ok_or(Code::Locked)?, self.key_id.clone().unwrap_or_default());
     let mut file = json!({ "v": 1, "keyId": key_id, "kdf": kdf, "check": b64(&crypto::check_of(kek.as_slice())), "created": iso(now) });
+    if let Some(id) = copy_id {
+      file["copyId"] = json!(id);
+    }
     let w = crypto::seal(kek.as_slice(), dek.as_slice(), &aad_code(&file).ok_or(Code::Damaged)?);
     file["wrapped"] = json!(w);
     write_json(&self.file(CODE), &file).map_err(|_| Code::Damaged)?;

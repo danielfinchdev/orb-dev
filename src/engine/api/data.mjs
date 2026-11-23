@@ -117,7 +117,7 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
         proof = true;
       }
       // The vault settles what the copy's code wrap and its Hello entries may bring (master.mjs › adoptStaged).
-      const adopt = ctx.master ? (dir, code) => adoptStaged(dir, code) : null;
+      const adopt = ctx.master ? (dir, code, copy) => adoptStaged(dir, code, undefined, copy) : null;
       const r = await K.stageRestore(ctx.home, fileOf(file), { secret: secret(), passphrase: pass(passphrase), adopt, proof });
       log(`copia lista para restaurar: ${path.basename(file)} (${r.files} archivos)${r.secretsKept ? '; los secretos de este PC se quedan como estaban' : ''}`);
       emit('backup:restoreReady', { file: path.basename(file) });

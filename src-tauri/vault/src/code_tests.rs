@@ -328,3 +328,27 @@ fn a_new_data_key_with_the_vault_closed_keeps_the_secrets_and_a_phrase_makes_no_
   assert!(!dir.join(CODE).exists());
   tidy(&[&dir]);
 }
+
+#[test]
+fn a_code_replaced_by_an_older_version_does_not_leave_its_wrap_working() {
+  let (h, dir, fake) = pc("stale-code", 1, None);
+  let copy = dir.join("copia-clave.json");
+  write_copy_wrap(&copy, 1, CODE_A);
+  let copy_s = copy.display().to_string();
+  // a 3.8.10 code: the vault's file goes with the copies' wrap it was made for
+  let salt = code::copy_salt(&copy_s).unwrap();
+  assert_eq!(run("codeSet", json!({ "code": CODE_A, "password": PASSWORD, "copy": copy_s, "copyId": salt }), &h, &fake).unwrap()["ok"], json!(true));
+  assert_eq!(read(&dir, CODE)["copyId"].as_str(), Some(salt.as_str()));
+  let right = run("codeUnlock", json!({ "code": CODE_A, "copy": copy_s }), &h, &fake).unwrap();
+  assert_eq!(right, json!({ "ok": true }));
+  assert!(dir.join(CODE).exists(), "the wrap that goes with the copies' stays");
+  // 3.8.9 makes a new code: only copia-clave.json changes
+  write_copy_wrap(&copy, 1, CODE_B);
+  let old = run("codeUnlock", json!({ "code": CODE_A, "copy": copy_s }), &h, &fake).unwrap();
+  assert_eq!(old["reason"], json!("wrong"), "the old code no longer opens anything");
+  assert!(!dir.join(CODE).exists(), "its wrap is dropped");
+  let new = run("codeUnlock", json!({ "code": CODE_B, "copy": copy_s }), &h, &fake).unwrap();
+  assert_eq!(new, json!({ "ok": true }), "the copies' wrap decides");
+  assert_eq!(read(&dir, CODE)["copyId"], read(&dir.clone(), "copia-clave.json")["kdf"]["salt"], "and the code file is written again for it");
+  tidy(&[&dir]);
+}

@@ -24,6 +24,8 @@ pub(crate) struct Proved {
   /// The code as the vault uses it (normalized).
   pub code: String,
   pub generated: bool,
+  /// The salt of the copies' recovery wrap read for this try: a code file written from this proof goes with it.
+  pub copy_id: Option<String>,
 }
 
 /// The copies' recovery wrap, opened with this PC's backup key: its cost and the wrapped key (src/domain/data/backup.mjs › setRecovery).
@@ -37,6 +39,17 @@ fn recovery_of(path: &str, bkey: &Locked) -> Option<(Value, Locked)> {
 /// One try of a code on a channel, with the waits of the vault. Ok(Err(answer)): refused or wrong; Ok(Ok(proof)): it is right.
 pub(crate) fn check_code(h: &Handle, typed: &str, copy: &str, channel: &str, now: u64) -> Result<Result<Proved, Value>, Code> {
   let (normal, generated) = code::normalize(typed);
+  let copy_id = code::copy_salt(copy);
+  {
+    // A code file made for another recovery wrap than the one now in the copies (a code replaced by an older version, which
+    // never touches this file) wraps the data key with a code nobody holds any more: it goes, and the copies' wrap decides.
+    let mut v = h.vault.lock().unwrap();
+    if let (Some(id), Some(m)) = (&copy_id, v.code_file()) {
+      if !code::bound_to(&m, id) {
+        v.drop_code();
+      }
+    }
+  }
   let (file, bkey) = {
     let v = h.vault.lock().unwrap();
     (v.code_file().and_then(|m| v.code_kdf(&m).map(|k| (m, k))), v.backup_key())
@@ -74,7 +87,7 @@ pub(crate) fn check_code(h: &Handle, typed: &str, copy: &str, channel: &str, now
   if tried != Tried::Ok {
     return Ok(Err(tried.to_json()));
   }
-  Ok(Ok(Proved { source: if file.is_some() { Source::Vault(key) } else { Source::Copy }, code: normal, generated }))
+  Ok(Ok(Proved { source: if file.is_some() { Source::Vault(key) } else { Source::Copy }, code: normal, generated, copy_id }))
 }
 
 /// A generated code only the copies' wrap knew (a 3.8.9 code) now also opens the vault: maestra-codigo.json is written.
@@ -82,13 +95,14 @@ fn migrate(h: &Handle, p: &Proved, now: u64) -> Result<(), Code> {
   if !p.generated || !h.vault.lock().unwrap().unlocked() {
     return Ok(());
   }
-  write_code(h, &p.code, now)
+  write_code(h, &p.code, p.copy_id.as_deref(), now)
 }
-/// maestra-codigo.json for the open data key (the scrypt without the vault held).
-pub(crate) fn write_code(h: &Handle, code_text: &str, now: u64) -> Result<(), Code> {
+/// maestra-codigo.json for the open data key (the scrypt without the vault held); copy_id: the salt of the copies' recovery
+/// wrap made for the same code.
+pub(crate) fn write_code(h: &Handle, code_text: &str, copy_id: Option<&str>, now: u64) -> Result<(), Code> {
   let kdf = h.vault.lock().unwrap().new_code_kdf();
   let kek = code::kek_of(code_text, &kdf).ok_or(Code::Damaged)?;
-  h.vault.lock().unwrap().put_code(&kek, kdf, now)
+  h.vault.lock().unwrap().put_code(&kek, kdf, copy_id, now)
 }
 
 pub(crate) fn unlock(req: &Value, h: &Handle, now: u64) -> Answer {
@@ -171,6 +185,8 @@ pub(crate) fn forgot(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> An
 pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answer {
   let drop = req.get("drop") == Some(&json!(true));
   let rekey = !drop && req.get("rekey") == Some(&json!(true));
+  // The salt the caller will give the copies' wrap of this code (made after this job), else the one that is there now.
+  let copy_id = Some(s(req, "copyId")).filter(|c| !c.is_empty()).map(String::from).or_else(|| code::copy_salt(s(req, "copy")));
   let new_code = code::normalize(s(req, "code"));
   if !drop && !new_code.1 {
     return Err(Code::Phrase);
@@ -227,13 +243,13 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
       hello.delete(&a);
     }
     wrap(h, &password(req, "password"), created, now)?;
-    write_code(h, &new_code.0, now)?;
+    write_code(h, &new_code.0, copy_id.as_deref(), now)?;
     let mut v = h.vault.lock().unwrap();
     v.lock();
     v.may_issue = true;
     return Ok(json!({ "ok": true, "rekeyed": true }));
   }
-  write_code(h, &new_code.0, now)?;
+  write_code(h, &new_code.0, copy_id.as_deref(), now)?;
   Ok(json!({ "ok": true, "rekeyed": false }))
 }
 
@@ -243,6 +259,7 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
 /// what only the data key can reach is marked to go the first time the key opens here.
 pub(crate) fn adopt(req: &Value, h: &Handle, now: u64) -> Answer {
   let (normal, generated) = code::normalize(s(req, "code"));
+  let copy_id = code::copy_salt(s(req, "copy"));
   let file = {
     let v = h.vault.lock().unwrap();
     v.code_file().and_then(|m| v.code_kdf(&m).map(|k| (m, k)))
@@ -269,7 +286,7 @@ pub(crate) fn adopt(req: &Value, h: &Handle, now: u64) -> Answer {
     }
   }
   if by_code {
-    write_code(h, &normal, now)?;
+    write_code(h, &normal, copy_id.as_deref(), now)?;
   }
   let v = h.vault.lock().unwrap();
   Ok(json!({ "ok": true, "byCode": by_code, "keyId": v.key_id() }))

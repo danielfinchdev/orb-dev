@@ -309,7 +309,7 @@ pub(crate) fn rebuild(req: &Value, h: &Handle, now: u64) -> Result<Value, Code> 
   };
   // The code goes first and comes back if the password cannot be written: never one new and one old.
   let old_code = std::fs::read(h.vault.lock().unwrap().dir.join(crate::vault::CODE)).ok();
-  crate::code_ops::write_code(h, &normal, now)?;
+  crate::code_ops::write_code(h, &normal, Some(s(req, "copyId")).filter(|c| !c.is_empty()), now)?;
   if let Err(e) = wrap(h, &next, created, now) {
     let file = h.vault.lock().unwrap().dir.join(crate::vault::CODE);
     match old_code {

@@ -197,7 +197,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
 // This PC's backup key: from the vault (the app), or from the plain clave.bin of a run without it (never made here).
 const secretOf = (home) => machineKeys({ create: false, home })?.backup ?? null;
 // What settles a restored copy's code wrap in the vault (master.mjs › adoptStaged); none without a secret to open it with.
-const adopter = (home) => { const s = masterSecret(home); return s ? async (dir, code) => (await import('../domain/security/master.mjs')).adoptStaged(dir, code, s) : null; };
+const adopter = (home) => { const s = masterSecret(home); return s ? async (dir, code, copy) => (await import('../domain/security/master.mjs')).adoptStaged(dir, code, s, copy) : null; };
 // What opens core\secretos for this PC: the vault's own secret (the app), a given one, or the plain clave.bin.
 const masterSecret = (home) => (ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })());
 

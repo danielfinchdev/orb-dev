@@ -252,7 +252,7 @@ export class Master {
   // «Lo he olvidado todo», step 2: token is Hello's rebuild token. → the phone's challenge or { ok: false, reason: 'unknown' }.
   rebuildBegin({ token, orbId, deviceId }) { return this.call('rebuildBegin', { token, orbId, deviceId }); }
   // Step 3, after the phone said yes: a new password and a new generated code, in this one request. → { ok: true } | { ok: false, reason: 'approval' }.
-  rebuildFinish(next, code) { return this.serial(async () => this.job('rebuildFinish', { next: checkPassword(next), code: normalizeCode(code) })); }
+  rebuildFinish(next, code, copyId = '') { return this.serial(async () => this.job('rebuildFinish', { next: checkPassword(next), code: normalizeCode(code), ...(copyId ? { copyId } : {}) })); }
 
   // Changing it: the current one first (the same waits). The data key stays (only wrapped again).
   change(current, next) { return this.serial(async () => { const p = checkPassword(next); return this.job('change', { current: typed(current), next: p }); }); }
@@ -273,13 +273,13 @@ export class Master {
   // A new generated code, or (drop) a phrase in its place. password or current (the code now in force) is checked in the
   // vault. rekey: a new data key too (needs the password; the vault itself keeps every secret but the phones' keys and Hello's). → { ok: true, rekeyed }
   // or a refusal (attempt()'s, or reason 'needsAuth').
-  setCode({ code = '', password = '', current = '', copy, rekey = false, drop = false }) {
+  setCode({ code = '', password = '', current = '', copy, rekey = false, drop = false, copyId = '' }) {
     return this.serial(async () => {
-      return this.job('codeSet', { code: normalizeCode(code), password: typed(password), current: normalizeCode(current), copy: path.resolve(copy), rekey, drop });
+      return this.job('codeSet', { code: normalizeCode(code), password: typed(password), current: normalizeCode(current), copy: path.resolve(copy), rekey, drop, ...(copyId ? { copyId } : {}) });
     });
   }
   // A restore being prepared (dir: its staged core\secretos, never the live one): what the copy's code wrap may bring.
-  adopt(code) { return this.job('adopt', { code: normalizeCode(code) }); }
+  adopt(code, copy = '') { return this.job('adopt', { code: normalizeCode(code), ...(copy ? { copy: path.resolve(copy) } : {}) }); }
   close() { try { request({ op: 'close', h: this.h }); } catch { /* the vault is gone */ } }
 
   // «Borrar secretos y empezar de cero»: the sealed files go, a new data key, an empty vault and the new password.
@@ -351,7 +351,7 @@ export function restoreMissing(dir, mirror) {
 
 // Opens a staged folder of secrets (a restore being prepared) in the vault and settles what the copy's code wrap and its
 // Hello and approval entries may bring (src-tauri/vault/src/code_ops.rs › adopt). → { ok, byCode, keyId }.
-export async function adoptStaged(dir, code, secret = IN_VAULT) {
+export async function adoptStaged(dir, code, secret = IN_VAULT, copy = '') {
   const m = new Master(dir, { secret });
-  try { return await m.adopt(code); } finally { m.close(); }
+  try { return await m.adopt(code, copy); } finally { m.close(); }
 }

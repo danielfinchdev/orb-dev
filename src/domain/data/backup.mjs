@@ -80,8 +80,9 @@ export function newRecoveryCode() {
 
 // The recovery wrap kept on this machine (sealed with its secret): the scheduled copies use it without asking for the code.
 export const recoveryFile = (home) => path.join(paths(home).data, 'copia-clave.json');
-export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT } = {}) {
-  const kdf = { alg: 'scrypt', ...params, salt: b64(crypto.randomBytes(16)) };
+// salt: chosen by the caller when the vault's code file must name this wrap (master.mjs › setCode copyId).
+export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT, salt = null } = {}) {
+  const kdf = { alg: 'scrypt', ...params, salt: salt || b64(crypto.randomBytes(16)) };
   const kek = passKek(passphrase, kdf);
   const sealed = wrap(machineKek(secret), kek, 'orbbak:recovery');
   const file = recoveryFile(home);
@@ -587,7 +588,7 @@ export async function settleEnvelopes(home, tmp, keys) {
     return false;
   }
   let byCode = false; let settled = false; let openedKey = null;
-  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : ''); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; } catch { byCode = false; } }
+  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : '', recoveryFile(tmp)); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; } catch { byCode = false; } }
   // Without the vault's word on it, the copy's code wrap is never taken.
   if (!settled) fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
   // The same data key is what the vault opened, not what the copy's file says it is.
