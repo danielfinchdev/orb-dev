@@ -5,6 +5,7 @@
 import * as L from '../../shared/link-payload.mjs'; // tiny and pure: what a QR or a typed code says (also the Android app's)
 import { timedFetch, fetchWithin, isOffline, TIMEOUTS } from './net.js';
 import { quiet } from './quiet.js';
+import { RESYNC_EVENTS, parseBlock, resumeRequest, reconnectWait, sendOnce } from './link-resume.js';
 const tl = async (key, vars) => (await import('./i18n.js')).t(key, vars);
 const crypto$ = () => import('../../shared/mobile-crypto.mjs');
 // the Android app (src/ui/lib/app-bridge.js, loaded first) gives this bridge its own host: where the Orb is (the
@@ -82,6 +83,9 @@ if (!window.orb) {
     // the PC is there but needs attention (its data could not be updated: remote.mjs ›
     // startAttention); said as such, never as «sin conexión».
     if (res.status === 503 && typeof data.attention === 'string') throw Object.assign(new Error(await tl('app.pcAttentionBody')), { attention: data.attention });
+    // 410: the PC saw this call's nonce but no longer holds its answer. The phone stays linked and never sends it again; it
+    // reads its state anew to learn what came of it.
+    if (res.status === 410) { for (const e of RESYNC_EVENTS) fire(e, {}); throw new Error(data.error ?? await tl('app.httpError', { n: res.status })); }
     if (!res.ok) throw new Error(data.error ?? await tl('app.httpError', { n: res.status }));
     const C = await crypto$();
     let msg; try { msg = C.open(s.key, data, C.AAD.response(s.id)); } catch { throw new Error(await tl('app.badAnswer')); }
@@ -92,7 +96,10 @@ if (!window.orb) {
     const s = await ready(); if (!s) { unpaired(); throw new Error(await tl('app.notLinked')); }
     const C = await crypto$();
     const box = C.seal(s.key, { t: stamp(), m: kind, b: body }, C.AAD.request(s.id));
-    const res = await reach(url, { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) }, ms, { once: kind !== 'me' });
+    const init = { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) };
+    // A call with no answer is sent once more with this same sealed request (same nonce): the PC answers from what it already
+    // did, so it never runs twice. Never with a new nonce.
+    const res = await sendOnce(() => reach(url, init, ms, { once: kind !== 'me' }), { again: kind === 'call' });
     if (retry && await clockFixed(res)) return post(url, kind, body, false, ms);
     return answer(res, s, box.n);
   };
@@ -100,11 +107,12 @@ if (!window.orb) {
   // the live events' one also says this client takes the streamed answer as deltas (d: 1, src/shared/chat-stream.mjs).
   const authHeader = async (s, kind) => { const C = await crypto$(); return C.sealText(s.key, { t: stamp(), m: kind, ...(kind === 'events' ? { d: 1 } : {}) }, C.AAD.request(s.id)); };
 
-  // Live events over a streamed fetch (EventSource cannot send headers); reconnects with a growing pause.
+  // Live events over a streamed fetch (EventSource cannot send headers); reconnects after 1, 2, 5, 10, 30 s, resuming from the last event seen.
   // the PC writes a ping every 15 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
   // without a word) means a dead stream: it is dropped, the window hears link:offline and it connects again.
   let stream = null; let live = false; let connecting = false;
-  const connect = async (wait = 1000) => {
+  let lastId = null; // the id of the last numbered event seen: the PC replays what came after it
+  const connect = async (failures = 0) => {
     stream?.abort(); const ctrl = new AbortController(); stream = ctrl;
     let idle = false; let watchdog = null;
     const arm = () => { clearTimeout(watchdog); watchdog = setTimeout(() => { idle = true; ctrl.abort(); }, TIMEOUTS.eventsIdle); };
@@ -113,12 +121,13 @@ if (!window.orb) {
       const s = await ready(); if (!s) { connecting = false; return; }
       const C = await crypto$();
       // The time limit is for the answer's headers only: the stream itself stays open as long as the PC keeps it.
-      const res = await reach('/api/events', { headers: { ...headersOf(s), 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal }, TIMEOUTS.events);
+      const resume = resumeRequest(lastId, { crossOrigin: Boolean(host) });
+      const res = await reach(`/api/events${resume.query}`, { headers: { ...headersOf(s), ...resume.headers, 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal }, TIMEOUTS.events);
       if (res.status === 401) { connecting = false; return unpaired(); }
-      if (await clockFixed(res)) wait = 100; // again at once, with the PC's time
+      if (await clockFixed(res)) { clearTimeout(watchdog); connecting = false; return connect(0); } // again at once, with the PC's time
       if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
-      wait = 1000; live = true; connecting = false; arm();
+      failures = 0; live = true; connecting = false; arm();
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
         arm();
@@ -126,15 +135,15 @@ if (!window.orb) {
         let i;
         while ((i = buf.indexOf('\n\n')) >= 0) {
           const block = buf.slice(0, i); buf = buf.slice(i + 2);
-          const data = block.split('\n').filter((l) => l.startsWith('data: ')).map((l) => l.slice(6)).join('');
-          if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); fire(e, p); } catch { /* not for us */ } }
+          const { id, data } = parseBlock(block);
+          if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); if (id) lastId = id; if (e === 'resync') { for (const x of RESYNC_EVENTS) fire(x, {}); } else fire(e, p); } catch { /* not for us */ } }
         }
       }
     } catch { if (ctrl.signal.aborted && !idle) { clearTimeout(watchdog); if (stream === ctrl) { live = false; connecting = false; } return; } }
     clearTimeout(watchdog);
     if (stream === ctrl) { live = false; connecting = false; }
     if (idle) seen(false);
-    if (stream === ctrl) setTimeout(() => { if (stream === ctrl) connect(Math.min(wait * 2, 30_000)); }, wait);
+    if (stream === ctrl) setTimeout(() => { if (stream === ctrl) connect(failures + 1); }, reconnectWait(failures));
   };
   // Back from the background (phones pause pages): reconnect at once.
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && session) connect(); });
