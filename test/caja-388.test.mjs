@@ -41,9 +41,9 @@ test('the permission levels and their calls are the same as before', () => {
   for (const level of ['auto', 'editar', 'leer', 'probar', 'preguntar', 'total']) assert.ok(autonomy.includes(`  ${level}: { Icon:`), level);
 });
 
-test('the reasoning has its four bars with the accent and a bubble with what it suits and what it spends', () => {
-  assert.match(brain, /REASONING_LEVELS = \['low', 'medium', 'high', 'xhigh'\]/);
-  assert.match(brain, /\[0, 1, 2, 3\]\.map/);
+test('the reasoning has its six bars with the accent and a bubble with what it suits and what it spends', () => {
+  assert.match(brain, /REASONING_LEVELS/);
+  assert.match(brain, /\[0, 1, 2, 3, 4, 5\]\.map/);
   assert.match(brain, /bg-primary-text/);
   assert.match(brain, /reasoning\.tasks\.\$\{level\}/);
   assert.match(brain, /reasoning\.use\.\$\{level\}/);

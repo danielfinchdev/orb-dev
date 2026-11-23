@@ -29,7 +29,7 @@ export const CAN_STEER = { claude: true, codex: true };
 // agents whose own compaction Orb can ask for (Claude /compact, Codex's thread compaction): «Compactar».
 export const CAN_COMPACT = { claude: true, codex: true };
 export const DECISION = translated({ allowed: ['decision.allowed', 'success'], always: ['decision.always', 'success'], denied: ['decision.denied', 'destructive'], expired: ['decision.expired', 'secondary'], timeout: ['decision.timeout', 'secondary'] });
-export const REASONING = translated({ low: 'reasoning.low', medium: 'reasoning.medium', high: 'reasoning.high', xhigh: 'reasoning.xhigh' });
+export const REASONING = translated({ low: 'reasoning.low', medium: 'reasoning.medium', high: 'reasoning.high', xhigh: 'reasoning.xhigh', minimal: 'reasoning.minimal', max: 'reasoning.max' });
 export const MODE = translated({ carpeta: 'mode.carpeta', aislada: 'mode.aislada' });
 export const SENSITIVE = translated({
   external_write: 'sensitive.external_write', publish: 'sensitive.publish', financial: 'sensitive.financial', credential_access: 'sensitive.credential_access', destructive: 'sensitive.destructive',

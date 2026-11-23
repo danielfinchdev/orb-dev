@@ -304,7 +304,9 @@ object TaskTexts {
         "low" -> "bajo"
         "medium" -> "medio"
         "high" -> "alto"
-        "xhigh" -> "máximo"
+        "minimal" -> "mínimo"
+        "xhigh" -> "extra alto"
+        "max" -> "máximo"
         else -> r.orEmpty()
     }
 

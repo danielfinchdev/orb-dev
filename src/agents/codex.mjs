@@ -119,8 +119,8 @@ export function onlyNetwork(perms) {
   const keys = Object.keys(perms).filter((k) => perms[k] != null && !(Array.isArray(perms[k]) && !perms[k].length));
   return keys.length > 0 && keys.every((k) => /^network/i.test(k));
 }
-// «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
-const effort = (r) => r || 'medium';
+// Orb only offers the levels each model's model/list says it takes; «max» is Claude's, so here it runs as «xhigh».
+export const effort = (r) => (r === 'max' ? 'xhigh' : r || 'medium');
 
 const ITEM_TOOL = (item) => {
   if (item.type === 'commandExecution') return { name: tr('sys.agents.tool.execute'), input: clip(item.command, 300) };
@@ -149,7 +149,7 @@ export function collabResult(item) {
 export function codexModels(r) {
   const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r?.models) ? r.models : [];
   // the reasoning levels each model takes (supportedReasoningEfforts: strings or { reasoningEffort }).
-  const effortsOf = (m) => { const list = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).map((e) => (typeof e === 'string' ? e : e?.reasoningEffort)).filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)); return list.length ? { efforts: [...new Set(list)] } : {}; };
+  const effortsOf = (m) => { const list = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).map((e) => (typeof e === 'string' ? e : e?.reasoningEffort)).filter((e) => ['minimal', 'low', 'medium', 'high', 'xhigh'].includes(e)); return list.length ? { efforts: [...new Set(list)] } : {}; };
   return rows.filter((m) => m && !m.hidden).map((m) => ({ id: m.model ?? m.id, label: m.displayName || m.model || m.id, ...(m.isDefault ? { default: true } : {}), ...effortsOf(m) })).filter((m) => m.id);
 }
 

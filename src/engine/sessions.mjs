@@ -30,7 +30,7 @@ import { PERMISSIONS, plainAction, pidKills, unwrapShell, globalAutonomy, permis
 import { askedByUser } from '../domain/security/approval.mjs';
 import { processList, taskProcesses, powershell } from '../platform/proc-list.mjs';
 import { explainFailure } from '../shared/agent-errors.mjs';
-import { rememberModels } from './usage/catalog.mjs';
+import { rememberModels, modelCatalog, levelsOf, nearestLevel } from './usage/catalog.mjs';
 import { snapshotBeforeTurn, snapshotAfterTurn, dropTurns } from '../domain/conversations/turns.mjs';
 import { dropRescues } from '../domain/conversations/rewind.mjs';
 import { changedFiles, logDirect } from '../domain/journal/journal.mjs';
@@ -288,6 +288,10 @@ export class Sessions {
   // ---- the live process of a conversation
   // a new permission starts the agent again at its next turn (its tools, Codex's sandbox and
   // approvals are chosen when it starts).
+  // A saved level the other agent or model does not take drops to the closest one it does, instead of breaking the turn.
+  levelFor(level, agent, model, account) {
+    try { return nearestLevel(level, levelsOf(modelCatalog(this.board), agent, model, account)); } catch { return level; }
+  }
   liveKey(s, acc) { return [s.agent, acc.id, s.cwd, s.reasoning, s.permission].join('|'); }
 
   closeLive(id) {
@@ -775,7 +779,7 @@ ${body}`;
     const a = adapter(other ?? s.agent);
     if (other && UNGUARDED_AGENTS.includes(other)) requireLevel('leer', AGENT_LABELS[other] ?? other); // the copy never keeps «total»
     // what was given with the master password stays with the original (also «total» of a project's chat).
-    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other && s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
+    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other ? this.levelFor(s.reasoning, other, null, null) : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // its title stays (not renamed by its next message)
     const old = this.board.all(`SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')${cut != null ? ' AND id <= ?' : ''} ORDER BY id DESC LIMIT 40`, s.id, ...(cut != null ? [cut] : [])).reverse();
@@ -812,7 +816,7 @@ ${body}`;
     this.closeLive(id);
     this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
     this.board.run('UPDATE sessions SET agent = ?, account = ?, model = ?, reasoning = ?, permission = ?, cli_session = NULL, context = NULL, android = 0, updated_at = ? WHERE id = ?',
-      agent, acc.id, ctx.config.agents[agent]?.defaultModel || null, s.reasoning === 'xhigh' ? 'high' : s.reasoning, permission, now(), id);
+      agent, acc.id, ctx.config.agents[agent]?.defaultModel || null, this.levelFor(s.reasoning, agent, ctx.config.agents[agent]?.defaultModel || null, acc.id), permission, now(), id);
     this.board.settingJson(`handoff_summary:${id}`, summary.text);
     if (Number(s.android) === 1) this.addItem(id, 'system', 'status', tr('msg.grants.androidOff')); // given to the old agent, not to the new one
     // the item keeps what fits in a stored line (20.000 characters); the agent gets the whole summary

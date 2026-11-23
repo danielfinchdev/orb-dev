@@ -95,7 +95,7 @@ export function validateConfig(c) {
   if (!AGENT_IDS.includes(brain)) throw new Error(tr('msg.ctx.missingAgentCfg', { id: brain }));
   if (brain === 'claude' && !o.models.some((m) => m.id === o.model) && !/^(sonnet|opus|haiku)$/.test(o.model ?? '')) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
   if (brain !== 'claude' && o.model && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(o.model)) throw new Error(tr('msg.ctx.badModels', { id: brain }));
-  if (!['low', 'medium', 'high', 'xhigh'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
+  if (!REASONING_LEVELS.includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
   if (o.parallel !== undefined) int(o.parallel, 1, 6, 'parallel'); // conversations answered at the same time
@@ -157,6 +157,7 @@ export function validateConfig(c) {
   bool(c.ui?.gameMusic, 'ui.gameMusic');
   bool(c.setupPending, 'setupPending'); // the welcome is not over yet (src/ui/views/setup.jsx)
   bool(c.budget?.autoModel, 'budget.autoModel'); // Orb chooses each task's model (true / missing) or the agents' defaults
+  bool(c.ui?.hideModelHelp, 'ui.hideModelHelp'); // «Recomendados» and «Guía de modelos» hidden from the selector
   bool(c.ui?.tourDone, 'ui.tourDone');
   bool(c.ui?.autoNoticed, 'ui.autoNoticed'); // the one notice about «Auto» was shown
   bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // the one notice about the recovery code was shown // the guided tour was seen (or skipped) in this assistant folder

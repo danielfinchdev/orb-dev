@@ -1,8 +1,10 @@
 // Favourite brains: a model + reasoning level + account the user marked with the star in the brain picker. Alt+] and
 // Alt+[ walk through them. Pure (no DOM, no storage): the window keeps the list (src/ui/lib/favorite-brains.js).
 
+import { REASONING_LEVELS } from './reasoning-levels.mjs';
+
 export const MAX_FAVORITES = 12;
-const LEVELS = new Set(['low', 'medium', 'high', 'xhigh']);
+const LEVELS = new Set(REASONING_LEVELS);
 const text = (v, n) => (typeof v === 'string' ? v.slice(0, n) : '');
 
 // → { agent, model, account, reasoning } or null when it is not a usable brain.

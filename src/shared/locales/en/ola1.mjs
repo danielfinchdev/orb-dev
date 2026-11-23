@@ -2,16 +2,22 @@
 // and compacting conversations. Loaded last: it also corrects some earlier texts.
 export default {
   // Reasoning: the agent button and its menu
-  'reasoning.xhigh': 'Extra',
+  'reasoning.minimal': 'Minimal',
+  'reasoning.xhigh': 'Extra high',
+  'reasoning.max': 'Max',
   'reasoning.title': 'Reasoning: {level}',
   'reasoning.titleText': 'How much it thinks before answering. More reasoning gives more careful answers and uses more.',
   'reasoning.use.low': 'Low usage',
   'reasoning.use.medium': 'Medium usage',
   'reasoning.use.high': 'High usage',
+  'reasoning.use.minimal': 'Minimal usage',
   'reasoning.use.xhigh': 'Very high usage',
+  'reasoning.use.max': 'Maximum usage',
   'reasoning.tasks.low': 'Quick questions, short texts and small changes.',
   'reasoning.tasks.medium': 'Everyday work: explaining, writing and coding.',
   'reasoning.tasks.high': 'Hard problems, multi-step plans and thorough reviews.',
+  'reasoning.tasks.minimal': 'Instant answers: barely any thinking, for trivial things.',
+  'reasoning.tasks.max': 'All the effort available: the hardest problems, with no cap on thinking.',
   'reasoning.tasks.xhigh': 'The most complex work: architecture, hard-to-find bugs and long analyses.',
   // Orchestrator: icon and small switch
   'chat.orchestratorTip': 'Orchestrator: {name} distributes the work across several agents',
@@ -35,8 +41,10 @@ export default {
   'msg.sessions.cleared': 'New conversation. The agent starts from scratch; the history is kept.',
   'msg.orch.cleared': 'New conversation. The next answer starts from scratch; the history is kept.',
   'msg.sessions.compactFailed': '{label} could not compact the conversation. You can keep writing as usual.',
-  'msg.api.reasoningXhigh': 'extra',
-  'msg.api.reasoningUnavailable': 'This model does not support Extra reasoning.',
+  'msg.api.reasoningXhigh': 'extra high',
+  'msg.api.reasoningMinimal': 'minimal',
+  'msg.api.reasoningMax': 'max',
+  'msg.api.reasoningUnavailable': 'This model does not support that reasoning level.',
   // Settings in six sections
   'settings.section.magiclink': 'Devices',
   'settings.section.agentes': 'Agents and usage',
