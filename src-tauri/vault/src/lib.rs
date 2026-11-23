@@ -9,6 +9,7 @@ pub mod dpapi;
 pub mod fake_hello;
 pub mod grants;
 pub mod hello;
+pub mod link;
 pub mod locked;
 pub mod machine;
 pub mod server;

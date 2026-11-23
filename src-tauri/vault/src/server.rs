@@ -310,6 +310,17 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
       Ok(if ok { ver["kdf"].clone() } else { Value::Null })
     }
     "pairFinish" => pair_finish(req, v, now),
+    // Linking with a one-use code, no password (link.rs): the code never leaves this process but in the answer that makes it.
+    "linkNew" => crate::link::make(v, s(req, "token"), now),
+    "linkInfo" => Ok(crate::link::info(v, now)),
+    "linkProbe" => crate::link::probe(v, s(req, "via"), &unb64(s(req, "devPub")).unwrap_or_default(), now),
+    "linkFail" => Ok(crate::link::fail(v, now)),
+    "linkFinish" => crate::link::finish(v, req, now),
+    "linkConfirm" => Ok(crate::link::confirm(v, s(req, "id"), &unb64(s(req, "devPub")).unwrap_or_default(), req.get("accept") == Some(&json!(true)), now)),
+    "linkCancel" => {
+      crate::link::cancel(v);
+      Ok(json!(true))
+    }
     "grant" => grant(req, v, now, server),
     _ => Err(Code::Damaged),
   }
@@ -337,7 +348,7 @@ fn pair_finish(req: &Value, v: &mut Vault, now: u64) -> Answer {
     salt: kdf.get("salt").and_then(Value::as_str).unwrap_or_default(),
     secret: s(req, "secret"),
   };
-  let Some(k) = crypto::pake_key(&x, pc.as_slice(), &verifier) else { return Ok(json!({ "ok": false, "reason": "bad" })) };
+  let Some(k) = crypto::pake_key(&x, pc.as_slice(), Some(&verifier)) else { return Ok(json!({ "ok": false, "reason": "bad" })) };
   if let Some(refusal) = v.begin_try("pair", now) {
     return Ok(refusal.to_json());
   }
