@@ -71,7 +71,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
     const m = marks.get(`conversation:${c.id}`) ?? {};
     const own = byConv.get(c.id) ?? [];
     out.push({
-      key: `conversation:${c.id}`, kind: 'conversation', id: c.id, title: c.title, project: c.project ?? null, agent: c.agent ?? null, model: c.model ?? null,
+      key: `conversation:${c.id}`, kind: 'conversation', id: c.id, title: c.title, project: c.project ?? null, agent: c.agent ?? null, account: c.account ?? null, model: c.model ?? null,
       pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), snoozedUntil: m.snoozedUntil ?? null, unread: Number(m.unread) || 0, markedUnread: Boolean(m.markedUnread), lastMessage: m.lastMessage ?? null,
       at: [m.lastMessage?.at, c.updated_at, own[0]?.updated_at].filter(Boolean).sort().pop() ?? null,
       done: c.status === 'done', busy: Boolean(c.busy || c.waiting || live.has(c.id) || m.state === 'working'), asking: Boolean(c.asking), ...(stepOf.has(c.id) ? { step: stepOf.get(c.id) } : {}),
@@ -83,7 +83,7 @@ export function orbItems({ inbox = null, conversations = [], sessions = [], task
     const asks = (approvals ?? []).some((a) => a.session_id === s.id);
     const stalled = ['interrupted', 'limited', 'error'].includes(s.status);
     const m = marks.get(`session:${s.id}`) ?? {};
-    out.push({ key: `session:${s.id}`, kind: 'session', id: s.id, title: s.title, project: s.project ?? null, agent: s.agent ?? null, model: s.model ?? null,
+    out.push({ key: `session:${s.id}`, kind: 'session', id: s.id, title: s.title, project: s.project ?? null, agent: s.agent ?? null, account: s.account ?? null, model: s.model ?? null,
       pinned: Boolean(m.pinned), pinOrder: m.pinOrder ?? null, muted: Boolean(m.muted), snoozedUntil: m.snoozedUntil ?? null, unread: Number(m.unread) || 0, markedUnread: Boolean(m.markedUnread), lastMessage: null, at: s.updated_at ?? null,
       done: Boolean(s.settled) || done.has(`s${s.id}`), busy: s.status === 'running', asks, stalled: stalled && !asks, agents: agentsOf(s.agent), tasks: [], open: 0,
       ...(typeof s.branch === 'string' && s.branch ? { branch: s.branch } : {}), ...(Number.isInteger(s.prNumber) ? { prNumber: s.prNumber } : {}) });

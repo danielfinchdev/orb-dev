@@ -38,7 +38,8 @@ import { canCapture, captureFrame } from '@/lib/window-capture.js';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { pickGreeting, pickSubtitle, suggestionsFor, greetingFor } from '@/lib/greeting.js';
 import { LiveActivity, QuestionCard } from '@/components/chat-live.jsx';
-import { BrainPicker, BrainChip, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel, modelLabel } from '@/components/brain-picker.jsx';
+import { AccountActions } from '@/components/account-notice.jsx';
+import { BrainPicker, BrainChip, ReasoningMenu, UsageBubble, useCatalog, useUsageBubble, favoriteLabel, modelLabel, AUTO } from '@/components/brain-picker.jsx';
 import { favoriteBrains } from '@/lib/favorite-brains.js';
 import { stepFavorite } from '../../shared/favorite-brains.mjs';
 import { useShortcut } from '@/lib/keys.js';
@@ -118,6 +119,7 @@ const Message = memo(function Message({ m, name, user, onChanges, tail, onPin })
   );
   // the tasks of this chat wait because the queue is paused: «Reanudar» right there (while it still is).
   if (m.meta?.kind === 'paused') return <PausedLine body={m.body} />;
+  if (m.meta?.kind === 'account') return <AccountLine m={m} />;
   // Orb ended a turn itself (the guard, a time limit): the reason, and the task's own «Ver tarea» / «Deshacer».
   if (m.meta?.kind === 'turn-stopped') return <StoppedCard m={m} name={name} />;
   // a finished task says it in one line; what the agent reported (technical) unfolds on request.
@@ -254,6 +256,21 @@ function TaskLine({ task, live }) {
 
 // The title of a conversation in the middle of a bar, and under it, small, its project with its icon (direct
 // conversations, views/session.jsx).
+// The chat's account notice (the engine writes the text): «Sigue con STAMINA…» or why a fixed account cannot take the message,
+// with what can be done while the message waits. The buttons live only while the wait does.
+function AccountLine({ m }) {
+  const id = useStore((s) => s.route?.id ?? null);
+  const hold = useStore((s) => chatOf(s, id)?.hold ?? null);
+  const run = (promise) => act(promise).then(() => refreshSoon());
+  return (
+    <div className="chat-actions bg-muted/70 text-muted-foreground mx-auto flex max-w-[88%] flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-control" data-testid="chat-account-line" data-kind={m.meta.problem?.kind ?? 'switched'}>
+      <div className="min-w-0 [&_p]:m-0"><Markdown>{m.body}</Markdown></div>
+      <AccountActions problem={m.meta.problem} hold={hold} onWait={() => run(call('chat.holdWait', { conversation: id }))}
+        onUse={(account) => run(call('chat.settings', { conversation: id, account }))} onAuto={() => run(call('chat.settings', { conversation: id, account: AUTO }))} />
+    </div>
+  );
+}
+
 function PausedLine({ body }) {
   const t = useT();
   const paused = useStore((s) => Boolean(s.app?.paused));
@@ -354,7 +371,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const name = app.config.assistantName;
   // only what this view draws from the conversation's live state (the streamed text is LiveAnswer's): a streamed
   // piece does not redraw the whole view.
-  const chat = useStore((s) => { const c = chatOf(s, id); return { busy: Boolean(c?.busy), waiting: Boolean(c?.waiting), used: c?.context?.used ?? null, size: c?.context?.size ?? null }; });
+  const chat = useStore((s) => { const c = chatOf(s, id); return { busy: Boolean(c?.busy), waiting: Boolean(c?.waiting), used: c?.context?.used ?? null, size: c?.context?.size ?? null, pendingAccount: c?.pending?.account ?? null, pendingFixed: Boolean(c?.pending?.fixed), pendingOn: Boolean(c?.pending), holdKind: c?.hold?.kind ?? null }; });
   // on a phone, the brain and «Orquestador» of a NEW conversation are chosen for that conversation alone (the ones
   // new conversations start with are a setting of the PC).
   const [draft, setDraft] = useState(null);
@@ -416,8 +433,9 @@ export function ChatView({ route, onConversation, project: inProject }) {
   const trail = useTrailScroll(scroll);
   const catalog = useCatalog();
   const brain = conv
-    ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account ?? conv.agent, reasoning: conv.reasoning ?? 'medium' }
-    : { agent: defaults.agent ?? 'claude', model: defaults.model ?? '', account: defaults.account, reasoning: defaults.reasoning ?? 'medium' };
+    ? { agent: conv.agent ?? 'claude', model: conv.model ?? '', account: conv.account_fixed && conv.account ? conv.account : AUTO, live: conv.account ?? null, reasoning: conv.reasoning ?? 'medium', pending: chat.pendingOn ? { account: chat.pendingAccount, fixed: chat.pendingFixed } : null }
+    // a new chat: the account chosen for it (a phone's draft) or the one new chats start with; automatic unless it is fixed
+    : { agent: defaults.agent ?? 'claude', model: defaults.model ?? '', account: local && draft && 'account' in draft ? draft.account : defaults.accountFixed ? defaults.account : AUTO, live: null, reasoning: defaults.reasoning ?? 'medium' };
   const orchestrate = conv ? true : defaults.orchestrate !== false;
   const bubble = useUsageBubble(catalog, brain);
   const userName = useStore((st) => st.app?.config?.userName?.trim() || '');
@@ -478,7 +496,7 @@ export function ChatView({ route, onConversation, project: inProject }) {
         const project = inProject ?? app.activeProject?.name ?? null;
         // «Acceso total» is never sent at creation: it is granted below, with the master password.
         const level = project ? access.permission : access.permission === 'total' ? 'total' : 'leer';
-        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(!project ? { permission: 'leer' } : level && level !== 'total' ? { permission: level } : {}), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
+        const s = await act(call('sessions.create', { agent: brain.agent, account: brain.account && brain.account !== brain.agent && brain.account !== AUTO ? brain.account : undefined, model: brain.model || undefined, reasoning: brain.reasoning, project, ...(!project ? { permission: 'leer' } : level && level !== 'total' ? { permission: level } : {}), ...(project && where.mode === 'worktree' ? { workspace: 'worktree', ...(where.base ? { base: where.base } : {}) } : {}) }));
         if (!s) { dropPending(mine); if (!moved()) giveBack(); return; }
         movePending(mine, `session:${s.id}`);
         // One unlock (5 minutes) covers both grants. If a grant the user asked for is not given, the message is not sent: it

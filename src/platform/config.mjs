@@ -10,6 +10,7 @@ import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, migrateAppearance } from '../shared/appearance.mjs';
 import { ADAPTIVE_THEMES } from '../shared/music.mjs';
 import { REASONING_LEVELS } from '../shared/reasoning-levels.mjs';
+import { ACCOUNT_COLORS, TAG_RE } from '../shared/account-marks.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
@@ -113,6 +114,7 @@ export function validateConfig(c) {
     ids.add(a.id);
     if (!AGENT_IDS.includes(a.agent)) throw new Error(tr('msg.ctx.accountAgent', { id: a.id }));
     if (typeof a.label !== 'string' || !a.label.trim() || a.label.length > 60) throw new Error(tr('msg.ctx.accountName', { id: a.id }));
+    if ((a.tag !== undefined && !(typeof a.tag === 'string' && TAG_RE.test(a.tag))) || (a.color !== undefined && !ACCOUNT_COLORS.includes(a.color))) throw new Error(tr('msg.ctx.accountMark', { id: a.id }));
     if (a.home && (typeof a.home !== 'string' || !path.isAbsolute(a.home))) throw new Error(tr('msg.ctx.accountHomeAbs', { label: a.label }));
     if (a.home) checkAccountHome(a.home, c);
     if (a.agent === 'cursor' && a.home) throw new Error(tr('msg.ctx.cursorFixed'));
