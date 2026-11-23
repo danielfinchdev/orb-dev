@@ -406,7 +406,9 @@ object ThisPhoneTexts {
                 else -> "Nunca ha funcionado"
             }
             val why = p.lastError?.let { PATH_ERRORS[it] }
-            val pc = entries.firstOrNull { it.url != null && it.url == p.url }
+            // matched by kind: the PC sends its own spelling of the URL (trailing slash) and none at all for a closed door
+            val wanted = when (kind) { RouteKind.Tailscale -> "tailscale"; RouteKind.Lan -> "wifi"; else -> null }
+            val pc = wanted?.let { w -> entries.firstOrNull { it.type == w } }
             val theirs = when {
                 pc == null -> null
                 pc.open == false -> "cerrada en el PC" + (pc.lastError?.let { ": $it" } ?: "")
