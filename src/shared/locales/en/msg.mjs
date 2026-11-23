@@ -433,6 +433,8 @@ export default {
   "msg.remote.callTimeout": "timeout: the PC took too long to answer",
   "msg.remote.notLinked": "this device is not paired",
   "msg.remote.clock": "the phone's time does not match the PC's",
+  "msg.remote.noEntry": "no way in could be opened",
+  "msg.remote.tailscaleServeDown": "tailscale serve is not responding",
   "msg.remote.ownImages": "only images uploaded from the phone are supported",
   "msg.remote.pcOnly": "that action can only be performed from the PC",
   "msg.remote.tooMany": "too many attempts. Wait a few minutes and generate a new QR code",

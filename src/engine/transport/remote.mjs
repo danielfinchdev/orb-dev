@@ -678,7 +678,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const settle = (kind, part) => {
     parts[kind] = part;
     const r = part?.routes[0];
-    if (!part) { if (entries[kind]) note(kind, { ok: false }); } else if (r) note(kind, { ok: true, url: r.url }); else note(kind, { ok: false, url: null, error: part.errors[0] ?? 'sin entrada' });
+    if (!part) { if (entries[kind]) note(kind, { ok: false }); } else if (r) note(kind, { ok: true, url: r.url }); else note(kind, { ok: false, url: null, error: part.errors[0] ?? tr('msg.remote.noEntry') });
   };
 
   // The home network: one server per local address, plus this PC's name there. → the part, or null when stop() ran meanwhile.
@@ -769,7 +769,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (served === null || mine !== generation) return false;
     const ok = await serveHttps(served);
     if (mine !== generation) { await unserve(); return false; } // stop() ran meanwhile: nothing may stay forwarded
-    note('tailscale', ok ? { ok: true } : { ok: false, error: 'tailscale serve no responde' });
+    note('tailscale', ok ? { ok: true } : { ok: false, error: tr('msg.remote.tailscaleServeDown') });
     return ok;
   }
   // closing waits until every server and its open connections are really gone (2 s at most), so a restart on the same

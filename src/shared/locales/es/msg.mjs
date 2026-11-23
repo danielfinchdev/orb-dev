@@ -433,6 +433,8 @@ export default {
   "msg.remote.callTimeout": "timeout: el PC ha tardado demasiado en responder",
   "msg.remote.notLinked": "este dispositivo no está vinculado",
   "msg.remote.clock": "la hora del móvil no coincide con la del PC",
+  "msg.remote.noEntry": "no se ha podido abrir ninguna entrada",
+  "msg.remote.tailscaleServeDown": "tailscale serve no responde",
   "msg.remote.ownImages": "solo se admiten imágenes subidas desde el móvil",
   "msg.remote.pcOnly": "esa acción solo se puede hacer desde el PC",
   "msg.remote.tooMany": "demasiados intentos. Espera unos minutos y genera un código QR nuevo",

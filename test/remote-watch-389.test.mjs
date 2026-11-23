@@ -2,6 +2,7 @@
 // a fake Tailscale: nothing real is asked, and what already works is never touched.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { ctx } from '../src/platform/context.mjs';
 import { tempHome } from './helpers.mjs';
 import { createLinkWatcher, WATCH_MS } from '../src/engine/transport/remote-watch.mjs';
@@ -117,4 +118,11 @@ test('el error del vigilante se registra sin rutas del PC', async () => {
   w.clock += WATCH_MS; await lw.tick();
   assert.ok(w.logs.some((l) => l.includes('vigilante')));
   assert.ok(!w.logs.some((l) => l.includes(home)), w.logs.join('|'));
+});
+
+test('the way-in errors shown in Ajustes are translated, not fixed Spanish', () => {
+  const src = fs.readFileSync(new URL('../src/engine/transport/remote.mjs', import.meta.url), 'utf8');
+  assert.doesNotMatch(src, /'sin entrada'|'tailscale serve no responde'/);
+  assert.match(src, /tr\('msg\.remote\.noEntry'\)/);
+  assert.match(src, /tr\('msg\.remote\.tailscaleServeDown'\)/);
 });
