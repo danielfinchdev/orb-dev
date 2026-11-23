@@ -297,6 +297,7 @@
   "tasks.search": "remote",
   "tasks.undo": "remote",
   "tasks.undoJoin": "remote",
+  "tasks.undoPreview": "pc",
   "terminal.close": "pc",
   "terminal.list": "pc",
   "terminal.open": "pc",
