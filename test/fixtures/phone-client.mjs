@@ -9,7 +9,7 @@ import { parseLinkPayload, normalAddress, normalCode, PROTOCOL, MIN_PROTOCOL } f
 const err = (message, extra = {}) => Object.assign(new Error(message), extra);
 export const TEST_MASTER = 'contraseña maestra de prueba';
 
-export function createPhone({ name = 'Móvil de prueba', kind = 'phone', password = TEST_MASTER, onFetch = null } = {}) {
+export function createPhone({ name = 'Móvil de prueba', kind = 'phone', password = TEST_MASTER, onFetch = null, giveUpMs = 0 } = {}) {
   const peers = new Map(); // id -> { id, key, base, skew, online, ctrl }
   const listeners = new Map();
   let stopped = false;
@@ -67,9 +67,10 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
   }
   // The same exchange as the page (src/shared/mobile-crypto.mjs › linkDevice): the password never leaves this phone.
   async function pairAt(base, pcPub, code, via) {
+    // 'link' (the QR's 128-bit secret) and 'linkcode' (typed, already stretched by the caller) ask for no password.
     const secret = via === 'code3' ? await C.shortSecretAsync(normalCode(code), C.b64.enc(pcPub)) : code;
     let r;
-    try { r = await C.linkDevice({ base, pcPub, secret, via, name, kind, v: PROTOCOL, min: MIN_PROTOCOL, password, fetch: onFetch ?? fetch }); }
+    try { r = await C.linkDevice({ base, pcPub, secret, via, name, kind, v: PROTOCOL, min: MIN_PROTOCOL, password, fetch: onFetch ?? fetch, ...(giveUpMs ? { giveUpMs } : {}) }); }
     catch (e) {
       if (e.code === 'badAnswer') throw err('el PC no es el del código', { code: 'badAnswer' });
       if (e.code === 'offline') throw err('el PC no responde', { status: 0, offline: true });
@@ -82,7 +83,7 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
     // fp: the fingerprint the person read on the PC's screen (the short code only).
     async connect({ qr, code, address, fp = null } = {}) {
       let urls; let pcPub; let secret; let via;
-      if (qr) { const q = parseLinkPayload(qr); urls = q.urls; pcPub = C.b64.dec(q.pc); secret = q.code; via = 'qr'; }
+      if (qr) { const q = parseLinkPayload(qr); urls = q.urls; pcPub = C.b64.dec(q.pc); secret = q.code; via = q.via; }
       else {
         const base = normalAddress(address);
         const res = await fetch(`${base}/api/hello`);
@@ -91,6 +92,8 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
         // The short code tied to the PC's key (3.5.1): an older answer, or one changed on the way, only with the QR.
         if (!(Number(h.short) >= 3)) throw err('ese Orb es de una versión anterior: enlaza con su QR');
         urls = [base]; pcPub = C.b64.dec(h.pc); secret = code; via = 'code3';
+        // Short 4: a code that links without the password; its own salt stretches the typed 8 characters.
+        if (Number(h.short) === 4) { via = 'linkcode'; secret = await C.linkSecret(code, h.salt, pcPub); }
         // The fingerprint is worked out from the key received (never the other side's word) and compared with the PC's.
         if (fp && String(fp).toLowerCase() !== C.fingerprint(pcPub)) throw err('la huella no coincide: no lo enlaces');
       }

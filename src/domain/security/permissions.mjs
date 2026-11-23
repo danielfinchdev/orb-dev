@@ -82,6 +82,8 @@ export const METHODS = Object.freeze({
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'master.helloState': 'pc', 'master.helloEnable': 'pc', 'master.unlockHello': 'pc', 'master.helloDisable': 'pc',
   // a phone's fingerprint approves sensitive actions (src/engine/api/master.mjs): this PC registers it, asks and waits; the phone only answers
+  // linking a phone without the master password (src-tauri/vault/src/link.rs): this PC's window makes the code and answers the question
+  'link.codeNew': 'pc', 'link.codeAnswer': 'pc', 'link.codeWaiting': 'pc', 'link.codeCancel': 'pc',
   'approve.devices': 'pc', 'approve.register': 'pc', 'approve.unregister': 'pc', 'approve.request': 'pc', 'approve.poll': 'pc',
   'approve.enroll': 'remote', 'approve.respond': 'remote',
   'master.rebuildStart': 'pc', 'master.rebuildPoll': 'pc', 'master.rebuildFinish': 'pc',
@@ -147,9 +149,11 @@ export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secre
 export const HELLO_ENABLE_PURPOSE = 'hello.enable';
 // The one-use token that registers a phone to approve (the vault takes it only when it was made with the password).
 export const APPROVE_REGISTER_PURPOSE = 'approve.register';
+// The one-use token (Hello's or the password's) that makes a code to link a phone without the master password (src-tauri/vault/src/link.rs).
+export const LINK_CODE_PURPOSE = 'linkCode';
 // The purpose of the Hello step of «Lo he olvidado todo» (src-tauri/vault/src/hello.rs › REBUILD): its token is good for nothing else.
 export const REBUILD_PURPOSE = 'rebuild-master';
-export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES), HELLO_ENABLE_PURPOSE, APPROVE_REGISTER_PURPOSE])]);
+export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES), HELLO_ENABLE_PURPOSE, APPROVE_REGISTER_PURPOSE, LINK_CODE_PURPOSE])]);
 // Two strengths of token (the vault keeps the strength inside each one): the password's opens everything above; Windows Hello's
 // is only a proof of presence, so it opens none of what shows, saves or hands out a secret, nor a restore of the copies (a
 // copy brings the secrets of another PC). Those ask for the password, or for the phone's approval (a one-use token of that
@@ -167,7 +171,7 @@ export function mobileMayApprove(method, params, current = {}) {
   return purpose === null || Object.values(SECRET_PURPOSES).includes(purpose);
 }
 // The purposes whose token Hello may make: every action that asks every time, except the secrets' and the new key's.
-export const HELLO_PURPOSES = Object.freeze(Object.values(FRESH_UNLOCK).filter((p) => p !== FRESH_UNLOCK['backup.newKey']));
+export const HELLO_PURPOSES = Object.freeze([...Object.values(FRESH_UNLOCK).filter((p) => p !== FRESH_UNLOCK['backup.newKey']), LINK_CODE_PURPOSE]);
 // Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
 export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete', 'rules.save']));
 // The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).

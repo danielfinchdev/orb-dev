@@ -25,7 +25,7 @@ function approveKey() {
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
 import * as K from '../../domain/data/backup.mjs';
-import { str } from './common.mjs';
+import { str, oneOf } from './common.mjs';
 import { HELLO_ID_PREFIXES } from '../../domain/security/permissions.mjs';
 import { scrubVaultedSecrets, DONE_AT } from '../../domain/data/legacy/migrate-38.mjs';
 
@@ -152,7 +152,7 @@ export function checkUnlock(method, params, { defer = false } = {}) {
 // (src/engine/security/grants.mjs › revokeAll).
 // onScreen(locked): Orb's lock screen goes up (true) or down (false); also once at the start.
 export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => {}, onLock = () => {}, onScreen = () => {} }) {
-  const locked = (why) => { try { const r = onLock(why); if (r?.catch) r.catch((error) => log(`acceso: ${error.message}`)); } catch (error) { log(`acceso: ${error.message}`); } };
+  const locked = (why) => { try { remoteRef.current?.cancelLinkCode?.(); } catch (error) { log(`enlace: ${error.message}`); } try { const r = onLock(why); if (r?.catch) r.catch((error) => log(`acceso: ${error.message}`)); } catch (error) { log(`acceso: ${error.message}`); } };
   const master = () => ctx.master ?? (ctx.master = openMaster(ctx.home, ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { return fs.readFileSync(ctx.paths.key); } catch { return null; } })(), { log }));
   const opened = () => { migrateSecrets(board, master(), { log, emit }); try { onUnlocked(); } catch (error) { log(`secretos: ${error.message}`); } };
   const password = (v) => (typeof v === 'string' ? v : '');
@@ -280,6 +280,23 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       log('Windows Hello desactivado');
       return { ok: true };
     },
+    // ---- link a phone without the master password: a one-use code (src-tauri/vault/src/link.rs), shown after Windows Hello or the
+    // password. The vault takes only the one-use token made for it (any other, or none, is refused there).
+    'link.codeNew': async ({ unlock, kind } = {}) => {
+      const m = master(); const remote = remoteRef.current;
+      const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
+      if (typeof unlock !== 'string' || !m.hasPassword()) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+      // Windows Hello never turns the phone access on: it has to be on already (Ajustes).
+      if (!remote.status().running) throw userError('msg.remote.enableFirst', {}, { reason: 'off' });
+      let made; try { made = m.linkNew(unlock); } catch (error) { throw error instanceof MasterError && error.code === 'locked' ? userError('msg.master.needUnlock', {}, { reason: 'unlock' }) : asUser(error); }
+      if (!made.ok) throw userError('msg.link.noKeys', {}, { reason: made.reason });
+      log('enlace sin contraseña: código nuevo');
+      return remote.openLinkCode(via, made);
+    },
+    // The owner's answer to «¿Enlazar <name>?».
+    'link.codeAnswer': ({ id, accept } = {}) => ({ ok: remoteRef.current?.answerLinkCode(str(id, 'id', 64), accept === true) === true }),
+    'link.codeWaiting': () => remoteRef.current?.waitingLinkCode() ?? null,
+    'link.codeCancel': () => { remoteRef.current?.cancelLinkCode(); return true; },
     // ---- a phone approves sensitive actions with its fingerprint
     // The linked phones and whether each may approve; a registration whose phone was unlinked is dropped on the way.
     'approve.devices': () => {

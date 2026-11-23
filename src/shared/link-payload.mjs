@@ -2,6 +2,7 @@
 // Pure functions, no browser or crypto: kept in one small file so a change of the Magic Link format only touches this
 // (test/android.test.mjs). The formats:
 // - v1 QR: «http://ip:port/#vincular=<one-time code>&pc=<the Orb's public key>»
+// - link QR (no master password): «http://ip:port/#enlace=<128-bit one-use secret>&pc=…&v=…»; its payload says via: 'link'
 // - v2 QR: the same plus «&v=2&n=<name>&a=<other addresses, comma separated>» (an older Orb also sent r=<role>)
 // - JSON: { v, urls | url, pc, code, name, role }
 // - typed by hand: the short code (8 letters and digits) and the Orb's address; its key comes from GET /api/hello.
@@ -54,25 +55,30 @@ export function parseLinkPayload(input) {
   let q = input;
   if (typeof q === 'string') q = q.trim();
   if (typeof q === 'string' && q.startsWith('{')) { try { q = JSON.parse(q); } catch { throw fail('app.linkBadQr'); } }
-  let out;
+  let out; let link = false;
   if (q && typeof q === 'object') {
     const urls = (Array.isArray(q.urls) ? q.urls : [q.url]).filter((u) => typeof u === 'string' && /^https?:\/\//i.test(u));
-    if (!urls.length || typeof q.pc !== 'string' || typeof q.code !== 'string') throw fail('app.linkBadQr');
-    out = { v: Number(q.v ?? 2), urls, pc: q.pc, code: q.code, name: q.name ?? null, role: q.role ?? null };
+    const secret = typeof q.link === 'string' ? q.link : null;
+    if (!urls.length || typeof q.pc !== 'string' || (typeof q.code !== 'string' && !secret)) throw fail('app.linkBadQr');
+    out = { v: Number(q.v ?? 2), urls, pc: q.pc, code: secret ?? q.code, name: q.name ?? null, role: q.role ?? null };
+    link = Boolean(secret);
   } else {
     let u; try { u = new URL(String(q ?? '')); } catch { throw fail('app.linkBadQr'); }
     if (!/^https?:$/.test(u.protocol)) throw fail('app.linkBadQr');
     const h = new URLSearchParams(u.hash.slice(1));
-    const code = h.get('vincular'); const pc = h.get('pc');
+    const secret = h.get('enlace');
+    const code = secret ?? h.get('vincular'); const pc = h.get('pc');
     if (!code) throw fail('app.linkBadQr');
+    if (secret && !/^[A-Za-z0-9_-]{22}$/.test(secret)) throw fail('app.linkBadQr'); // 16 random bytes, base64url
     if (!pc) throw fail('app.oldQr');
     const others = (h.get('a') ?? '').split(',').filter((x) => /^https?:\/\//i.test(x));
     out = { v: Number(h.get('v') ?? 1), urls: [`${u.protocol}//${u.host}`, ...others], pc, code, name: h.get('n'), role: h.get('r') };
+    link = Boolean(secret);
   }
   out.urls = orderBases(out.urls);
   if (!out.urls.length) throw fail('app.linkInsecure');
   if (!/^[A-Za-z0-9+/_-]{43}=?$/.test(out.pc)) throw fail('app.oldQr'); // a 32-byte key in base64
-  return { ...out, via: 'qr' };
+  return { ...out, via: link ? 'link' : 'qr' };
 }
 
 // What the person typed in the «by hand» form: a pasted link (or JSON) or the short code plus the address.
@@ -99,6 +105,9 @@ export function passwordPageOk({ protocol, hostname } = {}, { app = false } = {}
 // The secret both sides derive the pairing key from (src/ui/lib/web-bridge.js on the phone, src/engine/transport/remote.mjs on the
 // PC): the QR's code as is, the short one marked.
 export const pairingSecret = (p) => (p.via === 'code' ? `corto:${normalCode(p.code)}` : p.code);
+// A link made with a one-use code (no master password) is the QR's «link» way, or an 8-character code the PC says is one
+// (GET /api/hello: short 4, with the code's salt).
+export const passwordFree = (p) => p?.via === 'link' || p?.via === 'linkcode';
 
 // Which window.orb the page gets: the desktop app's (Tauri's bridge, already there), the Android app (Tauri's Android
 // build: app-bridge.js) or the browser's.

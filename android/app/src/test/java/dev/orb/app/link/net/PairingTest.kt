@@ -59,6 +59,59 @@ class PairingTest {
         assertTrue(client.me().isSuccess)
     }
 
+    // A one-use code (no master password): the QR's 128-bit secret, or the 8 typed characters stretched with the code's salt.
+    private val secret128 = "AbCdEfGhIjKlMnOpQrStUv"
+
+    @Test
+    fun `a qr with the one-use secret links without a password and the session works`() = runBlocking {
+        val e = env()
+        e.pc.setupPairing(FakePc.PairSetup(secret128, "", kdf, "link", noPassword = true))
+        val link = e.pairing.resolve(LinkPayload(4.0, listOf(base), e.pc.pcB64, secret128, "Orb de Dani", null, LinkVia.LINK)).getOrThrow()
+        assertTrue(link.passwordFree)
+        val ok = e.pairing.link(link, "", "Pixel (app)").getOrThrow()
+        assertEquals(e.pc.pairedIds.single(), ok.session.id)
+        val client = LinkClient(ok.session, e.pc.client(), TestClock(), kotlinx.coroutines.CoroutineScope(Dispatchers.Unconfined), io = Dispatchers.Unconfined)
+        assertTrue(client.me().isSuccess)
+    }
+
+    @Test
+    fun `a typed code the pc says needs no password is stretched with its salt`() = runBlocking {
+        val e = env()
+        val salt = B64.enc(ByteArray(16) { (it + 1).toByte() })
+        e.pc.hello = buildJsonObject { put("v", 4); put("short", 4); put("salt", salt); put("pc", e.pc.pcB64); put("name", "Orb de Dani") }
+        e.pc.setupPairing(FakePc.PairSetup(LinkCrypto.linkSecret("abcd-efgh", salt, e.pc.keys.pub), "", kdf, "linkcode", noPassword = true))
+        val typed = parseManual(code = "abcd-efgh", address = "192.168.1.5:3131")
+        val link = e.pairing.resolve(typed).getOrThrow()
+        assertEquals(LinkVia.LINKCODE, link.via)
+        assertTrue(link.passwordFree)
+        assertEquals(LinkCrypto.fingerprint(e.pc.keys.pub), link.fp)
+        assertTrue(e.pc.pairedIds.isEmpty())
+        e.pairing.link(link, "", "Pixel").getOrThrow()
+        assertEquals(1, e.pc.pairedIds.size)
+    }
+
+    @Test
+    fun `a typed code with another salt than the pcs does not link`() = runBlocking {
+        val e = env()
+        val salt = B64.enc(ByteArray(16) { (it + 1).toByte() })
+        e.pc.hello = buildJsonObject { put("v", 4); put("short", 4); put("salt", salt); put("pc", e.pc.pcB64) }
+        e.pc.setupPairing(FakePc.PairSetup(LinkCrypto.linkSecret("abcdefgh", B64.enc(ByteArray(16)), e.pc.keys.pub), "", kdf, "linkcode", noPassword = true))
+        val link = e.pairing.resolve(parseManual(code = "abcdefgh", address = "192.168.1.5:3131")).getOrThrow()
+        val err = e.pairing.link(link, "", "Pixel").exceptionOrNull() as PairingException
+        assertTrue(err.error is PairError.Refused)
+        assertTrue(e.pc.pairedIds.isEmpty())
+    }
+
+    @Test
+    fun `the owner saying no at the pc leaves nothing linked and says so`() = runBlocking {
+        val e = env()
+        e.pc.setupPairing(FakePc.PairSetup(secret128, "", kdf, "link", noPassword = true, declined = true))
+        val link = e.pairing.resolve(LinkPayload(4.0, listOf(base), e.pc.pcB64, secret128, null, null, LinkVia.LINK)).getOrThrow()
+        val err = (e.pairing.link(link, "", "Pixel").exceptionOrNull() as PairingException).error as PairError.Refused
+        assertEquals("declined", err.reason)
+        assertTrue(e.pc.pairedIds.isEmpty())
+    }
+
     @Test
     fun `a wrong password is the pcs refusal with the tries left`() = runBlocking {
         val e = env()

@@ -49,7 +49,11 @@ enum class WelcomeErrorKind {
 }
 
 /** What the PC answered, for the person to compare with the PC's own screen. */
-data class PcIdentity(val name: String, val groups: List<String>, val viaCode: Boolean)
+data class PcIdentity(
+    val name: String, val groups: List<String>, val viaCode: Boolean,
+    /** A one-use code that links without the master password: no password field, and the PC asks its owner to confirm this phone. */
+    val passwordFree: Boolean = false,
+)
 
 data class WelcomeUiState(
     val stage: WelcomeStage = WelcomeStage.Entry,
@@ -202,7 +206,7 @@ class WelcomeViewModel(
                 _state.update {
                     it.copy(
                         busy = false, sheet = false, stage = WelcomeStage.Fingerprint,
-                        pc = PcIdentity(pcNameOrNull(r.name) ?: "Tu PC", fingerprintGroups(r.fp), r.via == LinkVia.CODE),
+                        pc = PcIdentity(pcNameOrNull(r.name) ?: "Tu PC", fingerprintGroups(r.fp), r.via == LinkVia.CODE || r.via == LinkVia.LINKCODE, r.passwordFree),
                     )
                 }
             } catch (e: CancellationException) {
@@ -218,7 +222,7 @@ class WelcomeViewModel(
         val s = _state.value
         val r = resolved
         if (s.checking || s.stage != WelcomeStage.Fingerprint || r == null) return
-        if (s.password.isEmpty()) return _state.update { it.copy(passwordError = "Escribe la contraseña maestra del PC.") }
+        if (!r.passwordFree && s.password.isEmpty()) return _state.update { it.copy(passwordError = "Escribe la contraseña maestra del PC.") }
         val password = s.password
         _state.update { it.copy(checking = true, error = null, passwordError = null, password = "", showPassword = false) }
         viewModelScope.launch(dispatcher) {
@@ -292,7 +296,7 @@ class WelcomeViewModel(
     // tries, and "newCode" when the last password try failed. "tries" is the master password's general lock (the code
     // is still good), and 404/410 mean the address is not an Orb: none of those spend the code.
     private fun isSpent(r: PairError.Refused) =
-        r.reason == "password" && r.left == 0 || r.reason == "newCode" || r.reason == null && r.status == 401
+        r.reason == "password" && r.left == 0 || r.reason == "newCode" || r.reason == "declined" || r.reason == "timeout" || r.reason == null && r.status == 401
 
     /** Forgets what the PC answered and shows the first page again with [message]; the spent code is not kept. */
     private fun backToEntry(message: String, kind: WelcomeErrorKind = WelcomeErrorKind.CodeSpent) {

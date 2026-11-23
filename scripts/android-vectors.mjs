@@ -105,6 +105,18 @@ function shortVectors() {
     .map(([code, pcPubB64]) => ({ code, pcPubB64, secret: C.shortSecret(code, pcPubB64) }));
 }
 
+// The 8 typed characters of a link without the master password, stretched with the code's own salt.
+async function linkSecretVectors() {
+  const salts = [fill(16, (i) => i + 1), fill(16, (i) => 0xf0 - i)];
+  const out = [];
+  for (const [code, i] of [['abcd-efgh', 0], ['ABCDEFGH', 0], ['23456789', 1], [' q w-e r t y u i ', 1], ['código', 0]]) {
+    const saltB64 = b64.enc(salts[i]);
+    const pcPubB64 = b64.enc(pubOf(i === 0 ? 'seq' : 'ff'));
+    out.push({ code, saltB64, pcPubB64, secret: await C.linkSecret(code, saltB64, b64.dec(pcPubB64)) });
+  }
+  return out;
+}
+
 async function verifierVectors() {
   const salt = fill(16, (i) => 0xa0 + i);
   const kdf = { N: 2 ** 15, r: 8, p: 1, salt: b64.enc(salt) };
@@ -135,13 +147,14 @@ async function verifierVectors() {
 function pakeVectors() {
   const kdf = { N: 2 ** 16, r: 8, p: 1, salt: b64.enc(fill(16, (i) => 0x40 + i)) };
   const base = { devPub: pubOf('seq'), pcPub: pubOf('ff'), sid: 'sid-0123456789abcdef', kdf };
-  const transcripts = [{ ...base, via: 'qr' }, { ...base, via: 'corto', sid: 'sid-ñ' }].map((t) => ({
+  // The third is a link with a one-use code: no password, so its cost fields are the fixed empty ones.
+  const transcripts = [{ ...base, via: 'qr' }, { ...base, via: 'corto', sid: 'sid-ñ' }, { ...base, via: 'link', kdf: C.LINK_KDF }].map((t) => ({
     via: t.via, devPub: hex(t.devPub), pcPub: hex(t.pcPub), sid: t.sid, kdf: t.kdf, transcript: hex(C.pakeTranscript(t))
   }));
   const keys = [];
   for (const [i, t] of transcripts.entries()) {
-    const secret = i === 0 ? 'abc_DEF-123' : 'corto:ABCDEFGH';
-    const dhDevice = C.sharedSecret(PRIVS.seq, pubOf('ff')); const dhPassword = C.sharedSecret(PRIVS.low, pubOf('ff'));
+    const secret = ['abc_DEF-123', 'corto:ABCDEFGH', 'AbCdEfGhIjKlMnOpQrStUv'][i];
+    const dhDevice = C.sharedSecret(PRIVS.seq, pubOf('ff')); const dhPassword = i === 2 ? new Uint8Array(0) : C.sharedSecret(PRIVS.low, pubOf('ff'));
     const key = C.pakeKey({ secret, dhDevice, dhPassword, transcript: unhex(t.transcript) });
     keys.push({
       secret, dhDevice: hex(dhDevice), dhPassword: hex(dhPassword), transcript: t.transcript, key: hex(key),
@@ -226,6 +239,7 @@ async function buildCrypto() {
     x25519: x25519Vectors(),
     keys: keyVectors(),
     shortSecret: shortVectors(),
+    linkSecret: await linkSecretVectors(),
     verifier: await verifierVectors(),
     pake: pakeVectors(),
     seal: sealVectors()
@@ -254,6 +268,8 @@ function buildLink() {
     `http://8.8.8.8:3131/#vincular=abc&pc=${PC}`, `orb://x/#vincular=abc&pc=${PC}`,
     `https://orb.example.com/#vincular=abc&pc=${PC}`,
     // extra edge cases
+    `http://192.168.1.2:3131/#enlace=AbCdEfGhIjKlMnOpQrStUv&pc=${PC}&v=4&n=Casa`, `http://192.168.1.2:3131/#enlace=corto&pc=${PC}`, `http://192.168.1.2:3131/#enlace=AbCdEfGhIjKlMnOpQrStUv&vincular=zzz&pc=${PC}`,
+    JSON.stringify({ v: 4, urls: ['http://192.168.1.2:3131'], pc: PC, link: 'AbCdEfGhIjKlMnOpQrStUv', name: 'Casa' }),
     `  http://10.0.0.5:3131/#vincular=z&pc=${PC}  `, `HTTP://LOCALHOST:3131/#vincular=z&pc=${PC}`, `http://[fd12:3456::1]:3131/#vincular=z&pc=${PC}`,
     `http://192.168.1.2/#vincular=z&pc=${PC}`, `http://192.168.1.2:80/#vincular=z&pc=${PC}`, `https://pc.ts.net:443/#vincular=z&pc=${PC}`,
     `http://192.168.1.2:3131/#vincular=z&pc=${PC}=`, `http://192.168.1.2:3131/#vincular=z&pc=${PC}&v=abc`, `http://192.168.1.2:3131/#vincular=z&pc=${PC}&v=3&n=Caf%C3%A9+%F0%9F%98%80`,
@@ -289,7 +305,7 @@ function buildLink() {
   const addrs = [...HOSTILE, '100.64.1.2', '100.64.1.2:3131', 'casa.tail.ts.net', 'http://100.64.1.2', 'https://pc.tail.ts.net/', 'HTTPS://PC.TS.NET:8443/x?y#z', ' 10.0.0.1 ', '', '   ', null, '[fd12::1]', '[fd12::1]:4000',
     'http://[::1]', 'http://host:80', 'https://host:443', 'http://host:99999', 'http://', 'http://exa mple.com', 'http://用户.example', 'http://192.168.1.1:3131/', 'http://192.168.1.1.', 'http://0x7f.1', 'http://2130706433', 'http://user:pw@host'].map((i) => call(L.normalAddress, i));
 
-  const secrets = [{ via: 'qr', code: 'abc_DEF-123' }, { via: 'code', code: 'abcd-efgh' }, { via: 'code', code: 'oO0o1234' }, { via: 'code', code: 'a'.repeat(20) }, { via: 'code', code: null }]
+  const secrets = [{ via: 'qr', code: 'abc_DEF-123' }, { via: 'code', code: 'abcd-efgh' }, { via: 'code', code: 'oO0o1234' }, { via: 'code', code: 'a'.repeat(20) }, { via: 'code', code: null }, { via: 'link', code: 'AbCdEfGhIjKlMnOpQrStUv' }]
     .map((i) => call(L.pairingSecret, i));
   const normalCode = ['abcd-efgh', 'ABCD EFGH', 'oO01', 'a'.repeat(20), '', null, 'ñandú-12'].map((i) => call(L.normalCode, i));
   const shortCodeLabel = ['abcdefgh', 'ABCD-EFGH', 'abc', 'abcd', 'abcde', 'a'.repeat(20), '', null, 'ab cd.ef'].map((i) => call(L.shortCodeLabel, i));

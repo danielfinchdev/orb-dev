@@ -288,7 +288,13 @@ class FakePc(private val clock: Clock) : Interceptor {
     // ------------------------------------------------------------------ pairing
 
     /** The master password's verifier, kept by the PC, and the one-time secret of the QR (or the stretched short code). */
-    class PairSetup(val secret: String, val password: String, val kdf: PairKdf, val via: String)
+    class PairSetup(
+        val secret: String, val password: String, val kdf: PairKdf, val via: String,
+        /** A one-use code (via `link` / `linkcode`): no password in the exchange. */
+        val noPassword: Boolean = false,
+        /** The PC's owner says no to «¿Enlazar?». */
+        val declined: Boolean = false,
+    )
 
     var pairSetup: PairSetup? = null
     var badPcMac = false
@@ -301,7 +307,7 @@ class FakePc(private val clock: Clock) : Interceptor {
 
     fun setupPairing(setup: PairSetup, verifierOverride: KeyPair? = null) {
         pairSetup = setup
-        verifier = verifierOverride ?: LinkCrypto.verifierOf(setup.password, setup.kdf)
+        verifier = if (setup.noPassword) null else verifierOverride ?: LinkCrypto.verifierOf(setup.password, setup.kdf)
     }
 
     fun pairIntercept(req: okhttp3.Request): Response? {
@@ -323,19 +329,24 @@ class FakePc(private val clock: Clock) : Interceptor {
             if (kotlin.math.abs(pcNow - t) > LinkCrypto.CLOCK_SKEW_MS) return clockOff(req)
             val sid = "sid" + pending.size
             pending[sid] = pubB to devPub
-            val kdfJson = buildJsonObject { put("N", setup.kdf.N); put("r", setup.kdf.r); put("p", setup.kdf.p); put("salt", setup.kdf.salt) }
+            val shown = if (setup.noPassword) LinkCrypto.LINK_KDF else setup.kdf
+            val kdfJson = buildJsonObject { put("N", shown.N); put("r", shown.r); put("p", shown.p); put("salt", shown.salt) }
             val box = LinkCrypto.seal(codeKey, buildJsonObject { put("sid", sid); put("kdf", kdfJson) }, Aad.pairChallenge)
             return json(req, 200, buildJsonObject { put("sid", sid); put("box", buildJsonObject { put("n", box.n); put("c", box.c) }) })
         }
         val (pubStored, devKey) = pending.remove(body.str("sid")) ?: return json(req, 403, buildJsonObject { put("error", "codigo") })
         if (pubStored != pubB) return json(req, 403, buildJsonObject { put("error", "codigo") })
-        val transcript = LinkCrypto.pakeTranscript(setup.via, devKey, keys.pub, body.str("sid")!!, setup.kdf)
-        val k = LinkCrypto.pakeKey(setup.secret, LinkCrypto.sharedSecret(keys.priv, devKey), LinkCrypto.sharedSecret(keys.priv, verifier!!.pub), transcript)
+        // The phone says which way it links in the finish too (the PC reads it there).
+        if (setup.noPassword && body.str("via") != setup.via) return json(req, 401, buildJsonObject { put("error", "codigo") })
+        val transcript = LinkCrypto.pakeTranscript(setup.via, devKey, keys.pub, body.str("sid")!!, if (setup.noPassword) LinkCrypto.LINK_KDF else setup.kdf)
+        val dhPassword = if (setup.noPassword) ByteArray(0) else LinkCrypto.sharedSecret(keys.priv, verifier!!.pub)
+        val k = LinkCrypto.pakeKey(setup.secret, LinkCrypto.sharedSecret(keys.priv, devKey), dhPassword, transcript)
         val phoneMac = try { B64.dec(body.str("mac").orEmpty()) } catch (e: LinkCryptoException) { null }
         if (!LinkCrypto.sameBytes(phoneMac, LinkCrypto.pakeMac(k, LinkCrypto.MAC_PHONE))) {
             passwordTriesLeft--
             return json(req, 403, buildJsonObject { put("error", "contrasena incorrecta"); put("reason", "password"); put("left", passwordTriesLeft) })
         }
+        if (setup.declined) return json(req, 403, buildJsonObject { put("error", "no confirmado"); put("reason", "declined") })
         val id = "aaaaaaaa-0000-4000-8000-" + (pairedIds.size + 1).toString().padStart(12, '0')
         pairedIds += id
         deviceId = id

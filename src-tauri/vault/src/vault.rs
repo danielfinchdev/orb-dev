@@ -269,6 +269,8 @@ pub struct Vault {
   pub(crate) hello: crate::hello::State,
   /// The phones' approvals: challenges waiting for a signature and the rebuild's step (approve.rs); memory only.
   pub(crate) approve: crate::approve::State,
+  /// The one-use link code (link.rs); memory only.
+  pub(crate) link: crate::link::State,
   fails: HashMap<String, u64>,
   fails_until: HashMap<String, u64>,
   had_machine: bool,
@@ -295,6 +297,7 @@ impl Vault {
       tokens: HashMap::new(),
       hello: Default::default(),
       approve: Default::default(),
+      link: Default::default(),
       fails: HashMap::new(),
       fails_until: HashMap::new(),
       had_machine: false,
@@ -701,6 +704,7 @@ impl Vault {
     self.tokens.clear();
     self.hello.drop_pending();
     self.approve = Default::default();
+    self.link = Default::default();
     self.may_issue = false;
   }
 
