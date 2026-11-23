@@ -635,4 +635,18 @@ export default {
   "msg.projects.arrangeBusy": "Tasks, conversations or schedules are working: some folders may be in use. Arrange the folders when they finish.",
   "msg.projects.moveStranded": "The folder moved to {folder} but Orb could not record it, and it could not be moved back. Orb still points at the old place {old}: move the folder back by hand or import it again. Detail: {detail}",
   "msg.projects.syncBusy": "There are agents working on this project: wait for them to finish before syncing.",
+  "msg.acct.gone": "The account **{account}** is no longer in Orb. The message was not sent: pick another account for this chat.",
+  "msg.acct.nosession": "The account **{account}** is not signed in. The message was not sent: sign in under Agents or pick another account.",
+  "msg.acct.limit": "**{account}** has reached its limit (back at {time}). The message was not sent and the account was not changed: this chat only uses that one.",
+  "msg.acct.limitNoTime": "**{account}** has reached its limit. The message was not sent and the account was not changed: this chat only uses that one.",
+  "msg.acct.switched": "Continuing with **{to}**: {reason}",
+  "msg.acct.switchedGone": "Continuing with **{to}**: the account {from} is no longer available.",
+  "msg.acct.switchedLimit": "Continuing with **{to}**: {from} has reached its limit (back at {time}).",
+  "msg.acct.switchedBrake": "Continuing with **{to}**: {from} is close to its usage limit.",
+  "msg.acct.switchedFresh": "This conversation now continues with {to}, from a summary of what came before.",
+  "msg.acct.badAgent": "that account is not an {agent} one",
+  "msg.acct.noSession": "that account is not signed in",
+  "msg.acct.pending": "The change to **{to}** will apply when this turn ends.",
+  "msg.api.accountQueued": "this account has messages waiting in a conversation. Wait for them to be answered or remove them",
+  "msg.api.holdNone": "this chat is not waiting for an account"
 };

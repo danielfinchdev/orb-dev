@@ -635,4 +635,18 @@ export default {
   "msg.projects.arrangeBusy": "Hay tareas, conversaciones o programadas trabajando: algunas carpetas podrían estar en uso. Ordena las carpetas cuando terminen.",
   "msg.projects.moveStranded": "La carpeta se movió a {folder} pero Orb no pudo anotarlo ni devolverla a su sitio. Orb sigue apuntando al lugar antiguo {old}: devuelve la carpeta a mano o impórtala de nuevo. Detalle: {detail}",
   "msg.projects.syncBusy": "Hay agentes trabajando en este proyecto: espera a que terminen para sincronizar.",
+  "msg.acct.gone": "La cuenta **{account}** ya no está en Orb. El mensaje no ha salido: elige otra cuenta para este chat.",
+  "msg.acct.nosession": "La cuenta **{account}** no tiene sesión iniciada. El mensaje no ha salido: inicia sesión en Agentes o elige otra cuenta.",
+  "msg.acct.limit": "**{account}** ha llegado al límite (vuelve a las {time}). El mensaje no ha salido ni se ha cambiado de cuenta: este chat usa solo esa.",
+  "msg.acct.limitNoTime": "**{account}** ha llegado al límite. El mensaje no ha salido ni se ha cambiado de cuenta: este chat usa solo esa.",
+  "msg.acct.switched": "Sigue con **{to}**: {reason}",
+  "msg.acct.switchedGone": "Sigue con **{to}**: la cuenta {from} ya no está disponible.",
+  "msg.acct.switchedLimit": "Sigue con **{to}**: {from} ha llegado al límite (vuelve a las {time}).",
+  "msg.acct.switchedBrake": "Sigue con **{to}**: {from} está cerca del límite de uso.",
+  "msg.acct.switchedFresh": "Esta conversación sigue ahora con {to}, con el resumen de lo anterior.",
+  "msg.acct.badAgent": "esa cuenta no es de {agent}",
+  "msg.acct.noSession": "esa cuenta no tiene sesión iniciada",
+  "msg.acct.pending": "El cambio a **{to}** se aplicará cuando acabe este turno.",
+  "msg.api.accountQueued": "esta cuenta tiene mensajes en cola en alguna conversación. Espera a que se atiendan o quítalos",
+  "msg.api.holdNone": "este chat no está esperando una cuenta"
 };

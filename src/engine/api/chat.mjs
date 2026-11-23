@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig } from '../../platform/config.mjs';
-import { accounts as allAccounts } from '../../domain/usage/accounts.mjs';
+import { requireBrainAccount, brainAccount } from '../../domain/usage/accounts.mjs';
 import { brainOf } from '../orchestrator.mjs';
 import { slashCommand } from '../../shared/slash.mjs';
 import { oneLine, localStamp } from '../../shared/text.mjs';
@@ -227,15 +227,18 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       if (remote && (conversation == null || orchestrate !== undefined)) throw new PermissionError('config.save');
       const o = brainOf();
       const conv = conversation == null ? null : board.conversation(conversationId(conversation));
-      const base = conv ? { agent: conv.agent, account: conv.account, model: conv.model, reasoning: conv.reasoning } : o;
+      const base = conv ? { agent: conv.agent, account: conv.account, fixed: Boolean(conv.account_fixed && conv.account), model: conv.model, reasoning: conv.reasoning } : { ...o, fixed: Boolean(o.account && o.account !== 'auto') };
       const patch = {};
       if (agent !== undefined) {
         if (!modelCatalog(board).some((a) => a.id === agent)) fail(tr('msg.api.agentUnavailable', { agent: String(agent).slice(0, 40) }));
         patch.agent = agent;
       }
       const brain = patch.agent ?? base.agent ?? 'claude';
-      if (acc !== undefined) { patch.account = str(acc, 'cuenta', 40); if (patch.account && !allAccounts().some((a) => a.id === patch.account)) fail(tr('msg.api.noAccount')); }
-      else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.account = brain; // another agent: its own account
+      // 'auto' (or empty): the chat follows the agent's accounts; an id: that account only. It must exist, be signed in and be
+      // of the chat's agent, from the PC and from a phone alike.
+      let chosen = null;
+      if (acc !== undefined) { chosen = requireBrainAccount(str(acc, 'cuenta', 40, { optional: true }) || 'auto', brain); patch.account = chosen.account ?? 'auto'; }
+      else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) { chosen = brainAccount('auto', brain); patch.account = 'auto'; } // another agent: automatic among its accounts
       if (model !== undefined) {
         const m = String(model ?? '');
         if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) {
@@ -251,7 +254,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // Only a level the model takes: one asked for now that it lacks is refused; a saved one the new model lacks drops
       // to the closest it takes. An agent without levels (Cursor) keeps whatever is saved.
       if (reasoning !== undefined || patch.model !== undefined || patch.agent !== undefined) {
-        const takes = levelsOf(modelCatalog(board), brain, patch.model ?? base.model, patch.account ?? base.account);
+        const takes = levelsOf(modelCatalog(board), brain, patch.model ?? base.model, chosen ? chosen.account : base.account !== 'auto' ? base.account : null);
         const now = patch.reasoning ?? base.reasoning;
         if (takes.length && !takes.includes(now)) {
           if (reasoning !== undefined) fail(tr('msg.api.reasoningUnavailable'));
@@ -264,11 +267,21 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       const before = { ...base };
       if (conv) {
         const fields = {};
-        for (const k of ['agent', 'account', 'model', 'reasoning']) if (patch[k] !== undefined) fields[k] = patch[k] || null;
-        board.updateConversation(conv.id, fields);
-        // Another agent, or another account (its conversation lives in that account's folder): this conversation goes on
-        // afresh with the logs instead of failing to resume.
-        if ((patch.agent && patch.agent !== before.agent) || (patch.account !== undefined && patch.account !== before.account)) orchestrator.forget(conv.id);
+        for (const k of ['agent', 'model', 'reasoning']) if (patch[k] !== undefined) fields[k] = patch[k] || null;
+        const agentChange = Boolean(patch.agent && patch.agent !== before.agent);
+        // Picking «automática» again leaves an automatic chat on the account it is using; any other choice that differs
+        // from what the chat has is a change of account.
+        const accountChange = chosen != null && (agentChange || chosen.account_fixed !== Number(before.fixed) || (chosen.account_fixed && chosen.account !== before.account));
+        if (accountChange) { if (chosen.account || agentChange) fields.account = chosen.account; fields.account_fixed = chosen.account_fixed; } // «automática» keeps the account in use
+        // The agent's own conversation lives in its account's folder: another agent or account goes on afresh with the logs
+        // instead of failing to resume. With a turn in progress, that part waits for the end of the turn (never closing its
+        // process); what does not touch the process (reasoning, and the model when the agent stays) is applied now.
+        if (agentChange || accountChange) {
+          const now = {}; const later = {};
+          for (const [k, v] of Object.entries(fields)) ((k === 'reasoning' || (k === 'model' && !agentChange)) ? now : later)[k] = v;
+          if (Object.keys(now).length) board.updateConversation(conv.id, now);
+          orchestrator.setBrain(conv.id, later);
+        } else board.updateConversation(conv.id, fields);
       }
       // On this PC the choice is also the one the next new conversation starts with.
       if (!remote) { const c = saveConfig({ orchestrator: patch }); emit('config:changed', c); }
@@ -277,6 +290,8 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
       return info;
     },
+    // «Esperar» on a chat held by its fixed account's limit: its message goes by itself when the limit ends.
+    'chat.holdWait': ({ conversation }) => orchestrator.waitForAccount(conversationId(conversation)),
   };
   // clientId: a retry of the same message (same conversation) gets the first answer instead of a second message.
   const sent = createDedupe();

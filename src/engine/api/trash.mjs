@@ -44,6 +44,7 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
     'chat.answer': (p) => board.chatRow(Number(p.id))?.conversation_id,
     'chat.accept': (p) => board.chatRow(Number(p.id))?.conversation_id,
     'chat.compact': (p) => p.conversation,
+    'chat.holdWait': (p) => p.conversation,
     'chat.settings': (p) => p.conversation,
     'conversations.update': (p) => p.id,
   };

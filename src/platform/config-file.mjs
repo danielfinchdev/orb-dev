@@ -14,13 +14,13 @@ export const OFF_BY_DEFAULT = ['hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 
 export const AGENT_LABELS = { claude: 'Claude', codex: 'Codex', cursor: 'Cursor', gemini: 'Gemini', opencode: 'OpenCode', qwen: 'Qwen Code', copilot: 'GitHub Copilot', hermes: 'Hermes Agent', grok: 'Grok Build', devin: 'Devin', droid: 'Factory Droid', omp: 'Oh My Pi', pi: 'Pi', antigravity: 'Antigravity' };
 
 export const DEFAULT_CONFIG = Object.freeze({
-  version: 5,
+  version: 6,
   assistantName: PRODUCT.assistant,
   userName: '',
   language: 'es',
   // The assistant's own model: Sonnet to save (default) or Opus; "orchestrate" = only coordinate (true) or free mode (false).
   // renewAt: share of the context window at which the assistant starts a fresh conversation (the board and logs remember).
-  orchestrator: { agent: 'claude', account: 'claude', model: 'claude-sonnet-5-5', reasoning: 'medium', maxTurns: 60, renewAt: 0.6, orchestrate: true,
+  orchestrator: { agent: 'claude', account: 'auto', model: 'claude-sonnet-5-5', reasoning: 'medium', maxTurns: 60, renewAt: 0.6, orchestrate: true,
     models: [{ id: 'claude-sonnet-5-5', label: 'Sonnet 5.5' }, { id: 'claude-opus-5-5', label: 'Opus 5.5' }] },
   autoRun: true,
   // the grey proposal of the next message in a chat's box when a turn ends (src/engine/suggest.mjs). Off: it spends plan.
@@ -147,6 +147,12 @@ export function configFrom(stored) {
   if ((stored.version ?? 2) < 5) {
     if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
     config.version = 5;
+  }
+  // New chats follow the agent's accounts by themselves («auto»); the main account the old default named is no longer a
+  // fixed choice. An account picked by hand (any other id) stays.
+  if ((stored.version ?? 2) < 6) {
+    if (config.orchestrator.account === config.orchestrator.agent) config.orchestrator.account = 'auto';
+    config.version = 6;
   }
   // Orbs no longer link with each other: this Orb's role (todo / centro / taller) and «Orb para programar» go.
   delete config.role; delete config.devTarget;

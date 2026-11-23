@@ -8,8 +8,8 @@ import { ctx, tr } from '../platform/context.mjs';
 import { adapter, executable } from '../agents/index.mjs';
 import { UNGUARDED_AGENTS, requireLevel } from '../agents/unguarded.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
-import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
-import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
+import { accountEnv } from '../domain/usage/accounts.mjs';
+import { recordSpend, accountProblemText } from '../domain/usage/budget.mjs';
 import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
 
@@ -72,7 +72,10 @@ export class SideChats {
     let timer = null;
     try {
       if (!e.live || e.live.isClosed?.()) {
-        const acc = s.account ? findAccount(s.account) : pickAccount(this.sessions.board, { agent: s.agent });
+        // The chat's own account, never another one for a fixed chat; it never changes the chat's account itself.
+        const res = this.sessions.accountFor(s);
+        if (res.problem) throw new Error(accountProblemText(res.problem));
+        const acc = res.acc;
         if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
         e.account = acc.id;
         e.live = this.make(s.agent, {
