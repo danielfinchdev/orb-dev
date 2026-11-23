@@ -129,6 +129,17 @@ test('6: the OK of a report accepts only the run it shows', async () => {
   start(); await end();
   await assert.rejects(call('chat.accept', { id: old.id }), /volvió a ejecutar|ran again/i);
   assert.equal(board.isAccepted(task.id), false);
+  // a refused OK leaves the held tasks of that conversation as they were
+  const conv = board.createConversation({ title: 'P', project: task.project });
+  const stamp = new Date(Date.now() - 60000).toISOString();
+  board.run("INSERT INTO tasks (project, title, description, status, created_by, conversation_id, created_at, updated_at) VALUES (?, 'V', 'x', 'blocked', 'orb', ?, ?, ?)", task.project, conv.id, stamp, stamp);
+  const held = board.one('SELECT MAX(id) AS id FROM tasks').id;
+  board.event(held, 'orb', 'task.launched', 'queued'); board.event(held, 'orb', 'task.held', 'requiere tu revisión');
+  const rerun = board.addChat('assistant', 'again', { kind: 'report', project: task.project, tasks: [task.id] }, conv.id);
+  await new Promise((r) => setTimeout(r, 5));
+  start(); await end();
+  await assert.rejects(call('chat.accept', { id: rerun.id }), /volvió a ejecutar|ran again/i);
+  assert.equal(board.task(held).status, 'blocked');
 });
 
 test('7: undoing a joined task keeps later work in the folder', async () => {

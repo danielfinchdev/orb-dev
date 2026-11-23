@@ -201,7 +201,6 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // Only the PC window settles them: a phone or browser must not release held tasks through the report, as «tasks.accept» refuses.
       const held = row.conversation_id && principal?.channel === 'desktop' ? board.all("SELECT id FROM tasks WHERE conversation_id = ? AND status = 'blocked' AND updated_at <= ?", row.conversation_id, row.at)
         .map((r) => r.id).filter((tid) => board.heldInfo(board.task(tid))) : [];
-      for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       // Only the run the report shows: a task launched again after the report is not covered by its OK. Reports written
       // before `runs` was stored are judged by the time of the task's last launch.
       const shown = (row.meta.tasks ?? []).filter((tid) => {
@@ -211,6 +210,8 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
         return !(launched > Date.parse(row.at));
       });
       if (row.meta.tasks?.length && !shown.length) fail(tr('msg.api.reportRerun'));
+      // only after the check: a refused OK must not leave the held tasks settled
+      for (const tid of held) board.patch(tid, { status: 'done' }, 'usuario', 'task.review_accepted');
       const out = accept([...shown, ...held], row.meta.project);
       // the OK closes the conversation when nothing of it is still open (written in again, it opens).
       settleConversation(row.conversation_id);
