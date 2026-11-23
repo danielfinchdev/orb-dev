@@ -60,7 +60,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 const machineKek = (key) => new Uint8Array(Buffer.from(key));
 // A recovery code typed with or without dashes and spaces, in any case, gives the same key; any other passphrase is used
 // as written (NFKC, trimmed).
-function normalizePassphrase(text) {
+export function normalizePassphrase(text) {
   const s = String(text ?? '').normalize('NFKC').trim();
   const compact = s.replace(/[\s-]+/g, '').toUpperCase();
   return /^[A-Z2-9]{32}$/.test(compact) && /^[A-Za-z2-9\s-]+$/.test(s) ? compact : s;
