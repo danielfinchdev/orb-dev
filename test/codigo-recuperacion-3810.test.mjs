@@ -231,6 +231,8 @@ test('a failure writing the copies\' wrap after the vault changed still shows th
     fs.rmSync(wrap, { force: true }); fs.mkdirSync(wrap); // writing the file now fails
     const r = await e.call('backup.recovery', { password: PASS, rekey: true });
     assert.equal(r.rekeyed, true);
+    assert.equal(r.copyWrapFailed, true);
+    assert.equal(fs.existsSync(wrap), false, 'no old wrap is left for the scheduled copies');
     assert.match(r.code, /^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$/);
     assert.equal((await e.call('master.state')).hasCode, true, 'the vault has the new code');
   } finally { await e.stop(); }

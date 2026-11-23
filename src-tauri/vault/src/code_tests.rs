@@ -146,12 +146,12 @@ fn forgetting_it_with_a_chosen_phrase_makes_a_new_data_key_as_today() {
   let copy = dir.join("copia-clave.json").display().to_string();
   let wrong = run("forgot", json!({ "code": "otra frase distinta", "copy": copy, "next": "otra contraseña larga", "keep": [] }), &h, &fake).unwrap();
   assert_eq!(wrong["reason"], json!("wrong"));
-  let r = run("forgot", json!({ "code": " mi frase de recuperacion ", "copy": copy, "next": "otra contraseña larga", "keep": ["conector/clave"] }), &h, &fake).unwrap();
+  let r = run("forgot", json!({ "code": " mi frase de recuperacion ", "copy": copy, "next": "otra contraseña larga", "keep": [] }), &h, &fake).unwrap();
   assert_eq!(r, json!({ "ok": true, "rotated": true }));
   let mut v = h.vault.lock().unwrap();
   assert_ne!(v.key_id(), Some(before.as_str()));
   assert!(!dir.join(CODE).exists());
-  assert!(v.get("conector/clave").is_err() || v.get("conector/clave").unwrap() == json!("sk-secreto"));
+  assert_eq!(v.get("conector/clave").unwrap(), json!("sk-secreto"), "the vault, not the caller's list, decides what goes on");
   tidy(&[&dir]);
 }
 

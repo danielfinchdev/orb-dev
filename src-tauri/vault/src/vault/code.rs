@@ -136,6 +136,11 @@ impl Vault {
       let _ = std::fs::remove_file(self.file(RESTORED));
     }
   }
+  /// What goes on under a new data key, decided here and never by the caller: every secret but the phones' keys and what the
+  /// old key authenticated (Hello, approvals). Err when the secrets cannot be read: nothing may be rotated then.
+  pub fn keep_on_rotate(&mut self) -> Result<Vec<String>, Code> {
+    Ok(self.ids("")?.into_iter().filter(|id| id != "remote_keys" && id != crate::hello::HELLO_ID && !id.starts_with(APPROVE_PREFIX)).collect())
+  }
   /// Hello's key and the approvals a restored copy carried: the copy is not what enabled them.
   pub fn forget_unproven(&mut self) {
     let Ok(mut items) = self.items() else { return };

@@ -150,7 +150,7 @@ pub(crate) fn forgot(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> An
     }
     old_hello = if rotate { hello::account(&mut v) } else { None };
     if rotate {
-      let keep: Vec<String> = req.get("keep").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+      let keep = v.keep_on_rotate()?;
       v.rotate(&keep)?;
     }
   }
@@ -218,7 +218,7 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
       let old = hello::account(&mut v);
       // The vault decides what goes on (never the caller's list): everything but what the old key authenticated and the
       // phones' keys. If the secrets cannot be read, nothing is rotated.
-      let keep: Vec<String> = v.ids("")?.into_iter().filter(|id| id != "remote_keys" && id != hello::HELLO_ID && !id.starts_with(crate::vault::APPROVE_PREFIX)).collect();
+      let keep = v.keep_on_rotate()?;
       let created = v.master_file().and_then(|m| m.get("created").and_then(Value::as_str).map(String::from));
       v.rotate(&keep)?;
       (old, created)

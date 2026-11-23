@@ -245,18 +245,25 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       } catch (error) { throw asUser(error); }
       if (!r.ok) throw refused(r, { code: !password(p) });
       // The vault has already changed: whatever fails here, the code is still shown and a new data key still unlinks the phones.
-      try { K.setRecovery(ctx.home, secret, value); } catch (error) { log(`código de recuperación: copia-clave.json: ${error.message}`); board.notice(tr('msg.master.codeCopyWrap'), 'warning'); }
+      let copyWrapFailed = false;
+      try { K.setRecovery(ctx.home, secret, value); } catch (error) {
+        // The scheduled copies must not go on with the old code's wrap: without a wrap they go out without a code.
+        copyWrapFailed = true;
+        try { fs.rmSync(K.recoveryFile(ctx.home), { force: true, recursive: true }); } catch { /* the notice says it */ }
+        log(`código de recuperación: copia-clave.json: ${error.message}`);
+        board.notice(tr(chosen ? 'msg.master.phraseCopyWrap' : 'msg.master.codeCopyWrap'), 'warning');
+      }
       const at = new Date().toISOString();
       if (r.rekeyed) {
         const unlinked = unlinkAll('código nuevo');
         log(`código de recuperación nuevo con clave de datos nueva; ${unlinked} dispositivo(s) desenlazados`);
         board.notice(tr('msg.master.codeRekeyed', { n: unlinked }), 'warning');
         emit('master:locked', {});
-        return { code: value, at, rekeyed: true, unlinked, ...m.issue() };
+        return { code: value, at, rekeyed: true, unlinked, ...(copyWrapFailed ? { copyWrapFailed } : {}), ...m.issue() };
       }
       log(chosen ? 'código de recuperación: frase propia (el código ya no abre la bóveda)' : 'código de recuperación nuevo (misma clave de datos)');
       // Only a replaced code can still be out there: copies made before keep its wrap, and with them the old code opens what they hold.
-      return { code: chosen ? null : value, at, rekeyed: false, ...(!chosen && replaces ? { warn: tr('msg.master.codeKeptKey') } : {}) };
+      return { code: chosen ? null : value, at, rekeyed: false, ...(copyWrapFailed ? { copyWrapFailed } : {}), ...(!chosen && replaces ? { warn: tr('msg.master.codeKeptKey') } : {}) };
     },
     // «Borrar secretos y empezar de cero» (confirm: the user read what it does): without the recovery code, or on a PC that
     // cannot open them. The secrets go (here and in the copy outside core; never the backups), every phone is unlinked and
