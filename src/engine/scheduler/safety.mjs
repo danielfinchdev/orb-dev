@@ -158,9 +158,11 @@ export class SafetyPart {
     if (this.held(task.project)) throw new Error(tr('msg.scheduler.undoBusy'));
     const release = this.hold(task.project);
     try {
-      const out = cp.before.kind === 'git' ? await this.undoOutcome(task, cp, true) : undoCheckpoint(cp.before, cp.after ?? {}, { dry: true });
+      const full = cp.before.kind === 'git' ? await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' }) : null;
+      if (cp.before.kind === 'git' && !full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
+      const out = full ? await this.undoOutcome(task, cp, true, full) : undoCheckpoint(cp.before, cp.after ?? {}, { dry: true });
       const files = undoPreviewFiles(cp.before, out.plan);
-      return { hash: undoPlanHash(cp, out.plan), files, counts: countPlan(out.plan), noDiff: files.filter((x) => x.noDiff).length };
+      return { hash: undoPlanHash(cp, out.plan, full?.commit), files, counts: countPlan(out.plan), noDiff: files.filter((x) => x.noDiff).length };
     } finally { release(); }
   }
 
@@ -181,7 +183,7 @@ export class SafetyPart {
         if (hash !== undefined) {
           full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
           if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
-          if (undoPlanHash(cp, (await this.undoOutcome(task, cp, true, full)).plan) !== hash) throw new Error(tr('msg.undo.previewStale'));
+          if (undoPlanHash(cp, (await this.undoOutcome(task, cp, true, full)).plan, full.commit) !== hash) throw new Error(tr('msg.undo.previewStale'));
         }
         out = await this.undoOutcome(task, cp, false, full);
       } finally { release(); }
@@ -236,14 +238,22 @@ export class SafetyPart {
 
 // The fingerprint of what an undo would do: the two photos it goes between and each file with its final state. The preview
 // shows this plan and the undo that carries its hash recomputes it, so the two cannot disagree.
-export function undoPlanHash(cp, plan) {
-  // the content each changing file has right now is part of it: a file edited after the preview is a different plan
-  const dir = cp.before?.kind === 'git' ? cp.before.repo : cp.before?.dir;
-  const nowOf = (p) => {
-    if (!['restore', 'remove', 'recreate'].includes(p.action) || !dir) return '';
-    try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, p.path))).digest('hex'); } catch { return 'absent'; }
-  };
-  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => `${p.action}\t${p.path}	${nowOf(p)}`);
+export function undoPlanHash(cp, plan, fullCommit = null) {
+  // The state each changing file has right now is part of it: a file edited after the preview is a different plan. Nothing
+  // is read: git hands the blob ids of the full snapshot in one call (a copy checkpoint, size and time of the file).
+  const changing = plan.filter((p) => ['restore', 'remove', 'recreate'].includes(p.action));
+  const now = new Map();
+  if (changing.length && fullCommit && cp.before?.repo) {
+    const want = new Set(changing.map((p) => p.path));
+    const r = git(cp.before.repo, 'ls-tree', '-r', '-z', fullCommit);
+    for (const row of r.stdout.split(' ')) {
+      const tab = row.indexOf('	');
+      if (tab > 0 && want.has(row.slice(tab + 1))) now.set(row.slice(tab + 1), row.slice(0, tab).split(' ')[2]);
+    }
+  } else if (changing.length && cp.before?.dir) {
+    for (const p of changing) { try { const st = fs.lstatSync(path.join(cp.before.dir, p.path)); now.set(p.path, `${st.size}:${st.mtimeMs}`); } catch { /* absent */ } }
+  }
+  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => [p.action, p.path, changing.includes(p) ? (now.get(p.path) ?? 'absent') : ''].join('	'));
   return crypto.createHash('sha256').update(JSON.stringify([cp.before?.commit ?? cp.before?.copy ?? '', cp.after?.commit ?? '', rows])).digest('hex').slice(0, 32);
 }
 export function countPlan(plan) {
