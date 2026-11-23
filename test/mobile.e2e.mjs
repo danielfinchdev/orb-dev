@@ -59,6 +59,8 @@ try {
   await page.waitForSelector('[data-testid=orb-inbox]', { timeout: 30000 });
   assert.equal((await call('link.devices')).length, 1, 'enlazado una vez');
   await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
+  // «New chat» opens the project picker next: «No project» is its first row.
+  await page.click('[data-testid=new-chat-picker] [data-testid=new-conversation]');
   await page.waitForSelector('[data-testid=chat-input]');
   await page.fill('[data-testid=chat-input]', 'Hola desde el móvil');
   await page.keyboard.press('Enter');
@@ -119,6 +121,7 @@ try {
   await page.click('[data-testid=nav-chats]');
   // 3.0: «Nuevo chat» opens a clean conversation with the assistant.
   await page.click('[data-testid=chats-new]'); await page.locator('[data-testid=new-conversation]:visible').click();
+  await page.click('[data-testid=new-chat-picker] [data-testid=new-conversation]');
   await page.waitForSelector('[data-testid=chat-input]');
   await page.waitForTimeout(300);
   await noSideScroll('nuevo chat'); await shot('08-nueva-conversacion');
