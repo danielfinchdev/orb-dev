@@ -14,6 +14,14 @@ import { agentKeyState, saveAgentKey } from '../../domain/security/agent-keys.mj
 import { needsUnlock, needsPassword, freshPurpose, FRESH_PURPOSES, HELLO_PURPOSES, HELLO_ENABLE_PURPOSE, RULE_TARGET_METHODS, RAILS_PURPOSE, mobileMayApprove, APPROVE_REGISTER_PURPOSE, REBUILD_PURPOSE } from '../../domain/security/permissions.mjs';
 import { approveSummary, approvePurpose, SUMMARY_MAX } from '../../domain/security/approve.mjs';
 import crypto from 'node:crypto';
+
+// The key that keeps the secrets in an approval's summary from being guessed: made once, kept in the vault, never sent to a phone.
+function approveKey() {
+  const m = ctx.master;
+  let k = m.get('approve_summary_key');
+  if (typeof k !== 'string' || k.length < 32) { k = crypto.randomBytes(32).toString('hex'); m.set('approve_summary_key', k); }
+  return Buffer.from(k, 'hex');
+}
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
 import * as K from '../../domain/data/backup.mjs';
@@ -119,7 +127,7 @@ export function checkUnlock(method, params, { defer = false } = {}) {
   // The phone's one-use approval is the other proof a password-only action takes: it is good for this action with these very
   // parameters (the vault holds the purpose the phone signed for) and is spent here.
   if (!hello && typeof params?.unlock === 'string' && m.tokenStrength(params.unlock) === 'mobile') {
-    if (!mobileMayApprove(method, params, ctx.config) || !m.checkToken(params.unlock, approvePurpose(method, params), { consume: true, mobile: true })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+    if (!mobileMayApprove(method, params, ctx.config) || !m.checkToken(params.unlock, approvePurpose(method, params, approveKey()), { consume: true, mobile: true })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
     return defer ? { unlocked: 'mobile', settle: () => {} } : true;
   }
   // A Hello token handed to a password-only action is told apart, so the window asks for the password and not for Hello again.
@@ -296,6 +304,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     },
     'approve.unregister': ({ id }) => {
       master().approveForget(String(id)); remoteRef.current?.stopAsking(String(id));
+      for (const [k, r] of requests) if (r.device === String(id)) requests.delete(k);
       log('aprobaciones del móvil: quitadas');
       return { ok: true };
     },
@@ -304,7 +313,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     'approve.request': ({ method, params, device }) => {
       const m = master();
       if (typeof method !== 'string' || !params || typeof params !== 'object' || Array.isArray(params) || !mobileMayApprove(method, params, ctx.config)) throw userError('msg.approve.badMethod', {}, { reason: 'method' });
-      const summary = approveSummary(params);
+      const summary = approveSummary(params, approveKey());
       if (summary.length > SUMMARY_MAX) throw userError('msg.approve.big', {}, { reason: 'big' });
       const phone = registeredPhone(device);
       let ch; try { ch = m.approveAsk({ orbId: orbId(), deviceId: phone.id, action: method, summary }); } catch (error) { throw asUser(error); }
@@ -315,6 +324,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     'approve.poll': ({ id }) => {
       const r = requests.get(String(id));
       if (!r) return { state: 'gone' };
+      // A phone unlinked or removed since it answered: what it made is not handed over.
+      if (!master().approveList().some((x) => x.id === r.device) && r.kind !== 'enroll') { requests.delete(String(id)); return { state: 'gone' }; }
       if (r.state === 'waiting' && r.until <= Date.now()) { requests.delete(String(id)); remoteRef.current?.stopAsking(r.device); return { state: 'expired' }; }
       if (r.state === 'refused') { requests.delete(String(id)); return { state: 'refused' }; }
       if (r.state === 'done' && r.kind !== 'rebuild') { requests.delete(String(id)); return { state: 'done', ...(r.token ? { unlock: r.token, until: r.tokenUntil, strength: 'mobile' } : {}) }; }
@@ -356,6 +367,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     'master.rebuildPoll': ({ id }) => {
       const r = requests.get(String(id));
       if (!r || r.kind !== 'rebuild') return { state: 'gone' };
+      if (!master().approveList().some((x) => x.id === r.device)) { requests.delete(String(id)); return { state: 'gone' }; }
       if (r.state === 'waiting' && r.until <= Date.now()) { requests.delete(String(id)); remoteRef.current?.stopAsking(r.device); return { state: 'expired' }; }
       if (r.state === 'refused') requests.delete(String(id));
       return { state: r.state };

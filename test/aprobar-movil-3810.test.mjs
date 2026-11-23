@@ -67,10 +67,13 @@ test('the table: what a phone may approve is the password-only calls, never a ne
   assert.equal(mobileMayApprove('master.check', {}, {}), false, 'what Hello opens is not for the phone');
   assert.equal(mobileMayApprove('projects.deleteCheck', {}, {}), false);
   assert.equal(mobileMayApprove('secrets.answer', { saved: true }, {}), true);
-  const a = approveSummary({ name: 'github', unlock: 'tok' });
+  const key = Buffer.alloc(32, 1);
+  const a = approveSummary({ name: 'github', unlock: 'tok' }, key);
   assert.equal(a, '{"name":"github"}', 'the unlock token is never part of it');
-  assert.equal(approveSummary({ env: { K: 'secreto' }, name: 'x' }).includes('secreto'), false, 'a key is shown as its hash');
-  assert.notEqual(approveSummary({ env: { K: 'uno' } }), approveSummary({ env: { K: 'dos' } }), 'but another key is another summary');
+  assert.match(approveSummary({ name: 'x', nested: { unlock: 'visible' } }, key), /visible/, 'only the first level loses unlock');
+  for (const field of ['env', 'passphrase', 'apiKey', 'Authorization', 'client_secret', 'accessToken', 'password']) assert.equal(approveSummary({ [field]: 'secreto' }, key).includes('secreto'), false, field);
+  assert.notEqual(approveSummary({ env: { K: 'uno' } }, key), approveSummary({ env: { K: 'dos' } }, key), 'but another key is another summary');
+  assert.notEqual(approveSummary({ env: 'uno' }, key), approveSummary({ env: 'uno' }, Buffer.alloc(32, 2)), 'and the hash depends on this PC\'s key: no guessing from what the phone gets');
   const payload = buildPayload({ action: 'secrets.connector', hash: summaryHash(a), nonce: Buffer.alloc(32, 1), orbId: 'orb-1', deviceId: 'dev-1', pcPub: Buffer.alloc(32, 2), expires: 1_800_000_000_000 });
   assert.deepEqual(parsePayload(payload).nonce, Buffer.alloc(32, 1));
   assert.equal(parsePayload(payload.subarray(0, payload.length - 1)), null);
@@ -133,10 +136,14 @@ test('a phone is registered only with the password typed on the PC, and then app
 test('unlinking a phone deletes its registration, and linking it again does not bring it back', async () => {
   await withPhone(async ({ e, link }) => {
     const { ph, id } = await link();
-    await register(e, ph, id);
+    const key = await register(e, ph, id);
     const win = await e.call('master.unlock', { password: PASS });
     assert.match(await said(e.call('approve.unregister', { id })), GUARD, 'removing it asks for the unlock too');
+    // an approval it already gave, not yet picked up, dies with the unlinking
+    const made = await ask(e, ph, 'secrets.connector', { name: 'github' });
+    await ph.call(id, 'approve.respond', { nonce: made.event.nonce, sig: answer(made.event, key).sig });
     await e.call('link.revoke', { id, unlock: win.unlock });
+    assert.equal((await e.call('approve.poll', { id: made.req.id })).state, 'gone');
     const again = await link();
     assert.notEqual(again.id, id);
     assert.deepEqual((await e.call('approve.devices')).phones.map((p) => p.registered), [false]);

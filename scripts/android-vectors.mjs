@@ -322,10 +322,10 @@ async function buildApprove() {
     { action: 'master.rebuild', params: {}, nonce: fill(32, (i) => 200 + i), orbId: 'o', deviceId: 'd', pcPub: fill(32, () => 9), expires: 1 }
   ];
   const good = cases.map((c) => {
-    const summary = A.approveSummary(c.params);
+    const summary = A.approveSummary(c.params, Buffer.alloc(32, 4));
     const hash = A.summaryHash(summary);
     const payload = A.buildPayload({ action: c.action, hash, nonce: c.nonce, orbId: c.orbId, deviceId: c.deviceId, pcPub: c.pcPub, expires: c.expires });
-    return { action: c.action, summary, hash, nonce: hex(c.nonce), orbId: c.orbId, deviceId: c.deviceId, pcPub: hex(c.pcPub), expires: c.expires, payload: hex(payload), purpose: A.approvePurpose(c.action, c.params) };
+    return { action: c.action, summary, hash, nonce: hex(c.nonce), orbId: c.orbId, deviceId: c.deviceId, pcPub: hex(c.pcPub), expires: c.expires, payload: hex(payload), purpose: A.approvePurpose(c.action, c.params, Buffer.alloc(32, 4)) };
   });
   // Bytes that are not a payload of this protocol: Kotlin must refuse every one.
   const base = Buffer.from(good[0].payload, 'hex');

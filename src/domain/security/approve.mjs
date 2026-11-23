@@ -5,9 +5,12 @@
 import crypto from 'node:crypto';
 
 export const SUMMARY_MAX = 16_000;
-// Values that are or hold secrets are shown as their hash, not as text (the phone sees what the call is about, never a key).
-const SECRET_KEYS = new Set(['env', 'value', 'token', 'password', 'secret', 'key', 'code', 'current', 'next']);
+// Values that are or hold secrets are shown as a keyed hash, not as text (the phone sees what the call is about, never a key). Any
+// field whose name says it holds one counts. The hash is an HMAC with a key that stays on this PC, so a value of few possibilities
+// cannot be guessed from what the phone receives.
+const SECRET_KEY = /^(env|value|code|current|next)$|pass|secret|token|key|cred|auth|bearer|pin$/i;
 const sha = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+const mac = (key, text) => crypto.createHmac('sha256', key).update(text, 'utf8').digest('hex');
 
 // JSON with its keys in order and no spaces, so the same call always says the same text.
 export function canonical(value) {
@@ -17,21 +20,22 @@ export function canonical(value) {
   }
   return JSON.stringify(value) ?? 'null';
 }
-function redact(value, key = '') {
-  if (SECRET_KEYS.has(key) && value !== null && value !== undefined && value !== '') return `sha256:${sha(canonical(value))}`;
-  if (Array.isArray(value)) return value.map((v) => redact(v));
+function redact(value, hmacKey, key = '', top = false) {
+  if (SECRET_KEY.test(key) && value !== null && value !== undefined && value !== '') return `hmac:${mac(hmacKey, canonical(value))}`;
+  if (Array.isArray(value)) return value.map((v) => redact(v, hmacKey));
   if (value && typeof value === 'object') {
     const out = {};
-    for (const [k, v] of Object.entries(value)) if (k !== 'unlock' && v !== undefined) out[k] = redact(v, k);
+    // Only the call's own unlock token is left out (first level): a field of that name deeper down is a parameter like any other.
+    for (const [k, v] of Object.entries(value)) if (!(top && k === 'unlock') && v !== undefined) out[k] = redact(v, hmacKey, k);
     return out;
   }
   return value;
 }
-// The summary of a call's parameters (never the unlock token).
-export const approveSummary = (params) => canonical(redact(params ?? {}));
+// The summary of a call's parameters (never the unlock token). hmacKey: this PC's own key (never sent anywhere).
+export const approveSummary = (params, hmacKey) => canonical(redact(params ?? {}, hmacKey, '', true));
 export const summaryHash = (summary) => sha(summary);
 // The purpose of the vault's token for this call: what the phone signed for.
-export const approvePurpose = (method, params) => `approve:${method}:${summaryHash(approveSummary(params))}`;
+export const approvePurpose = (method, params, hmacKey) => `approve:${method}:${summaryHash(approveSummary(params, hmacKey))}`;
 
 // The signed payload (src-tauri/vault/src/approve.rs › message), built here for the tests and the phones' shared vectors.
 const field = (bytes) => { const len = Buffer.alloc(4); len.writeUInt32BE(bytes.length); return Buffer.concat([len, bytes]); };
