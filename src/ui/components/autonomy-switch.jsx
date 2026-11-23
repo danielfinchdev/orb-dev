@@ -85,12 +85,12 @@ export function AutonomySwitch({ value, onChange, more = [], extra = [], main = 
     const { Icon, tip } = meta(o.value);
     const on = o.value === value;
     return (
-      <button key={o.value} ref={(el) => { refs.current[i] = el; }} type="button" role="option" aria-selected={on} tabIndex={i === at ? 0 : -1}
+      <button key={o.value} ref={(el) => { refs.current[i] = el; }} type="button" role="option" aria-selected={on} data-picked={on} tabIndex={i === at ? 0 : -1}
         onClick={() => pick(o.value)} data-testid={`${testid}-${o.value}`}
-        className="hover:bg-accent focus-visible:bg-accent flex w-full cursor-pointer items-start gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 text-left outline-none">
+        className="pick hover:bg-accent focus-visible:bg-accent flex w-full cursor-pointer items-start gap-2 rounded-[var(--r-ctl)] px-2 py-1.5 text-left outline-none">
         <Icon className="mt-0.5 size-4 shrink-0" />
         <span className="grid min-w-0 flex-1 gap-0.5"><span className="text-control font-medium">{o.value === 'total' && !o.label.endsWith('…') ? `${o.label}…` : o.label}</span><span className="text-muted-foreground text-xs leading-snug">{tip()}</span></span>
-        <Check className={cn('text-muted-foreground mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
+        <Check className={cn('text-primary-text mt-0.5 size-4 shrink-0', on ? 'opacity-100' : 'opacity-0')} aria-hidden />
       </button>
     );
   };

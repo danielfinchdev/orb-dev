@@ -37,6 +37,7 @@ import dev.orb.app.link.api.UserConfirmation
 import dev.orb.app.ui.chats.Message
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbButton
+import dev.orb.app.ui.kit.chosenFill
 import dev.orb.app.ui.kit.OrbButtonKind
 import dev.orb.app.ui.kit.OrbDialog
 import dev.orb.app.ui.kit.OrbDialogAction
@@ -165,11 +166,11 @@ private fun MergeDialog(pr: PrDetail, project: String, busy: Boolean, onDismiss:
             Text(ProjectTexts.PR_MERGE_METHOD, Modifier.padding(top = 4.dp), color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
             for (m in MergeMethods) {
                 Row(
-                    Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).selectable(selected = method == m, onClick = { method = m }, role = Role.RadioButton),
+                    Modifier.fillMaxWidth().defaultMinSize(minHeight = 48.dp).chosenFill(method == m).selectable(selected = method == m, onClick = { method = m }, role = Role.RadioButton),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Icon(if (method == m) OrbIcons.CircleCheck else OrbIcons.Circle, null, Modifier.size(20.dp), tint = if (method == m) OrbKit.foreground else OrbKit.mutedForeground)
-                    Text(ProjectTexts.mergeMethod(m), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
+                    Text(ProjectTexts.mergeMethod(m), Modifier.weight(1f), color = OrbKit.foreground, fontSize = 14.5.sp, lineHeight = 21.sp)
+                    if (method == m) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.primaryText)
                 }
             }
             OrbNote(ProjectTexts.PR_MERGE_NOTE)
