@@ -38,16 +38,16 @@ export class BoardConversations {
   conversations({ limit = 300 } = {}) {
     return this.all('SELECT * FROM conversations WHERE bot_id IS NULL AND group_id IS NULL AND trashed_at IS NULL ORDER BY updated_at DESC, id DESC LIMIT ?', Math.min(Math.max(Number(limit) || 300, 1), 2000)).map(conversationRow).map(({ notes, ...rest }) => ({ ...rest, has_notes: Boolean(notes) })); // the notes themselves are read with chat.notes
   }
-  createConversation({ title = '', project = null, agent = 'claude', account = null, model = null, reasoning = 'medium' } = {}) {
+  createConversation({ title = '', project = null, agent = 'claude', account = null, account_fixed = 0, model = null, reasoning = 'medium' } = {}) {
     if (project && !this.project(project)) throw new Error(tr('sys.board.unknownProject', { name: project }));
     const at = now();
-    const { lastInsertRowid } = this.run('INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?)',
-      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, model || null, reasoning || 'medium', at, at);
+    const { lastInsertRowid } = this.run('INSERT INTO conversations (title, titled, project, agent, account, account_fixed, model, reasoning, created_at, updated_at) VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?)',
+      oneLine(title || tr('msg.board.newConversation'), 80), project ? this.project(project).name : null, agent, account || null, account && account_fixed ? 1 : 0, model || null, reasoning || 'medium', at, at);
     this.changed('conversations');
     return this.conversation(Number(lastInsertRowid));
   }
   updateConversation(id, fields) {
-    const allowed = ['title', 'titled', 'notes', 'project', 'agent', 'account', 'model', 'reasoning', 'session_id', 'turns', 'context', 'status', 'done_at', 'updated_at'];
+    const allowed = ['title', 'titled', 'notes', 'project', 'agent', 'account', 'account_fixed', 'model', 'reasoning', 'session_id', 'turns', 'context', 'status', 'done_at', 'updated_at'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.conversation(id);
     const value = (k) => (k === 'context' ? (fields[k] == null ? null : JSON.stringify(fields[k])) : k === 'titled' ? Number(Boolean(fields[k])) : k === 'title' ? oneLine(String(fields[k]), 80) : fields[k] ?? null);

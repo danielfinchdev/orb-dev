@@ -21,9 +21,9 @@ import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
-import { account as findAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { account as findAccount, accountEnv, brainAccount } from '../domain/usage/accounts.mjs';
 import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
-import { pickAccount, recordSpend } from '../domain/usage/budget.mjs';
+import { pickAccount, recordSpend, resolveAccount, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
 import { browserKey } from './browser/browser-key.mjs';
 import { androidAllowed } from './host/android.mjs';
 import { PERMISSIONS, plainAction, pidKills, unwrapShell, globalAutonomy, permissionOfAutonomy } from '../domain/security/guard.mjs';
@@ -160,6 +160,7 @@ export class Sessions {
     // the periodic sweep must never throw: a database already closed (the app is leaving) is not worth an uncaught error
     this.sweeper = setInterval(() => { try { this.closeIdle(); } catch (error) { this.log?.(`limpieza de sesiones: ${error.message}`); } }, 60_000);
     this.sweeper.unref?.();
+    this.holds = new Map(); // chat id -> { problem, sig, timer }: a fixed chat whose account cannot take its queued messages
     this.side = new SideChats(this); // «/side»: questions apart, in memory only (side.mjs)
     this.suggest = new Suggester(this); // the grey next message in the box, when Ajustes has it on (suggest.mjs)
   }
@@ -170,10 +171,17 @@ export class Sessions {
   get(id) { return parseRow(this.board.one('SELECT * FROM sessions WHERE id = ?', String(id))); }
   must(id) { const s = this.get(id); if (!s) throw new Error(tr('msg.sessions.noConversation')); return s; }
 
-  create({ kind = 'chat', agent, account = null, model = null, reasoning = 'medium', permission = permissionOfAutonomy(globalAutonomy()), project = null, cwd, title, taskId = null, parentId = null }) {
+  // account: 'auto' (or nothing) or the id of the only account the chat may use; accountFixed overrides what that says (a copy
+  // keeps its original's account without fixing it). A task's session always takes the account its run was given.
+  create({ kind = 'chat', agent, account = null, accountFixed = null, model = null, reasoning = 'medium', permission = permissionOfAutonomy(globalAutonomy()), project = null, cwd, title, taskId = null, parentId = null }) {
     adapter(agent);
     if (account && findAccount(account) && findAccount(account).agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
-    const acc = pickAccount(this.board, { agent, preferred: account });
+    const wanted = brainAccount(account, agent);
+    const fixed = accountFixed == null ? wanted.account_fixed : Number(Boolean(accountFixed) && Boolean(wanted.account));
+    // A chat: a chosen account that is not in Orb is refused here; one without a session or at its limit is told when the
+    // message goes (the chat keeps the choice). Another account is never picked for it.
+    const acc = kind === 'task' ? pickAccount(this.board, { agent, preferred: account })
+      : resolveAccount(this.board, { agent, account: wanted.account, fixed: Boolean(fixed), model }).acc;
     if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account, agent }));
     if (!PERMISSIONS.includes(permission)) throw new Error(tr('msg.sessions.badPermission'));
     if (!cwd || !fs.existsSync(cwd) || !fs.statSync(cwd).isDirectory()) throw new Error(tr('msg.sessions.noCwd', { cwd }));
@@ -181,16 +189,30 @@ export class Sessions {
     // No model chosen = the agent's default from Agentes (Sonnet for Claude), never its CLI's own default (which can be the
     // most expensive one).
     const chosen = model || ctx.config.agents[agent]?.defaultModel || null;
-    this.board.run(`INSERT INTO sessions (id, kind, agent, account, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?)`, id, kind, agent, acc.id, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at);
+    this.board.run(`INSERT INTO sessions (id, kind, agent, account, account_fixed, model, reasoning, permission, project, cwd, task_id, title, status, parent_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'idle', ?, ?, ?)`, id, kind, agent, acc.id, kind === 'task' ? 1 : fixed ? 1 : 0, chosen, reasoning, permission, project, cwd, taskId, oneLine(title || tr('msg.sessions.defaultTitle'), 80), parentId, at, at);
     const s = this.get(id); this.emit('session:update', s); return s;
   }
 
   update(id, fields) {
     this.flushDelta(id); // what was streamed goes before the change (the turn's end) it came before
-    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'settled', 'context', 'titled', 'android'];
+    const allowed = ['title', 'model', 'reasoning', 'permission', 'archived', 'status', 'cli_session', 'cwd', 'account', 'account_fixed', 'settled', 'context', 'titled', 'android'];
     const keys = Object.keys(fields).filter((k) => allowed.includes(k));
     if (!keys.length) return this.get(id);
+    // Another account while a turn runs waits for the end of that turn: its process is never closed from under it.
+    if (keys.some((k) => k === 'account' || k === 'account_fixed') && this.running.has(id) && !fields.applyPending) {
+      const later = {};
+      if ('account' in fields) later.account = fields.account;
+      if ('account_fixed' in fields) later.account_fixed = fields.account_fixed;
+      this.board.settingJson(`pending_account:${id}`, later);
+      const rest = Object.fromEntries(Object.entries(fields).filter(([k]) => k !== 'account' && k !== 'account_fixed'));
+      this.emit('session:update', { ...this.must(id), pendingAccount: later });
+      return Object.keys(rest).length ? this.update(id, rest) : this.get(id);
+    }
+    // A change made now replaces one that was waiting for the end of a turn.
+    if (keys.some((k) => k === 'account' || k === 'account_fixed') && !fields.applyPending) this.board.settingJson(`pending_account:${id}`, null);
+    // Another account: the agent's own conversation lives in the old account's folder, so the chat goes on from its summary.
+    if ('account' in fields && fields.account !== this.get(id)?.account && !('cli_session' in fields)) { fields = { ...fields, cli_session: null, context: null }; keys.push('cli_session', 'context'); }
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
     const value = (k) => { const v = fields[k]; if (typeof v === 'boolean') return Number(v); if (v && typeof v === 'object') return JSON.stringify(v); return v ?? null; };
     this.board.run(`UPDATE sessions SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...keys.map(value), now(), id);
@@ -203,9 +225,12 @@ export class Sessions {
       // a «/plan» turn runs in «Solo lectura»: a change made meanwhile applies from the next turn (its process is rebuilt then)
       if ('permission' in fields && !this.running.get(id)?.planOnly) entry.live.setPermission?.(fields.permission);
       if ('reasoning' in fields && !this.running.has(id)) this.closeLive(id);
-      if ('cwd' in fields || 'account' in fields) this.closeLive(id);
+      if ('cwd' in fields || 'account' in fields) this.closeLive(id); // not while running: that case waited above
     }
-    const s = this.get(id); this.emit('session:update', s); return s;
+    const s = this.get(id); this.emit('session:update', s);
+    // the messages a fixed chat held for its account go when the account is changed (a turn that just ended handles its own queue)
+    if (this.holds.has(id) && ('account' in fields || 'account_fixed' in fields) && !fields.applyPending) this.kickQueue(id);
+    return s;
   }
 
   remove(id) {
@@ -311,6 +336,53 @@ export class Sessions {
     for (const [id] of mine) this.closeLive(id);
     this.side.closeProcessesOf(accountId);
     return true;
+  }
+  // Whether a chat of this account is in a turn ('busy') or has messages waiting ('queued'), else null.
+  workingOn(accountId) {
+    const ids = this.board.all('SELECT id FROM sessions WHERE account = ?', accountId).map((r) => r.id);
+    if (ids.some((id) => this.running.has(id))) return 'busy';
+    if (this.side.processesOf(accountId).some((e) => e.status === 'running')) return 'busy';
+    if (ids.some((id) => this.queue(id).length)) return 'queued';
+    // an account change waiting for the end of a turn (also one saved before Orb restarted)
+    return this.board.all("SELECT value FROM settings WHERE key LIKE 'pending_account:%'").some((r) => { try { return JSON.parse(r.value)?.account === accountId; } catch { return false; } }) ? 'pending' : null;
+  }
+  // The messages a fixed chat held (its account could not take them) go now, if it can: in order, one at a time.
+  kickQueue(id) {
+    const s = this.get(id);
+    if (!s || s.kind !== 'chat' || this.running.has(id) || !this.queue(id).length || this.accountFor(s).problem) return;
+    const hold = this.holds.get(id); if (hold?.timer) clearTimeout(hold.timer);
+    this.holds.delete(id);
+    const next = this.takeQueued(id);
+    if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
+  }
+  // «Esperar»: the held messages go by themselves when the account's limit ends.
+  holdWait(id) {
+    const hold = this.holds.get(String(id));
+    if (!hold) throw new Error(tr('msg.api.holdNone'));
+    if (hold.timer) clearTimeout(hold.timer);
+    const ms = hold.problem.until ? Math.max(1000, hold.problem.until - Date.now() + 5000) : 60_000;
+    hold.timer = setTimeout(() => { hold.timer = null; this.kickQueue(String(id)); }, Math.min(ms, 2_147_000_000));
+    hold.timer.unref?.();
+    this.emit('session:account', { id: String(id), problem: hold.problem, waiting: true });
+    return { ok: true };
+  }
+  // The account change asked for during a turn, now that it has ended.
+  applyPendingAccount(id) {
+    const later = this.board.settingJson(`pending_account:${id}`);
+    if (!later || !this.get(id)) return;
+    this.board.settingJson(`pending_account:${id}`, null);
+    const moved = 'account' in later && later.account !== this.get(id).account;
+    this.update(id, { ...later, applyPending: true });
+    if (moved) this.addItem(id, 'system', 'status', tr('msg.acct.switchedFresh', { to: findAccount(later.account)?.label ?? later.account }));
+  }
+  // A chat's account for its next turn: fixed (its own or a problem) or automatic (stays, or moves between turns).
+  // The conversation of the agent lives in its account's folder: an automatic chat that never talked is free to choose.
+  accountFor(s) {
+    if (s.kind !== 'chat') {
+      const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
+      return { acc, problem: acc ? null : { kind: 'gone', account: s.account }, switched: null };
+    }
+    return resolveAccount(this.board, { agent: s.agent, account: s.account_fixed || s.cli_session ? s.account : null, fixed: Boolean(s.account_fixed), model: s.model });
   }
   closeIdle() {
     for (const [id, entry] of this.lives) if (!this.running.has(id) && Date.now() - entry.lastUsed > IDLE_CLOSE_MS) this.closeLive(id);
@@ -522,7 +594,7 @@ export class Sessions {
   // step) or queue it (sent when the turn ends). mode: 'auto' (steer when the agent can, else queue) | 'steer' | 'queue'.
   message(id, text, { images = [], mode = 'auto', context = '', asked } = {}) {
     // context: what @ attached (another task, conversation or log), added for the agent but not shown as typed.
-    if (!this.running.has(id)) { this.send(id, text, { images, asked, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
+    if (!this.running.has(id)) { const run = this.send(id, text, { images, asked, prompt: context ? `${text}${context}` : undefined }); return run ? { sent: true } : { queued: true, held: true }; }
     const entry = this.lives.get(id);
     const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
     if (mode !== 'queue' && !images.length && !this.running.get(id)?.compacting && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
@@ -590,10 +662,10 @@ export class Sessions {
   send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked, turnPermission } = {}) {
     // turnPermission: this one turn runs with less permission than the chat has («/plan»). Only «leer» exists, and only to lower
     // it: nothing here can make a turn more permissive than the chat.
-    const chat = this.must(id);
+    let chat = this.must(id);
     this.suggest.cancel(id); // a message of the user ends the proposal for the box
     const planOnly = turnPermission === 'leer';
-    const s = planOnly ? { ...chat, permission: 'leer' } : chat;
+    let s = planOnly ? { ...chat, permission: 'leer' } : chat;
     // what this turn may do because the user's own words asked for it: a task's comes from the scheduler (the
     // request it came from); a chat's, from the message the user typed now (a turn Orb sends by itself keeps the last).
     if (this.editing?.has(id) || this.editing?.has(chat.cwd)) throw new Error(tr('msg.sessions.stillWorking')); // a message is being edited
@@ -603,9 +675,37 @@ export class Sessions {
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
     if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
-    // The conversation's own account: if it was removed, the turn does not silently move to another subscription.
-    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
+    // An account change asked for during the last turn goes before the account is settled.
+    if (this.board.settingJson(`pending_account:${id}`)) { this.applyPendingAccount(id); chat = this.must(id); s = planOnly ? { ...chat, permission: 'leer' } : chat; }
+    // The conversation's own account. A fixed chat never moves: when its account cannot take the turn the message does not go
+    // and the chat says why (an automatic one moves to another account of its agent, and says so).
+    const res = this.accountFor(s);
+    if (res.problem) {
+      const line = accountProblemText(res.problem);
+      const sig = `${res.problem.kind}:${res.problem.account}:${Math.round((res.problem.until ?? 0) / 600_000)}`;
+      // what the user typed is not lost: it waits in the chat's queue until the account can take it or the chat is changed
+      // Only a plain message can wait: the queue keeps text and pictures, not a prompt, a «/plan» level or what the user asked for.
+      const held = showUser && !onFinish && s.kind === 'chat' && prompt === undefined && !turnPermission && !Array.isArray(asked);
+      if (held) this.enqueue(id, text, images);
+      if (this.holds.get(id)?.sig !== sig) {
+        const old = this.holds.get(id); if (old?.timer) clearTimeout(old.timer);
+        if (held) this.holds.set(id, { problem: res.problem, sig, timer: null });
+        this.board.settingJson(`account_problem:${id}`, res.problem);
+        this.addItem(id, 'system', 'status', line);
+        this.emit('session:account', { id, problem: res.problem });
+      }
+      if (held) return null;
+      throw Object.assign(new Error(line), { problem: res.problem });
+    }
+    this.holds.delete(id);
+    const acc = res.acc;
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
+    if (res.switched || (s.kind === 'chat' && s.account !== acc.id)) {
+      const had = Boolean(s.cli_session);
+      this.update(id, { account: acc.id, ...(res.switched && had ? { cli_session: null, context: null } : {}) });
+      if (res.switched) this.addItem(id, 'system', 'status', `${accountSwitchText(res.switched, acc)}${had ? ` ${tr('msg.acct.switchedFresh', { to: acc.label ?? acc.id })}` : ''}`);
+      chat = this.must(id); s = planOnly ? { ...chat, permission: 'leer' } : chat;
+    }
     const a = adapter(s.agent);
     const attached = placeAttachments(images, s.cwd);
     const shown = showUser ? this.addItem(id, 'user', 'text', attached.length ? { text, images: attached.map((f) => f.path) } : text) : null;
@@ -652,6 +752,7 @@ ${body}`;
       clearInterval(timer);
       entry.lastUsed = Date.now();
       if (this.running.get(id) === run) this.running.delete(id);
+      try { this.applyPendingAccount(id); } catch (error) { this.log(`cambio de cuenta ${id}: ${error.message}`); }
       const failed = result.isError && !run.stopped;
       // A conversation that cannot be resumed (old or deleted on the agent's side) starts over on the next message.
       if (failed && resumed && !result.text && /resum|no conversation|not found|malformed|thread|session/i.test(result.final ?? '')) {
@@ -675,7 +776,10 @@ ${body}`;
       if (!onFinish && s.kind === 'chat') { try { this.suggest.after(id, { request: text, result, stopped: run.stopped }); } catch (error) { this.log(`sugerencia ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
       if (!run.stopped && !limited && !onFinish) {
-        const next = this.takeQueued(id);
+        // a fixed chat whose account cannot take it now keeps its queue: send() would say why and the message would be lost
+        const blocked = s.kind === 'chat' && this.queue(id).length ? this.accountFor(this.get(id) ?? s).problem : null;
+        if (blocked) { this.addItem(id, 'system', 'status', accountProblemText(blocked)); this.emit('session:account', { id, problem: blocked }); }
+        const next = blocked ? null : this.takeQueued(id);
         if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
       }
     }).catch((error) => {
@@ -684,6 +788,7 @@ ${body}`;
       this.log(`turno ${id}: ${error.stack}`);
       clearInterval(timer);
       if (this.running.get(id) === run) this.running.delete(id);
+      try { this.applyPendingAccount(id); } catch (e) { this.log(`cambio de cuenta ${id}: ${e.message}`); }
       const final = `${a.label}: ${error.message}`;
       try { this.update(id, { status: 'error' }); this.addItem(id, 'error', 'text', final); } catch { /* the conversation may be gone */ }
       if (!onFinish && s.kind === 'chat') { try { goalFailed(this, id, final); } catch { /* the conversation may be gone */ } }
@@ -718,7 +823,9 @@ ${body}`;
     const a = adapter(s.agent);
     if (!a.caps?.compact) throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
     if (!s.cli_session) return { ok: true, how: 'none' };
-    const acc = s.account ? findAccount(s.account) : pickAccount(this.board, { agent: s.agent });
+    const res = this.accountFor(s);
+    if (res.problem) throw new Error(accountProblemText(res.problem));
+    const acc = res.acc;
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const entry = this.getLive(s, acc);
     if (typeof entry.live.compact !== 'function') throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
@@ -779,7 +886,7 @@ ${body}`;
     const a = adapter(other ?? s.agent);
     if (other && UNGUARDED_AGENTS.includes(other)) requireLevel('leer', AGENT_LABELS[other] ?? other); // the copy never keeps «total»
     // what was given with the master password stays with the original (also «total» of a project's chat).
-    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, model: other ? null : s.model, reasoning: other ? this.levelFor(s.reasoning, other, null, null) : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
+    const copy = this.create({ kind: 'chat', agent: other ?? s.agent, account: other ? null : s.account, accountFixed: other ? null : Boolean(s.account_fixed), model: other ? null : s.model, reasoning: other ? this.levelFor(s.reasoning, other, null, null) : s.reasoning, permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
       project: s.project, cwd: s.cwd, title: title || (other ? tr('msg.sessions.switchTitle', { title: s.title, agent: AGENT_LABELS[other] ?? other }) : tr('msg.sessions.forkTitle', { title: s.title })), parentId: s.id });
     this.board.run('UPDATE sessions SET titled = 1 WHERE id = ?', copy.id); // its title stays (not renamed by its next message)
     const old = this.board.all(`SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant')${cut != null ? ' AND id <= ?' : ''} ORDER BY id DESC LIMIT 40`, s.id, ...(cut != null ? [cut] : [])).reverse();
@@ -803,7 +910,7 @@ ${body}`;
     if (this.pendingApprovals(id).length) throw new Error(tr('msg.sessions.handoffApproval'));
     adapter(agent); // throws for an unknown agent
     if (UNGUARDED_AGENTS.includes(agent)) requireLevel('leer', AGENT_LABELS[agent] ?? agent); // «total» is never carried over
-    const acc = pickAccount(this.board, { agent });
+    const acc = resolveAccount(this.board, { agent, model: ctx.config.agents[agent]?.defaultModel || null }).acc;
     if (!acc || acc.agent !== agent) throw new Error(tr('msg.sessions.accountNotOf', { account: agent, agent }));
     const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);
     const from = AGENT_LABELS[s.agent] ?? s.agent; const to = AGENT_LABELS[agent] ?? agent;
@@ -815,7 +922,7 @@ ${body}`;
     this.asked.delete(id); // what the user's words allowed the old agent is not the new agent's
     this.closeLive(id);
     this.board.settingJson(`fork_summary:${id}`, null); this.board.settingJson(`fork_pending:${id}`, null);
-    this.board.run('UPDATE sessions SET agent = ?, account = ?, model = ?, reasoning = ?, permission = ?, cli_session = NULL, context = NULL, android = 0, updated_at = ? WHERE id = ?',
+    this.board.run('UPDATE sessions SET agent = ?, account = ?, account_fixed = 0, model = ?, reasoning = ?, permission = ?, cli_session = NULL, context = NULL, android = 0, updated_at = ? WHERE id = ?',
       agent, acc.id, ctx.config.agents[agent]?.defaultModel || null, this.levelFor(s.reasoning, agent, ctx.config.agents[agent]?.defaultModel || null, acc.id), permission, now(), id);
     this.board.settingJson(`handoff_summary:${id}`, summary.text);
     if (Number(s.android) === 1) this.addItem(id, 'system', 'status', tr('msg.grants.androidOff')); // given to the old agent, not to the new one

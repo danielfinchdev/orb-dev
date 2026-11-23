@@ -122,7 +122,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
 
       // The copy holds the whole conversation as it was. It gets fresh ids in order, so its list reads top to bottom;
       // the originals from the edited message on leave this chat.
-      copy = sessions.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning,
+      copy = sessions.create({ kind: 'chat', agent: s.agent, account: s.account, accountFixed: Boolean(s.account_fixed), model: s.model, reasoning: s.reasoning,
         permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
         project: s.project, cwd: s.cwd, title: tr('msg.edit.copyTitle', { title: s.title }), parentId: s.id });
       // parseRow turned context into an object; the raw column is what goes into the copy

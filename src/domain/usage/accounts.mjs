@@ -5,7 +5,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ctx } from '../../platform/context.mjs';
+import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 
 export const MULTI = { claude: 'CLAUDE_CONFIG_DIR', codex: 'CODEX_HOME' }; // agents that support several accounts
@@ -82,6 +82,41 @@ export async function findAccountFolders(agent, { budgetMs = 4000, maxDirs = 400
 
 // Default account of an agent (for direct conversations when none is chosen, and for the assistant itself).
 export const defaultAccount = (agent) => usableAccounts(agent)[0] ?? accountsOf(agent)[0] ?? null;
+
+// What a chat's brain picker means in columns: 'auto' (or nothing) = the chat follows the agent's accounts
+// (account NULL until its first turn, account_fixed 0); an account id = that account only (account_fixed 1). The one place
+// that turns a choice into columns, so a chat made by the assistant, a schedule, the phone or the importer reads it the same
+// way. An account of another agent (the brain changed agent) is not a choice for this one: automatic.
+export function brainAccount(value, agent) {
+  const id = typeof value === 'string' ? value.trim() : '';
+  if (!id || id === 'auto') return { account: null, account_fixed: 0 };
+  const known = account(id);
+  if (known && known.agent !== agent) return { account: null, account_fixed: 0 };
+  return { account: id, account_fixed: 1 };
+}
+
+// The account choice new chats start with, from the assistant's settings: 'auto' or an account id. `account` keeps naming an
+// account (the main one when automatic) so an older Orb reading the same file still finds a valid one; `accountMode` says
+// whether it is a choice. A file without it (made by an older Orb) is automatic when it names the agent's main account.
+export function configuredAccount(o, agent) {
+  const mode = o?.accountMode;
+  if (mode === 'auto' || (mode !== 'fixed' && (!o?.account || o.account === (o.agent || agent)))) return 'auto';
+  return o.account;
+}
+// The settings that say the same choice back (see configuredAccount): the account and its mode.
+export const accountSettings = (choice, agent) => (choice && choice !== 'auto' ? { account: choice, accountMode: 'fixed' } : { account: agent, accountMode: 'auto' });
+
+// The same choice, checked for a person's request (the window or a linked phone): the account must exist, be of this
+// agent and be signed in. An id the user can no longer pick (a limit is not a reason: that is told when the message goes).
+export function requireBrainAccount(value, agent) {
+  const id = typeof value === 'string' ? value.trim() : '';
+  if (!id || id === 'auto') return { account: null, account_fixed: 0 };
+  const known = account(id);
+  if (!known) throw new Error(tr('msg.api.noAccount'));
+  if (known.agent !== agent) throw new Error(tr('msg.acct.badAgent', { agent }));
+  if (!usableAccounts(agent).some((a) => a.id === id)) throw new Error(tr('msg.acct.noSession'));
+  return { account: id, account_fixed: 1 };
+}
 
 export const accountLabel = (id) => account(id)?.label ?? id;
 

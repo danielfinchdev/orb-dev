@@ -4,7 +4,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
-import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
+import { accountsOf, accountLabel, requireBrainAccount } from '../../domain/usage/accounts.mjs';
 import { slashCommand, modeCommand } from '../../shared/slash.mjs';
 import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf, debugOn } from '../modes.mjs';
 import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, scheduleHash, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
@@ -284,7 +284,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // «Local» (the project's folder) or «Worktree» (its own git worktree and branch, made below); it changes where the chat works, never what it may do.
       const where = oneOf(p.workspace, ['local', 'worktree'], 'espacio', 'local');
       if (where === 'worktree' && !proj) fail(tr('msg.chatWt.needsProject'));
-      const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      const agent = oneOf(p.agent, AGENT_IDS, 'agente');
+      // 'auto' (or none): the chat follows the agent's accounts; an id: only that one (it must exist and be signed in).
+      const pick = requireBrainAccount(str(p.account, 'cuenta', 40, { optional: true }) || 'auto', agent);
+      const created = sessions.create({ kind: 'chat', agent, account: pick.account, model: str(p.model, 'modelo', 80, { optional: true }) || null,
         reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', permissionOfAutonomy(globalAutonomy())) : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
       if (where === 'worktree') {
@@ -396,7 +399,7 @@ ${block}` : ''}` });
     'sessions.sides': ({ id }) => sessions.side.list(str(id, 'conversación', 64)),
     'sessions.sideClose': ({ side }) => sessions.side.close(str(side, 'lateral', 64)),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
-    'sessions.update': async ({ id, title, model, reasoning, permission, archived }) => {
+    'sessions.update': async ({ id, title, model, reasoning, permission, archived, account }) => {
       const s = sessions.must(str(id, 'conversación', 64));
       // a chat taken out of the archive gets back the worktree that was removed when it was archived
       // (if it cannot be brought back the chat still comes out, and the user is told)
@@ -420,8 +423,18 @@ ${block}` : ''}` });
       if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));
       if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
       if (archived !== undefined) fields.archived = Boolean(archived);
+      // The account of a chat (also from a phone): 'auto' leaves the one in use and lets it move between turns; an id fixes it.
+      // With a turn running it waits for the end of that turn.
+      if (account !== undefined) {
+        if (s.kind === 'task') fail(tr('msg.api.taskModelFromTask'));
+        const pick = requireBrainAccount(str(account, 'cuenta', 40, { optional: true }) || 'auto', s.agent);
+        fields.account_fixed = pick.account_fixed;
+        if (pick.account) fields.account = pick.account;
+      }
       return sessions.update(s.id, fields);
     },
+    // «Esperar» on a chat whose fixed account is at its limit: what it held goes when the limit ends.
+    'sessions.holdWait': ({ id }) => sessions.holdWait(str(id, 'conversación', 64)),
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
     // the worktrees of direct chats (src/engine/chat-worktrees.mjs)
     'worktrees.branches': ({ project: name }) => chatTrees.branches(project(name).path),

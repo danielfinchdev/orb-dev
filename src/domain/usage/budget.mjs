@@ -308,6 +308,59 @@ export function pickAccount(board, { agent, preferred = null } = {}) {
   return usableAccounts(agent)[0] ?? accountsOf(agent)[0] ?? null;
 }
 
+// Why a chat turn cannot use this account right now, or null: a pause (usage limit, a model's limit) or the real-usage
+// brake. The launch counts are for tasks and do not apply to a chat's answers.
+export function chatBlock(board, id, model = null) {
+  const until = cooldownUntil(board, id) || modelLimitUntil(board, id, model);
+  if (until) return { paused: until, reason: tr('msg.budget.noQuota', { name: nameOf(id), time: untilText(until) }) };
+  const brake = usageBrake(board, id);
+  return brake ? { paused: brake.paused ?? brake.resetAt ?? null, reason: brake.reason, brake: true } : null;
+}
+
+// The account a chat turn runs on. fixed: that account and no other, ever: when it cannot take the turn the answer is a
+// `problem` (never another account): { kind: 'gone' | 'nosession' | 'limit', account, until?, reason?, other? } with `other`
+// the id of an account of the agent that could take the turn (for «Usar otra»). The brake (90 % of the real window) is
+// not a problem for a fixed chat: the message goes with a warning, as it always did.
+// Automatic: stays on its account while it can take the turn; otherwise it moves to the usable account of the agent with the
+// most room (`switched` says from where), unless continuity.switchAccount is off. When no account can, it stays where it is.
+// → { acc, problem, switched }
+export function resolveAccount(board, { agent, account = null, fixed = false, model = null } = {}) {
+  const usable = usableAccounts(agent);
+  const known = account ? findAccount(account) : null;
+  const mine = known && known.agent === agent ? known : null;
+  if (fixed && account) {
+    if (!mine) return { acc: null, problem: { kind: 'gone', account }, switched: null };
+    if (!usable.some((a) => a.id === mine.id)) return { acc: mine, problem: { kind: 'nosession', account: mine.id }, switched: null };
+    const block = chatBlock(board, mine.id, model);
+    if (block && !block.brake) {
+      const other = rankAccounts(board, usable.filter((a) => a.id !== mine.id), model).find((r) => !chatBlock(board, r.account, model));
+      return { acc: mine, problem: { kind: 'limit', account: mine.id, until: block.paused, reason: block.reason, other: other?.account ?? null }, switched: null };
+    }
+    return { acc: mine, problem: null, switched: null };
+  }
+  const current = mine && usable.some((a) => a.id === mine.id) ? mine : null;
+  if (current && !chatBlock(board, current.id, model)) return { acc: current, problem: null, switched: null };
+  const stay = ctx.config?.continuity?.switchAccount === false;
+  if (current && stay) return { acc: current, problem: null, switched: null };
+  const best = rankAccounts(board, usable, model).find((r) => !chatBlock(board, r.account, model));
+  const chosen = best ? findAccount(best.account) : current ?? usable[0] ?? accountsOf(agent)[0] ?? null;
+  return { acc: chosen, problem: null, switched: account && chosen && chosen.id !== account ? { from: account, why: current ? chatBlock(board, current.id, model) : null } : null };
+}
+
+// The chat line for a fixed chat's problem (resolveAccount) and for an automatic chat that moved to another account.
+export function accountProblemText(p) {
+  const name = nameOf(p.account);
+  if (p.kind === 'gone') return tr('msg.acct.gone', { account: p.account });
+  if (p.kind === 'nosession') return tr('msg.acct.nosession', { account: name });
+  return p.until ? tr('msg.acct.limit', { account: name, time: untilText(p.until) }) : tr('msg.acct.limitNoTime', { account: name });
+}
+export function accountSwitchText(sw, to) {
+  const toName = to?.label ?? to?.id ?? '';
+  if (!findAccount(sw.from) || !sw.why) return tr('msg.acct.switchedGone', { to: toName, from: sw.from });
+  if (sw.why?.paused) return tr('msg.acct.switchedLimit', { to: toName, from: nameOf(sw.from), time: untilText(sw.why.paused) });
+  return tr('msg.acct.switchedBrake', { to: toName, from: nameOf(sw.from) });
+}
+
 // What one turn spent (usage_ledger; the day in the owner's time zone). usage: what the agent reported ({ inputTokens,
 // outputTokens, costUsd } or the snake_case names); one turn per call unless usage.userTurns says.
 export function recordSpend(board, { account = null, conversation = null, session = null, task = null, usage = {} } = {}) {

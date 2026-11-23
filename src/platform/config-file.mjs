@@ -148,6 +148,7 @@ export function configFrom(stored) {
     if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
     config.version = 5;
   }
+
   // Orbs no longer link with each other: this Orb's role (todo / centro / taller) and «Orb para programar» go.
   delete config.role; delete config.devTarget;
   // «Monitoreo del equipo» and Opti Bot are gone, and so are the bots, Open Control Edge and the «Orb | Bots» mode too.

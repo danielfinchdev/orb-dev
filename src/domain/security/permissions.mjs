@@ -39,7 +39,7 @@ export const METHODS = Object.freeze({
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
   'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc', 'conversations.trash': 'remote', 'conversations.restore': 'remote',
-  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.queue': 'remote', 'chat.editQueued': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
+  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.queue': 'remote', 'chat.editQueued': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.holdWait': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
   'chat.settings': 'remote',
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',
@@ -57,7 +57,7 @@ export const METHODS = Object.freeze({
   // direct conversations with an agent and the tasks' sessions
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.handoff': 'remote', 'sessions.edit': 'remote', 'sessions.rewindInfo': 'remote', 'sessions.editRewind': 'pc', 'sessions.rewindUndo': 'pc', 'sessions.settle': 'remote',
-  'sessions.stop': 'remote', 'sessions.subagent': 'remote', 'sessions.sideAsk': 'pc', 'sessions.sides': 'remote', 'sessions.sideClose': 'remote', 'sessions.suggestCancel': 'remote', 'sessions.modes': 'remote', 'sessions.goal': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc', 'worktrees.branches': 'remote', 'worktrees.status': 'pc', 'worktrees.list': 'pc', 'worktrees.discard': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
+  'sessions.stop': 'remote', 'sessions.subagent': 'remote', 'sessions.sideAsk': 'pc', 'sessions.sides': 'remote', 'sessions.sideClose': 'remote', 'sessions.suggestCancel': 'remote', 'sessions.modes': 'remote', 'sessions.goal': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.holdWait': 'remote', 'sessions.remove': 'pc', 'worktrees.branches': 'remote', 'worktrees.status': 'pc', 'worktrees.list': 'pc', 'worktrees.discard': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
   // «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
   'permissions.setMode': 'remote',
   // «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
