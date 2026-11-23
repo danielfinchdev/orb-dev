@@ -3,6 +3,7 @@
 // engine keeps its own API as it was: src/domain/security/master.mjs); what takes time (scrypt) runs as a job the engine polls, so
 // its event loop never waits for a password check and the quick requests are answered meanwhile.
 // Every buffer that carried a password or a secret (the request line, the parsed request, the answer) is wiped after use.
+use crate::approve;
 use crate::code_ops;
 use crate::crypto::{self, b64url, unb64};
 use crate::grants::Grants;
@@ -91,6 +92,11 @@ pub fn serve(server: &Server, input: &mut impl BufRead, output: &mut impl Write)
   }
 }
 
+/// The entries the vault keeps for itself (Hello's key, the phones' approval keys): the engine never reads or writes them as secrets.
+fn own_entry(id: &str) -> bool {
+  id == hello::HELLO_ID || id.starts_with(vault::APPROVE_PREFIX)
+}
+
 pub(crate) fn s<'a>(req: &'a Value, k: &str) -> &'a str {
   req.get(k).and_then(Value::as_str).unwrap_or_default()
 }
@@ -133,7 +139,7 @@ impl Session<'_> {
         if op == "close" {
           self.vaults.remove(&req["h"].as_u64().unwrap_or(0));
           Ok(json!(true))
-        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock" | "codeUnlock" | "codeSet" | "adopt") {
+        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock" | "rebuildFinish" | "codeUnlock" | "codeSet" | "adopt") {
           return self.start_job(op, req, h);
         } else {
           let now = self.now(req);
@@ -242,10 +248,10 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
     "openMachine" => Ok(json!(v.open_with_machine()?)),
     "sealMachine" => Ok(json!(v.seal_for_machine())),
     // Hello's entry is the vault's own (hello.rs): the engine can neither read nor write it through the generic ops.
-    "get" | "set" if s(req, "id") == hello::HELLO_ID => Err(Code::Damaged),
+    "get" | "set" if own_entry(s(req, "id")) => Err(Code::Damaged),
     "get" => v.get(s(req, "id")),
     "set" => v.set(s(req, "id"), req.get("value").cloned().unwrap_or(Value::Null)).map(|_| json!(true)),
-    "ids" => Ok(json!(v.ids(s(req, "prefix"))?.into_iter().filter(|i| i != hello::HELLO_ID).collect::<Vec<_>>())),
+    "ids" => Ok(json!(v.ids(s(req, "prefix"))?.into_iter().filter(|i| !own_entry(i)).collect::<Vec<_>>())),
     "wait" => Ok(json!(v.wait_of(s(req, "channel"), now))),
     "tryBegin" => Ok(v.begin_try(s(req, "channel"), now).map(|t| t.to_json()).unwrap_or(Value::Null)),
     "tryEnd" => Ok(v.end_try(s(req, "channel"), req.get("ok") == Some(&json!(true)), now).to_json()),
@@ -257,11 +263,41 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
       }
       hello::disable(v, server.hello.as_ref())
     }
+    "approveList" => Ok(json!(approve::list(v)?)),
+    "approveBegin" => {
+      // Registering a phone takes the password (or the code) typed now: the one-use token of that strength made for it.
+      if !v.check_strength(s(req, "token"), Some(approve::REGISTER), Some(Strength::Password), true, now) {
+        return Err(Code::Locked);
+      }
+      approve::begin_enroll(v, s(req, "orbId"), s(req, "deviceId"), s(req, "name"), now)
+    }
+    "approveEnroll" => approve::enroll(v, s(req, "deviceId"), s(req, "nonce"), s(req, "pub"), s(req, "sig"), now),
+    "approveAsk" => approve::ask(v, s(req, "orbId"), s(req, "deviceId"), s(req, "action"), s(req, "summary"), now),
+    "approveSign" => approve::sign(v, s(req, "deviceId"), s(req, "nonce"), s(req, "sig"), now),
+    "approveForget" => approve::forget(v, s(req, "deviceId")),
+    "approveForgetAll" => approve::forget_all(v),
+    // «Lo he olvidado todo», step 2: only Hello's rebuild token starts it, and only for a phone that was registered.
+    "rebuildBegin" => {
+      let token = s(req, "token");
+      if v.strength_of(token, now) != Some(Strength::Hello) || !v.check_strength(token, Some(hello::REBUILD), Some(Strength::Hello), false, now) {
+        return Err(Code::Locked);
+      }
+      let out = approve::ask_rebuild(v, s(req, "orbId"), s(req, "deviceId"), now)?;
+      if out.get("ok") == Some(&json!(true)) {
+        v.check_strength(token, Some(hello::REBUILD), Some(Strength::Hello), true, now);
+      }
+      Ok(out)
+    }
     "tokenStrength" => Ok(json!(v.strength_of(s(req, "token"), now).map(Strength::as_str))),
     "issue" => v.issue(req.get("purpose").and_then(Value::as_str).map(String::from), now),
     "check" => {
       // A Hello token is taken only when the caller says so (need: "hello"); by default only a password's counts.
-      let need = (req.get("need").and_then(Value::as_str) != Some("hello")).then_some(Strength::Password);
+      let need = match req.get("need").and_then(Value::as_str) {
+        Some("hello") => Strength::Hello,
+        Some("mobile") => Strength::Mobile,
+        _ => Strength::Password,
+      };
+      let need = Some(need);
       Ok(json!(v.check_strength(s(req, "token"), req.get("purpose").and_then(Value::as_str), need, req.get("consume") == Some(&json!(true)), now)))
     }
     "lock" => {
@@ -461,6 +497,10 @@ pub(crate) fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: im
   if matches!(op, "helloEnable" | "helloUnlock") {
     return hello_job(op, req, h, hello, &now);
   }
+  if op == "rebuildFinish" {
+    let _one = h.serial.lock().unwrap();
+    return approve::rebuild(req, h, now());
+  }
   let _one = h.serial.lock().unwrap();
   match op {
     "codeUnlock" => code_ops::unlock(req, h, now()),
@@ -519,6 +559,16 @@ pub(crate) fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: im
     }
     _ => Err(Code::Damaged),
   }
+}
+
+/// For the other modules' tests: the same server a test of this file builds, and one quick request at the tests' fixed clock.
+#[cfg(test)]
+pub(crate) fn tests_server(fake: Arc<crate::fake_hello::Fake>) -> Server {
+  Server { costs: Costs { test: true }, caller_clock: true, grants: Arc::new(Grants::new("x".into())), sealer: Arc::new(machine::Fake::default()), hello: fake }
+}
+#[cfg(test)]
+pub(crate) fn tests_quick(op: &str, req: Value, v: &mut Vault, server: &Server) -> Answer {
+  quick(op, &req, v, 1_800_000_000_000, server)
 }
 
 #[cfg(test)]

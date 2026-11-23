@@ -85,7 +85,7 @@ fn migrate(h: &Handle, p: &Proved, now: u64) -> Result<(), Code> {
   write_code(h, &p.code, now)
 }
 /// maestra-codigo.json for the open data key (the scrypt without the vault held).
-fn write_code(h: &Handle, code_text: &str, now: u64) -> Result<(), Code> {
+pub(crate) fn write_code(h: &Handle, code_text: &str, now: u64) -> Result<(), Code> {
   let kdf = h.vault.lock().unwrap().new_code_kdf();
   let kek = code::kek_of(code_text, &kdf).ok_or(Code::Damaged)?;
   h.vault.lock().unwrap().put_code(&kek, kdf, now)
