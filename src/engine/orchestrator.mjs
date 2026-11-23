@@ -526,7 +526,7 @@ export class Orchestrator {
   constructor(board, { emit = () => {}, log = () => {}, title = null } = {}) {
     this.board = board; this.emit = emit; this.log = log; this.title = title;
     this.lanes = new Map(); this.closing = false;
-    this.sweeper = setInterval(() => this.closeIdle(), 60_000); this.sweeper.unref?.();
+    this.sweeper = setInterval(() => { try { this.closeIdle(); } catch (error) { this.log(`limpieza del asistente: ${error.message}`); } }, 60_000); this.sweeper.unref?.();
   }
 
   get logFile() { return path.join(ctx.paths.runs, 'asistente.log'); }
@@ -708,7 +708,7 @@ export class Orchestrator {
   kick() { for (const l of this.lanes.values()) { if (this.busyCount() >= this.maxBusy) return; if (!l.busy && !l.inflight && l.queue.length) l.next(); } }
   stop(id) { this.lanes.get(Number(id))?.stop(); }
   compact(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).compact(); }
-  stopAll() { for (const l of this.lanes.values()) l.stop({ quiet: true }); }
+  stopAll() { clearInterval(this.sweeper); for (const l of this.lanes.values()) l.stop({ quiet: true }); }
   forget(id) { this.lane(id).forget(); }
   clear(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).clear(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }

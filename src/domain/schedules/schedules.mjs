@@ -49,7 +49,7 @@ export function listSchedules(board) {
 }
 // The fingerprint of what approving a schedule lets run on its own: whoever approves sends the one they saw, so an edit made
 // after the list was loaded is refused instead of approved unseen.
-export const scheduleHash = (s) => createHash('sha256').update(JSON.stringify([s.id, s.project, s.title, s.description, s.agent, s.model ?? null, Boolean(s.readonly), s.every, s.at_time, s.month_day ?? null, s.tz ?? null, [...(s.weekdays ?? [])], s.autonomy ?? null, Boolean(s.same_chat)])).digest('hex').slice(0, 32);
+export const scheduleHash = (s) => createHash('sha256').update(JSON.stringify([s.id, s.project, s.title, s.description, s.agent, s.model ?? null, Boolean(s.readonly), s.every, s.at_time, s.month_day ?? null, s.tz ?? null, [...(s.weekdays ?? [])], s.autonomy ?? null, Boolean(s.same_chat), Boolean(s.notify_mobile)])).digest('hex').slice(0, 32);
 export const getSchedule = (board, id) => parseRow(board.one('SELECT * FROM schedules WHERE id = ?', Number(id)));
 
 // `only` (an update) limits the checks to what the patch changes, so editing the title of a schedule whose agent is

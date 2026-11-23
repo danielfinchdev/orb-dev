@@ -18,7 +18,7 @@ test('la ventana nace oculta y no se enseña al cargar el HTML', () => {
 
 test('la ventana se enseña una sola vez, con tope de seguridad, y nunca si es la de pruebas oculta', () => {
   const w = read('src-tauri/src/window.rs');
-  assert.match(w, /pub const REVEAL_LIMIT: Duration = Duration::from_secs\(5\)/);
+  assert.match(w, /pub const REVEAL_LIMIT: Duration = Duration::from_millis\(2500\)/);
   const reveal = w.slice(w.indexOf('pub fn reveal'), w.indexOf('const DARK'));
   assert.match(reveal, /!ui\.hidden && !ui\.shown\.swap\(true, Ordering::SeqCst\)/);
   assert.match(w, /sleep\(REVEAL_LIMIT\)[\s\S]*?reveal\(&w\)/);
@@ -36,7 +36,7 @@ test('window_ready es un comando solo de la ventana principal, registrado y perm
 
 test('la página avisa en cuanto sale de «loading» y el puente lo expone', () => {
   assert.match(read('src/ui/lib/tauri-bridge.js'), /windowReady: \(\) => invoke\('window_ready'\)/);
-  assert.match(read('src/ui/main.jsx'), /if \(phase !== 'loading'\) bridge\.windowReady\?\.\(\)\?\.catch\(quiet\)/);
+  assert.match(read('src/ui/main.jsx'), /if \(phase !== 'loading'\) languageReady\.then\(\(\) => bridge\.windowReady\?\.\(\)\?\.catch\(quiet\)\)/);
 });
 
 test('el inglés no va en el bloque principal: la interfaz lo carga bajo demanda', () => {
@@ -57,4 +57,12 @@ test('un idioma registrado después renueva la función t y mientras tanto sale 
   assert.notEqual(after, before);
   assert.equal(after('a.b', { n: 2 }), 'hello 2');
   assert.equal(translate('xx', 'missing'), 'missing');
+});
+
+test('un arranque en inglés espera (tope corto) a los textos en inglés antes de enseñar la ventana', () => {
+  const i = read('src/ui/lib/i18n.js');
+  assert.match(i, /localStorage\.getItem\(SAVED_KEY\)/);
+  assert.match(i, /Promise\.race\(\[loading\.get\('en'\), new Promise\(\(r\) => setTimeout\(r, ENGLISH_WAIT_MS\)\)\]\)/);
+  assert.match(i, /ENGLISH_WAIT_MS = 300/);
+  assert.match(read('src/ui/lib/store.js'), /rememberLanguage\(uiLanguage\(getState\(\)\)\)/);
 });

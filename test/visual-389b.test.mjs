@@ -12,7 +12,7 @@ test('42: the composer shows the orchestrator icon, lit when on and dim when off
   const chat = src('views', 'chat.jsx');
   const sw = chat.slice(chat.indexOf('function OrchestratorSwitch'), chat.indexOf('function LiveAnswer'));
   assert.match(chat, /import \{ OrchestratorIcon \}/);
-  assert.match(sw, /<OrchestratorIcon className=\{cn\('size-4', on \? 'text-primary' : 'text-muted-foreground'\)\}/);
+  assert.match(sw, /<OrchestratorIcon className=\{cn\('size-4', on \? 'text-primary-text' : 'text-muted-foreground'\)\}/);
   assert.doesNotMatch(sw, /\{t\('chat\.orchestrator'\)\}<\/span>/, 'no «Orquestador» word next to the switch');
   assert.match(sw, /aria-label=\{t\('chat\.orchestrator'\)\}/);
   assert.match(sw, /title=\{t\('chat\.orchestratorTip'/);
@@ -22,6 +22,7 @@ test('43: the new chat has the full permissions menu and applies it to the chat 
   const chat = src('views', 'chat.jsx');
   assert.match(chat, /<AutonomySwitch \{\.\.\.newChatAccess\} testid="chat-autonomy"/);
   assert.match(chat, /options\(PERMISSION\)\.filter/);
+  assert.match(chat, /value: orchestrate \? globalLevel : alone \? \(fullHere \? 'total' : 'leer'\) : access\.permission \|\| globalLevel/, 'a direct chat without project shows the level it is created with');
   assert.match(chat, /key: 'android'/);
   // the chosen level goes to sessions.create; the total level and the phone are granted with the master password
   assert.match(chat, /\{ permission: level \}/);
