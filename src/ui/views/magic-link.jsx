@@ -169,14 +169,14 @@ function TailscaleCard() {
     } catch (e) { notifyError(e); } finally { setTimeout(() => setBusy(false), 60_000); }
   };
   const running = info.state === 'running';
-  const note = !info.installed ? t('link.ts.notInstalled') : running ? t('link.ts.account', { account: info.account ?? info.tailnet ?? '' }) : t('link.ts.needsLogin');
+  const note = !info.installed ? t('link.ts.notInstalled') : running ? t('link.ts.account', { account: info.account ?? info.tailnet ?? '' }) : info.state === 'stopped' ? t('link.ts.stopped') : t('link.ts.needsLogin');
   return (
     <Block title={t('link.ts.title')} count={running ? info.devices.length : undefined} note={note} data-testid="link-tailscale">
       <Panel>
         {!info.installed ? (
           <Stack><Button size="sm" onClick={install} disabled={busy} data-testid="ts-install"><Download />{t('link.ts.install')}</Button><Hint>{t('link.ts.installHint')}</Hint></Stack>
         ) : !running ? (
-          <Stack><Button size="sm" onClick={login} disabled={busy} data-testid="ts-login"><LogIn />{t('link.ts.login')}</Button><Hint>{t('link.ts.loginHint')}</Hint></Stack>
+          <Stack><Button size="sm" onClick={login} disabled={busy} data-testid="ts-login"><LogIn />{info.state === 'stopped' ? t('link.ts.connect') : t('link.ts.login')}</Button><Hint>{info.state === 'stopped' ? t('link.ts.connectHint') : t('link.ts.loginHint')}</Hint></Stack>
         ) : (
           <>
             {info.self ? <Stack><Hint data-testid="ts-self">{t('link.ts.self', { name: info.self.dns ?? info.self.name })}</Hint></Stack> : null}

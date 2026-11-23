@@ -29,19 +29,20 @@ fun interface DiscoverProbe {
 /**
  * The addresses to try for what the person typed (the PC's name on Tailscale as Ajustes › Dispositivos shows it): the
  * full MagicDNS name is tried over https (what `tailscale serve` gives, with its certificate) and plain http; a short name
- * or a 100.x address only over plain http, which Tailscale's WireGuard already encrypts. Only addresses the app may use.
+ * or a 100.x address only over plain http, which Tailscale's WireGuard already encrypts. Plain http is tried only while the
+ * phone's VPN (Tailscale) is on [vpnActive]: without it nothing is sent in the clear and only the https name remains.
  */
-fun tailscaleCandidates(typed: String, port: String = DEFAULT_PORT): List<String> {
+fun tailscaleCandidates(typed: String, vpnActive: Boolean = true, port: String = DEFAULT_PORT): List<String> {
     val host = typed.trim().lowercase().removePrefix("https://").removePrefix("http://").substringBefore('/').substringBefore(':').trimEnd('.')
     if (host.isEmpty() || !Regex("^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$").matches(host)) return emptyList()
     val full = host.endsWith(".ts.net")
-    return (if (full) listOf("https://$host:$port", "http://$host:$port") else listOf("http://$host:$port")).filter { allowedBase(it) }
+    return (if (full) listOf("https://$host:$port", "http://$host:$port") else listOf("http://$host:$port")).filter { allowedBase(it) && (vpnActive || it.startsWith("https://")) }
 }
 
 /** Tries all the candidates at once and keeps the ones where an Orb answers; one entry per PC, https first. */
-class TailscaleDiscovery(private val probe: DiscoverProbe) : PcDiscovery {
+class TailscaleDiscovery(private val probe: DiscoverProbe, private val vpnActive: () -> Boolean = { true }) : PcDiscovery {
     override suspend fun find(typed: String): List<FoundPc> = coroutineScope {
-        val found = tailscaleCandidates(typed).map { base -> async { probe.probe(base)?.let { FoundPc(it, base) } } }.awaitAll().filterNotNull()
+        val found = tailscaleCandidates(typed, vpnActive()).map { base -> async { probe.probe(base)?.let { FoundPc(it, base) } } }.awaitAll().filterNotNull()
         // the same PC may answer on https and http: keep the first (https comes first in the candidates)
         found.distinctBy { it.name }
     }

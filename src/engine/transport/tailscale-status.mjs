@@ -49,29 +49,32 @@ export async function tailscaleInfo({ exec = run } = {}) {
   return parseTailscaleStatus(r.out);
 }
 
-// Starts the sign-in: `tailscale up` prints the page to sign in at (Google, GitHub, Microsoft…) and waits for it, so the
-// command is left to finish by itself and only the first address is returned for the window to open. Nothing else about
-// Tailscale's settings is changed.
-export async function tailscaleLogin({ exec = (args, o) => new Promise((resolve) => {
-  const child = execFile(tailscaleExe(), args, { windowsHide: true, timeout: 600_000 }, () => {}); // the person may take minutes to sign in
-  let buf = ''; let done = false;
-  const finish = (v) => { if (!done) { done = true; resolve(v); } };
-  const take = (d) => { buf += String(d); const m = /https:\/\/login\.tailscale\.com\/[^\s"']+/.exec(buf); if (m) finish({ ok: true, url: m[0] }); };
+// Starts the sign-in (or, when Tailscale is only stopped, the connection): `tailscale up` prints the page to sign in at
+// (Google, GitHub, Microsoft…) and waits for it. Only one runs at a time and it is stopped as soon as its address
+// is read or it ends: the sign-in goes on in Tailscale's own service. Nothing else about its settings is changed.
+let live = null;
+const defaultExec = (args, o) => new Promise((resolve) => {
+  try { live?.kill(); } catch { /* already gone */ }
+  const child = execFile(tailscaleExe(), args, { windowsHide: true, timeout: o.timeoutMs }, () => {});
+  live = child;
+  let buf = ''; let done = false; let timer = null;
+  const finish = (v) => { if (done) return; done = true; clearTimeout(timer); try { child.kill(); } catch { /* already gone */ } if (live === child) live = null; resolve(v); };
+  const take = (d) => { buf += String(d).slice(0, 4096); const m = /https:\/\/login\.tailscale\.com\/[^\s"']+/.exec(buf); if (m) finish({ ok: true, url: m[0] }); };
   child.stdout?.on('data', take); child.stderr?.on('data', take);
   child.on('error', (e) => finish({ ok: false, missing: e.code === 'ENOENT' }));
-  child.on('exit', () => finish({ ok: false }));
-  setTimeout(() => finish({ ok: false }), o.timeoutMs).unref?.();
-}) } = {}) {
+  child.on('exit', (code) => finish({ ok: code === 0, url: null }));
+  timer = setTimeout(() => finish({ ok: false }), o.timeoutMs); timer.unref?.();
+});
+export async function tailscaleLogin({ exec = defaultExec } = {}) {
   const r = await exec(['up'], { timeoutMs: 20_000 });
   if (r.missing) return { started: false, missing: true, url: null };
-  return { started: Boolean(r.ok && r.url), url: r.ok && /^https:\/\/login\.tailscale\.com\//.test(r.url ?? '') ? r.url : null };
+  const valid = /^https:\/\/login\.tailscale\.com\//.test(r.url ?? '');
+  return { started: Boolean(r.ok && (valid || !r.url)), url: r.ok && valid ? r.url : null };
 }
 
-// Which of Tailscale's devices are phones linked to this Orb: the address that linked device last connected from is the
-// device's Tailscale address (or, failing that, the same name). → the devices with `orbDevice` (the linked device's name) or null.
+// Which of Tailscale's devices are phones linked to this Orb: only by address (the one that linked device last connected
+// from is its Tailscale address); a name is never enough. → the devices with `orbDevice` (the linked device's name) or null.
 export function markLinked(devices, linked = []) {
   const byIp = new Map((linked ?? []).filter((d) => d?.ip).map((d) => [String(d.ip).replace(/^::ffff:/, ''), d]));
-  // over `tailscale serve` a phone arrives through loopback, so its address was not kept: its name is the fallback
-  const byName = new Map((linked ?? []).filter((d) => d?.name).map((d) => [String(d.name).toLowerCase(), d]));
-  return (devices ?? []).map((d) => ({ ...d, orbDevice: (d.ip && byIp.get(d.ip)?.name) || byName.get(String(d.name).toLowerCase())?.name || null }));
+  return (devices ?? []).map((d) => ({ ...d, orbDevice: (d.ip && byIp.get(d.ip)?.name) || null }));
 }

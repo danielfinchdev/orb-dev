@@ -226,7 +226,11 @@ class AppContainer(private val app: Application) {
     }
 
     /** «Buscar mi PC en Tailscale»: asks the tailnet's names whether an Orb answers there. */
-    val discovery: dev.orb.app.link.net.PcDiscovery = dev.orb.app.link.net.TailscaleDiscovery(dev.orb.app.link.net.HttpDiscoverProbe(http))
+    val discovery: dev.orb.app.link.net.PcDiscovery = dev.orb.app.link.net.TailscaleDiscovery(dev.orb.app.link.net.HttpDiscoverProbe(http)) {
+        val cm = app.getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+        caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+    }
 
     /** Reads the saved link off the main thread (the Keystore can be slow); true when the phone is linked. */
     val startup = scope.async(Dispatchers.IO) {

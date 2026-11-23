@@ -42,6 +42,12 @@ class TailscaleSearchTest {
         assertEquals(listOf("http://100.64.0.1:3131"), tailscaleCandidates("100.64.0.1"))
     }
 
+    @Test fun withoutTheVpnOnlyTheHttpsMagicDnsNameIsTried() {
+        assertEquals(listOf("https://torre.example.ts.net:3131"), tailscaleCandidates("torre.example.ts.net", vpnActive = false))
+        assertTrue(tailscaleCandidates("torre", vpnActive = false).isEmpty())
+        assertTrue(tailscaleCandidates("100.64.0.1", vpnActive = false).isEmpty())
+    }
+
     @Test fun publicOrMalformedNamesAreNeverProbed() {
         assertTrue(tailscaleCandidates("").isEmpty())
         assertTrue(tailscaleCandidates("8.8.8.8").isEmpty())

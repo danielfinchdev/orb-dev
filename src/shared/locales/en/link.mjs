@@ -54,4 +54,7 @@ export default {
   "link.ts.os.ios": "iPhone/iPad",
   "link.ts.os.macos": "Mac",
   "link.ts.os.linux": "Linux",
+  "link.ts.connect": "Connect Tailscale",
+  "link.ts.connectHint": "Tailscale is installed but turned off. Connect it to see your devices.",
+  "link.ts.stopped": "Tailscale is turned off on this PC.",
 };

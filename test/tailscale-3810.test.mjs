@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './helpers.mjs';
+import { viaTailscale } from '../src/engine/transport/remote-net.mjs';
 import { parseTailscaleStatus, tailscaleInfo, tailscaleLogin, markLinked } from '../src/engine/transport/tailscale-status.mjs';
 
 const STATUS = {
@@ -46,10 +47,10 @@ test('iniciar sesión solo acepta la página de Tailscale y no toca nada más', 
   assert.equal((await tailscaleLogin({ exec: async () => ({ ok: false, missing: true }) })).missing, true);
 });
 
-test('marca los móviles enlazados a Orb por dirección o, si no, por nombre', () => {
+test('marca los móviles enlazados a Orb solo por dirección', () => {
   const devices = parseTailscaleStatus(STATUS).devices;
   const marked = markLinked(devices, [{ name: 'Mi móvil', ip: '100.64.0.2' }, { name: 'Tablet', ip: '127.0.0.1' }]);
-  assert.deepEqual(marked.map((d) => [d.name, d.orbDevice]), [['movil', 'Mi móvil'], ['tablet', 'Tablet'], ['portatil', null]]);
+  assert.deepEqual(marked.map((d) => [d.name, d.orbDevice]), [['movil', 'Mi móvil'], ['tablet', null], ['portatil', null]], 'un nombre igual no basta');
 });
 
 test('estar en la tailnet no enlaza: ni el módulo ni el método de la lista tocan el emparejamiento ni la clave', () => {
@@ -61,4 +62,11 @@ test('estar en la tailnet no enlaza: ni el módulo ni el método de la lista toc
   assert.doesNotMatch(m, /pair\(|revoke|rename/);
   const perms = fs.readFileSync(path.join(ROOT, 'src/domain/security/permissions.mjs'), 'utf8');
   assert.match(perms, /'tailscale\.status': 'pc', 'tailscale\.login': 'pc'/, 'solo este PC, nunca un móvil');
+});
+
+test('/api/discover solo responde por Tailscale o por loopback, nunca por la red de casa', () => {
+  for (const ip of ['100.64.0.1', '100.127.1.1', '::ffff:100.100.1.1', 'fd7a:115c:a1e0::5', '127.0.0.1', '::1']) assert.equal(viaTailscale(ip), true, ip);
+  for (const ip of ['192.168.1.20', '10.0.0.5', '172.16.0.2', '100.128.0.1', '8.8.8.8', '', undefined]) assert.equal(viaTailscale(ip), false, String(ip));
+  const src = fs.readFileSync(path.join(ROOT, 'src/engine/transport/remote.mjs'), 'utf8');
+  assert.match(src, /p === '\/api\/discover' && viaTailscale\(req\.socket\?\.localAddress\)/);
 });

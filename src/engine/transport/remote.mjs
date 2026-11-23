@@ -27,7 +27,7 @@ import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
 import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, PING_MS, CALL_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
 import { guardCall, withDeadline, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
-import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, tailscaleAdapterUp, lanAddresses } from './remote-net.mjs';
+import { viaTailscale, privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, tailscaleAdapterUp, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
 import { createJournal } from './remote-events.mjs';
 import { createLinkWatcher, createRepairGate } from './remote-watch.mjs';
@@ -227,7 +227,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (app) { res.setHeader('Access-Control-Allow-Origin', app); for (const [k, v] of Object.entries(APP_CORS)) res.setHeader(k, v); }
     if (req.method === 'OPTIONS') { req.resume(); return send(res, app ? 204 : 403, '', 'text/plain'); }
     if (req.method === 'GET' && p === '/api/hello') return helloInfo(res);
-    if (req.method === 'GET' && p === '/api/discover') return send(res, 200, { orb: 1, v: PROTOCOL, name: orbName() }); // only «an Orb is here»: it links nothing
+    // only where Tailscale looks for an Orb: on the home network it is an unknown route like any other
+    if (req.method === 'GET' && p === '/api/discover' && viaTailscale(req.socket?.localAddress)) return send(res, 200, { orb: 1, v: PROTOCOL, name: orbName() }); // only «an Orb is here»: it links nothing
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
