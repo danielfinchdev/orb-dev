@@ -22,6 +22,7 @@ import { createSchedule } from '../src/domain/schedules/schedules.mjs';
 import { prepareWorkdir } from '../src/domain/tasks/checkpoints.mjs';
 
 let t; let board; let api; let remote; let pushLog;
+const runners = [];
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
 const DAY = 86_400_000;
 const wipe = () => board.run('DELETE FROM mobile_notes');
@@ -40,12 +41,18 @@ before(() => {
   const emit = () => {};
   const sessions = new Sessions(board, { emit });
   const orchestrator = new Orchestrator(board, { emit });
-  const scheduler = new Scheduler(board, sessions, { orchestrator, emit });
+  const scheduler = new Scheduler(board, sessions, { orchestrator, emit }); runners.push(scheduler);
   api = buildApi({ board, sessions, orchestrator, scheduler, emit, log: () => {}, version: 'test', remoteRef: { current: null, link: null } });
   remote = createRemote({ board, api, log: () => {}, emit, version: 'test' });
   link();
 });
-after(() => { try { board.db.close(); } catch { /* closed */ } t.cleanup(); });
+after(async () => {
+  // A finished task can still be closing or joining in the background: let it end before the database is shut, as the app
+  // does on exit, or it would touch a closed database once the file's tests are over.
+  for (const sched of runners) await sched.drain();
+  try { board.db.close(); } catch { /* closed */ }
+  t.cleanup();
+});
 
 test('cada tipo nuevo: una nota sin acciones, con tipo, destino y texto corto', () => {
   const done = noticeNote({ kind: 'done', task: 42 });
@@ -300,6 +307,7 @@ const ended = { code: 0, state: { final: 'hecho', text: 'hecho', isError: false 
 function runner() {
   const facts = [];
   const sched = new Scheduler(board, { closeLive() {}, stop() {} }, { log: () => {}, announce: (f) => facts.push(f) });
+  runners.push(sched);
   return { facts, sched };
 }
 const folderTask = (sched, p, extra = {}) => {
