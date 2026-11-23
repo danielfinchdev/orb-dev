@@ -213,7 +213,7 @@ export class Sessions {
     // A change made now replaces one that was waiting for the end of a turn.
     if (keys.some((k) => k === 'account' || k === 'account_fixed') && !fields.applyPending) this.board.settingJson(`pending_account:${id}`, null);
     // Another account: the agent's own conversation lives in the old account's folder, so the chat goes on from its summary.
-    if ('account' in fields && fields.account !== this.get(id)?.account && !('cli_session' in fields)) { fields = { ...fields, cli_session: null, context: null }; keys.push('cli_session', 'context'); }
+    if ('account' in fields && fields.account !== this.get(id)?.account && !('cli_session' in fields)) { this.keepSummary(id, this.get(id)?.account, fields.account); fields = { ...fields, cli_session: null, context: null }; keys.push('cli_session', 'context'); }
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
     const value = (k) => { const v = fields[k]; if (typeof v === 'boolean') return Number(v); if (v && typeof v === 'object') return JSON.stringify(v); return v ?? null; };
     this.board.run(`UPDATE sessions SET ${keys.map((k) => `${k} = ?`).join(', ')}, updated_at = ? WHERE id = ?`, ...keys.map(value), now(), id);
@@ -366,6 +366,16 @@ export class Sessions {
     hold.timer.unref?.();
     this.emit('session:account', { id: String(id), problem: hold.problem, waiting: true });
     return { ok: true };
+  }
+  // The agent's own conversation stays in the old account's folder, so the next turn on another account starts from a bounded
+  // summary of what was said (as handoff() does for another agent). Nothing is written for a chat that never talked.
+  keepSummary(id, fromId, toId) {
+    const s = this.get(id);
+    if (!s || s.kind !== 'chat' || !fromId || fromId === toId) return;
+    const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);
+    if (!rows.length) return;
+    const label = (a) => findAccount(a)?.label ?? a;
+    this.board.settingJson(`handoff_summary:${id}`, buildHandoff(rows, { fromLabel: label(fromId), toLabel: label(toId) }).text);
   }
   // The account change asked for during a turn, now that it has ended.
   applyPendingAccount(id) {
@@ -726,6 +736,7 @@ export class Sessions {
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     if (res.switched || (s.kind === 'chat' && s.account !== acc.id)) {
       const had = Boolean(s.cli_session);
+      if (res.switched && had) this.keepSummary(id, s.account, acc.id);
       this.update(id, { account: acc.id, ...(res.switched && had ? { cli_session: null, context: null } : {}) });
       if (res.switched) this.addItem(id, 'system', 'status', `${accountSwitchText(res.switched, acc)}${had ? ` ${tr('msg.acct.switchedFresh', { to: acc.label ?? acc.id })}` : ''}`);
       chat = this.must(id); s = planOnly ? { ...chat, permission: 'leer' } : chat;
