@@ -227,6 +227,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (app) { res.setHeader('Access-Control-Allow-Origin', app); for (const [k, v] of Object.entries(APP_CORS)) res.setHeader(k, v); }
     if (req.method === 'OPTIONS') { req.resume(); return send(res, app ? 204 : 403, '', 'text/plain'); }
     if (req.method === 'GET' && p === '/api/hello') return helloInfo(res);
+    if (req.method === 'GET' && p === '/api/discover') return send(res, 200, { orb: 1, v: PROTOCOL, name: orbName() }); // only «an Orb is here»: it links nothing
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 

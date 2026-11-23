@@ -287,6 +287,8 @@
   "sessions.update": "remote",
   "sidebar.complete": "remote",
   "system.check": "pc",
+  "tailscale.login": "pc",
+  "tailscale.status": "pc",
   "tasks.accept": "remote",
   "tasks.approve": "remote",
   "tasks.cancel": "remote",

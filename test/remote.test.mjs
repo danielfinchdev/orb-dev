@@ -338,6 +338,22 @@ test('solo redes privadas, Tailscale y este PC; QR v1 y v2; código corto', asyn
   } finally { byCode.stop(); }
 });
 
+// 3.8.10: finding the PC (Tailscale's list, the phone's «search my PC») tells where an Orb is and nothing more.
+test('/api/discover dice dónde hay un Orb, sin código, sin clave y sin enlazar nada', async () => {
+  const before = (await call('link.devices')).length;
+  const r = await fetch(`${base}/api/discover`);
+  assert.equal(r.status, 200);
+  const d = await r.json();
+  assert.deepEqual(Object.keys(d).sort(), ['name', 'orb', 'v']);
+  assert.equal(d.orb, 1);
+  assert.equal(JSON.stringify(d).includes('pc'), false, 'ni la clave ni la huella');
+  assert.equal((await call('link.devices')).length, before, 'encontrarlo no enlaza');
+  // without a code on screen the PC still refuses to say anything to link with, and a phone cannot link by being found
+  const ghost = createPhone({ name: 'Solo por Tailscale', kind: 'phone' });
+  try { await assert.rejects(ghost.connect({ code: 'ZZZZZZZZ', address: `127.0.0.1:${port}` })); } finally { ghost.stop(); }
+  assert.equal((await call('link.devices')).length, before);
+});
+
 // Last: it leaves this address without more tries for a while.
 test('el QR ya usado no sirve y demasiados intentos se cortan', async () => {
   const q = await call('link.qr');

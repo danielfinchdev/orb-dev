@@ -3,7 +3,7 @@
 // close its session. The phone asks for the master password to link, and unlinking one asks for it here.
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { QrCode, Smartphone, Globe, Pencil, Trash2, Ellipsis, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
+import { QrCode, Smartphone, Globe, Pencil, Trash2, Ellipsis, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound, RefreshCw, Monitor, Download, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
@@ -149,6 +149,50 @@ function OutsideGuide() {
   );
 }
 
+const OS_KEY = { windows: 'windows', android: 'android', ios: 'ios', macos: 'macos', linux: 'linux' };
+
+// Tailscale as the account: install it, sign in (Google, GitHub…) and see the devices of the same account. Finding a device
+// here links nothing: a phone still needs the code from this screen and the master password.
+function TailscaleCard() {
+  const t = useT();
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => call('tailscale.status').then(setInfo).catch(() => setInfo({ installed: false, state: 'missing', devices: [] }));
+  useEffect(() => { load(); const id = setInterval(load, busy ? 3000 : 15_000); return () => clearInterval(id); }, [busy]);
+  if (!info) return null;
+  const install = async () => { setBusy(true); try { await act(call('installer.start', { ids: ['tailscale'] }), t('link.ts.installing')); } finally { setTimeout(() => setBusy(false), 60_000); } };
+  const login = async () => {
+    setBusy(true);
+    try {
+      const r = await call('tailscale.login');
+      if (r?.url) await bridge.openExternal(r.url); else if (r?.missing) notifyError(new Error(t('link.ts.notInstalled')));
+    } catch (e) { notifyError(e); } finally { setTimeout(() => setBusy(false), 60_000); }
+  };
+  const running = info.state === 'running';
+  const note = !info.installed ? t('link.ts.notInstalled') : running ? t('link.ts.account', { account: info.account ?? info.tailnet ?? '' }) : t('link.ts.needsLogin');
+  return (
+    <Block title={t('link.ts.title')} count={running ? info.devices.length : undefined} note={note} data-testid="link-tailscale">
+      <Panel>
+        {!info.installed ? (
+          <Stack><Button size="sm" onClick={install} disabled={busy} data-testid="ts-install"><Download />{t('link.ts.install')}</Button><Hint>{t('link.ts.installHint')}</Hint></Stack>
+        ) : !running ? (
+          <Stack><Button size="sm" onClick={login} disabled={busy} data-testid="ts-login"><LogIn />{t('link.ts.login')}</Button><Hint>{t('link.ts.loginHint')}</Hint></Stack>
+        ) : (
+          <>
+            {info.self ? <Stack><Hint data-testid="ts-self">{t('link.ts.self', { name: info.self.dns ?? info.self.name })}</Hint></Stack> : null}
+            {!info.devices.length ? <Stack><Hint>{t('link.ts.noDevices')}</Hint></Stack> : info.devices.map((d) => (
+              <ListRow key={d.dns ?? d.name} className="border-border rounded-none not-first:border-t" data-testid="ts-device" leading={d.os === 'android' || d.os === 'ios' ? <Smartphone className="text-muted-foreground size-4 shrink-0" /> : <Monitor className="text-muted-foreground size-4 shrink-0" />}
+                title={d.name}
+                meta={[OS_KEY[d.os] ? t(`link.ts.os.${OS_KEY[d.os]}`) : null, d.online ? t('link.onNow') : d.lastSeen ? t('link.seen', { when: ago(d.lastSeen) }) : t('link.never')].filter(Boolean).join(' · ')}
+                trailing={<div className="flex items-center gap-1.5">{d.orbDevice ? <Badge variant="success" data-testid="ts-linked">{t('link.ts.linked')}</Badge> : null}<Badge variant={d.online ? 'success' : 'secondary'}>{d.online ? t('link.online') : t('link.offline')}</Badge></div>} />
+            ))}
+          </>
+        )}
+      </Panel>
+    </Block>
+  );
+}
+
 function DevicesCard({ devices, reload, onPair }) {
   const t = useT();
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
@@ -223,6 +267,7 @@ export function MagicLinkPanel({ grouped = false, phoneAccess = null }) {
       <SubSection id="dispositivos" title={title('dispositivos')}>
         <PairCard device={device} pair={pair} onPair={ask} />
         <DevicesCard devices={devices} reload={load} onPair={ask} />
+        <TailscaleCard />
         {/* phoneAccess draws «Acceso desde otros dispositivos» and puts the pairing options inside its «Más opciones» */}
         {phoneAccess ? phoneAccess(more) : <MoreOptions testid="link-more-options">{more}</MoreOptions>}
       </SubSection>

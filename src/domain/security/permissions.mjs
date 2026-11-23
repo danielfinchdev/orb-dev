@@ -71,7 +71,7 @@ export const METHODS = Object.freeze({
   // phone access and Magic Link
   'remote.status': 'pc', 'remote.enable': 'pc', 'remote.configure': 'pc', 'remote.pair': 'pc', 'remote.revoke': 'pc',
   'pc.screenshot': 'remote',
-  'link.qr': 'pc', 'link.devices': 'pc', 'link.revoke': 'pc', 'link.rename': 'pc',
+  'tailscale.status': 'pc', 'tailscale.login': 'pc', 'link.qr': 'pc', 'link.devices': 'pc', 'link.revoke': 'pc', 'link.rename': 'pc',
   // agents and their accounts
   'agents.status': 'remote', 'agents.check': 'pc', 'agents.login': 'pc', 'agents.loginCode': 'pc', 'agents.loginCancel': 'pc',
   'agents.loginState': 'pc', 'agents.install': 'pc', 'agents.installState': 'pc',
