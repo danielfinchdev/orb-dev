@@ -148,8 +148,15 @@ class AppContainer(private val app: Application) {
     }
 
     /** The optional app lock (off by default). It keeps a flag and a delay; the secret is the system's own authentication. */
-    val lockPrefs = dev.orb.app.lock.LockPrefs(SharedPrefsStore(app.getSharedPreferences("orb.lock", android.content.Context.MODE_PRIVATE)))
-    val lock = dev.orb.app.lock.AppLock(lockPrefs, dev.orb.app.lock.AppLockGate(lockPrefs, android.os.SystemClock::elapsedRealtime))
+    private val lockStore = SharedPrefsStore(app.getSharedPreferences("orb.lock", android.content.Context.MODE_PRIVATE))
+    private fun lockLog(line: String) { if (app.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) android.util.Log.d("OrbLock", line) }
+    val lockPrefs = dev.orb.app.lock.LockPrefs(lockStore)
+    // Below Android 11 there is no key for the lock (it asks the system only); `log` gets timings, never data.
+    val lock = dev.orb.app.lock.AppLock(
+        lockPrefs, dev.orb.app.lock.AppLockGate(lockPrefs, android.os.SystemClock::elapsedRealtime),
+        crypto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) dev.orb.app.lock.KeystoreLockCrypto(lockStore, ::lockLog) else null,
+        log = ::lockLog,
+    )
 
     /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
     val gate: dev.orb.app.share.AppGate get() = lock.gate

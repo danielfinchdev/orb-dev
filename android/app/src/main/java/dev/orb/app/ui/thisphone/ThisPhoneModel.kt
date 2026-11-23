@@ -190,7 +190,7 @@ class ThisPhoneViewModel(
             keepConnected = s.keepConnected, lockScreen = s.lockScreen, notices = enabled, unlinking = b, unlinked = d,
         )
     }.combine(combine(backend.lock, lockAvailable, lockMessage) { l, a, m -> Triple(l, a, m) }) { st, (l, a, m) ->
-        st.copy(appLock = l.enabled, lockDelay = l.delay, lockAvailable = a, lockMessage = m ?: ThisPhoneTexts.LOCK_AUTO_OFF.takeIf { l.autoOff })
+        st.copy(appLock = l.enabled, lockDelay = l.delay, lockAvailable = a, lockMessage = m ?: ThisPhoneTexts.lockAutoOff().takeIf { l.autoOff })
     }.combine(combine(backend.paths, backend.pcEntries) { p, e -> p to e }) { st, (p, e) ->
         st.copy(paths = ThisPhoneTexts.pathLines(p, e, wallClock()))
     }.combine(combine(latency, measuring) { l, m -> l to m }) { st, (l, m) ->
@@ -261,7 +261,7 @@ class ThisPhoneViewModel(
         backend.enableLock { result ->
             lockMessage.value = when (result) {
                 AuthResult.Blocked -> ThisPhoneTexts.LOCK_BLOCKED
-                AuthResult.Failed, AuthResult.NotRecognized -> ThisPhoneTexts.LOCK_FAILED
+                AuthResult.Failed, AuthResult.NotRecognized, is AuthResult.Crypto -> ThisPhoneTexts.LOCK_FAILED
                 AuthResult.NothingSet -> ThisPhoneTexts.LOCK_NOTHING_SET
                 AuthResult.Success, AuthResult.Cancelled -> null
             }
@@ -332,6 +332,10 @@ object ThisPhoneTexts {
     const val LOCK_BLOCKED = "Demasiados intentos. Espera un momento o usa el PIN del móvil."
     const val LOCK_FAILED = "No se pudo comprobar. El bloqueo sigue apagado."
     const val LOCK_AUTO_OFF = "El bloqueo se desactivó porque el móvil ya no tiene PIN ni huella."
+    const val LOCK_AUTO_OFF_EN = "The lock was turned off because the phone no longer has a PIN or fingerprint."
+
+    /** The note follows the phone's language (Spanish by default). */
+    fun lockAutoOff(language: String = Locale.getDefault().language) = if (language == "en") LOCK_AUTO_OFF_EN else LOCK_AUTO_OFF
     const val LOCK_NOTHING_SET = "Este móvil no tiene huella ni PIN configurados."
     const val MORE_OPTIONS = "Más opciones"
     const val LINK_TEST = "Prueba de conexión"

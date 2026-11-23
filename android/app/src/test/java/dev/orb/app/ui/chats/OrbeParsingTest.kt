@@ -64,7 +64,7 @@ class OrbeParsingTest {
         assertEquals("Opus · alto", info.label)
         assertEquals("Claude Code · medio", OrbeParser.brain(dev.orb.app.data.json("""{"agentLabel":"Claude Code","reasoning":"medium"}"""))!!.label)
         assertEquals("Opus", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"Opus"}"""))!!.label)
-        assertEquals("GPT · extra", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"GPT","reasoning":"xhigh"}"""))!!.label)
+        assertEquals("GPT · extra alto", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"GPT","reasoning":"xhigh"}"""))!!.label)
         assertNull(OrbeParser.brain(dev.orb.app.data.json("""{"conversation":7}""")))
         assertNull(OrbeParser.brain(dev.orb.app.data.json("""[]""")))
         assertNull(OrbeParser.brain(null))

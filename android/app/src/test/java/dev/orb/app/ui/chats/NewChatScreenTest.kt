@@ -193,7 +193,7 @@ class NewChatScreenTest {
         rule.onNodeWithText("Recomendado").assertIsDisplayed()
         rule.onNodeWithText("Opus").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
-        rule.onNodeWithText("high").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.onNodeWithText("Alto").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals("high", vm.state.value.effort)
         rule.onNodeWithText("Listo").performClick()
