@@ -159,9 +159,16 @@ try {
   await win.waitForSelector('[data-testid=task-detail] >> text=Deshacer esta tarea');
   await win.waitForTimeout(300);
   await shot('04-tareas');
-  await win.getByRole('button', { name: 'Deshacer esta tarea' }).click();
-  await dialogButton('Deshacer').click();
-  await until(() => !fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'deshacer');
+  // The tasks just created in that project (the push and the payment) may still be closing in the same folder: «Deshacer» is
+  // refused while something works in it (by design), so wait for them and click again if the engine still says it is busy.
+  await until(async () => (await call('tasks.list')).filter((t) => t.id !== task.id && t.project === 'webviaproject' && t.agent === 'codex').every((t) => !['queued', 'waiting', 'running'].includes(t.status)), 'tareas del proyecto asentadas');
+  const gone = () => !fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt'));
+  for (let i = 0; !gone() && i < 5; i++) {
+    await win.getByRole('button', { name: 'Deshacer esta tarea' }).click();
+    await dialogButton('Deshacer').click();
+    for (let j = 0; j < 15 && !gone(); j++) await win.waitForTimeout(200);
+  }
+  await until(gone, 'deshacer');
 
   // ---- direct conversation with Codex
   step = 'conversación directa';
