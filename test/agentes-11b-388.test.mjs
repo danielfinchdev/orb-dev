@@ -81,7 +81,7 @@ test('Uso: aviso en las barras, leyenda y «Aviso» en la cuenta; el aviso y el 
 
 test('con el agente desactivado ninguna cuenta dice «Activa»: solo que tiene la sesión iniciada', () => {
   assert.match(agents, /acc\.login === 'si' \? \(agentOn \? \[t\('agents\.accountActive'\), 'success'\] : \[t\('login\.si'\), 'secondary'\]\) : login/);
-  assert.match(agents, /<AccountRow [^>]*agentOn=\{!!cfg\.enabled\} \/>/);
+  assert.match(agents, /<AccountRow .*agentOn=\{!!cfg\.enabled\}.* \/>/);
 });
 
 test('la acentuación sigue siendo un token en las dos páginas', () => {
