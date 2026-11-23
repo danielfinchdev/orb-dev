@@ -588,7 +588,7 @@ export async function settleEnvelopes(home, tmp, keys) {
     return false;
   }
   let byCode = false; let settled = false; let openedKey = null;
-  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : '', recoveryFile(tmp)); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; } catch { byCode = false; } }
+  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : '', recoveryFile(tmp)); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; if (r?.turnedOff === true && keys.outcome) keys.outcome.turnedOff = true; } catch { byCode = false; } }
   // Without the vault's word on it, the copy's code wrap is never taken.
   if (!settled) fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
   // The same data key is what the vault opened, not what the copy's file says it is.
@@ -621,11 +621,12 @@ export async function stageRestore(home, file, keys = {}) {
       if (keys.secret && keys.passphrase) setRecovery(tmp, keys.secret, keys.passphrase);
       else { fs.rmSync(staged, { force: true }); recoveryOther = true; }
     }
-    const secretsKept = await settleEnvelopes(home, tmp, keys);
+    const outcome = { turnedOff: false };
+    const secretsKept = await settleEnvelopes(home, tmp, { ...keys, outcome });
     fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ recoveryOther, secretsKept, from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
     await fsp.rm(ready, { recursive: true, force: true });
     await fsp.rename(tmp, ready);
-    return { files: r.files, bytes: r.bytes, header: r.header, secretsKept };
+    return { files: r.files, bytes: r.bytes, header: r.header, secretsKept, turnedOff: outcome.turnedOff };
   } catch (error) { await fsp.rm(tmp, { recursive: true, force: true }); throw error; }
 }
 

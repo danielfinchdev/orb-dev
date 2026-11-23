@@ -270,6 +270,7 @@ export default {
   'recovery.printNote': 'Keep it away from this PC. It opens your backups on another PC and sets another password if you forget it. Do not share it.',
   'datos.restoreMaster': 'Your master password (optional)',
   'datos.restoreMasterHint': 'If the backup comes from another PC, enter it to recover its secrets. Without it, this PC\'s secrets stay as they were.',
+  'datos.restoreHelloOff': 'Windows Hello and phone approvals have been turned off: turn them on again.',
   'datos.restoreKept': 'Backup checked. This PC\'s secrets stay as they were. Restart Orb to use it.',
   'msg.approve.none': 'No linked phone may approve sensitive actions. Allow it in Settings › Devices.',
   'msg.approve.badMethod': 'This action cannot be approved with the phone.',

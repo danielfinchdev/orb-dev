@@ -158,13 +158,16 @@ impl Vault {
     Ok(self.ids("")?.into_iter().filter(|id| id != "remote_keys" && id != crate::hello::HELLO_ID && !id.starts_with(APPROVE_PREFIX)).collect())
   }
   /// Hello's key and the approvals a restored copy carried: the copy is not what enabled them.
-  pub fn forget_unproven(&mut self) {
-    let Ok(mut items) = self.items() else { return };
+  /// → whether anything was there to forget (the person is told, since Hello and the approvals must be turned on again).
+  pub fn forget_unproven(&mut self) -> bool {
+    let Ok(mut items) = self.items() else { return false };
     let before = items.0.len();
     items.0.retain(|id, _| id != crate::hello::HELLO_ID && !id.starts_with(APPROVE_PREFIX));
-    if items.0.len() != before {
+    let gone = items.0.len() != before;
+    if gone {
       let _ = self.write_items(&items.0);
     }
+    gone
   }
   /// A restored folder whose data key could not be opened here: the mark that drops the same things at its first open.
   pub fn mark_restored(&self) {

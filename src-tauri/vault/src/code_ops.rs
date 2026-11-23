@@ -279,15 +279,16 @@ pub(crate) fn adopt(req: &Value, h: &Handle, now: u64) -> Answer {
     }
   }
   let by_code = key.is_some();
+  let mut turned_off = false;
   {
     let mut v = h.vault.lock().unwrap();
     if let Some(k) = key {
       v.open_with_code(k);
-      v.forget_unproven();
+      turned_off = v.forget_unproven();
     } else {
       v.drop_restored_code();
       if v.open_existing_machine() {
-        v.forget_unproven();
+        turned_off = v.forget_unproven();
       } else {
         v.mark_restored();
       }
@@ -297,7 +298,7 @@ pub(crate) fn adopt(req: &Value, h: &Handle, now: u64) -> Answer {
     write_code(h, &normal, copy_id.as_deref(), now)?;
   }
   let v = h.vault.lock().unwrap();
-  Ok(json!({ "ok": true, "byCode": by_code, "keyId": v.key_id() }))
+  Ok(json!({ "ok": true, "byCode": by_code, "keyId": v.key_id(), "turnedOff": turned_off }))
 }
 
 #[cfg(test)]

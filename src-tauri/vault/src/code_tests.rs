@@ -271,6 +271,7 @@ fn a_restore_being_prepared_proves_the_copy_s_code_wrap_or_drops_it() {
   let r = run("adopt", json!({ "code": CODE_A }), &s, &fake).unwrap();
   assert_eq!(r["byCode"], json!(true));
   assert_eq!(r["keyId"].as_str(), Some(key_id.as_str()));
+  assert_eq!(r["turnedOff"], json!(true), "the person is told Hello and the approvals went");
   assert_ne!(read(&staged, CODE)["kdf"]["salt"], old_code["kdf"]["salt"], "written again, not copied");
   assert!(staged.join(MACHINE).exists());
   let after = handle(&staged, 2);
@@ -372,4 +373,16 @@ fn setting_a_code_with_the_password_issues_no_window_token() {
   assert_eq!(run("codeSet", json!({ "drop": true, "password": PASSWORD }), &h, &fake).unwrap()["ok"], json!(true));
   assert!(h.vault.lock().unwrap().issue(None, NOW).is_err());
   tidy(&[&dir]);
+}
+
+#[test]
+fn a_restore_with_no_hello_or_approvals_turns_nothing_off() {
+  let (a, dir_a, fake) = pc("adopt-none", 1, Some(CODE_A));
+  drop(a);
+  let staged = dir_of("adopt-none-s");
+  copy_files(&dir_a, &staged, &[MASTER, CODE, VAULT]);
+  let r = run("adopt", json!({ "code": CODE_A }), &handle(&staged, 2), &fake).unwrap();
+  assert_eq!(r["byCode"], json!(true));
+  assert_eq!(r["turnedOff"], json!(false));
+  tidy(&[&dir_a, &staged]);
 }
