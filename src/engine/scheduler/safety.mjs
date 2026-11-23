@@ -52,7 +52,7 @@ export class SafetyPart {
     const cp = takeCheckpoint(project.path, `t${task.id}-${Date.now()}`, ctx.paths.checkpoints);
     const isGit = cp.kind === 'git';
     // The first checkpoint is kept: undo goes back to before the task, including later follow-up rounds.
-    this.board.settingJson(`checkpoint:${task.id}`, { before: reusable ? prev.before : cp, after: null, head: isGit ? git(cp.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(cp.repo) : null });
+    this.board.settingJson(`checkpoint:${task.id}`, { before: cp, after: null, head: isGit ? git(cp.repo, 'rev-parse', 'HEAD').stdout.trim() : null, remotes: isGit ? remotesOf(cp.repo) : null });
     this.board.event(task.id, 'orb', 'checkpoint', isGit ? eventKey('sys.events.checkpointGit', { ref: cp.ref }) : eventKey('sys.events.checkpointCopy', { copy: cp.copy }));
     return { workdir: project.path, cwd: project.path, branch: null, isGit, folder: true, notes: [] };
   }
