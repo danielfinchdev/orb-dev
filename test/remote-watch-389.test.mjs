@@ -2,6 +2,8 @@
 // a fake Tailscale: nothing real is asked, and what already works is never touched.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { ctx } from '../src/platform/context.mjs';
+import { tempHome } from './helpers.mjs';
 import { createLinkWatcher, WATCH_MS } from '../src/engine/transport/remote-watch.mjs';
 
 function rig(over = {}) {
@@ -104,4 +106,15 @@ test('dos vueltas a la vez no se pisan', async () => {
   const a = lw.tick(); w.clock += WATCH_MS; const b = lw.tick();
   release(); await Promise.all([a, b]);
   assert.equal(only('openTailscale').length, 1);
+});
+
+test('el error del vigilante se registra sin rutas del PC', async () => {
+  const { w, tick } = rig({ adapter: true });
+  w.alive = true; const t = tempHome();
+  const home = ctx.home.split('\\').join('/');
+  t.cleanup?.();
+  const lw = createLinkWatcher({ every: WATCH_MS, now: () => w.clock, log: (m) => w.logs.push(m), wifiOn: () => true, tailscaleOn: () => true, lanKey: () => { throw new Error(`falla ${home}/secreto/x.txt`); }, openedLan: () => null, tsOpen: () => false, tsServed: () => false, tsAdapter: () => false, seen: () => {} });
+  w.clock += WATCH_MS; await lw.tick();
+  assert.ok(w.logs.some((l) => l.includes('vigilante')));
+  assert.ok(!w.logs.some((l) => l.includes(home)), w.logs.join('|'));
 });

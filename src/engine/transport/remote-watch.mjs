@@ -1,6 +1,8 @@
 // Keeps the phone entries open without restarting what already works. Every tick is cheap (an in-process look at the
 // network adapters); the expensive checks (`tailscale status`, `tailscale serve status`) only run when something points
 // to a problem, after a long enough pause, or after the clock jumped (the PC slept or hibernated).
+import { withoutPaths } from './remote-calls.mjs';
+
 export const WATCH_MS = 15_000;
 const SERVE_CHECK_MS = 60_000; // how often an open https entry is checked against `tailscale serve`
 const RETRY_MS = 60_000; // pause between failed attempts to open Tailscale while its adapter is up
@@ -42,7 +44,7 @@ export function createLinkWatcher(d) {
           } else if (alive) d.seen('tailscale');
         }
       }
-    } catch (error) { d.log(`móvil: vigilante: ${error?.message ?? error}`); }
+    } catch (error) { d.log(`móvil: vigilante: ${withoutPaths(String(error?.message ?? error))}`); }
     finally { busy = false; }
   }
   return { tick };
