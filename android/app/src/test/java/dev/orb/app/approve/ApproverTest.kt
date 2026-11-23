@@ -254,4 +254,26 @@ class ApproverTest {
         assertTrue(store.getBoolean("approve.registered", false))
         assertEquals(ApproveTexts.FAILED, approver.ui.value!!.body)
     }
+
+    @Test fun thisPhoneSaysWhetherItMayApprove() {
+        assertEquals(ApproveStatus.NotYet, approver.status())
+        register(); approver.dismiss()
+        assertEquals(ApproveStatus.Allowed, approver.status())
+        crypto.invalidated = true
+        approver.onEvent(event("secrets.connector", "{}", nonceByte = 3))
+        approver.confirm()
+        assertEquals("a new fingerprint: the PC must allow it again", ApproveStatus.NeedsAgain, approver.status())
+        auth.strong = false
+        assertEquals("without a strong biometric nothing else matters", ApproveStatus.NoStrong, approver.status())
+    }
+
+    @Test fun theStatusLinesSpeakBothLanguagesAndKeepTheirKeyWords() {
+        for (s in ApproveStatus.entries) {
+            assertTrue(dev.orb.app.ui.thisphone.ThisPhoneTexts.approveLine(s, "es").isNotBlank())
+            assertTrue(dev.orb.app.ui.thisphone.ThisPhoneTexts.approveLine(s, "en") != dev.orb.app.ui.thisphone.ThisPhoneTexts.approveLine(s, "es"))
+        }
+        assertTrue(dev.orb.app.ui.thisphone.ThisPhoneTexts.approveLine(ApproveStatus.Allowed, "es").startsWith("Este móvil puede aprobar acciones del PC"))
+        assertTrue(dev.orb.app.ui.thisphone.ThisPhoneTexts.approveLine(ApproveStatus.NeedsAgain, "es").startsWith("Vuelve a permitir las aprobaciones desde el PC"))
+        assertTrue(dev.orb.app.ui.thisphone.ThisPhoneTexts.approveLine(ApproveStatus.NoStrong, "es").startsWith("Tu móvil no tiene huella o cara de seguridad alta"))
+    }
 }

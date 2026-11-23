@@ -633,7 +633,7 @@ export function SessionView({ route }) {
                 Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
             {/* «Auto» / «Preguntar» at one click, the other levels and «Usar mi móvil Android» under «Más opciones» (the phone may switch between levels, never to «total», and has no switch for its phone). */}
             {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} extra={androidRow} request={permAsk} onChange={async (permission) => {
-              if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
+              if (permission === 'total') { const unlock = await unlockCore('fullAccess', { request: { method: 'sessions.grantTotal', params: { id: s.id } } }); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
               if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
               act(call('sessions.update', { id: s.id, permission }), permission === 'auto' ? t('session.autoOn') : permission === 'editar' ? t('session.askOn') : t('session.permissionsChanged'));
             }} />
@@ -641,7 +641,7 @@ export function SessionView({ route }) {
                  when Orb locks). Never from the phone. */
               : <AutonomySwitch main={['leer']} value={s.permission === 'total' ? 'total' : 'leer'} testid="session-permission" disabled={bridge.mobile} more={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} extra={androidRow} request={permAsk} onChange={async (permission) => {
                 if (permission !== 'total') { act(call('sessions.revokeGrant', { id: s.id, grant: 'total' }), t('session.permissionsChanged')); return; }
-                const unlock = await unlockCore('fullAccess');
+                const unlock = await unlockCore('fullAccess', { request: { method: 'sessions.grantTotal', params: { id: s.id } } });
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} />}
             {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] bg-warning-soft px-2 text-control whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}

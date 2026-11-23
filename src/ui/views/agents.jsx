@@ -390,13 +390,17 @@ function AgentKeys({ a }) {
   const load = () => call('agentKeys.state').then((s) => setSaved(s?.[a.id] ?? {})).catch(quiet);
   useEffect(() => { load(); }, [a.id]);
   const set = async (name) => {
-    const unlock = await unlockCore('secrets');
-    if (!unlock) return;
+    // The password or the phone's approval comes after the key is typed: the phone approves exactly this call.
     const r = await form(t('agents.keyTitle', { name }), {
       description: t('agents.keyDesc'), initial: { value: '' },
       body: (v, setV) => <Input type="password" autoComplete="off" spellCheck={false} autoFocus value={v.value} onChange={(e) => setV({ value: e.target.value })} data-testid={`agent-key-input-${a.id}`} />,
       ok: t('settings.save'),
-      onOk: (v) => call('agentKeys.save', { agent: a.id, name, value: v.value.trim(), unlock })
+      onOk: async (v) => {
+        const params = { agent: a.id, name, value: v.value.trim() };
+        const unlock = await unlockCore('secrets', { request: { method: 'agentKeys.save', params } });
+        if (!unlock) return false;
+        return call('agentKeys.save', { ...params, unlock });
+      }
     });
     if (r) { notifyOk(t('agents.keySaved')); load(); }
   };

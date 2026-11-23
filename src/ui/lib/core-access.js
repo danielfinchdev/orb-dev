@@ -41,13 +41,15 @@ const HELLO_FRESH = Object.freeze(['deleteProject', 'rails', 'ruleSeed']);
 export const canUseHello = (action) => !PASSWORD_ACTIONS.includes(action) && (!FRESH_ACTIONS.includes(action) || HELLO_FRESH.includes(action));
 // what: the thing the action is about (a project's name), said before Windows' own notice.
 // request: { method, params } of the call the token is for; with it the dialog may offer the phone's approval (a token for that call only).
-export async function unlockCore(action, { what = null, request = null } = {}) {
+// info: an object that gets `mobile: true` when the token is a phone's (it is for that call only, so nothing else may use it first).
+export async function unlockCore(action, { what = null, request = null, info = null } = {}) {
   const fresh = FRESH_ACTIONS.includes(action);
   const have = fresh ? null : heldUnlock(Date.now(), { needsPassword: PASSWORD_ACTIONS.includes(action) });
   if (have) return have;
   if (!asker) return null;
   const r = await asker(action, { fresh, what, request });
   // A phone's approval is for one call: it is never kept for the next one.
+  if (info && r?.strength === 'mobile') info.mobile = true;
   return fresh || r?.strength === 'mobile' ? r?.unlock ?? null : keepUnlock(r);
 }
 

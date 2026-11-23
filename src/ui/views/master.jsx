@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, FieldError, Input, Label, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { Checkbox } from '@/components/ui/overlay.jsx';
-import { form, choose } from '@/components/dialogs.jsx';
+import { form, choose, confirm } from '@/components/dialogs.jsx';
 import { call, bridge, getState, setState, act, useStore, robotSkin } from '@/lib/store.js';
 import { Select } from '@/components/ui/overlay.jsx';
 import { LOCK_MINUTES, lockMinutesOf } from '@/lib/idle-lock.js';
@@ -25,13 +25,14 @@ import { quiet } from '@/lib/quiet.js';
 import { Block, Panel, Setting } from './settings/rows.jsx';
 import { HelloBox, HelloNotes, HelloPasswordOnly, HelloSetting, HelloOffer, helloOfferable } from './hello.jsx';
 import { MobileBox } from './approve.jsx';
-import { mobileReady } from '@/lib/approve.js';
+import { mobileReady, rebuildReadiness } from '@/lib/approve.js';
+import { rebuildFlow } from './rebuild.jsx';
 
 const MIN = MASTER_MIN;
 const BAR = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];
 
 // The new password twice, its strength and, when asked, the box «Entiendo que…».
-function NewPassword({ v, set, ack = null, autoFocus = false }) {
+export function NewPassword({ v, set, ack = null, autoFocus = false }) {
   const t = useT();
   const score = passwordStrength(v.next, MIN);
   return (
@@ -53,7 +54,7 @@ function NewPassword({ v, set, ack = null, autoFocus = false }) {
     </div>
   );
 }
-const ready = (v, ack = true) => [...String(v.next ?? '')].length >= MIN && v.next === v.again && (!ack || v.ack === true);
+export const ready = (v, ack = true) => [...String(v.next ?? '')].length >= MIN && v.next === v.again && (!ack || v.ack === true);
 
 // What «Si la olvidas no se puede recuperar» means, said where the password is made: plain grey text, its title leading it.
 // recovery: false = the code is given right after creating it, true = Orb already has one (kept as it is), null = not known
@@ -258,18 +259,26 @@ async function resetFlow() {
     onOk: async (v) => { if (!ready(v)) throw new Error(tNow(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.reset', { password: v.next, confirm: true }); }
   });
 }
-// canForget: this PC can keep the secrets (it opened them and has a recovery code); otherwise only starting from scratch.
-async function forgotFlow({ canForget = false } = {}) {
+// «Lo he olvidado todo» when it cannot be done (no phone that approves, no Windows Hello, no password file): what is missing and that
+// starting from scratch is what is left. → the reset's answer or null.
+async function noRebuild(rb, lost) {
+  const why = lost ? 'rebuild.no.lost' : rb.reason === 'noHello' ? 'rebuild.no.noHello' : 'rebuild.no.noPhone';
+  if (!(await confirm(tNow('rebuild.noTitle'), `${tNow(why)} ${tNow('rebuild.noEnd')}`, { ok: tNow('master.reset'), danger: true }))) return null;
+  return resetFlow();
+}
+// canForget: this PC can keep the secrets (it opened them and has a recovery code). Without the code, a phone that approves and
+// Windows Hello can still make a new password and code («Lo he olvidado todo»); otherwise only starting from scratch.
+async function forgotFlow({ canForget = false, lost = false } = {}) {
   let r = null;
-  if (!canForget) r = await resetFlow();
-  else {
-    const how = await choose(tNow('master.forgot'), tNow('master.forgotChoose'), [
-      { value: 'code', label: tNow('master.forgotWithCode'), hint: tNow('master.forgotWithCodeHint') },
-      { value: 'reset', label: tNow('master.reset'), hint: tNow('master.resetHint'), variant: 'danger' }
-    ], { testid: 'master-forgot-choice' });
-    if (how === 'code') r = await forgotWithCode();
-    else if (how === 'reset') r = await resetFlow();
-  }
+  const rb = bridge.mobile ? { ok: false } : lost ? { ok: false } : await rebuildReadiness(call);
+  const how = await choose(tNow('master.forgot'), tNow(canForget ? 'master.forgotChoose' : 'master.forgotChooseNo'), [
+    ...(canForget ? [{ value: 'code', label: tNow('master.forgotWithCode'), hint: tNow('master.forgotWithCodeHint') }] : []),
+    ...(bridge.mobile ? [] : [{ value: 'all', label: tNow('master.forgotAll'), hint: tNow('master.forgotAllHint') }]),
+    { value: 'reset', label: tNow('master.reset'), hint: tNow('master.resetHint'), variant: 'danger' }
+  ], { testid: 'master-forgot-choice' });
+  if (how === 'code') r = await forgotWithCode();
+  else if (how === 'all') r = rb.ok ? await rebuildFlow(rb) : await noRebuild(rb, lost);
+  else if (how === 'reset') r = await resetFlow();
   if (r?.unlock) keepUnlock(r);
   return r;
 }
@@ -332,7 +341,7 @@ export function MasterLocked({ onDone, state = null }) {
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
     catch (err) { setError(errorText(err)); setBusy(false); }
   };
-  const forgot = () => openDialog(() => forgotFlow({ canForget }));
+  const forgot = () => openDialog(() => forgotFlow({ canForget, lost }));
   const helloMark = screen && !inCode ? helloMode(hello) : 'off';
   const switchTo = (next) => { if (busy) return; reveal.hide(); setError(null); setMode(next); };
   // Grey, 24 px tall with 12 px of side padding, as the mock-up's ghost button inside the «¿La olvidaste?» line.
@@ -539,7 +548,11 @@ export async function connectorKeys(server) {
     onOk: async (v) => {
       const env = {};
       for (const line of v.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) { const m = KEY_LINE.exec(line); if (!m) throw new Error(tNow('master.keysBad')); env[m[1]] = m[2]; }
-      return call('secrets.saveConnector', { name: server.name, env, unlock });
+      // What was seen used the first token (a phone's is for one call): saving asks again, now for exactly these keys.
+      const params = { name: server.name, env };
+      const again = await unlockCore('secrets', { request: { method: 'secrets.saveConnector', params } });
+      if (!again) return false;
+      return call('secrets.saveConnector', { ...params, unlock: again });
     }
   });
   if (!r) return;

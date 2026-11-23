@@ -29,6 +29,9 @@ data class ApproveUi(
     val busy: Boolean = false,
 )
 
+/** Whether this phone may approve the PC's actions now. */
+enum class ApproveStatus { Allowed, NeedsAgain, NoStrong, NotYet }
+
 /**
  * Approves the PC's sensitive actions with this phone's fingerprint. An `approve` event is held against this phone's own link and key
  * ([ApproveRules]); only then is the action painted, from the signed bytes. The key is made only when the PC registers this phone, and
@@ -51,6 +54,18 @@ class Approver(
     val ui: StateFlow<ApproveUi?> = _ui.asStateFlow()
 
     private fun registered() = store.getBoolean(REGISTERED, false) && crypto.hasKey()
+
+    /** What «Este móvil» says about approving: only the PC makes the key, so «not yet» means going to the PC. */
+    fun status(): ApproveStatus {
+        val strong = authenticator()?.strongBiometric() == true
+        val wasRegistered = store.getBoolean(REGISTERED, false) || store.getString(ORB) != null
+        return when {
+            !strong -> ApproveStatus.NoStrong
+            registered() -> ApproveStatus.Allowed
+            wasRegistered -> ApproveStatus.NeedsAgain
+            else -> ApproveStatus.NotYet
+        }
+    }
 
     /** An `approve` event of the PC. */
     fun onEvent(payload: JsonElement) {
