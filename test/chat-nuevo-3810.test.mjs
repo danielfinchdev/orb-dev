@@ -65,3 +65,14 @@ test('the texts exist in Spanish and English', () => {
     assert.ok(es[k] && en[k] && es[k] !== en[k], k);
   }
 });
+
+test('Enter picks the highlighted row and Esc is left to the dialog', () => {
+  const picker = read('src/ui/components/new-chat-picker.jsx');
+  // Enter: the highlighted row (clamped to the filtered list) is chosen, and a composing IME keeps its own Enter.
+  assert.match(picker, /e\.key === 'Enter' && !e\.nativeEvent\.isComposing\) \{ e\.preventDefault\(\); pick\(Math\.min\(active, entries\.length - 1\)\); \}/);
+  // Esc is not swallowed by the picker: the dialog host closes it and resolves null, so no chat is created.
+  assert.ok(!/Escape/.test(picker));
+  const host = read('src/ui/components/dialogs.jsx');
+  assert.match(host, /onOpenChange=\{\(o\) => \{ if \(!o\) close\(d\.id, null\); \}\}/);
+  assert.match(read('src/ui/components/project-actions.jsx'), /if \(r\) await newChat\(r\.project\)/);
+});
