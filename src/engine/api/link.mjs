@@ -8,6 +8,7 @@ import { createScreenshot, sweepShots, SHOT_DIR } from '../host/screenshot.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { PAIR_KINDS, PREVIEWS } from '../transport/remote.mjs';
+import { tailscaleInfo, tailscaleLogin, markLinked } from '../transport/tailscale-status.mjs';
 import { str, oneOf } from './common.mjs';
 
 // Engine tests (they run with the fake agents) never touch the real screen: they copy a prepared JPEG instead. The
@@ -86,6 +87,10 @@ export function linkMethods({ emit, remoteRef, log, version }) {
       if (c.mobile.enabled) await remoteRef.current.restart();
       return remoteRef.current.status();
     },
+    // Tailscale as the account: its state and the devices of the same account (linked phones marked), and the sign-in. Finding a
+    // device here links nothing: it still needs the pairing code and the master password.
+    'tailscale.status': async () => { const info = await tailscaleInfo(); return { ...info, devices: markLinked(info.devices, remoteRef.current?.devices?.() ?? []) }; },
+    'tailscale.login': () => tailscaleLogin(),
     'remote.pair': ({ kind }) => remoteRef.current.pair(oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined)),
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
     // ---- Magic Link

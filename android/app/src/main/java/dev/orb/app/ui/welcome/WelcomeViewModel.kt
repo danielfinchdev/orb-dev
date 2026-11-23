@@ -2,7 +2,9 @@ package dev.orb.app.ui.welcome
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.orb.app.link.net.FoundPc
 import dev.orb.app.link.net.PairError
+import dev.orb.app.link.net.PcDiscovery
 import dev.orb.app.link.net.PairOk
 import dev.orb.app.link.net.pcNameOrNull
 import dev.orb.app.link.net.PairingException
@@ -79,6 +81,12 @@ data class WelcomeUiState(
     // The offer to lock the app with the fingerprint or face: shown when the phone can do it and it is not on yet; it starts ticked.
     val protectOffer: Boolean = false,
     val protect: Boolean = true,
+    // «Buscar mi PC en Tailscale»: the PC's name as typed, the Orbs that answered, and whether a search ran or is running.
+    val tsOpen: Boolean = false,
+    val tsQuery: String = "",
+    val tsFound: List<FoundPc> = emptyList(),
+    val tsSearching: Boolean = false,
+    val tsSearched: Boolean = false,
 ) {
     /** How many of the three steps of «Enlazando» really happened: the PC's code, the password, the key saved. */
     val stepsDone: Int get() = when (stage) {
@@ -119,6 +127,7 @@ class WelcomeViewModel(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val notices: NoticeGate? = null,
     private val lockOffer: LockOffer? = null,
+    private val discovery: PcDiscovery? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(WelcomeUiState())
     val state: StateFlow<WelcomeUiState> = _state.asStateFlow()
@@ -143,6 +152,27 @@ class WelcomeViewModel(
     fun setLink(v: String) = _state.update { it.copy(link = v, error = null) }
     fun setCode(v: String) = _state.update { it.copy(code = v, error = null) }
     fun setAddress(v: String) = _state.update { it.copy(address = v, error = null) }
+
+    fun toggleTs() = _state.update { it.copy(tsOpen = !it.tsOpen) }
+    fun setTsQuery(v: String) = _state.update { it.copy(tsQuery = v, tsSearched = false, tsFound = emptyList(), error = null) }
+
+    /** Looks for Orbs on the person's tailnet. It only learns where a PC is: nothing is linked and no key is exchanged. */
+    fun searchTs() {
+        val s = _state.value
+        val d = discovery ?: return
+        if (s.tsSearching || s.busy || s.tsQuery.isBlank()) return
+        _state.update { it.copy(tsSearching = true, tsSearched = false, tsFound = emptyList(), error = null) }
+        viewModelScope.launch(dispatcher) {
+            val found = try { d.find(s.tsQuery) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            _state.update { it.copy(tsSearching = false, tsSearched = true, tsFound = found) }
+        }
+    }
+
+    /**
+     * A PC from the list: its address fills the form, so the person only types the short code shown on the PC. The link is then the
+     * same as ever (code, fingerprint, master password): being on the tailnet is not a reason to trust a device.
+     */
+    fun pickTs(found: FoundPc) = _state.update { it.copy(link = "", address = found.base, error = null) }
 
     /** The «Pegar» button: whatever the clipboard holds replaces the link field. */
     fun paste(text: String?) {

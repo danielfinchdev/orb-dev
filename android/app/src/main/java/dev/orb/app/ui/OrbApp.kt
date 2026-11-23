@@ -269,7 +269,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
     ) {
         composable<Welcome> { entry ->
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
-                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess), lockOffer = AndroidLockOffer(container.lock)) }
+                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess), lockOffer = AndroidLockOffer(container.lock), discovery = container.discovery) }
             })
             // What the scanner left for this page (it may have been recreated meanwhile): used once, then erased.
             val handle = entry.savedStateHandle

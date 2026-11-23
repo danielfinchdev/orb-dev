@@ -44,6 +44,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.orb.app.link.net.FoundPc
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.OrbBanner
 import dev.orb.app.ui.kit.OrbBannerKind
@@ -71,6 +72,18 @@ object WelcomeTexts {
     const val PROTECT = "Proteger Orb con tu huella o tu cara"
     const val PROTECT_EN = "Protect Orb with your fingerprint or face"
     fun protect(language: String = java.util.Locale.getDefault().language) = if (language == "en") PROTECT_EN else PROTECT
+
+    /** The texts of «Buscar mi PC en Tailscale». */
+    class TailscaleTexts(val title: String, val hint: String, val search: String, val searching: String, val none: String, val store: String, val next: String, val help: String, val found: (String) -> String)
+    fun tailscale(language: String = java.util.Locale.getDefault().language) = if (language == "en") TailscaleTexts(
+        "Find my PC on Tailscale", "PC name on Tailscale", "Search", "Looking on your Tailscale network…",
+        "No Orb answered. Is Orb open on the PC and Tailscale signed in on both, with the same account? You can also scan the QR.", "Get Tailscale",
+        "Now type the code shown on the PC (Settings › Devices).", "Install Tailscale on this phone and the PC and sign in with the same account. Type the PC's name as Settings › Devices shows it.",
+    ) { n -> "Use $n" } else TailscaleTexts(
+        "Buscar mi PC en Tailscale", "Nombre del PC en Tailscale", "Buscar", "Buscando en tu red de Tailscale…",
+        "Ningún Orb ha respondido. ¿Orb está abierto en el PC y Tailscale con sesión en los dos, con la misma cuenta? También puedes escanear el QR.", "Conseguir Tailscale",
+        "Ahora escribe el código que se ve en el PC (Ajustes › Dispositivos).", "Instala Tailscale en este móvil y en el PC e inicia sesión con la misma cuenta. Escribe el nombre del PC tal como lo muestra Ajustes › Dispositivos.",
+    ) { n -> "Usar $n" }
 }
 
 class WelcomeActions(
@@ -92,7 +105,18 @@ class WelcomeActions(
     val openThisPhone: () -> Unit = {},
     val dismissError: () -> Unit = {},
     val setProtect: (Boolean) -> Unit = {},
+    val toggleTs: () -> Unit = {},
+    val setTsQuery: (String) -> Unit = {},
+    val searchTs: () -> Unit = {},
+    val pickTs: (FoundPc) -> Unit = {},
+    val openTailscaleStore: () -> Unit = {},
 )
+
+/** Tailscale's page in Google Play (or the web page when there is no Play Store). */
+private fun openTailscaleStore(context: Context) {
+    val open = { uri: String -> context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    try { open("market://details?id=com.tailscale.ipn") } catch (e: Exception) { try { open("https://tailscale.com/download/android") } catch (_: Exception) { } }
+}
 
 /** The text on the clipboard, or null when there is none. */
 fun systemClipboardText(context: Context): String? {
@@ -124,7 +148,8 @@ fun WelcomeScreen(
         setAddress = vm::setAddress, paste = { vm.paste(readClipboard(context)) }, resolve = vm::resolve, back = vm::back,
         setPassword = vm::setPassword, toggleShowPassword = vm::toggleShowPassword, confirm = vm::confirm,
         activateNotices = vm::activateNotices, declineNotices = vm::declineNotices, done = { vm.finish(onDone) }, openThisPhone = onOpenThisPhone, setProtect = vm::setProtect,
-        dismissError = vm::dismissError,
+        dismissError = vm::dismissError, toggleTs = vm::toggleTs, setTsQuery = vm::setTsQuery, searchTs = vm::searchTs, pickTs = vm::pickTs,
+        openTailscaleStore = { openTailscaleStore(context) },
     )
     WelcomeContent(state, actions, modifier)
 }
@@ -219,6 +244,7 @@ private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
                     trailing = { OrbButton("Pegar", a.paste, kind = OrbButtonKind.Ghost, small = true, enabled = !state.busy) },
                 )
             }
+            if (!linkOnly) TailscaleSearch(state, a)
             if (!linkOnly) {
                 OrbNote("o escribe el código y la dirección", Modifier.fillMaxWidth())
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -238,6 +264,28 @@ private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
             }
             OrbButton("Continuar", a.resolve, kind = OrbButtonKind.Primary, block = true, enabled = !state.busy)
         }
+    }
+}
+
+/** «Buscar mi PC en Tailscale»: the PC's name on Tailscale, the Orbs that answer, and how to get Tailscale when it is missing. */
+@Composable
+private fun TailscaleSearch(state: WelcomeUiState, a: WelcomeActions) {
+    val tx = WelcomeTexts.tailscale()
+    // closed by default: the sheet keeps its short layout for the people who scan or type the code
+    if (!state.tsOpen) return OrbButton(tx.title, a.toggleTs, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Monitor)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Label(tx.title)
+        OrbTextField(
+            state.tsQuery, a.setTsQuery, tx.hint, enabled = !state.busy && !state.tsSearching, keyboardType = KeyboardType.Uri,
+            trailing = { OrbButton(tx.search, a.searchTs, kind = OrbButtonKind.Ghost, small = true, enabled = !state.busy && !state.tsSearching && state.tsQuery.isNotBlank()) },
+        )
+        if (state.tsSearching) Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { OrbSpinner(); OrbNote(tx.searching) }
+        state.tsFound.forEach { pc -> OrbButton(tx.found(pc.name), { a.pickTs(pc) }, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Monitor, enabled = !state.busy) }
+        if (state.tsSearched && state.tsFound.isEmpty()) {
+            OrbNote(tx.none)
+            OrbButton(tx.store, a.openTailscaleStore, kind = OrbButtonKind.Ghost, small = true)
+        } else if (state.tsFound.isNotEmpty()) OrbNote(tx.next)
+        else OrbNote(tx.help)
     }
 }
 
