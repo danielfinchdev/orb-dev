@@ -28,7 +28,7 @@ test('Agentes: the sign-in is a dialog with the same calls, and the team block i
   for (const call of ["'agents.login'", "'agents.loginCode'", "'agents.loginCancel'", "'accounts.remove'", "'accounts.add'", "'accounts.scan'", "'agents.install'", "'agentKeys.save'", "'installer.start'", "'installer.check'"]) assert.ok(agents.includes(call), call);
   // removing an account, the key's master password and the scan prompt keep asking
   assert.match(agents, /confirm\(t\('agents\.removeTitle'\), t\('agents\.removeBody'.*danger: true/s);
-  assert.match(agents, /unlockCore\('secrets'\)/);
+  assert.match(agents, /unlockCore\('secrets', \{ request: \{ method: 'agentKeys\.save'/);
   // an agent the mock-up draws but Orb does not detect is not invented: the cards come from agents.status
   assert.match(agents, /call\('agents\.status'/);
 });

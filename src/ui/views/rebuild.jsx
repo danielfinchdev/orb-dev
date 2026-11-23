@@ -10,7 +10,7 @@ import { call } from '@/lib/store.js';
 import { waitApproval, countdown } from '@/lib/approve.js';
 import { t as tNow, useT } from '@/lib/i18n.js';
 import { HelloNotes, useHelloUnlock } from './hello.jsx';
-import { NewPassword, ready } from './master.jsx';
+import { NewPassword, ready } from './new-password.jsx';
 import { showRecoveryCode } from './recovery.jsx';
 
 const Step = ({ title, children, on, testid }) => (
