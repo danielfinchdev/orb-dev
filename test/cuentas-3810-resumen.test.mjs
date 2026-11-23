@@ -37,3 +37,13 @@ test('a chat that never talked stores no summary', () => {
   sessions.update(s.id, { account: 'claude-2' });
   assert.equal(board.settingJson(`handoff_summary:${s.id}`) ?? null, null);
 });
+
+test('a stored account problem comes back with the session and goes when the account changes', () => {
+  const s = sessions.create({ agent: 'claude', account: 'claude', accountFixed: true, cwd: project.path, project: 'web', title: 'z' });
+  board.settingJson(`account_problem:${s.id}`, { kind: 'limit', account: 'claude', until: 1 });
+  assert.equal(sessions.get(s.id).accountProblem.kind, 'limit');
+  assert.equal(sessions.list().find((x) => x.id === s.id).accountProblem.account, 'claude');
+  sessions.update(s.id, { account: 'claude-2' });
+  assert.equal(sessions.get(s.id).accountProblem, undefined);
+  assert.equal(board.settingJson(`account_problem:${s.id}`), null);
+});

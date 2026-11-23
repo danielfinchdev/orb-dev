@@ -419,6 +419,8 @@ export function SessionView({ route }) {
     const offAccount = bridge.on('session:account', (e) => { if (String(e.id) === String(route.id)) setAcctHold(e.problem ? { problem: e.problem, waiting: Boolean(e.waiting) } : null); });
     return () => { alive = false; offItem(); offReset(); offQueue(); offAccount(); setAcctHold(null); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // coming back to a chat that is still held by its account: the stored problem brings the notice (and its buttons) back
+  useEffect(() => { setAcctHold((prev) => (s?.accountProblem ? prev ?? { problem: s.accountProblem, waiting: false } : null)); }, [route.id, s?.accountProblem?.kind, s?.accountProblem?.account]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => dropRepeatedAgent(toBlocks(items, tb)), [items, tb]);
   // what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
