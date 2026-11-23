@@ -538,13 +538,13 @@ const MTIME_SLACK_MS = 2000;
 // dry: the same decisions without writing or removing anything; the result also carries `plan`, one { path, action } per file
 // (restore, recreate, remove, unchanged, conflict, kept, skipped), so a preview is computed by this very code and cannot
 // drift from what the undo then does.
-export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null, dry = false, known = null } = {}) {
-  if (before.kind === 'git') return runSync(before.repo, undoGitFlow(before, after, { only, safe, madeAfter, dry, known }));
+export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null, dry = false, known = null, onBeforeWrite = null } = {}) {
+  if (before.kind === 'git') return runSync(before.repo, undoGitFlow(before, after, { only, safe, madeAfter, dry, known, onBeforeWrite }));
   return undoCopy(before, after, { dry });
 }
 // The same decisions without blocking the event loop on git (what the engine runs while the app is open).
-export async function undoCheckpointAsync(before, after, { only = null, safe = false, madeAfter = null, dry = false, known = null } = {}) {
-  if (before.kind === 'git') return runAsync(before.repo, undoGitFlow(before, after, { only, safe, madeAfter, dry, known }));
+export async function undoCheckpointAsync(before, after, { only = null, safe = false, madeAfter = null, dry = false, known = null, onBeforeWrite = null } = {}) {
+  if (before.kind === 'git') return runAsync(before.repo, undoGitFlow(before, after, { only, safe, madeAfter, dry, known, onBeforeWrite }));
   return undoCopy(before, after, { dry });
 }
 // What a run over two commits reads and cannot change (commits are immutable): kept so that a second run over the same
@@ -552,7 +552,7 @@ export async function undoCheckpointAsync(before, after, { only = null, safe = f
 // now are never kept: each run reads them again.
 export const newKnown = () => ({ blobs: new Map(), lists: new Map() });
 
-function* undoGitFlow(before, after, { only = null, safe = false, madeAfter = null, dry = false, known = null } = {}) {
+function* undoGitFlow(before, after, { only = null, safe = false, madeAfter = null, dry = false, known = null, onBeforeWrite = null } = {}) {
   known ??= newKnown();
   const restored = []; const removed = []; const skipped = []; const kept = [];
   const plan = [];
@@ -567,6 +567,14 @@ function* undoGitFlow(before, after, { only = null, safe = false, madeAfter = nu
     const k = `${i}|${file}`;
     if (!hashed.has(k)) hashed.set(k, (yield ask({}, ...variants[i], 'hash-object', '--', file)).stdout.trim());
     return hashed.get(k);
+  };
+  // A file is read again right before it is written over or removed: the batch above was read a moment ago and an
+  // asynchronous run lets the person (or the agent) change it meanwhile. onBeforeWrite is the tests' hook for that moment.
+  const stillAsDecided = function* (file, id, existed) {
+    if (onBeforeWrite) onBeforeWrite(file);
+    if (!existed) return !fs.existsSync(file);
+    for (let i = 0; i < variants.length; i++) if ((yield ask({}, ...variants[i], 'hash-object', '--', file)).stdout.trim() === id) return true;
+    return false;
   };
   const matches = function* (file, id) {
     for (let i = 0; i < variants.length; i++) if ((yield* hashAt(i, file)) === id) return true;
@@ -629,6 +637,7 @@ function* undoGitFlow(before, after, { only = null, safe = false, madeAfter = nu
       const old = yield askBuffer(...cfg, 'cat-file', '--filters', `${before.commit}:${target}`);
       if (old.status !== 0) { skipped.push(target); note(target, 'skipped'); continue; }
       if (dry) { restored.push(target); note(target, 'restore'); continue; }
+      if (!(yield* stillAsDecided(file, blobAfter, true))) { skipped.push(target); note(target, 'conflict'); continue; }
       try { respellPath(repo, rel, target, respelled); fs.writeFileSync(path.join(repo, target), old.stdout); restored.push(target); }
       catch (error) { if (!safe) throw error; skipped.push(`${target}: ${error.message}`); }
       continue;
@@ -668,12 +677,14 @@ function* undoGitFlow(before, after, { only = null, safe = false, madeAfter = nu
           if (deletedBlobs.has(blobAfter) && newFolderAbove(repo, rel, madeAfter)) { /* a moved file: remove it */ } else { kept.push(rel); note(rel, 'kept'); continue; }
         } else if (!made) { kept.push(rel); note(rel, 'kept'); continue; }
       }
+      if (nowExists && !dry && !(yield* stillAsDecided(file, blobAfter, true))) { skipped.push(rel); note(rel, 'conflict'); continue; }
       if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) { removed.push(rel); note(rel, 'remove'); } else if (nowExists) note(rel, 'skipped');
       continue;
     }
     // --filters: the file as it was on disk (the attributes' line endings, Git LFS), not git's stored form; a raw
     // checkpoint holds it byte for byte (core.autocrlf off).
     const old = yield askBuffer(...cfg, 'cat-file', '--filters', `${before.commit}:${rel}`);
+    if (old.status === 0 && !dry && !(yield* stillAsDecided(file, blobAfter, nowExists))) { skipped.push(rel); note(rel, 'conflict'); continue; }
     if (old.status === 0) { if (attempt(rel, () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); })) { restored.push(rel); note(rel, status === 'D' ? 'recreate' : 'restore'); } else note(rel, 'skipped'); }
     else { skipped.push(rel); note(rel, 'skipped'); }
   }

@@ -46,3 +46,32 @@ test('50 changed files: the plan and the preview never hold the event loop and e
     assert.ok(worst < 100, `the event loop was held ${Math.round(worst)} ms`);
   } finally { t.cleanup(); }
 });
+
+test('a file changed after the batch was read and before it is written over is a conflict, not lost', async () => {
+  const t = tempHome();
+  try {
+    const repo = path.join(t.home, 'web', 'race');
+    fs.mkdirSync(repo, { recursive: true });
+    git(repo, 'init', '-q');
+    for (const f of ['a.txt', 'b.txt', 'c.txt']) fs.writeFileSync(path.join(repo, f), `${f} one\n`);
+    git(repo, 'add', '-A'); git(repo, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'first');
+    const cp = takeCheckpoint(repo, `t-race-${Date.now()}`, path.join(t.home, 'fotos'));
+    for (const f of ['a.txt', 'b.txt']) fs.writeFileSync(path.join(repo, f), `${f} agent\n`);
+    fs.writeFileSync(path.join(repo, 'new.txt'), 'agent\n');
+    fs.rmSync(path.join(repo, 'c.txt'));
+    const end = snapshotCommit(repo, { always: true, message: 'after' });
+    const after = { kind: 'git', repo, commit: end.commit, at: Date.now() };
+    // the person edits a.txt, new.txt and recreates c.txt in the instant between the batch and the write
+    const hook = (file) => {
+      const name = path.basename(file);
+      if (name === 'a.txt' || name === 'new.txt') fs.writeFileSync(file, 'mine\n');
+    };
+    const out = await undoCheckpointAsync(cp, after, { onBeforeWrite: hook });
+    assert.equal(fs.readFileSync(path.join(repo, 'a.txt'), 'utf8'), 'mine\n');
+    assert.equal(fs.readFileSync(path.join(repo, 'new.txt'), 'utf8'), 'mine\n');
+    assert.ok(out.skipped.includes('a.txt') && out.skipped.includes('new.txt'));
+    assert.equal(fs.readFileSync(path.join(repo, 'b.txt'), 'utf8'), 'b.txt one\n', 'the untouched ones still come back');
+    assert.equal(fs.readFileSync(path.join(repo, 'c.txt'), 'utf8'), 'c.txt one\n');
+    assert.ok(out.restored.includes('b.txt'));
+  } finally { t.cleanup(); }
+});
