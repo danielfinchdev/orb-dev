@@ -298,7 +298,7 @@ export class Master {
   // ---- Linking with a one-use code, no password (src-tauri/vault/src/link.rs): the code lives in Rust; the engine only gets it
   // once, from linkNew, to show it.
   // token: one made for LINK_CODE_PURPOSE with Windows Hello or the password. → { ok, code, secret, salt, until } | { ok: false, reason }.
-  linkNew(token) { return this.call('linkNew', { token: String(token ?? '') }); }
+  linkNew(token) { return this.job('linkNew', { token: String(token ?? '') }); }
   // → { ok, salt, until } while a code is live (what a phone that only has the typed code needs), else { ok: false }.
   linkInfo() { return this.call('linkInfo'); }
   // The key that opens a phone's first message for its way (via: 'link' | 'linkcode'), or { ok: false }.

@@ -139,7 +139,7 @@ impl Session<'_> {
         if op == "close" {
           self.vaults.remove(&req["h"].as_u64().unwrap_or(0));
           Ok(json!(true))
-        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock" | "rebuildFinish" | "codeUnlock" | "codeSet" | "adopt") {
+        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock" | "rebuildFinish" | "codeUnlock" | "codeSet" | "adopt" | "linkNew") {
           return self.start_job(op, req, h);
         } else {
           let now = self.now(req);
@@ -311,7 +311,6 @@ fn quick(op: &str, req: &Value, v: &mut Vault, now: u64, server: &Server) -> Ans
     }
     "pairFinish" => pair_finish(req, v, now),
     // Linking with a one-use code, no password (link.rs): the code never leaves this process but in the answer that makes it.
-    "linkNew" => crate::link::make(v, s(req, "token"), now),
     "linkInfo" => Ok(crate::link::info(v, now)),
     "linkProbe" => crate::link::probe(v, s(req, "via"), &unb64(s(req, "devPub")).unwrap_or_default(), now),
     "linkFail" => Ok(crate::link::fail(v, now)),
@@ -517,6 +516,7 @@ pub(crate) fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: im
     "codeUnlock" => code_ops::unlock(req, h, now()),
     "codeSet" => code_ops::set(req, h, hello, now()),
     "adopt" => code_ops::adopt(req, h, now()),
+    "linkNew" => crate::link::make_job(h, req, now()),
     "forgot" => code_ops::forgot(req, h, hello, now()),
     "create" => {
       let p = password(req, "password");

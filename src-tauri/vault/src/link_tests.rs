@@ -258,9 +258,10 @@ fn the_server_ops_need_the_token_and_never_touch_the_password_exchange() {
   };
   let srv = crate::server::tests_server(std::sync::Arc::new(crate::fake_hello::Fake::new(crate::fake_hello::Mode::Ok)));
   let q = |op: &str, req: Value| crate::server::tests_quick(op, req, &mut h.vault.lock().unwrap(), &srv);
-  assert_eq!(q("linkNew", json!({ "token": "x" })).err(), Some(Code::Locked));
+  let new = |token: &str| crate::server::slow("linkNew", &json!({ "token": token }), &h, srv.hello.as_ref(), || 1_800_000_000_000);
+  assert_eq!(new("x").err(), Some(Code::Locked));
   let t = token(&mut h.vault.lock().unwrap(), Strength::Hello, PURPOSE);
-  let made = q("linkNew", json!({ "token": t })).unwrap();
+  let made = new(&t).unwrap();
   assert_eq!(made["ok"], json!(true));
   assert_eq!(q("linkInfo", json!({})).unwrap()["ok"], json!(true));
   assert_eq!(q("linkCancel", json!({})).unwrap(), json!(true));

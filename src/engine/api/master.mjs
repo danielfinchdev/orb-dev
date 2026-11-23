@@ -288,7 +288,7 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       if (typeof unlock !== 'string' || !m.hasPassword()) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
       // Windows Hello never turns the phone access on: it has to be on already (Ajustes).
       if (!remote.status().running) throw userError('msg.remote.enableFirst', {}, { reason: 'off' });
-      let made; try { made = m.linkNew(unlock); } catch (error) { throw error instanceof MasterError && error.code === 'locked' ? userError('msg.master.needUnlock', {}, { reason: 'unlock' }) : asUser(error); }
+      let made; try { made = await m.linkNew(unlock); } catch (error) { throw error instanceof MasterError && error.code === 'locked' ? userError('msg.master.needUnlock', {}, { reason: 'unlock' }) : asUser(error); }
       if (!made.ok) throw userError('msg.link.noKeys', {}, { reason: made.reason });
       log('enlace sin contraseña: código nuevo');
       return remote.openLinkCode(via, made);
