@@ -142,7 +142,7 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false, onBack =
     if (!unlock) return { error: 'expired' };
     try {
       if ((await call('master.state'))?.canForget) return { have: true };
-      const made = (await call('backup.recovery', { unlock }))?.code;
+      const made = (await call('backup.recovery', { unlock, password: v.next }))?.code;
       return made ? { code: made } : { error: 'failed' };
     } catch { return { error: 'failed' }; }
   };

@@ -41,7 +41,7 @@ test('la clave de datos: se crea con este PC, la contraseña la envuelve, los se
   const dir = tmp();
   const m = new Master(dir, { secret: secretA });
   assert.equal(m.openWithMachine(), true, 'un espacio nuevo: clave de datos nueva, ya abierta');
-  assert.deepEqual(m.state(), { exists: false, lost: false, locked: false, changedAt: null });
+  assert.deepEqual(m.state(), { exists: false, lost: false, locked: false, changedAt: null, hasCode: false });
   m.set('remote_keys', { priv: 'CLAVE-PRIVADA-DEL-PC' });
   await assert.rejects(m.create('corta'), { code: 'short' });
   await assert.rejects(m.create('nueve car'), { code: 'short' }, `al menos ${MASTER_MIN}`);
@@ -204,7 +204,8 @@ test('la copia fuera de core repone lo que falta; los conectores guardan referen
   assert.equal(sealConnectors(back, sealed.slice(0, 1)), null, 'nada nuevo que guardar');
   assert.deepEqual(back.ids('mcp/'), ['mcp/github/GITHUB_TOKEN'], 'las claves de un conector quitado se van');
   // What asks for it.
-  for (const m2 of ['backup.restore', 'backup.recovery', 'backup.verify', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector']) assert.equal(needsUnlock(m2, {}), true, m2);
+  assert.equal(needsUnlock('backup.recovery', {}), false, 'a token proves nothing there: the password or the code is checked in the vault');
+  for (const m2 of ['backup.restore', 'backup.verify', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector']) assert.equal(needsUnlock(m2, {}), true, m2);
   const current = { mcpServers: sealed.slice(0, 1), protected: ['secreto.txt'] };
   assert.equal(needsUnlock('config.save', { patch: { backup: { folder: '' } } }, current), true);
   assert.equal(needsUnlock('config.save', { patch: { mcpServers: [{ name: 'a', env: { K: 'claro' } }] } }, current), true);
@@ -235,13 +236,13 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     assert.ok(!db.includes(C.b64.enc(priv)) && !db.includes('VAPID_PRIVADA_X'), 'la clave del PC ya no está en la base (ni en sus páginas libres)');
     const config = fs.readFileSync(path.join(t.home, 'core', 'orb.json'), 'utf8');
     assert.ok(!config.includes('ghp_DE_PRUEBA_123') && config.includes('orb-secret:mcp/github/GITHUB_TOKEN'), 'orb.json guarda la referencia');
-    assert.deepEqual(await e.call('master.state'), { exists: false, lost: false, locked: false, changedAt: null, canForget: false, minLength: 10, unlockMinutes: 5, screenLocked: false, upgraded: false });
+    assert.deepEqual(await e.call('master.state'), { exists: false, lost: false, locked: false, changedAt: null, hasCode: false, canForget: false, minLength: 10, unlockMinutes: 5, screenLocked: false, upgraded: false });
     // Guarded: nothing without the password (there is none yet), then nothing without a fresh unlock.
     await assert.rejects(e.call('secrets.connector', { name: 'github' }), /Crea primero la contraseña maestra/);
     await assert.rejects(e.call('master.create', { password: 'corta' }), /al menos 10/);
     const made = await e.call('master.create', { password: PASS });
     assert.match(made.unlock, /^[0-9a-f]{48}$/);
-    for (const [method, params] of [['secrets.connector', { name: 'github' }], ['legacy.delete', {}], ['link.revoke', { id: 'x' }], ['master.check', {}], ['backup.restore', { file: 'x.orbbak' }], ['backup.recovery', {}], ['backup.verify', { file: 'x.orbbak' }], ['config.save', { patch: { backup: { folder: '' } } }], ['config.save', { patch: { mcpServers: [] } }]]) {
+    for (const [method, params] of [['secrets.connector', { name: 'github' }], ['legacy.delete', {}], ['link.revoke', { id: 'x' }], ['master.check', {}], ['backup.restore', { file: 'x.orbbak' }], ['backup.verify', { file: 'x.orbbak' }], ['config.save', { patch: { backup: { folder: '' } } }], ['config.save', { patch: { mcpServers: [] } }]]) {
       await assert.rejects(e.call(method, params), /necesita tu contraseña maestra/, method);
       await assert.rejects(e.call(method, { ...params, unlock: 'f'.repeat(48) }), /necesita tu contraseña maestra/, `${method} con un token inventado`);
     }
@@ -278,7 +279,7 @@ test('el motor: secretos de 3.7 fuera de la base y de orb.json, acciones protegi
     const { unlock } = await e.call('master.unlock', { password: PASS });
     assert.equal(await e.call('master.check', { unlock }), true);
     // The backup: no secret in clear in any file of it; the vault inside opens with the password.
-    const { code } = await e.call('backup.recovery', { unlock });
+    const { code } = await e.call('backup.recovery', { password: PASS });
     const made2 = await e.call('backup.now', {});
     const into = path.join(t.base, 'restaurada');
     await K.restoreInto(into, made2.path, { passphrase: code });
@@ -428,14 +429,30 @@ test('cambiar la contraseña mantiene los móviles; olvidarla pide el código de
     // Forgotten: without a recovery code made on this PC there is no keeping the secrets.
     assert.equal((await e.call('master.state')).canForget, false);
     await assert.rejects(e.call('master.forgot', { code: 'X', password: 'contraseña nueva de verdad', confirm: true }), /no tiene código de recuperación/);
-    const { code } = await e.call('backup.recovery', { unlock: changed.unlock });
+    await assert.rejects(e.call('backup.recovery', { unlock: changed.unlock }), /contraseña maestra o el código/, 'a token alone makes no code');
+    await assert.rejects(e.call('backup.recovery', { password: 'no es la contraseña' }), /incorrecta/);
+    const { code } = await e.call('backup.recovery', { password: 'otra contraseña larga' });
     assert.equal((await e.call('master.state')).canForget, true);
+    assert.equal((await e.call('master.state')).hasCode, true);
     await assert.rejects(e.call('master.forgot', { code, password: 'contraseña nueva de verdad' }), /Confirma/);
     await assert.rejects(e.call('master.forgot', { code: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH', password: 'contraseña nueva de verdad', confirm: true }), /Código de recuperación incorrecto. Te quedan 4/);
+    // A generated code opens the data key itself: the new password keeps the keys, the secrets and the phones.
+    const sameKey = read(dir, FILES.master).keyId;
+    const kept = await e.call('master.forgot', { code: code.toLowerCase().replaceAll('-', ' '), password: 'una contraseña intermedia', confirm: true });
+    assert.equal(kept.unlinked, 0);
+    assert.equal(read(dir, FILES.master).keyId, sameKey, 'misma clave de datos');
+    assert.ok(await a.call(null, 'projects.list'), 'el móvil sigue enlazado');
+    assert.deepEqual((await e.call('secrets.connector', { name: 'github', unlock: kept.unlock })).env, { GITHUB_TOKEN: 'ghp_CONSERVADA' });
+    // A phrase of the user's own takes the code's place (for the copies only): forgetting with it makes a new data key.
+    const phrase = 'mi frase propia de recuperacion';
+    await assert.rejects(e.call('backup.recovery', { code: phrase, password: 'una contraseña intermedia' }), /dejará de servir/);
+    await e.call('backup.recovery', { code: phrase, password: 'una contraseña intermedia', confirm: true });
+    assert.equal((await e.call('master.state')).hasCode, false);
+    assert.equal((await e.call('master.state')).canForget, true, 'la frase sigue sirviendo para olvidar la contraseña');
     const oldMaster = fs.readFileSync(path.join(dir, FILES.master));
     const oldKey = JSON.parse(oldMaster).keyId;
     const fpBefore = (await e.call('remote.status')).pc;
-    const r = await e.call('master.forgot', { code, password: 'contraseña nueva de verdad', confirm: true });
+    const r = await e.call('master.forgot', { code: phrase, password: 'contraseña nueva de verdad', confirm: true });
     assert.equal(r.unlinked, 1);
     assert.notEqual(read(dir, FILES.master).keyId, oldKey, 'clave de datos nueva');
     assert.notEqual((await e.call('remote.status')).pc, fpBefore, 'claves nuevas del PC para los móviles');

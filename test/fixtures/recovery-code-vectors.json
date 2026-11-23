@@ -1,0 +1,100 @@
+{
+ "note": "Cases of the recovery code normalization: normalizePassphrase (src/domain/data/backup.mjs) and normalize (src-tauri/vault/src/vault/code.rs) must give the same.",
+ "cases": [
+  {
+   "in": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6789",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "abcd efgh jklm npqr stuv wxyz 2345 6789",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "  ABCDEFGHJKLMNPQRSTUVWXYZ23456789  ",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "abcdefghjklmnpqrstuvwxyz23456789",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "ABCD--EFGH  JKLM-NPQR-STUV-WXYZ-2345-6789",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-678",
+   "out": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-678",
+   "generated": false
+  },
+  {
+   "in": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-67890",
+   "out": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-67890",
+   "generated": false
+  },
+  {
+   "in": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6780",
+   "out": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6780",
+   "generated": false
+  },
+  {
+   "in": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6781",
+   "out": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6781",
+   "generated": false
+  },
+  {
+   "in": "ＡＢＣＤ－ＥＦＧＨ－ＪＫＬＭ－ＮＰＱＲ－ＳＴＵＶ－ＷＸＹＺ－２３４５－６７８９",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "ABCD EFGH　JKLM NPQR\tSTUV\nWXYZ 2345 6789",
+   "out": "ABCDEFGHJKLMNPQRSTUVWXYZ23456789",
+   "generated": true
+  },
+  {
+   "in": "ABCD_EFGH-JKLM-NPQR-STUV-WXYZ-2345-6789",
+   "out": "ABCD_EFGH-JKLM-NPQR-STUV-WXYZ-2345-6789",
+   "generated": false
+  },
+  {
+   "in": "una frase que yo elijo",
+   "out": "una frase que yo elijo",
+   "generated": false
+  },
+  {
+   "in": "  una frase con espacios  ",
+   "out": "una frase con espacios",
+   "generated": false
+  },
+  {
+   "in": "Frase-Con-Guiones y Mayúsculas",
+   "out": "Frase-Con-Guiones y Mayúsculas",
+   "generated": false
+  },
+  {
+   "in": "",
+   "out": "",
+   "generated": false
+  },
+  {
+   "in": "   ",
+   "out": "",
+   "generated": false
+  },
+  {
+   "in": "IIII-OOOO-IIII-OOOO-IIII-OOOO-IIII-OOOO",
+   "out": "IIIIOOOOIIIIOOOOIIIIOOOOIIIIOOOO",
+   "generated": true
+  },
+  {
+   "in": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6789-ABCD",
+   "out": "ABCD-EFGH-JKLM-NPQR-STUV-WXYZ-2345-6789-ABCD",
+   "generated": false
+  }
+ ]
+}

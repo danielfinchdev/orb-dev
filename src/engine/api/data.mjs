@@ -13,6 +13,7 @@ import * as K from '../../domain/data/backup.mjs';
 import { legacyData, deleteLegacyData } from '../../domain/data/legacy/migrate-38.mjs';
 import { utcToZoned, localDay, ownerTz } from '../../shared/tz.mjs';
 import { refused } from './master.mjs';
+import { adoptStaged } from '../../domain/security/master.mjs';
 
 // A backup made by an Orb older than 3.8, which kept keys without the master password (one without a version is not counted).
 export const before38 = (v) => { const m = /^(\d+)\.(\d+)/.exec(String(v ?? '')); return Boolean(m) && (Number(m[1]) < 3 || (Number(m[1]) === 3 && Number(m[2]) < 8)); };
@@ -107,13 +108,21 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       return { ok: true, files: r.files, bytes: r.bytes, created: r.header.created, version: r.header.version };
     },
     // The copy is checked and unpacked now; it replaces the data at the next start of the engine (restartNeeded).
-    'backup.restore': async ({ file, passphrase }) => {
-      const r = await K.stageRestore(ctx.home, fileOf(file), { secret: secret(), passphrase: pass(passphrase) });
-      log(`copia lista para restaurar: ${path.basename(file)} (${r.files} archivos)`);
+    // password: only for a copy of another data key than this PC's, which is restored with proof or its secrets stay as they are.
+    'backup.restore': async ({ file, passphrase, password }) => {
+      let proof = false;
+      if (typeof password === 'string' && password && ctx.master) {
+        const t = await ctx.master.verify(password, 'pc');
+        if (!t.ok) throw refused(t);
+        proof = true;
+      }
+      // The vault settles what the copy's code wrap and its Hello entries may bring (master.mjs › adoptStaged).
+      const adopt = ctx.master ? (dir, code) => adoptStaged(dir, code) : null;
+      const r = await K.stageRestore(ctx.home, fileOf(file), { secret: secret(), passphrase: pass(passphrase), adopt, proof });
+      log(`copia lista para restaurar: ${path.basename(file)} (${r.files} archivos)${r.secretsKept ? '; los secretos de este PC se quedan como estaban' : ''}`);
       emit('backup:restoreReady', { file: path.basename(file) });
-      return { ok: true, files: r.files, created: r.header.created, restartNeeded: true };
+      return { ok: true, files: r.files, created: r.header.created, restartNeeded: true, secretsKept: r.secretsKept === true };
     },
-    // The recovery code: a new one is made and shown once (the user writes it down); copies from now on open with it.
     // after «Empezar con una clave nueva», Windows opens the key from before again: go back to it at the
     // next start (src-tauri/vault/src/machine.rs › previous_key). Guarded like the recovery code.
     'backup.previousKey': () => {
@@ -137,12 +146,6 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
       const dir = paths(ctx.home).data;
       for (const f of [NEW_FILE, BACK_FILE]) fs.rmSync(path.join(dir, f), { force: true });
       return { ok: true };
-    },
-    'backup.recovery': ({ code }) => {
-      const value = code == null || code === '' ? K.newRecoveryCode() : String(code);
-      if (value.length < 12 || value.length > 200) fail(tr('data.backup.err.shortPassphrase'));
-      K.setRecovery(ctx.home, secret(), value);
-      return { code: code ? null : value, at: new Date().toISOString() };
     },
     // what Orb 3.7 left (the archives and the copies of its database), and «Borrar los datos de Orb 3.7».
     // oldBackups: the copies made before Orb 3.8 still hold 3.7's keys without the master password.

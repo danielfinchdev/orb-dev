@@ -2,6 +2,7 @@
 // a password live only in this crate's memory (locked pages, wiped after use). Orb.exe runs it for its engine
 // (src-tauri/src/vault_host.rs); the tests run the same code as the orb-vault binary. The engine's side, with the API
 // the rest of Orb uses, is src/domain/security/master.mjs.
+pub mod code_ops;
 pub mod crypto;
 pub mod dpapi;
 pub mod fake_hello;

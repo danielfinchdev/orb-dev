@@ -3,6 +3,7 @@
 // engine keeps its own API as it was: src/domain/security/master.mjs); what takes time (scrypt) runs as a job the engine polls, so
 // its event loop never waits for a password check and the quick requests are answered meanwhile.
 // Every buffer that carried a password or a secret (the request line, the parsed request, the answer) is wiped after use.
+use crate::code_ops;
 use crate::crypto::{self, b64url, unb64};
 use crate::grants::Grants;
 use crate::hello::{self, Hello};
@@ -29,10 +30,10 @@ pub struct Server {
   pub hello: Arc<dyn Hello>,
 }
 
-struct Handle {
-  vault: Mutex<Vault>,
+pub(crate) struct Handle {
+  pub(crate) vault: Mutex<Vault>,
   /// One slow change at a time (two windows' clicks, a phone linking while the password changes).
-  serial: Mutex<()>,
+  pub(crate) serial: Mutex<()>,
 }
 
 type Answer = Result<Value, Code>;
@@ -90,7 +91,7 @@ pub fn serve(server: &Server, input: &mut impl BufRead, output: &mut impl Write)
   }
 }
 
-fn s<'a>(req: &'a Value, k: &str) -> &'a str {
+pub(crate) fn s<'a>(req: &'a Value, k: &str) -> &'a str {
   req.get(k).and_then(Value::as_str).unwrap_or_default()
 }
 
@@ -132,7 +133,7 @@ impl Session<'_> {
         if op == "close" {
           self.vaults.remove(&req["h"].as_u64().unwrap_or(0));
           Ok(json!(true))
-        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock") {
+        } else if matches!(op, "create" | "verify" | "same" | "change" | "forgot" | "reset" | "helloEnable" | "helloUnlock" | "codeUnlock" | "codeSet" | "adopt") {
           return self.start_job(op, req, h);
         } else {
           let now = self.now(req);
@@ -219,6 +220,10 @@ fn finish(a: Answer, h: &Handle) -> Value {
   };
   if std::mem::take(&mut v.changed) {
     out["changed"] = json!(true);
+  }
+  let stale = std::mem::take(&mut v.stale);
+  if !stale.is_empty() {
+    out["stale"] = json!(stale);
   }
   let notices = std::mem::take(&mut v.notices);
   if !notices.is_empty() {
@@ -337,7 +342,7 @@ fn grant(req: &Value, v: &mut Vault, now: u64, server: &Server) -> Answer {
   Ok(json!({ "grant": token, "pipe": server.grants.name() }))
 }
 
-fn password(req: &Value, k: &str) -> Locked {
+pub(crate) fn password(req: &Value, k: &str) -> Locked {
   Locked::from_slice(s(req, k).as_bytes())
 }
 
@@ -365,7 +370,7 @@ fn verifier_of(p: &Locked, kdf: Value) -> Option<Value> {
 }
 
 /// The password's wrap and the phones' verifier from a new password (two scrypts, the vault not held meanwhile).
-fn wrap(h: &Handle, p: &Locked, created: Option<String>, now: u64) -> Answer {
+pub(crate) fn wrap(h: &Handle, p: &Locked, created: Option<String>, now: u64) -> Answer {
   let (kdf, pair) = {
     let v = h.vault.lock().unwrap();
     (v.new_kdf(), v.new_pair_kdf())
@@ -378,7 +383,7 @@ fn wrap(h: &Handle, p: &Locked, created: Option<String>, now: u64) -> Answer {
 }
 
 /// One check of a password on a channel, with its waits (src/domain/security/master.mjs › verify).
-fn verify(h: &Handle, p: &Locked, channel: &str, now: u64) -> Answer {
+pub(crate) fn verify(h: &Handle, p: &Locked, channel: &str, now: u64) -> Answer {
   let (m, costs) = {
     let v = h.vault.lock().unwrap();
     if !v.has_password() {
@@ -425,7 +430,7 @@ fn same(h: &Handle, p: &Locked) -> Answer {
   Ok(json!(h.vault.lock().unwrap().key_for_kek(&m, kek.as_slice()).is_some()))
 }
 
-fn checked(p: &Locked) -> Result<(), Code> {
+pub(crate) fn checked(p: &Locked) -> Result<(), Code> {
   check_password(p.as_str().ok_or(Code::Short)?)
 }
 
@@ -452,12 +457,16 @@ fn hello_job(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: &impl Fn
   hello::finish(&mut h.vault.lock().unwrap(), &begun.message, signed, now())
 }
 
-fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: impl Fn() -> u64) -> Answer {
+pub(crate) fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: impl Fn() -> u64) -> Answer {
   if matches!(op, "helloEnable" | "helloUnlock") {
     return hello_job(op, req, h, hello, &now);
   }
   let _one = h.serial.lock().unwrap();
   match op {
+    "codeUnlock" => code_ops::unlock(req, h, now()),
+    "codeSet" => code_ops::set(req, h, hello, now()),
+    "adopt" => code_ops::adopt(req, h, now()),
+    "forgot" => code_ops::forgot(req, h, hello, now()),
     "create" => {
       let p = password(req, "password");
       checked(&p)?;
@@ -488,19 +497,14 @@ fn slow(op: &str, req: &Value, h: &Handle, hello: &dyn Hello, now: impl Fn() -> 
       v.may_issue = true;
       Ok(json!({ "ok": true }))
     }
-    "forgot" | "reset" => {
+    "reset" => {
       let next = password(req, "next");
       checked(&next)?;
       let old_hello;
       {
         let mut v = h.vault.lock().unwrap();
         old_hello = hello::account(&mut v);
-        if op == "forgot" {
-          let keep: Vec<String> = req.get("keep").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
-          v.rotate(&keep)?;
-        } else {
-          v.wipe_all()?;
-        }
+        v.wipe_all()?;
       }
       // The new data key left no Hello entry behind; the OS key of the old one goes too.
       if let Some(a) = old_hello {

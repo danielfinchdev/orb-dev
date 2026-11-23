@@ -189,13 +189,15 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // the master password's files come back first from their copy outside core (newer than any backup).
   { const { restoreMissing } = await import('../domain/security/master.mjs'); try { restoreMissing(paths(home).secrets, mirror); } catch (error) { console.error(`secretos: ${error.message}`); } }
   const { repairCore } = await import('../domain/data/backup.mjs');
-  const repair = await repairCore(home, { secret: secretOf(home) });
+  const repair = await repairCore(home, { secret: secretOf(home), adopt: adopter(home) });
   if (!repair.ok) return coreBlocked({ home, version, repair });
   return open({ home, version, repair });
 }
 // The secret the backups are sealed with: the app's, or the plain one of a run without the app (never made here).
 // This PC's backup key: from the vault (the app), or from the plain clave.bin of a run without it (never made here).
 const secretOf = (home) => machineKeys({ create: false, home })?.backup ?? null;
+// What settles a restored copy's code wrap in the vault (master.mjs › adoptStaged); none without a secret to open it with.
+const adopter = (home) => { const s = masterSecret(home); return s ? async (dir, code) => (await import('../domain/security/master.mjs')).adoptStaged(dir, code, s) : null; };
 // What opens core\secretos for this PC: the vault's own secret (the app), a given one, or the plain clave.bin.
 const masterSecret = (home) => (ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })());
 
@@ -257,7 +259,7 @@ function coreBlocked({ home, version, repair }) {
       if (!fs.existsSync(cfg)) writeJson(cfg, merge(DEFAULT_CONFIG, { language: language === 'en' ? 'en' : 'es' }));
     } else {
       const { repairCore } = await import('../domain/data/backup.mjs');
-      next = await repairCore(home, { secret: secretOf(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,
+      next = await repairCore(home, { secret: secretOf(home), adopt: adopter(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,
         file: typeof file === 'string' && /\.orbbak$/i.test(file) && path.isAbsolute(file) && fs.existsSync(file) ? file : null });
       if (!next.ok) { core = { ...core, reason: next.reason, backup: next.backup ?? core.backup, error: next.error ?? null }; return core; }
     }

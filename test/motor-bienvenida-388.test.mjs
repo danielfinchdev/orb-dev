@@ -13,7 +13,7 @@ test('a new home: master.create → backup.recovery with its unlock → canForge
     assert.equal((await e.call('master.state')).canForget, false);
     const made = await e.call('master.create', { password: 'una frase larga de prueba' });
     assert.match(made.unlock, /^[0-9a-f]{48}$/);
-    const r = await e.call('backup.recovery', { unlock: made.unlock });
+    const r = await e.call('backup.recovery', { password: 'una frase larga de prueba' });
     assert.equal(typeof r.code, 'string');
     assert.ok(r.code.length >= 12);
     assert.equal((await e.call('master.state')).canForget, true, 'with the code the secrets can be kept after a forgotten password');

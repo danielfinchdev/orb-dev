@@ -69,7 +69,7 @@ test('4: the recovery code is made only when there is none, shown once, kept now
   assert.match(create, /call\('backup\.status'\)\.then\(\(s\) => setHasCode\(Boolean\(s\?\.recovery\)\)\)/);
   assert.match(create, /if \(hasCode === true\) \{ onDone\?\.\(\); return; \}/);
   assert.match(create, /\(await call\('master\.state'\)\)\?\.canForget\) return \{ have: true \}/);
-  assert.match(create, /call\('backup\.recovery', \{ unlock \}\)/);
+  assert.match(create, /call\('backup\.recovery', \{ unlock, password: v\.next \}\)/);
   assert.match(create, /const unlock = heldUnlock\(\);\s*if \(!unlock\) return \{ error: 'expired' \};/);
   assert.match(create, /catch \{ return \{ error: 'failed' \}; \}/);
   // A failed code is no toast: the card says so and the user retries or goes on.

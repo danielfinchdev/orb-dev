@@ -86,6 +86,13 @@ pub fn backup_key(secret: &[u8]) -> Locked {
   Hkdf::<Sha256>::new(Some(b"orb-backup"), secret).expand(b"machine-v1", out.as_mut_slice()).expect("32 bytes");
   out
 }
+/// The key a generated recovery code wraps the data key with: HKDF of scrypt(code), apart from the backups' key (their own
+/// scrypt of the same code is another key), so a copy's wrap and the vault's never open each other.
+pub fn code_kek(scrypt_out: &[u8]) -> Locked {
+  let mut out = Locked::zeroed(32);
+  Hkdf::<Sha256>::new(None, scrypt_out).expand(b"orb-vault-code-v1", out.as_mut_slice()).expect("32 bytes");
+  out
+}
 /// Lower-case hex, kept in locked memory (the sealed text of this PC's secret is its hex).
 pub fn hex_of(bytes: &[u8]) -> Locked {
   const D: &[u8; 16] = b"0123456789abcdef";
