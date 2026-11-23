@@ -157,7 +157,8 @@ export class Sessions {
     for (const row of board.all("SELECT id, body FROM session_items WHERE kind = 'approval' AND body LIKE '%\"status\":\"pending\"%'")) {
       const item = parseItem(row); board.run('UPDATE session_items SET body = ? WHERE id = ?', JSON.stringify({ ...item.body, status: 'expired' }), row.id);
     }
-    this.sweeper = setInterval(() => this.closeIdle(), 60_000);
+    // the periodic sweep must never throw: a database already closed (the app is leaving) is not worth an uncaught error
+    this.sweeper = setInterval(() => { try { this.closeIdle(); } catch (error) { this.log?.(`limpieza de sesiones: ${error.message}`); } }, 60_000);
     this.sweeper.unref?.();
     this.side = new SideChats(this); // «/side»: questions apart, in memory only (side.mjs)
     this.suggest = new Suggester(this); // the grey next message in the box, when Ajustes has it on (suggest.mjs)
