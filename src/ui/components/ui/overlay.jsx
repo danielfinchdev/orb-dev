@@ -93,7 +93,7 @@ export function Select({ value, onValueChange, options, placeholder, prefix, car
         <SelectPrimitive.Content data-slot="select-content" position="popper" sideOffset={4} className="pop bg-popover text-popover-foreground border-border data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 origin-(--radix-select-content-transform-origin) relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] min-w-(--radix-select-trigger-width) overflow-x-hidden overflow-y-auto rounded-card border text-control shadow-(--shadow)">
           <SelectPrimitive.Viewport className="p-1">
             {options.map((o) => (
-              <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="it focus:bg-accent focus:text-foreground flex w-full cursor-pointer items-center gap-2 rounded-ctl px-2 py-1.5 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg:not([class*='size-'])]:size-4">
+              <SelectPrimitive.Item key={o.value} value={o.value} disabled={o.disabled} className="it pick focus:bg-accent focus:text-foreground flex w-full cursor-pointer items-center gap-2 rounded-ctl px-2 py-1.5 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45 [&_svg:not([class*='size-'])]:size-4">
                 {o.icon ?? null}<SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
                 <span className="chk text-primary-text ml-auto flex size-4 items-center justify-center"><SelectPrimitive.ItemIndicator><CheckIcon className="size-4" /></SelectPrimitive.ItemIndicator></span>
               </SelectPrimitive.Item>
@@ -211,12 +211,12 @@ export function DropdownMenuCheckboxItem({ className, children, checked, onCheck
     </DropdownPrimitive.CheckboxItem>
   );
 }
-// one choice among several (a sort order, a mode): the group keeps one value, the chosen item shows a dot.
+// one choice among several (a sort order, a mode): the group keeps one value, the chosen item gets a soft accent fill and a check (see .pick in app.css).
 export const DropdownMenuRadioGroup = DropdownPrimitive.RadioGroup;
 export function DropdownMenuRadioItem({ className, children, ...props }) {
   return (
-    <DropdownPrimitive.RadioItem className={cn('it focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl py-1.5 pr-2 pl-8 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props}>
-      <span className="absolute left-2 grid size-4 place-items-center"><DropdownPrimitive.ItemIndicator><span className="bg-primary-text block size-2 rounded-full" /></DropdownPrimitive.ItemIndicator></span>
+    <DropdownPrimitive.RadioItem className={cn('it pick focus:bg-accent focus:text-foreground relative flex cursor-pointer items-center gap-2 rounded-ctl py-1.5 pr-2 pl-8 text-control leading-[1.45] outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-45', className)} {...props}>
+      <span className="absolute left-2 grid size-4 place-items-center"><DropdownPrimitive.ItemIndicator><CheckIcon className="text-primary-text size-4" /></DropdownPrimitive.ItemIndicator></span>
       {children}
     </DropdownPrimitive.RadioItem>
   );

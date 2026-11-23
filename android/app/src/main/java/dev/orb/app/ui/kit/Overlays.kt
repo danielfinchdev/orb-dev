@@ -130,7 +130,7 @@ fun OrbSheetItem(
     val click = if (checked != null) Modifier.selectable(selected = checked, enabled = enabled, role = Role.RadioButton, onClick = onClick)
     else Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick)
     Row(
-        modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).then(click).then(if (enabled) Modifier else Modifier.alpha(0.45f)).padding(horizontal = 20.dp),
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).chosenFill(checked == true).then(click).then(if (enabled) Modifier else Modifier.alpha(0.45f)).padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = if (danger) OrbKit.destructive else OrbKit.mutedForeground)
@@ -139,20 +139,24 @@ fun OrbSheetItem(
             fontWeight = if (checked == true) FontWeight.Medium else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
         if (meta != null) Text(meta, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp)
-        if (checked == true) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.foreground)
+        if (checked == true) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.primaryText)
         if (chevron) Icon(OrbIcons.ChevronRight, null, Modifier.size(20.dp), tint = OrbKit.faintForeground)
         trailing?.invoke()
     }
 }
 
+/** The chosen row of a pick-one list: a soft fill of the app palette's accent (the same container the badges use), with no circle or radio. */
+@Composable
+fun Modifier.chosenFill(chosen: Boolean): Modifier = if (chosen) background(OrbKit.primarySoft) else this
+
 /**
  * A two-line choice of a sheet (the mockups' 64 dp radio `.it`): a mark, a title with a line of explanation and, at the
- * end, a filled check circle while chosen or an empty one.
+ * end, a check while chosen.
  */
 @Composable
 fun OrbSheetChoice(title: String, hint: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     Row(
-        modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
+        modifier.fillMaxWidth().defaultMinSize(minHeight = 64.dp).chosenFill(selected).selectable(selected = selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -161,8 +165,8 @@ fun OrbSheetChoice(title: String, hint: String, icon: ImageVector, selected: Boo
             Text(title, color = OrbKit.foreground, fontSize = 15.sp, lineHeight = 21.sp, fontWeight = FontWeight.Medium)
             Text(hint, color = OrbKit.mutedForeground, fontSize = 13.sp, lineHeight = 17.sp)
         }
-        // Like every `.it .lucide` of the mockup: the muted colour, chosen or not; only the glyph tells which one is on.
-        Icon(if (selected) OrbIcons.CircleCheck else OrbIcons.Circle, null, Modifier.size(20.dp), tint = OrbKit.mutedForeground)
+        // No empty circle: the chosen row is told by its soft accent fill and a check; the others show nothing.
+        if (selected) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.primaryText)
     }
 }
 

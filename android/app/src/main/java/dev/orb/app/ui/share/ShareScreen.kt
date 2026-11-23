@@ -48,6 +48,7 @@ import dev.orb.app.ui.chats.ChatRow
 import dev.orb.app.ui.chats.ChatTexts
 import dev.orb.app.ui.icons.OrbIcons
 import dev.orb.app.ui.kit.AgentMark
+import dev.orb.app.ui.kit.chosenFill
 import dev.orb.app.ui.kit.OrbBadge
 import dev.orb.app.ui.kit.OrbBadgeKind
 import dev.orb.app.ui.kit.OrbButton
@@ -150,7 +151,7 @@ private fun ShareText(value: String, onChange: (String) -> Unit) {
 @Composable
 private fun DestRow(title: String, meta: String?, selected: Boolean, onClick: () -> Unit, lead: @Composable () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).selectable(selected = selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = 20.dp),
+        Modifier.fillMaxWidth().defaultMinSize(minHeight = 52.dp).chosenFill(selected).selectable(selected = selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Box(Modifier.width(20.dp), contentAlignment = Alignment.Center) { lead() }
@@ -159,7 +160,7 @@ private fun DestRow(title: String, meta: String?, selected: Boolean, onClick: ()
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal, maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
         if (!meta.isNullOrBlank()) Text(meta, color = OrbKit.faintForeground, fontSize = 12.sp, lineHeight = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.width(96.dp))
-        if (selected) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.foreground)
+        if (selected) Icon(OrbIcons.Check, null, Modifier.size(20.dp), tint = OrbKit.primaryText)
     }
 }
 

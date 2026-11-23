@@ -33,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -454,8 +453,8 @@ private fun ReassignSheet(agents: List<AgentChoice>?, current: String?, reasonin
         for (o in options) {
             val on = agent == o.id
             OrbSheetItem(
-                listOfNotNull(o.label, o.detail).joinToString(" · "), { agent = o.id }, Modifier.semantics { selected = on },
-                icon = if (on) OrbIcons.Check else OrbIcons.Circle, meta = if (o.id == (current ?: "any")) TaskTexts.REASSIGN_CURRENT else null,
+                listOfNotNull(o.label, o.detail).joinToString(" · "), { agent = o.id },
+                checked = on, meta = if (o.id == (current ?: "any")) TaskTexts.REASSIGN_CURRENT else null,
             )
         }
         OrbSheetLabel(TaskTexts.MORE_OPTIONS_TASK)

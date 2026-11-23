@@ -601,3 +601,9 @@ html[data-motion="minima"] .context-slot-item { animation-name: slot-fade; }
 
 /* Edge/WebView2 draw their own eye and clear button inside inputs; the app has its own «Mostrar» and clear controls. */
 input::-ms-reveal, input::-ms-clear { display: none; }
+
+/* The chosen row of every pick-one menu (selects, radio menus, the autonomy list) carries a soft fill of the theme accent plus its check, never a circle.
+   The fill is a tint of --primary-text so it follows each palette in light and dark; the hover/keyboard highlight stays the neutral --accent fill,
+   so «chosen» (tinted) and «highlighted» (grey) differ, and chosen+highlighted gets a stronger tint and a thin accent edge. Doubled class beats focus:bg-accent. */
+.pick.pick:is([data-state="checked"], [data-picked="true"]) { background-color: color-mix(in oklab, var(--primary-text) 14%, transparent); }
+.pick.pick:is([data-state="checked"], [data-picked="true"]):is([data-highlighted], :hover, :focus-visible) { background-color: color-mix(in oklab, var(--primary-text) 24%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary-text) 40%, transparent); }
