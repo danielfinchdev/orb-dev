@@ -1,9 +1,10 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 // The detail of the usage lives in the «Uso» tab next to this one (views/usage.jsx).
 import { useEffect, useState } from 'react';
-import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, Plus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, ListChecks, LogOut } from 'lucide-react';
+import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, Plus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, ListChecks, LogOut, Pencil, Check } from 'lucide-react';
 import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
-import { useCatalog } from '@/components/brain-picker.jsx';
+import { useCatalog, AccountTag } from '@/components/brain-picker.jsx';
+import { ACCOUNT_COLORS, TAG_RE, defaultTag } from '../../shared/account-marks.mjs';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { InstallProgress } from '@/components/installer.jsx';
@@ -250,21 +251,87 @@ async function signOut(acc, reload) {
 }
 
 // One account: its name with the plan and the state of its login, and a menu with what can be done with it.
-function AccountRow({ acc, plan, reload, agentOn = true }) {
+// What Orb knows about whose login a folder holds: checked against the one it learned, not matching, or not checked yet.
+function identityOf(acc, t) {
+  if (acc.viaKey) return [t('acct.viaKey'), 'info'];
+  if (acc.identity === 'ok') return [acc.hint ? t('acct.checkedHint', { hint: acc.hint }) : t('acct.checked'), 'success'];
+  if (acc.identity === 'mismatch' || acc.identity === 'noMail') return [t('acct.mismatch'), 'warning'];
+  return [t('acct.unchecked'), 'secondary'];
+}
+
+// The used part of the account's window as a thin bar with its number, from what the agent reports (nothing when it says none).
+function AccountUsage({ u, label }) {
   const t = useT();
+  const locale = useLocale();
+  const real = u?.real;
+  if (!real) return <span className="text-faint-foreground w-[150px] text-right text-caption" data-testid="account-usage-none">{t('agents.noUsageData')}</span>;
+  const pct = Math.round(real.utilization * 100);
+  return (
+    <span className="flex w-[150px] items-center justify-end gap-2" data-testid="account-usage" title={real.resetAt ? t('agents.renews', { when: whenOf(real.resetAt, locale) }) : undefined}>
+      <span className="text-muted-foreground text-caption tabular-nums">{pct} %</span>
+      <span className="bg-muted block h-1.5 w-[84px] overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={label}><span className={cn('block h-full rounded-full', pct >= 90 ? 'bg-warning' : 'bg-primary-text')} style={{ width: `${Math.min(100, Math.max(pct > 0 ? 3 : 0, pct))}%` }} /></span>
+    </span>
+  );
+}
+
+// Name, tag and colour of an account. Empty tag: the one Orb makes from the name.
+function editAccount(acc, t, reload) {
+  return form(t('acct.editTitle'), {
+    initial: { label: acc.label, tag: acc.tag ?? '', color: acc.color ?? ACCOUNT_COLORS[0] },
+    body: (v, set) => (<>
+      <Field label={t('agents.accountName')}><Input value={v.label} maxLength={60} onChange={(e) => set({ label: e.target.value })} data-testid="account-edit-name" /></Field>
+      <Field label={t('acct.tag')} hint={t('acct.tagHint')}><Input value={v.tag} maxLength={4} placeholder={defaultTag(v.label, acc.id)} onChange={(e) => set({ tag: e.target.value.toUpperCase() })} data-testid="account-edit-tag" /></Field>
+      <Field label={t('acct.color')}>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('acct.color')}>
+          {ACCOUNT_COLORS.map((c) => (
+            <button key={c} type="button" role="radio" aria-checked={v.color === c} onClick={() => set({ color: c })} className={cn('cursor-pointer rounded-md p-0.5 outline-none focus-visible:outline-2 focus-visible:outline-ring', v.color === c && 'ring-ring ring-2')} data-testid={`account-color-${c}`}>
+              <AccountTag text={v.tag.trim() || defaultTag(v.label, acc.id)} color={c} />
+            </button>
+          ))}
+        </div>
+      </Field>
+    </>),
+    ok: t('settings.save'),
+    onOk: async (v) => {
+      const tag = v.tag.trim();
+      if (tag && !TAG_RE.test(tag)) { notifyWarn(t('acct.tagBad')); return false; }
+      await call('accounts.update', { id: acc.id, label: v.label.trim() || acc.label, tag, color: v.color });
+      reload(); return true;
+    }
+  });
+}
+
+// «Es correcta, recordar esta»: shows the login found in the folder before taking it as the account's own.
+async function rememberAccount(acc, t, reload) {
+  const found = await act(call('accounts.identityFound', { id: acc.id }));
+  const hint = found?.hint ?? acc.foundHint;
+  if (!hint) { notifyWarn(t('acct.noFound')); return; }
+  if (!(await confirm(t('acct.rememberTitle', { label: acc.label }), t('acct.rememberBody', { label: acc.label, hint }), { ok: t('acct.remember') }))) return;
+  if (await act(call('accounts.rememberIdentity', { id: acc.id }), t('acct.remembered'))) reload();
+}
+
+function AccountRow({ acc, plan, reload, agentOn = true, usage = null, multi = false }) {
+  const t = useT();
+  const [idText, idTone] = identityOf(acc, t);
+  const identityFlag = acc.identity === 'mismatch' || acc.identity === 'noMail';
   const login = LOGIN[acc.login] ?? LOGIN.desconocido;
   // The state as the mock-up's row says it: signed out, paused (not used by Orb) or active (signed in and in use).
   // With its agent turned off no account is in use, so a signed-in one only says that it is signed in.
   const state = acc.login === 'no' ? [t('agents.accountNoLogin'), 'warning'] : acc.enabled === false ? [t('agents.accountPaused'), 'secondary'] : acc.login === 'si' ? (agentOn ? [t('agents.accountActive'), 'success'] : [t('login.si'), 'secondary']) : login;
   return (
-    <ListRow className={cn('border-border not-first:border-t', acc.enabled === false && 'opacity-60')} title={acc.label} meta={plan ? <span>{plan}</span> : null}
+    <ListRow className={cn('border-border not-first:border-t', acc.enabled === false && 'opacity-60')} data-testid={`agent-account-${acc.id}`}
+      title={multi ? <span className="inline-flex items-center gap-1.5"><AccountTag acc={acc} />{acc.label}</span> : acc.label}
+      meta={<span className="inline-flex min-w-0 items-center gap-1.5">{plan ? <span>{plan}</span> : null}<span className={cn(idTone === 'warning' && 'text-warning-ink', idTone === 'success' && 'text-success')} data-testid={`agent-account-identity-${acc.id}`} data-identity={acc.viaKey ? 'viaKey' : acc.identity ?? 'unchecked'}>{plan ? '· ' : ''}{idText}</span>{acc.sameAs?.length ? <span className="text-warning-ink" data-testid={`agent-account-same-${acc.id}`}>· {t('acct.sameAs')}</span> : null}</span>}
       trailing={(
-        <span className="flex flex-none items-center gap-1.5">
+        <span className="flex flex-none items-center gap-2.5">
+          {multi ? <AccountUsage u={usage} label={acc.label} /> : null}
           <Badge variant={state[1]} data-testid={`agent-account-state-${acc.id}`}>{state[0]}</Badge>
           <DropdownMenu modal={false}>
             <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-account-more-${acc.id}`} /></DropdownMenuTrigger></BubbleTip>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onSelect={() => signIn(acc, acc.label)} data-testid={`agent-login-${acc.id}`}><LogIn />{t('agents.login')}</DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => editAccount(acc, t, reload)} data-testid={`agent-edit-${acc.id}`}><Pencil />{t('acct.edit')}</DropdownMenuItem>
+              {identityFlag ? <DropdownMenuItem onSelect={() => rememberAccount(acc, t, reload)} data-testid={`agent-remember-${acc.id}`}><Check />{t('acct.remember')}</DropdownMenuItem> : null}
               <DropdownMenuCheckboxItem checked={acc.enabled !== false} onCheckedChange={(enabled) => act(call('accounts.update', { id: acc.id, enabled })).then(reload)}>{t('agents.useAccount')}</DropdownMenuCheckboxItem>
               {acc.logout ? <DropdownMenuItem onSelect={() => signOut(acc, reload)} data-testid={`agent-logout-${acc.id}`}><LogOut />{t('agents.logout')}</DropdownMenuItem> : null}
               {acc.id !== acc.agent ? <DropdownMenuItem variant="destructive" onSelect={async () => { if (await confirm(t('agents.removeTitle'), t('agents.removeBody', { label: acc.label }), { ok: t('agents.remove'), danger: true })) act(call('accounts.remove', { id: acc.id }), t('agents.accountRemoved')).then(reload); }}><Trash2 />{t('agents.removeTitle')}</DropdownMenuItem> : null}
@@ -439,7 +506,7 @@ function AgentCard({ a, reload, usage, team, today }) {
       {a.id === 'hermes' ? <Stack><p className="text-warning-ink text-caption" data-testid="agent-hermes-note">{t('agents.hermesNote')}</p></Stack> : null}
       {a.unverified ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-unverified-${a.id}`}>{t('agents.unverifiedNote')}</p></Stack> : null}
       {a.id === 'pi' || a.id === 'antigravity' ? <Stack><p className="text-warning-ink text-caption" data-testid={`agent-noguard-${a.id}`}>{t('agents.noGuardNote')}</p></Stack> : null}
-      {a.installed ? a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} agentOn={!!cfg.enabled} />) : null}
+      {a.installed ? a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} agentOn={!!cfg.enabled} usage={usage.find((u) => u.account === acc.id) ?? null} multi={a.accounts.length > 1} />) : null}
       {a.installed && a.multi && a.accounts.filter((acc) => acc.enabled !== false).length === 1 ? <Stack className="py-2.5"><span className="text-muted-foreground text-caption" data-testid={`agent-one-account-${a.id}`}>{t('agents.oneAccount')}</span></Stack> : null}
       {a.installed && !a.multi ? <Stack className="py-2.5"><span className="text-faint-foreground text-caption">{t('agents.fixedSession', { label: a.label })}</span></Stack> : null}
       {a.keys?.length ? <AgentKeys a={a} /> : null}
@@ -448,7 +515,7 @@ function AgentCard({ a, reload, usage, team, today }) {
           {shown.length ? <span className="flex flex-wrap justify-end gap-1">{shown.map((m) => <Badge key={m.id} variant="secondary">{m.label}</Badge>)}{listed.length > shown.length ? <Badge variant="secondary">+{listed.length - shown.length}</Badge> : null}</span> : <span className="text-muted-foreground text-caption">{t('agents.modelsAfterLogin')}</span>}
         </Setting>
       ) : null}
-      {a.installed ? <WindowRow a={a} usage={usage} /> : null}
+      {a.installed && a.accounts.length < 2 ? <WindowRow a={a} usage={usage} /> : null}
       {a.installed ? <SpendRow a={a} today={today} /> : null}
       {/* a new version of an agent Orb cannot update by itself, or on a PC where its installer is not at hand: the command, no button */}
       {upd?.available && !INSTALLABLE.includes(a.id) && !installViaTeam && upd.command ? <Stack><span className="text-muted-foreground text-caption" data-testid={`agent-update-cmd-${a.id}`}>{t('agents.updateManual', { latest: upd.latest, cmd: upd.command })}</span></Stack> : null}

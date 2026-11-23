@@ -32,7 +32,8 @@ import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
 import { onTerminalPaste } from '@/lib/terminal-paste.js';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { useCatalog, modelsOf, modelLabel, AgentChip } from '@/components/brain-picker.jsx';
+import { useCatalog, modelsOf, modelLabel, AgentChip, AUTO } from '@/components/brain-picker.jsx';
+import { AccountActions } from '@/components/account-notice.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
@@ -356,6 +357,7 @@ export function SessionView({ route }) {
   const [items, setItems] = useState([]);
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);
+  const [acctHold, setAcctHold] = useState(null);
   const draft = useDraft();
   // text sent here by «Añadir al chat» (a selected text)
   useAddToChat((text) => draft.set((prev) => appendToBox(prev, text)));
@@ -413,7 +415,9 @@ export function SessionView({ route }) {
     });
     const offReset = bridge.on('session:reset', (e) => { if (e.id === route.id) call('sessions.items', { id: route.id, limit: PAGE }).then((r) => { setItems(r); setMore(r.length >= PAGE); }).catch(quiet); });
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
-    return () => { alive = false; offItem(); offReset(); offQueue(); };
+    // a fixed account that cannot take the waiting message: the notice keeps its buttons until the chat moves on
+    const offAccount = bridge.on('session:account', (e) => { if (String(e.id) === String(route.id)) setAcctHold(e.problem ? { problem: e.problem, waiting: Boolean(e.waiting) } : null); });
+    return () => { alive = false; offItem(); offReset(); offQueue(); offAccount(); setAcctHold(null); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
   const blocks = useMemo(() => dropRepeatedAgent(toBlocks(items, tb)), [items, tb]);
@@ -572,6 +576,12 @@ export function SessionView({ route }) {
               <Button size="sm" onClick={() => act(call('sessions.resume', { id: s.id }))}><Play />{t('session.continue')}</Button>
             </div>
           ) : null}
+          {acctHold && !running ? (
+            <div className="bg-muted/70 text-muted-foreground flex flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-control" data-testid="session-account-notice" data-kind={acctHold.problem.kind}>
+              <AccountActions problem={acctHold.problem} hold={{ account: acctHold.problem.account, kind: acctHold.problem.kind, waiting: acctHold.waiting }}
+                onWait={() => act(call('sessions.holdWait', { id: s.id }))} onUse={(account) => act(call('sessions.update', { id: s.id, account })).then(() => setAcctHold(null))} onAuto={() => act(call('sessions.update', { id: s.id, account: AUTO })).then(() => setAcctHold(null))} />
+            </div>
+          ) : null}
         </div>
       </div>
       <ConversationTrail scrollRef={trail.node} />
@@ -642,7 +652,7 @@ export function SessionView({ route }) {
           {s.context ? <span className="text-muted-foreground text-xs"><ContextMeter context={s.context} /></span> : null}
           {s.kind === 'chat' ? (<>
             {/* one chip for the agent, its model and its reasoning; its menu lists the models, the levels and «Guía de modelos». */}
-            <AgentChip catalog={catalog} agent={s.agent} account={s.account} models={models} model={selectedModel} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
+            <AgentChip catalog={catalog} agent={s.agent} account={s.account_fixed && s.account ? s.account : AUTO} live={s.account ?? null} onAccount={(account) => act(call('sessions.update', { id: s.id, account }))} models={models} model={selectedModel} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
               onModel={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} onReasoning={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
         </>} />

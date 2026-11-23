@@ -18,6 +18,7 @@ import { changeRail } from '@/lib/rules-actions.js';
 import { confirmPauseRail, confirmResumeRail } from '@/views/rules-dialogs.jsx';
 import { paceOf, windowMs } from '@/lib/usage-pace.js';
 import { AGENT } from '@/lib/labels.js';
+import { AccountMark } from '@/components/brain-picker.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
@@ -230,7 +231,7 @@ export function Account({ u, locale, stop, weeklyStop, warn = 0, reload }) {
   const fiveStop = u.windows?.some((w) => /five_hour|^300min$|^5h$/.test(String(w.window)) && w.utilization >= warn) ? stop : weeklyStop;
   return (
     <div className="bg-card border-border rounded-card flex flex-col gap-2.5 border px-3.5 py-3 text-control" data-testid="usage-account">
-      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : warned ? <Badge variant="warning" data-testid="usage-warned">{t('usage.warnBadge')}</Badge> : null}</div>
+      <div className="flex items-center gap-2"><AgentIcon agent={u.agent} /><AccountMark agent={u.agent} id={u.account} /><b className="min-w-0 flex-1 truncate font-(family-name:--title) text-card-title leading-[1.45] font-semibold">{u.label && u.label !== name ? `${name} · ${u.label}` : name}</b>{u.plan ? <Badge variant="secondary" title={t('agents.planHint')}>{u.plan}</Badge> : null}{braked ? <Badge variant="warning">{t('usage.brake')}</Badge> : warned ? <Badge variant="warning" data-testid="usage-warned">{t('usage.warnBadge')}</Badge> : null}</div>
       {u.windows?.length ? (
         <div className="text-muted-foreground grid grid-cols-[90px_1fr] items-center gap-x-2.5 gap-y-1.5 text-caption leading-[1.45]">
           {u.windows.map((w) => {
@@ -339,6 +340,7 @@ export function UsageView() {
   const ioTokens = data?.total ? data.total.tokensIn + data.total.tokensOut : 0;
   const totalTokens = ioTokens + (data?.tokensCache ?? 0);
   // one flat row per model (an agent that reports no model keeps its own name), with its cost and share.
+  const accountRows = useMemo(() => (data?.byAccount ?? []).map((a) => ({ ...a, key: `account:${a.account}`, name: a.label, plain: false })), [data]);
   const agentRows = useMemo(() => (data?.models ?? []).map((m) => ({ ...m, key: `${m.agent}:${m.model ?? ''}`, name: m.label ?? m.model ?? AGENT[m.agent] ?? m.agent })), [data]);
   // from the ledger of this period (usage.history), the same source as the rest of the page
   const projects = (data?.projects ?? []).map((p) => ({ ...p, key: p.project, name: p.project || '—' }));
@@ -391,6 +393,7 @@ export function UsageView() {
               <Days days={data.days} byDay={data.byDay} order={order} metric={metric} locale={locale} />
             </Block>
             {projects.length ? <Block title={t('usage.byProject')}><Rows head={t('usage.project')} rows={projects} locale={locale} total={projectsTotal} /></Block> : null}
+            {accountRows.length ? <Block title={t('usage.byAccount')}><Rows head={t('usage.account')} rows={accountRows} locale={locale} total={ioTokens} /></Block> : null}
             {agentRows.length ? <Block title={t('usage.byAgentModel')}><Rows head={t('usage.agent')} rows={agentRows} locale={locale} total={ioTokens} /></Block> : null}
             {!data.total.turns ? <p className="text-muted-foreground text-control">{t('usage.empty')}</p> : null}
           </>)}

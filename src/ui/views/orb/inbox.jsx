@@ -14,6 +14,7 @@ import { PageHeader, PageBody } from '@/components/page.jsx';
 import { Robot } from '@/components/robot.jsx';
 import { OrbMark } from '@/components/orb-mark.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
+import { AccountMark } from '@/components/brain-picker.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { createProjectFlow, startChatFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
@@ -301,6 +302,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false,
           <span className="flex min-h-5 items-center gap-1.5">
             <span className="grid shrink-0 place-items-center" role="img" aria-label={who || t('orbchats.noProject')} title={who || undefined} data-testid="orb-agent-mark">{!agents[0] && robotSkin(skin) ? <Robot size={16} still /> : <AgentIcon agent={agents[0]} className="size-2.5 opacity-70" />}</span>
             <span className={cn('min-w-0 flex-1 truncate text-control leading-5', 'font-normal', item.done && 'text-foreground/70', fade && 'text-muted-foreground line-through')}>{item.title}</span>
+            <AccountMark agent={item.agent} id={item.account} />
             {working ? <LoaderCircle className="text-muted-foreground size-3.5 shrink-0 animate-spin" aria-label={t('chats.working')} data-testid="orb-working" /> : null}
             {item.snoozedUntil ? <AlarmClock className="text-muted-foreground size-3.5 shrink-0" aria-label={t('orbchats.snoozed', { when: new Date(item.snoozedUntil).toLocaleString(locale, { dateStyle: 'short', timeStyle: 'short' }) })} data-testid="chat-snoozed" /> : null}
             {item.muted ? <BellOff className="text-muted-foreground size-3.5 shrink-0" aria-label={t('chats.muted')} /> : null}
@@ -336,6 +338,7 @@ const OrbRow = memo(function OrbRow({ item, phone, onSheet, showProject = false,
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2">
             <span className={cn('min-w-0 flex-1 truncate text-card-title compact:text-control', 'font-medium', item.done && 'text-foreground/70', fade && 'text-muted-foreground line-through')}>{item.title}</span>
+            <AccountMark agent={item.agent} id={item.account} />
             <span className={cn('shrink-0 text-caption tabular-nums', 'text-muted-foreground')}>{time}</span>
           </span>
           <span className="mt-0.5 flex items-center gap-1.5">

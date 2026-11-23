@@ -15,6 +15,7 @@ import { useT, useLocale } from '@/lib/i18n.js';
 import { keepIfSame } from '@/lib/memo.js';
 import { useFavoriteBrains, toggleFavoriteBrain } from '@/lib/favorite-brains.js';
 import { isFavorite } from '../../shared/favorite-brains.mjs';
+import { markOf } from '../../shared/account-marks.mjs';
 import { REASONING_LEVELS, USUAL_LEVELS, knownLevels, nearestLevel } from '../../shared/reasoning-levels.mjs';
 
 // The installed agents with their models (engine: models.catalog), read again when the settings change. The
@@ -25,6 +26,44 @@ export function useCatalog() {
   const [catalog, setCatalog] = useState(null);
   useEffect(() => { let alive = true; call('models.catalog').then((c) => alive && setCatalog((prev) => keepIfSame(prev, c))).catch(() => alive && setCatalog((prev) => keepIfSame(prev, []))); return () => { alive = false; }; }, [version]);
   return catalog;
+}
+
+// The accounts of an agent as the selector lists them: those that can take work, then the ones that cannot (dimmed, with
+// the reason). The marks show only when the agent has more than one.
+export const accountsOfAgent = (a) => [...(a?.accounts ?? []), ...(a?.unusable ?? [])];
+export const AUTO = 'auto';
+
+// The account in use by a brain value: 'auto' follows the account the chat is on now (value.live).
+const liveId = (value) => (value.account === AUTO || !value.account ? value.live ?? null : value.account);
+
+// The small pill with the account's tag and colour. text replaces the tag (Auto·PGC, PGC → STA).
+export function AccountTag({ acc, text, color, dim, className }) {
+  if (!acc && !text) return null;
+  return <span className={cn('acct-tag', className)} data-color={color ?? acc?.color} data-dim={dim || undefined} data-testid="account-tag" title={acc?.label}>{text ?? acc?.tag}</span>;
+}
+
+// The mark of the account `id` of `agent`, read from the settings (no catalog call per row): only when the agent has several
+// accounts, so a single-account setup looks as it always did.
+export function AccountMark({ agent, id, className }) {
+  const accounts = useStore((s) => s.app?.config?.accounts);
+  const list = (accounts ?? []).filter((a) => a.agent === agent);
+  const i = id ? list.findIndex((a) => a.id === id) : -1;
+  if (list.length < 2 || i < 0) return null;
+  const m = markOf(list[i], i);
+  return <AccountTag acc={{ label: list[i].label }} text={m.tag} color={m.color} className={className} />;
+}
+
+// What the message box says about the account: «PGC», «Auto·PGC» (automatic, now on PGC) or «PGC → STA» (a change waiting for
+// the turn to end). null when the agent has one account only.
+export function brainMark(catalog, value) {
+  const all = accountsOfAgent(catalog?.find((a) => a.id === value.agent));
+  if (all.length < 2) return null;
+  const auto = !value.account || value.account === AUTO;
+  const live = all.find((x) => x.id === liveId(value)) ?? null;
+  const to = value.pending ? (value.pending.fixed ? all.find((x) => x.id === value.pending.account) : 'auto') : null;
+  const from = auto ? (live ? `Auto·${live.tag}` : 'Auto') : live?.tag ?? '?';
+  const text = to ? `${live?.tag ?? from} → ${to === 'auto' ? 'Auto' : to?.tag ?? '?'}` : from;
+  return { acc: live, text, auto, waiting: Boolean(to) };
 }
 
 // an account with its own plan has its own models (Codex Go and Pro); the others use the agent's list.
@@ -50,7 +89,8 @@ const labelOf = (a, m, t) => (m.id ? m.label : m.defaultOf ? t('brain.defaultIs'
 // «Codex Pro · GPT-6 · Alto»: what a favourite says on its row (and to the screen reader).
 export function favoriteLabel(catalog, f, t) {
   const agent = catalog?.find((a) => a.id === f.agent);
-  const account = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === f.account)?.label ?? agent.label : agent?.label ?? f.agent;
+  const all = accountsOfAgent(agent);
+  const account = all.length > 1 ? (f.account === AUTO ? t('acct.auto') : all.find((x) => x.id === f.account)?.label ?? agent.label) : agent?.label ?? f.agent;
   const model = f.model ? modelLabel(catalog, f.agent, f.model) : modelOf(catalog, f)?.defaultOf ?? '';
   return [account, model, t(`reasoning.${f.reasoning}`)].filter(Boolean).join(' · ');
 }
@@ -64,15 +104,18 @@ export function BrainPicker({ catalog, value, onChange, className }) {
   // with no model chosen and none the agent names, just the agent («Claude»), never «predeterminado».
   const label = !value.model ? (model?.defaultOf ?? '') : model && agent ? labelOf(agent, model, t) : modelLabel(catalog, value.agent, value.model);
   // with several accounts of one agent (Codex Go and Codex Pro), the button names the account in use.
-  const who = agent?.accounts?.length > 1 ? agent.accounts.find((x) => x.id === value.account)?.label ?? agent.label : agent?.label;
+  const mark = brainMark(catalog, value);
+  const who = mark ? (mark.auto ? t('acct.auto') : mark.acc?.label ?? agent.label) : agent?.label;
   return (
     <DropdownMenu>
       <BubbleTip title={t('brain.title')} text={t('brain.titleText')}>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm" className={cn('max-w-64 gap-1.5', className)} data-testid="brain-picker" aria-label={t('brain.title')}>
             <AgentIcon agent={value.agent} className="size-4" />
+            {/* the account's mark stays on a phone: it is the one thing the row would otherwise not say */}
+            {mark ? <AccountTag acc={mark.acc} text={mark.text} color={mark.acc?.color ?? 'blue'} /> : null}
             {/* on a phone, the model only (the icon says the agent), so the row stays on one line. */}
-            <span className="truncate">{label ? <><span className="max-sm:hidden">{who ?? value.agent} · </span>{label}</> : <span className="max-sm:hidden">{who ?? value.agent}</span>}</span>
+            <span className="truncate">{label ? <><span className="max-sm:hidden">{mark ? '' : `${who ?? value.agent} · `}</span>{label}</> : <span className="max-sm:hidden">{mark ? '' : who ?? value.agent}</span>}</span>
             <ChevronDown className="size-3.5 opacity-60" />
           </Button>
         </DropdownMenuTrigger>
@@ -116,15 +159,16 @@ function BrainGroups({ catalog, value, onChange }) {
   const t = useT();
   const locale = useLocale();
   const [open, setOpen] = useState(null);
-  const list = (a) => { const own = usableFirst(modelsOf(a, value.agent === a.id ? value.account : null)); return own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]; };
+  const list = (a) => { const own = usableFirst(modelsOf(a, value.agent === a.id && value.account !== AUTO ? value.account : null)); return own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }]; };
   const hide = useHideHelp();
   const recommended = hide ? [] : catalog.flatMap((a) => list(a).filter((m) => m.recommended).map((m) => ({ a, m })));
-  // acc: the account of a group of its own (an agent with several accounts); otherwise the one in use or the first.
+  // acc: the account of a group of its own (an agent with several accounts). The «Automática» group and an agent with one
+  // account send 'auto': the chat then follows the agent's accounts, never one fixed by accident.
   const item = (a, m, key, withAgent, acc = null) => {
-    const account = acc?.id ?? (value.agent === a.id && a.accounts.some((x) => x.id === value.account) ? value.account : a.accounts[0]?.id ?? a.id);
-    const on = value.agent === a.id && (value.model ?? '') === m.id && (!acc || value.account === acc.id);
+    const account = acc === AUTO ? AUTO : acc?.id ?? (accountsOfAgent(a).length > 1 && value.agent === a.id && value.account && value.account !== AUTO ? value.account : AUTO);
+    const on = value.agent === a.id && (value.model ?? '') === m.id && (!acc || (acc === AUTO ? !value.account || value.account === AUTO : value.account === acc.id));
     return (
-      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account })} className={cn(m.limitedUntil && 'opacity-55')} data-testid={`brain-${acc?.id ?? a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
+      <DropdownMenuItem key={key} onSelect={() => onChange({ agent: a.id, model: m.id, account })} className={cn(m.limitedUntil && 'opacity-55')} data-testid={`brain-${acc === AUTO ? `${a.id}-auto` : acc?.id ?? a.id}-${m.id || 'default'}${withAgent ? '-rec' : ''}`}>
         {withAgent ? <AgentIcon agent={a.id} className="ml-5 size-3.5" /> : null}
         {/* each model says what it is for (fast, balanced, most capable), so no one has to know the names. */}
         <span className={cn('grid min-w-0 flex-1', !withAgent && 'pl-5')}>
@@ -137,10 +181,10 @@ function BrainGroups({ catalog, value, onChange }) {
       </DropdownMenuItem>
     );
   };
-  const header = (id, icon, label, note) => (
+  const header = (id, icon, label, note, sub = null) => (
     <DropdownMenuItem onSelect={(e) => { e.preventDefault(); setOpen((o) => (o === id ? null : id)); }} aria-expanded={open === id} className="text-control font-medium" data-testid={`brain-group-${id}`}>
       <ChevronRight className={cn('size-3.5 transition-transform', open === id && 'rotate-90')} />{icon}
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="grid min-w-0 flex-1"><span className="truncate">{label}</span>{sub ? <span className="text-muted-foreground truncate text-micro leading-tight font-normal">{sub}</span> : null}</span>
       {note ? <span className="text-muted-foreground max-w-28 truncate text-xs font-normal">{note}</span> : null}
     </DropdownMenuItem>
   );
@@ -151,17 +195,36 @@ function BrainGroups({ catalog, value, onChange }) {
       <DropdownMenuSeparator />
     </> : null}
     {catalog.map((a) => {
-      // one group per account when the agent has several (Codex Go, Codex Pro), each with its own models.
-      if (a.accounts?.length > 1) return a.accounts.map((acc) => {
-        const own = usableFirst(modelsOf(a, acc.id)); const models = own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: acc.label }) }];
-        const current = value.agent === a.id && value.account === acc.id ? models.find((m) => m.id === (value.model ?? '')) : null;
+      // several accounts (Claude PGC and STAMINA, Codex Go and Pro): «Automática» first, then one group per account with its
+      // mark and usage; an account that cannot take work is listed dimmed with the reason and cannot be picked.
+      const all = accountsOfAgent(a);
+      if (all.length > 1) {
+        const autoModels = usableFirst(modelsOf(a, null)); const autoList = autoModels.length ? autoModels : [{ id: '', label: t('brain.defaultOf', { agent: a.label }) }];
+        const autoNow = value.agent === a.id && (!value.account || value.account === AUTO) ? autoList.find((m) => m.id === (value.model ?? '')) : null;
         return (
-          <div key={acc.id}>
-            {header(acc.id, <AgentIcon agent={a.id} className="size-3.5" />, acc.label, current ? labelOf(a, current, t) : null)}
-            {open === acc.id ? models.map((m) => item(a, m, `${acc.id}-${m.id || 'default'}`, false, acc)) : null}
+          <div key={a.id}>
+            {header(`${a.id}:auto`, <AgentIcon agent={a.id} className="size-3.5" />, `${a.label} · ${t('acct.auto')}`, autoNow ? labelOf(a, autoNow, t) : null, t('acct.autoNote'))}
+            {open === `${a.id}:auto` ? autoList.map((m) => item(a, m, `${a.id}-auto-${m.id || 'default'}`, false, AUTO)) : null}
+            {all.map((acc) => {
+              if (acc.state !== 'ok') return (
+                <DropdownMenuItem key={acc.id} disabled className="text-control font-medium opacity-55" data-testid={`brain-group-${acc.id}`} data-state={acc.state}>
+                  <span className="size-3.5" /><AccountTag acc={acc} dim />
+                  <span className="grid min-w-0 flex-1"><span className="truncate">{acc.label}</span><span className="text-muted-foreground truncate text-micro leading-tight font-normal">{acc.reason}</span></span>
+                </DropdownMenuItem>
+              );
+              const own = usableFirst(modelsOf(a, acc.id)); const models = own.length ? own : [{ id: '', label: t('brain.defaultOf', { agent: acc.label }) }];
+              const current = value.agent === a.id && value.account === acc.id ? models.find((m) => m.id === (value.model ?? '')) : null;
+              const sub = acc.limitedUntil ? t('acct.limitUntil', { when: untilShort(acc.limitedUntil, locale) }) : acc.usage != null ? t('acct.used', { pct: Math.round(acc.usage * 100) }) : null;
+              return (
+                <div key={acc.id}>
+                  {header(acc.id, <AccountTag acc={acc} />, acc.label, current ? labelOf(a, current, t) : null, sub)}
+                  {open === acc.id ? models.map((m) => item(a, m, `${acc.id}-${m.id || 'default'}`, false, acc)) : null}
+                </div>
+              );
+            })}
           </div>
         );
-      });
+      }
       const current = value.agent === a.id ? list(a).find((m) => m.id === (value.model ?? '')) : null;
       return (
         <div key={a.id}>
@@ -225,8 +288,11 @@ export function ReasoningMenu({ catalog, value, onChange, levels, disabled }) {
 // models, the reasoning levels and «Guía de modelos». models: [{ value, label }] of the agent; the reasoning list is the
 // one the model takes («Extra» only where the agent has it). The chip is the model picker; the level and its bars inside it
 // are the reasoning picker (same test ids as when they were two buttons).
-export function AgentChip({ catalog, agent, account, models, model, modelName, reasoning, onModel, onReasoning, disabled }) {
+// account: the id the chat is fixed to or 'auto'; live: the account it is on now; onAccount(choice) lets the chat change it.
+export function AgentChip({ catalog, agent, account, live, models, model, modelName, reasoning, onModel, onReasoning, onAccount, disabled }) {
   const t = useT();
+  const all = accountsOfAgent(catalog?.find((a) => a.id === agent));
+  const mark = brainMark(catalog, { agent, account, live });
   const list = levelsFor(catalog, { agent, account, model });
   const current = levelNow(list, reasoning);
   const name = t(`reasoning.${current}`);
@@ -237,6 +303,7 @@ export function AgentChip({ catalog, agent, account, models, model, modelName, r
           <button type="button" disabled={disabled} aria-label={t('brain.title')} data-testid="session-model"
             className="text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground inline-flex h-[var(--ctl)] max-w-64 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50">
             <AgentIcon agent={agent} className="size-3.5 shrink-0 opacity-70" />
+            {mark ? <AccountTag acc={mark.acc} text={mark.text} color={mark.acc?.color ?? 'blue'} /> : null}
             {modelName ? <span className="truncate">{modelName}</span> : null}
             {list.length ? <span className="text-faint-foreground inline-flex shrink-0 items-center gap-1.5" data-testid="reasoning-picker" data-level={current}>
               <span data-testid="reasoning-level">{name}</span><UsageMeter level={current} />
@@ -246,6 +313,21 @@ export function AgentChip({ catalog, agent, account, models, model, modelName, r
         </DropdownMenuTrigger>
       </BubbleTip>
       <DropdownMenuContent align="end" side="top" className="max-h-[70vh] w-[240px] overflow-y-auto" onCloseAutoFocus={(e) => e.preventDefault()} data-testid="reasoning-menu">
+        {mark && onAccount ? <>
+          <DropdownMenuLabel>{t('acct.account')}</DropdownMenuLabel>
+          <DropdownMenuItem onSelect={() => onAccount(AUTO)} data-testid="session-account-auto" data-selected={mark.auto || undefined}>
+            <span className="grid min-w-0 flex-1"><span className="truncate">{t('acct.auto')}</span><span className="text-muted-foreground truncate text-micro leading-tight">{t('acct.autoNote')}</span></span>
+            <Check className={cn('text-muted-foreground!', mark.auto ? null : 'invisible')} />
+          </DropdownMenuItem>
+          {all.map((acc) => (
+            <DropdownMenuItem key={acc.id} disabled={acc.state !== 'ok'} onSelect={() => onAccount(acc.id)} className={cn(acc.state !== 'ok' && 'opacity-55')} data-testid={`session-account-${acc.id}`} data-selected={(!mark.auto && account === acc.id) || undefined}>
+              <AccountTag acc={acc} dim={acc.state !== 'ok'} />
+              <span className="grid min-w-0 flex-1"><span className="truncate">{acc.label}</span>{acc.state !== 'ok' ? <span className="text-muted-foreground truncate text-micro leading-tight">{acc.reason}</span> : acc.usage != null ? <span className="text-muted-foreground truncate text-micro leading-tight">{t('acct.used', { pct: Math.round(acc.usage * 100) })}</span> : null}</span>
+              <Check className={cn('text-muted-foreground!', !mark.auto && account === acc.id ? null : 'invisible')} />
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuSeparator />
+        </> : null}
         {models.length ? <>
           <DropdownMenuLabel>{t('session.model')}</DropdownMenuLabel>
           {models.map((m) => (
@@ -295,6 +377,7 @@ export function BrainChip({ catalog, value, onChange, onReasoning, className }) 
   const label = !value.model ? (model?.defaultOf ?? '') : model && agent ? labelOf(agent, model, t) : modelLabel(catalog, value.agent, value.model);
   const list = levelsFor(catalog, value);
   const current = levelNow(list, value.reasoning);
+  const mark = brainMark(catalog, value);
   return (
     <DropdownMenu>
       <BubbleTip title={t('brain.title')} text={t('brain.titleText')} side="top">
@@ -302,6 +385,7 @@ export function BrainChip({ catalog, value, onChange, onReasoning, className }) 
           <button type="button" aria-label={t('brain.title')} data-testid="brain-picker"
             className={cn('text-muted-foreground hover:bg-accent hover:text-foreground aria-expanded:bg-accent aria-expanded:text-foreground inline-flex h-[var(--ctl)] max-w-64 min-w-0 shrink cursor-pointer items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50', className)}>
             <AgentIcon agent={value.agent} className="size-3.5 shrink-0 opacity-70" />
+            {mark ? <AccountTag acc={mark.acc} text={mark.text} color={mark.acc?.color ?? 'blue'} /> : null}
             <span className="truncate">{label || (agent?.label ?? value.agent)}</span>
             {list.length ? <span className="text-faint-foreground inline-flex shrink-0 items-center gap-1.5" data-testid="reasoning-picker" data-level={current}>
               <span data-testid="reasoning-level">{t(`reasoning.${current}`)}</span><UsageMeter level={current} />
@@ -336,7 +420,7 @@ function UsageMeter({ level }) {
 function usageWarning(catalog, value, t) {
   const agent = catalog?.find((a) => a.id === value.agent);
   const model = modelOf(catalog, value);
-  const used = agent?.accounts.find((a) => a.id === value.account)?.usage ?? agent?.accounts[0]?.usage ?? null;
+  const used = agent?.accounts.find((a) => a.id === liveId(value))?.usage ?? agent?.accounts[0]?.usage ?? null;
   if (used == null || used < 0.5) return null;
   const pct = Math.round(used * 100);
   const high = value.reasoning === 'high';
