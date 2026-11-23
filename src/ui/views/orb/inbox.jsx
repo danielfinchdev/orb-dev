@@ -15,7 +15,7 @@ import { Robot } from '@/components/robot.jsx';
 import { OrbMark } from '@/components/orb-mark.jsx';
 import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
-import { createProjectFlow } from '@/components/project-actions.jsx';
+import { createProjectFlow, startChatFlow } from '@/components/project-actions.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, DropdownMenuCheckboxItem, Collapsible, CollapsibleTrigger, CollapsibleContent, Dialog, DialogContent, DialogTitle, DialogDescription, BubbleTip } from '@/components/ui/overlay.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { Input } from '@/components/ui/basic.jsx';
@@ -450,20 +450,30 @@ export async function newProjectChat() {
   const p = await createProjectFlow();
   if (p) await newChat(p.name);
 }
-function OrbNewMenu({ fab = false }) {
+// The PC's two buttons next to the search (one row, icons with their tooltip): «New project» and «New chat», which opens the
+// project picker at once (components/new-chat-picker.jsx).
+function OrbNewButtons() {
   const t = useT();
-  // The key of «new chat» (a new tab in a new chat): shown only where it works, the PC with the chat tabs on.
   const newKey = useKeys().table.get('chat.new')?.key;
   const tabsOn = useStore((s) => !phoneLayout() && s.app?.config?.ui?.tabs !== false);
-  const trigger = fab
-    ? <button type="button" className="press bg-primary text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
-    : <IconButton label={t('chats.new')} className="shrink-0" data-testid="chats-new"><Plus /></IconButton>;
+  return (
+    <>
+      <BubbleTip title={t('newchat.project')}><IconButton label={t('newchat.project')} className="shrink-0" onClick={newProjectChat} data-testid="sidebar-new-project"><FolderPlus /></IconButton></BubbleTip>
+      <BubbleTip title={t('nav.newChat')} text={tabsOn && newKey ? newKey : t('newchat.hint')}><IconButton label={t('nav.newChat')} className="shrink-0" onClick={startChatFlow} data-testid="chats-new"><MessageSquarePlus /></IconButton></BubbleTip>
+    </>
+  );
+}
+// The phone's round button: a menu with the same two actions (the PC has the two buttons beside the search).
+function OrbNewMenu() {
+  const t = useT();
   return (
     <DropdownMenu modal={false}>
-      {fab ? <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger> : <BubbleTip title={t('chats.new')} text={t('chats.newHint')}><DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger></BubbleTip>}
-      <DropdownMenuContent align="end" side={fab ? 'top' : 'bottom'} className="w-[220px]">
-        <DropdownMenuItem onSelect={() => newChat()} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}{tabsOn && newKey ? <span className="text-faint-foreground ml-auto text-micro" data-testid="new-conversation-key">{newKey}</span> : null}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={newProjectChat} data-testid="sidebar-new-project"><FolderPlus />{t('comp.projects.newTitle')}</DropdownMenuItem>
+      <DropdownMenuTrigger asChild>
+        <button type="button" className="press bg-primary text-primary-foreground fixed right-4 bottom-[calc(84px+env(safe-area-inset-bottom,0px))] z-30 grid size-14 cursor-pointer place-items-center rounded-2xl shadow-lg" aria-label={t('chats.new')} data-testid="chats-new"><Plus className="size-6" /></button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-[220px]">
+        <DropdownMenuItem onSelect={startChatFlow} data-testid="new-conversation"><MessageSquarePlus />{t('nav.newChat')}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={newProjectChat} data-testid="sidebar-new-project"><FolderPlus />{t('newchat.project')}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -666,7 +676,7 @@ export function OrbInbox({ page = false }) {
       <FilterMenu filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} order={order} setOrder={setOrder} />
     </div>
   );
-  // The PC's search (the mock-up's .search): the filter sits inside the box, at its right end, and «+» is an icon button.
+  // The PC's search (the mock-up's .search): the filter sits inside the box, at its right end, then «New project» and «New chat».
   const pcSearch = (
     <div className="flex items-center gap-1">
       <div className="relative min-w-0 flex-1">
@@ -677,7 +687,7 @@ export function OrbInbox({ page = false }) {
           <FilterMenu inline filter={filter} setFilter={setFilter} agents={agents} snoozed={parts.snoozed} order={order} setOrder={setOrder} />
         </div>
       </div>
-      <OrbNewMenu />
+      <OrbNewButtons />
     </div>
   );
   const search = phone ? phoneSearch : pcSearch;
@@ -770,7 +780,7 @@ export function OrbInbox({ page = false }) {
         </div>
       )}
       <nav className={cn('flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto', phone ? 'px-2 pb-28' : 'px-2 pb-2')} aria-label={t('chats.list')} data-testid="mobile-chats">{body}</nav>
-      {phone ? <OrbNewMenu fab /> : null}
+      {phone ? <OrbNewMenu /> : null}
       {sheetItem ? <OrbSheet item={sheetItem} onClose={() => setSheet(null)} /> : null}
     </div>
   );
