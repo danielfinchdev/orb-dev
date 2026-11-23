@@ -246,14 +246,14 @@ export function undoPlanHash(cp, plan, fullCommit = null) {
   if (changing.length && fullCommit && cp.before?.repo) {
     const want = new Set(changing.map((p) => p.path));
     const r = git(cp.before.repo, 'ls-tree', '-r', '-z', fullCommit);
-    for (const row of r.stdout.split(' ')) {
-      const tab = row.indexOf('	');
+    for (const row of r.stdout.split('\0')) {
+      const tab = row.indexOf('\t');
       if (tab > 0 && want.has(row.slice(tab + 1))) now.set(row.slice(tab + 1), row.slice(0, tab).split(' ')[2]);
     }
   } else if (changing.length && cp.before?.dir) {
     for (const p of changing) { try { const st = fs.lstatSync(path.join(cp.before.dir, p.path)); now.set(p.path, `${st.size}:${st.mtimeMs}`); } catch { /* absent */ } }
   }
-  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => [p.action, p.path, changing.includes(p) ? (now.get(p.path) ?? 'absent') : ''].join('	'));
+  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => [p.action, p.path, changing.includes(p) ? (now.get(p.path) ?? 'absent') : ''].join('\t'));
   return crypto.createHash('sha256').update(JSON.stringify([cp.before?.commit ?? cp.before?.copy ?? '', cp.after?.commit ?? '', rows])).digest('hex').slice(0, 32);
 }
 export function countPlan(plan) {
