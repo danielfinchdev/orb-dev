@@ -8,6 +8,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { tempHome, startEngine } from './helpers.mjs';
+import { Master } from '../src/domain/security/master.mjs';
+import { keysHeld } from '../src/domain/security/connector-secrets.mjs';
 import { UNLOCK_METHODS, SECRET_METHODS, PASSWORD_ONLY_METHODS, FRESH_UNLOCK, HELLO_PURPOSES, SECRET_PURPOSES, needsPassword, needsUnlock } from '../src/domain/security/permissions.mjs';
 
 const PASS = 'una contraseña larga de prueba';
@@ -32,7 +34,7 @@ async function withEngine(mode, fn, config = { mcpServers: [GITHUB] }) {
 }
 
 test('the secrets are a fixed list and every other unlocked action takes Hello', () => {
-  assert.deepEqual([...SECRET_METHODS].sort(), ['agentKeys.save', 'backup.restore', 'mcpExt.createToken', 'secrets.connector', 'secrets.saveConnector', 'sessions.grantTotal']);
+  assert.deepEqual([...SECRET_METHODS].sort(), ['agentKeys.save', 'backup.restore', 'mcpExt.createToken', 'mcpExt.setProjects', 'secrets.connector', 'secrets.saveConnector', 'sessions.grantTotal']);
   for (const m of SECRET_METHODS) assert.ok(UNLOCK_METHODS.has(m) && needsPassword(m, {}, {}), m);
   assert.ok(needsPassword('backup.newKey', {}, {}), 'a new key is never Hello’s');
   for (const m of UNLOCK_METHODS) if (!PASSWORD_ONLY_METHODS.has(m)) assert.equal(needsPassword(m, {}, {}), false, m);
@@ -130,4 +132,36 @@ test('no token, nonce or signature in the answers or the files after a Hello unl
     assert.ok(!/orb-hello-v1/.test(text));
     assert.ok(!text.includes(PASS));
   });
+});
+
+test('a Hello token does not tie the keys of a held connector to its new command; the password does', async () => {
+  const t = tempHome({ mcpServers: [GITHUB] });
+  const secret = crypto.randomBytes(32);
+  const file = path.join(t.home, 'core', 'orb.json');
+  const folder = path.join(t.base, 'copias');
+  let e = await startEngine(t.home, { secret: secret.toString('hex'), env: { ORB_VAULT_FAKE_HELLO: 'ok' } });
+  try {
+    await e.call('master.create', { password: PASS });
+    const pw = await e.call('master.unlock', { password: PASS });
+    await e.call('config.save', { patch: { mcpServers: [GITHUB] }, unlock: pw.unlock }); // the key goes into the vault
+  } finally { await e.stop(); }
+  // someone changes the command outside Orb: the keys stay tied to the old one
+  const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  cfg.mcpServers[0].command = 'otro-programa';
+  fs.writeFileSync(file, JSON.stringify(cfg));
+  // This PC's secret changes: the vault stays closed at the start (no migration ties anything) and the password opens it.
+  const other = crypto.randomBytes(32);
+  const held = (sec) => { const m = new Master(path.join(t.home, 'core', 'secretos'), { secret: sec }); try { m.openWithMachine(); return keysHeld(m, JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers[0]); } finally { m.close(); } };
+  assert.equal(held(secret), true, 'the keys are held');
+  e = await startEngine(t.home, { secret: other.toString('hex'), env: { ORB_VAULT_FAKE_HELLO: 'ok' } });
+  try {
+    await e.call('master.helloEnable', { password: PASS });
+    const h = await e.call('master.unlockHello', {});
+    const current = JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers;
+    await e.call('config.save', { patch: { backup: { folder }, mcpServers: current }, unlock: h.unlock });
+    assert.equal(held(other), true, 'Hello did not re-tie them');
+    const pw = await e.call('master.unlock', { password: PASS });
+    await e.call('config.save', { patch: { mcpServers: current }, unlock: pw.unlock });
+    assert.equal(held(other), false, 'the password ties them to the command as it is');
+  } finally { await e.stop(); }
 });

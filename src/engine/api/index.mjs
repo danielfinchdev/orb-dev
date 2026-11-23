@@ -250,9 +250,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     },
     'config.save': ({ patch, unlock }, _principal, { unlocked = false } = {}) => {
       // a connector's keys never reach orb.json: they go into the vault and orb.json keeps references. With the window
-      // unlocked (a change that needs it: checkUnlock), the keys are tied to the connectors' commands as they are now.
+      // unlocked by the password (a change that needs it: checkUnlock; Windows Hello's token does not count), the keys are tied to the connectors' commands as they are now.
       const p = patch ?? {};
-      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: unlocked || Boolean(ctx.master?.checkToken(unlock)) }) : null;
+      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: unlocked === 'password' || Boolean(ctx.master?.checkToken(unlock)) }) : null;
       const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
       if (p.backup) guardOutside(); // the chosen backups' folder, kept from the agents
       return c;

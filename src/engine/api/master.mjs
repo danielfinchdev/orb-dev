@@ -97,6 +97,7 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
 
 // The guard of the dispatcher (api.mjs): a guarded call from this PC's window needs a fresh unlock token.
 // → true when the call was guarded and its token was valid (the token may be used up by now), false when it needed none.
+// With defer, unlocked is false, or the strength of the token that opened it: 'password' | 'hello'.
 // defer: true → returns { unlocked, settle(ok) } and a rails token is spent by settle(true), after the action has run
 // without error (so a call refused for its parameters does not make the owner type the password again). Until then the
 // token is held as «in flight», so a second call with the same token cannot slip through while the first one runs.
@@ -120,14 +121,16 @@ export function checkUnlock(method, params, { defer = false } = {}) {
     : userError('msg.master.needUnlock', {}, { reason: 'unlock' }));
   // Only the rails token waits: its handlers validate the values (saveConfig) before any effect. The other one-use tokens
   // (secrets, rules, project delete) are spent as soon as they are checked: their handlers can fail after their effect.
+  // The strength is read before a one-use token is spent: what the handler may trust depends on it (config.save re-ties a held connector's keys only for the password).
+  const strength = hello && typeof params?.unlock === 'string' ? (m.tokenStrength(params.unlock) ?? 'password') : 'password';
   if (!defer || purpose !== RAILS_PURPOSE) {
     if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose), hello })) throw needed();
-    return defer ? { unlocked: true, settle: () => {} } : true;
+    return defer ? { unlocked: strength, settle: () => {} } : true;
   }
   const token = params?.unlock;
   if (typeof token !== 'string' || inflight.has(token) || !m.checkToken(token, purpose, { hello })) throw needed();
   inflight.add(token);
-  return { unlocked: true, settle: (ok) => { inflight.delete(token); if (ok) { try { m.checkToken(token, purpose, { consume: true, hello }); } catch { /* the token was already gone */ } } } };
+  return { unlocked: strength, settle: (ok) => { inflight.delete(token); if (ok) { try { m.checkToken(token, purpose, { consume: true, hello }); } catch { /* the token was already gone */ } } } };
 }
 
 // onLock(why): Orb locked (or its password changed): what the master password gave the chats goes

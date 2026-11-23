@@ -146,7 +146,9 @@ export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_
 // is only a proof of presence, so it opens none of what shows, saves or hands out a secret, nor a restore of the copies (a
 // copy brings the secrets of another PC). Those ask for the password, or for the phone's approval (a one-use token of that
 // strength is the only other proof they will take; src/engine/api/master.mjs › checkUnlock is where it plugs in).
-export const SECRET_METHODS = Object.freeze(new Set(['secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'mcpExt.createToken', 'sessions.grantTotal', 'backup.restore']));
+export const SECRET_METHODS = Object.freeze(new Set(['secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'mcpExt.createToken', 'sessions.grantTotal', 'backup.restore',
+  // widening what an outside agent's token reaches is nearly what creating one gives
+  'mcpExt.setProjects']));
 // What changes the keys' own state asks for the password too, always: Hello neither makes a new key nor proves who forgot it.
 export const PASSWORD_ONLY_METHODS = Object.freeze(new Set([...SECRET_METHODS, 'backup.newKey']));
 // The purposes whose token Hello may make: every action that asks every time, except the secrets' and the new key's.
