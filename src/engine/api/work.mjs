@@ -13,7 +13,7 @@ import { PERMISSIONS } from '../sessions.mjs';
 import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
 import { checkDevTools } from '../../platform/dev-tools.mjs';
 import { expandMentions, mentionOptions } from '../mentions.mjs';
-import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { modelCatalog, REASONING_LEVELS, levelsOf, nearestLevel } from '../usage/catalog.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
 import { diffBetween, fileBetween, statBetweenAsync } from '../../domain/tasks/checkpoints.mjs';
@@ -396,10 +396,15 @@ ${block}` : ''}` });
       if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);
       if (model !== undefined) fields.model = str(model, 'modelo', 80, { optional: true }) || null;
       if (reasoning !== undefined) fields.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
-      // «Extra» only with a model that takes it (the conversation's, or the one chosen now).
-      if ((fields.reasoning ?? s.reasoning) === 'xhigh' && (reasoning !== undefined || model !== undefined) && !levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account).includes('xhigh')) {
-        if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
-        fields.reasoning = 'high';
+      // Only a level the model takes (the conversation's, or the one chosen now): one asked for now that it lacks is
+      // refused; a saved one the new model lacks drops to the closest it takes.
+      if (reasoning !== undefined || model !== undefined) {
+        const takes = levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account);
+        const now = fields.reasoning ?? s.reasoning;
+        if (takes.length && !takes.includes(now)) {
+          if (reasoning !== undefined) fail(tr('msg.api.reasoningUnavailable'));
+          fields.reasoning = nearestLevel(now, takes);
+        }
       }
       // into or out of «total» only through grants.mjs (password, audit log, lock).
       if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));

@@ -69,10 +69,12 @@ data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reaso
 
     companion object {
         fun reasoningWord(level: String): String = when (level) {
+            "minimal" -> "mínimo"
             "low" -> "bajo"
             "medium" -> "medio"
             "high" -> "alto"
-            "xhigh" -> "extra"
+            "xhigh" -> "extra alto"
+            "max" -> "máximo"
             else -> level
         }
     }

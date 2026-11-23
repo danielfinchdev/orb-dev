@@ -12,7 +12,7 @@ import { ATTACH_DIR } from '../sessions.mjs';
 import { playableType } from '../../shared/attach-kind.mjs';
 import { expandMentions } from '../mentions.mjs';
 import { assistantName } from '../../domain/tasks/board.mjs';
-import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { modelCatalog, REASONING_LEVELS, levelsOf, nearestLevel } from '../usage/catalog.mjs';
 import { slug } from '../../platform/git.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { phoneText } from '../transport/remote-calls.mjs';
@@ -248,11 +248,14 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
         patch.model = m || (brain === 'claude' ? 'claude-sonnet-5-5' : '');
       } else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) patch.model = brain === 'claude' ? 'claude-sonnet-5-5' : '';
       if (reasoning !== undefined) patch.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
-      // «Extra» (xhigh) only with a model that takes it; changing to a model without it leaves «Alto».
-      if ((patch.reasoning ?? base.reasoning) === 'xhigh' && (reasoning !== undefined || patch.model !== undefined || patch.agent !== undefined)) {
-        if (!levelsOf(modelCatalog(board), brain, patch.model ?? base.model, patch.account ?? base.account).includes('xhigh')) {
-          if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
-          patch.reasoning = 'high';
+      // Only a level the model takes: one asked for now that it lacks is refused; a saved one the new model lacks drops
+      // to the closest it takes. An agent without levels (Cursor) keeps whatever is saved.
+      if (reasoning !== undefined || patch.model !== undefined || patch.agent !== undefined) {
+        const takes = levelsOf(modelCatalog(board), brain, patch.model ?? base.model, patch.account ?? base.account);
+        const now = patch.reasoning ?? base.reasoning;
+        if (takes.length && !takes.includes(now)) {
+          if (reasoning !== undefined) fail(tr('msg.api.reasoningUnavailable'));
+          patch.reasoning = nearestLevel(now, takes);
         }
       }
       if (orchestrate !== undefined && !conv) patch.orchestrate = Boolean(orchestrate);
@@ -270,7 +273,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // On this PC the choice is also the one the next new conversation starts with.
       if (!remote) { const c = saveConfig({ orchestrator: patch }); emit('config:changed', c); }
       const info = orchestrator.info(conv?.id ?? null);
-      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh'), xhigh: tr('msg.api.reasoningXhigh') }[info.reasoning] ?? info.reasoning;
+      const level = { low: tr('msg.api.reasoningLow'), medium: tr('msg.api.reasoningMedium'), high: tr('msg.api.reasoningHigh'), xhigh: tr('msg.api.reasoningXhigh'), minimal: tr('msg.api.reasoningMinimal'), max: tr('msg.api.reasoningMax') }[info.reasoning] ?? info.reasoning;
       if ((patch.model !== undefined && patch.model !== before.model) || (patch.agent && patch.agent !== (before.agent ?? 'claude')) || (patch.reasoning && patch.reasoning !== before.reasoning)) board.notice(tr('msg.api.assistantBrain', { name: assistantName(), agent: info.agentLabel, label: info.modelLabel, reasoning: level }), 'info');
       return info;
     },

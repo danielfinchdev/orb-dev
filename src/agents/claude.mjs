@@ -12,6 +12,9 @@ import { decide, describeAction } from '../domain/security/guard.mjs';
 import { tr } from '../platform/context.mjs';
 import { logJson } from '../platform/log.mjs';
 
+// Claude Code takes low, medium, high, xhigh and max; «minimal» is Codex's, so it runs as the closest one, «low».
+export const claudeEffort = (r) => (r === 'minimal' ? 'low' : r || 'medium');
+
 export const id = 'claude';
 export const label = 'Claude Code';
 export const kind = 'sdk';
@@ -136,8 +139,8 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
     return rows.filter((m) => m?.value && m.value !== 'default').map((m) => {
       const isDefault = !marked && usual && (m.resolvedModel ?? m.value) === usual;
       if (isDefault) marked = true;
-      // the reasoning levels the model takes (Orb offers low, medium, high and, when the model has it, xhigh).
-      const efforts = Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)) : null;
+      // the reasoning levels the model takes (low, medium, high and, when the model has them, xhigh and max).
+      const efforts = Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(e)) : null;
       return { id: m.value, label: m.displayName || m.value, ...(m.resolvedModel && m.resolvedModel !== m.value ? { resolved: m.resolvedModel } : {}), ...(isDefault ? { default: true } : {}), ...(efforts?.length ? { efforts } : {}) };
     });
   } catch { return null; } finally { release?.(); try { q?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } }
@@ -290,7 +293,7 @@ export function createLive(o) {
       pathToClaudeCodeExecutable: o.exe.cmd,
       env: cleanEnv({ ...(o.env ?? {}), ...mcp.env }),
       model: o.model || undefined,
-      effort: o.reasoning || 'medium',
+      effort: claudeEffort(o.reasoning),
       includePartialMessages: true,
       settingSources: risky.length ? [] : LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },

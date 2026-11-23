@@ -13,7 +13,7 @@ test('a brain is cleaned: bad agents and models are refused, the account and rea
   assert.equal(cleanBrain({ agent: '../x y' }), null);
   assert.equal(cleanBrain({ agent: 'claude', model: 'a b; rm' }), null);
   assert.equal(cleanBrain(null), null);
-  assert.equal(cleanBrain({ agent: 'claude', reasoning: 'max' }).reasoning, 'medium');
+  assert.equal(cleanBrain({ agent: 'claude', reasoning: 'huge' }).reasoning, 'medium');
 });
 
 test('what storage holds is parsed without repeats, junk or more than the limit', () => {

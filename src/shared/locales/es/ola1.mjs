@@ -2,16 +2,22 @@
 // y la compactación de conversaciones. Va la última: también corrige algunos textos anteriores.
 export default {
   // Razonamiento: botón del agente con su menú
-  'reasoning.xhigh': 'Extra',
+  'reasoning.minimal': 'Mínimo',
+  'reasoning.xhigh': 'Extra alto',
+  'reasoning.max': 'Máximo',
   'reasoning.title': 'Razonamiento: {level}',
   'reasoning.titleText': 'Cuánto piensa antes de responder. A más razonamiento, respuestas más cuidadas y más uso.',
   'reasoning.use.low': 'Uso bajo',
   'reasoning.use.medium': 'Uso medio',
   'reasoning.use.high': 'Uso alto',
+  'reasoning.use.minimal': 'Uso mínimo',
   'reasoning.use.xhigh': 'Uso muy alto',
+  'reasoning.use.max': 'Uso máximo',
   'reasoning.tasks.low': 'Preguntas rápidas, textos cortos y cambios pequeños.',
   'reasoning.tasks.medium': 'El trabajo habitual: explicar, redactar y programar.',
   'reasoning.tasks.high': 'Problemas difíciles, planes de varios pasos y revisiones a fondo.',
+  'reasoning.tasks.minimal': 'Respuestas inmediatas: casi sin pensar, para lo trivial.',
+  'reasoning.tasks.max': 'Todo el esfuerzo posible: lo más difícil, sin límite de reflexión.',
   'reasoning.tasks.xhigh': 'Lo más complejo: arquitectura, fallos difíciles de localizar y análisis largos.',
   // Orquestador: icono e interruptor pequeño
   'chat.orchestratorTip': 'Orquestador: {name} reparte el trabajo entre varios agentes',
@@ -35,8 +41,10 @@ export default {
   'msg.sessions.cleared': 'Conversación nueva. El agente empieza de cero; el historial se conserva.',
   'msg.orch.cleared': 'Conversación nueva. La próxima respuesta empieza de cero; el historial se conserva.',
   'msg.sessions.compactFailed': '{label} no ha podido compactar la conversación. Puedes seguir escribiendo con normalidad.',
-  'msg.api.reasoningXhigh': 'extra',
-  'msg.api.reasoningUnavailable': 'Este modelo no admite el razonamiento Extra.',
+  'msg.api.reasoningXhigh': 'extra alto',
+  'msg.api.reasoningMinimal': 'mínimo',
+  'msg.api.reasoningMax': 'máximo',
+  'msg.api.reasoningUnavailable': 'Este modelo no admite ese nivel de razonamiento.',
   // Ajustes en seis secciones
   'settings.section.magiclink': 'Dispositivos',
   'settings.section.agentes': 'Agentes y uso',

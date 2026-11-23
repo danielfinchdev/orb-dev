@@ -258,7 +258,7 @@ private fun MoreBrainOptions(s: NewChatState, vm: NewChatViewModel, ready: Boole
         if (efforts.isNotEmpty()) {
             OrbSheetLabel(ChatTexts.NEW_CHAT_EFFORT)
             ChipsRow {
-                for (e in efforts) OrbChip(e, s.effort == e, { vm.pickBrain(agent.id, s.model, if (s.effort == e) null else e) })
+                for (e in efforts) OrbChip(BrainInfo.reasoningWord(e).replaceFirstChar { it.uppercase() }, s.effort == e, { vm.pickBrain(agent.id, s.model, if (s.effort == e) null else e) })
             }
         }
     }

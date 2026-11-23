@@ -12,15 +12,16 @@ import { usableAccounts } from '../../domain/usage/accounts.mjs';
 import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../../domain/usage/budget.mjs';
 import { cursorShownName } from '../../agents/cursor.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
-// the reasoning levels Orb offers (Bajo, Medio, Alto, Extra); Extra only for the models that take it.
-export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
-const USUAL_LEVELS = ['low', 'medium', 'high'];
+import { REASONING_LEVELS, USUAL_LEVELS, knownLevels, nearestLevel } from '../../shared/reasoning-levels.mjs';
+export { REASONING_LEVELS, nearestLevel };
 // The levels a model takes, from the catalog (what its agent listed); without a figure, the usual three.
 export function levelsOf(catalog, agent, model, account = null) {
   const a = (catalog ?? []).find((x) => x.id === agent);
   const list = [...((account && a?.accountModels?.[account]) || []), ...(a?.models ?? [])];
   const m = list.find((x) => x.id === (model ?? '')) ?? (model ? null : list.find((x) => x.id === ''));
-  return m?.efforts?.length ? m.efforts : USUAL_LEVELS;
+  if (m?.efforts?.length) return m.efforts;
+  // Cursor picks the effort through the model variant, not through a setting: without a list it offers none.
+  return agent === 'cursor' ? [] : USUAL_LEVELS;
 }
 // the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
 const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
@@ -49,8 +50,8 @@ export function rememberModels(board, agent, list, account = agent) {
     const item = { id: m.id, label };
     if (m.default && !marked) { item.default = true; marked = true; }
     if (typeof m.resolved === 'string' && m.resolved !== m.id && MODEL_ID.test(m.resolved)) item.resolved = m.resolved;
-    // the reasoning levels the agent says the model takes (only Orb's four).
-    if (Array.isArray(m.efforts)) { const e = REASONING_LEVELS.filter((x) => m.efforts.includes(x)); if (e.length) item.efforts = e; }
+    // the reasoning levels the agent says the model takes (only the ones Orb knows).
+    if (Array.isArray(m.efforts)) { const e = knownLevels(m.efforts); if (e.length) item.efforts = e; }
     clean.push(item);
     if (clean.length >= 40) break;
   }
