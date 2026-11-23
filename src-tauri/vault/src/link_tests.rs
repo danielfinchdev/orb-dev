@@ -1,5 +1,5 @@
 use super::*;
-use crate::crypto::{pake_key, pake_mac, Pake};
+use crate::crypto::{b64, pake_key, pake_mac, Pake};
 use crate::locked::Locked;
 use crate::vault::Costs;
 use serde_json::json;
@@ -103,6 +103,13 @@ fn the_qr_secret_links_only_after_the_owner_says_yes() {
   assert_eq!(pc_mac, pake_mac(k.as_slice(), "orb-pake:pc:dev-1"));
   assert_eq!(info(&mut v, NOW)["ok"], json!(false), "one use");
   tidy(&dir);
+}
+
+/// The phones' side is src/shared/mobile-crypto.mjs > linkSecret: this value comes from it (same text, same letters).
+#[test]
+fn a_typed_code_gives_the_secret_the_phone_works_out() {
+  let salt: Vec<u8> = (1..=16).collect();
+  assert_eq!(typed_secret("abcd-efgh", &salt).unwrap().as_str().unwrap(), "corto4:rPnLoUvFVfy_IovMAGuaHnrO3SgDzh4WMJ0k_ktBItk");
 }
 
 #[test]

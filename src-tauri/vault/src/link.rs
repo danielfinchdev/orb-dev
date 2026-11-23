@@ -6,7 +6,7 @@
 // ECDH(phone, PC). A phone that scanned the QR uses the 128-bit secret; a typed code is stretched with scrypt and the code's
 // salt first. A right MAC does not finish the link: the PC's own MAC is kept back until the owner says yes at the PC to the
 // phone's name (confirm), and without that yes there is no link.
-use crate::crypto::{self, b64, b64url, unb64};
+use crate::crypto::{self, b64url, unb64};
 use crate::locked::Locked;
 use crate::server::s;
 use crate::vault::{Code, Strength, Vault};
@@ -77,9 +77,9 @@ pub fn normalize(text: &str) -> String {
 /// What a typed code becomes on both sides (src/shared/mobile-crypto.mjs > linkSecret).
 pub fn typed_secret(code: &str, salt: &[u8]) -> Option<Locked> {
   let k = crypto::scrypt(normalize(code).as_bytes(), salt, TYPED_N, 8, 1)?;
-  let mut text = Locked::with_capacity(8 + 44);
+  let mut text = Locked::with_capacity(7 + 44);
   text.extend(b"corto4:");
-  text.extend(b64(k.as_slice()).as_bytes());
+  text.extend(b64url(k.as_slice()).as_bytes());
   Some(text)
 }
 
@@ -124,7 +124,7 @@ pub fn probe(v: &mut Vault, via: &str, dev_pub: &[u8], now: u64) -> Result<Value
   let Some(secret) = v.link.live(now).and_then(|l| secret_of(l, via)) else { return Ok(json!({ "ok": false, "reason": "gone" })) };
   let Some(pc) = v.pc_private() else { return Ok(json!({ "ok": false, "reason": "gone" })) };
   let Some(key) = crypto::pairing_key(pc.as_slice(), dev_pub, secret.as_str().unwrap_or_default()) else { return Ok(json!({ "ok": false, "reason": "bad" })) };
-  Ok(json!({ "ok": true, "key": b64(key.as_slice()) }))
+  Ok(json!({ "ok": true, "key": b64url(key.as_slice()) }))
 }
 
 fn wrong(v: &mut Vault) -> Value {
