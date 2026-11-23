@@ -135,7 +135,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     for (const r of board.all('SELECT conversation_id AS c, status, COUNT(*) AS n FROM tasks WHERE conversation_id IS NOT NULL GROUP BY conversation_id, status')) (counts[r.c] ??= {})[r.status] = r.n;
     const asking = new Set(board.all(`SELECT DISTINCT conversation_id AS c FROM chat WHERE conversation_id IS NOT NULL AND meta LIKE '%"kind":"question"%' AND meta LIKE '%"status":"pending"%'`).map((r) => r.c));
     const live = new Map(orchestrator.states().map((x) => [x.conversation, x]));
-    return board.conversations().map((c) => ({ id: c.id, title: c.title, project: c.project, agent: c.agent, account: c.account, model: c.model, reasoning: c.reasoning, status: c.status,
+    return board.conversations().map((c) => ({ id: c.id, title: c.title, project: c.project, agent: c.agent, account: c.account, account_fixed: Number(Boolean(c.account_fixed && c.account)), model: c.model, reasoning: c.reasoning, status: c.status,
       created_at: c.created_at, updated_at: c.updated_at, done_at: c.done_at, context: c.context ?? null, tasks: counts[c.id] ?? {}, busy: Boolean(live.get(c.id)?.busy), waiting: Boolean(live.get(c.id)?.waiting), asking: asking.has(c.id) }));
   };
   // a conversation is done when the user gave the OK to its work and none of its tasks is still open.
@@ -283,7 +283,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'models.catalog': () => {
       // with the accounts' real usage in the key: the usage bubble reads it from here and must not see an old figure.
       const rates = board.all("SELECT key, value FROM settings WHERE key LIKE 'rate:%'").map((r) => `${r.key}=${r.value.length}:${r.value.slice(0, 40)}`);
-      const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev'), rates]);
+      // the accounts (their marks, states and folders) and their pauses show in the catalog too
+      const pauses = board.all("SELECT key, value FROM settings WHERE key LIKE 'cooldown:%'").map((r) => r.key + '=' + r.value);
+      const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, ctx.config.accounts, pauses, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev'), rates]);
       if (catalogCache && catalogCache.key === key && Date.now() - catalogCache.at < 5000) return catalogCache.value;
       const value = modelCatalog(board, { discover: true, log });
       catalogCache = { key, at: Date.now(), value };
@@ -348,7 +350,12 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
         WHERE u.day >= ? AND u.day <= ? GROUP BY 1`, out.from, out.to);
       const projects = byProject.map((p) => ({ project: p.project, tokensIn: p.tin, tokensOut: p.tout, usd: p.usd })).filter((p) => p.tokensIn + p.tokensOut || p.usd)
         .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
-      return { ...out, projects, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+      // the same rows by account, only where an agent has several (the mark says which is which)
+      const byAccount = board.all('SELECT account_id AS account, COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) AS tin, COALESCE(SUM(tokens_out), 0) AS tout, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE day >= ? AND day <= ? AND account_id IS NOT NULL GROUP BY 1', out.from, out.to)
+        .map((r) => ({ r, acc: (ctx.config.accounts ?? []).find((a) => a.id === r.account) })).filter(({ acc }) => acc && (ctx.config.accounts ?? []).filter((a) => a.agent === acc.agent).length > 1)
+        .map(({ r, acc }) => ({ account: acc.id, agent: acc.agent, label: acc.label, turns: r.turns, tokensIn: r.tin, tokensOut: r.tout, usd: r.usd })).filter((x) => x.tokensIn + x.tokensOut || x.usd)
+        .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
+      return { ...out, projects, byAccount, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
     },
     // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.

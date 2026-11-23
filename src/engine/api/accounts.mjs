@@ -17,6 +17,22 @@ import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '..
 import { translate } from '../../shared/i18n.mjs';
 import { refreshModels, refreshAllModels } from '../usage/catalog.mjs';
 import { fail, str, oneOf } from './common.mjs';
+import { ACCOUNT_COLORS, TAG_RE, markOf } from '../../shared/account-marks.mjs';
+
+// tag/color of «accounts.update»: an empty value goes back to the default one.
+function markPatch(tag, color) {
+  const out = {};
+  if (tag !== undefined) {
+    const t = String(tag ?? '').trim();
+    if (t && !TAG_RE.test(t)) fail(tr('msg.api.accountTag'));
+    out.tag = t ? t.toUpperCase() : undefined;
+  }
+  if (color !== undefined) {
+    if (color && !ACCOUNT_COLORS.includes(color)) fail(tr('msg.api.accountTag'));
+    out.color = color || undefined;
+  }
+  return out;
+}
 
 // the installer is loaded the first time an install is asked for (not at the engine's start).
 let installerModule = null;
@@ -36,7 +52,7 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
   const decorate = (a) => {
     const update = updateInfo(board, a.id, a.version);
     const state = (acc) => { const identity = identityState(acc.id); const sameAs = duplicatesOf(acc.id); const foundHere = foundHint(acc.id); return { ...(foundHere ? { foundHint: foundHere } : {}), ...(identity ? { identity: identity.state, ...(identity.viaKey ? { viaKey: true } : {}) } : {}), ...(sameAs.length ? { sameAs } : {}) }; };
-    return { ...a, accounts: a.accounts?.map((acc) => { const logout = logoutKind(acc); return { ...acc, ...state(acc), ...(logout ? { logout } : {}) }; }), ...(update ? { update } : {}) };
+    return { ...a, accounts: a.accounts?.map((acc, i) => { const logout = logoutKind(acc); return { ...acc, ...markOf(acc, i), ...state(acc), ...(logout ? { logout } : {}) }; }), ...(update ? { update } : {}) };
   };
   return {
     // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
@@ -141,9 +157,9 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
     // the masked hint of the other login found, to show what «recordar esta» would adopt (this PC only)
     'accounts.identityFound': ({ id }) => ({ hint: foundHint(str(id, 'cuenta', 40)) }),
     'accounts.rememberIdentity': ({ id }) => { const ok = rememberIdentity(str(id, 'cuenta', 40), emit); if (!ok) fail(tr('msg.api.noIdentity')); return true; },
-    'accounts.update': ({ id, label, enabled }) => {
+    'accounts.update': ({ id, label, enabled, tag, color }) => {
       const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));
-      const next = ctx.config.accounts.map((a) => (a.id === acc.id ? { ...a, ...(label !== undefined ? { label: oneLine(str(label, 'nombre', 60), 60) } : {}), ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}) } : a));
+      const next = ctx.config.accounts.map((a) => (a.id === acc.id ? { ...a, ...(label !== undefined ? { label: oneLine(str(label, 'nombre', 60), 60) } : {}), ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}), ...markPatch(tag, color) } : a));
       const c = saveConfig({ accounts: next }); emit('config:changed', c); return true;
     },
     'accounts.remove': ({ id }) => {
