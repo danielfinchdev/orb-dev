@@ -1,15 +1,59 @@
 ## Download
 
-### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.9/Orb-3.8.9-instalador.exe)
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.10/Orb-3.8.10-instalador.exe)
 
-`Orb-3.8.9-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+`Orb-3.8.10-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
 It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
 installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.9/Orb-3.8.9-android.apk)
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.10/Orb-3.8.10-android.apk)
 
-`Orb-3.8.9-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+`Orb-3.8.10-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
 the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+## What's new in 3.8.10
+
+### Added
+
+- **Several accounts of the same agent.** Use more than one Claude, Codex or Cursor account. Each chat either keeps a
+  fixed account or lets Orb choose one automatically; Orb tells you when it switches or holds a message. Every account
+  has its own mark and colour in the chat box, the lists and the tasks. Before each turn Orb checks that the signed-in
+  identity is the one you picked, and Usage shows each account on its own. Android shows the account mark too.
+- **Windows Hello unlock.** Unlock Orb with Windows Hello instead of typing the master password, in the lock screen and
+  in protected dialogs. Hello never opens agent secrets on its own: those still need the password or your phone.
+- **Recovery code.** Orb can generate a recovery code that also opens your data on a new PC.
+- **Approve sensitive PC actions with your phone's fingerprint.** Saving keys, connectors, restoring a backup, full
+  access and answers that carry a secret can be approved from the phone.
+- **"I forgot everything" recovery.** Confirm with Windows Hello and your phone, then set a new password and a new code.
+- **Link a phone without the master password.** A one-time code (typed or from a QR) links a new phone; the PC shows its
+  fingerprint and asks you to confirm the phone's name.
+- **Android app lock bound to a Keystore key.** The lock needs your biometrics and is invalidated if they change.
+- **Tailscale in Settings › Devices.** A new card installs and signs in to Tailscale and lists the devices on your
+  tailnet. On Android, "Find my PC on Tailscale" fills in the address once you type the PC's name.
+- **Real reasoning levels for each model**, from the agent itself (Claude Low to Max, Codex Minimal to Extra high), and an
+  option in Settings to hide "Recommended" and the model guide in the picker.
+- **New chat in one click**, plus a search row in the sidebar. "New chat" and Ctrl+K open a project picker with search,
+  arrows and Enter.
+- **Undo shows what will happen.** The dialog lists how each file ends up, with a diff per file, and refuses to run if
+  anything has changed since.
+
+### Changed
+
+- The option you chose is highlighted in menus, lists and sheets, on the PC, the phone web and Android.
+- The mobile web app resumes the live stream and resends lost requests like the Android app does.
+
+### Fixed
+
+- Codex recovers from a lost thread instead of failing the identity check.
+- A chat that switches account keeps its context.
+- A newly linked phone never receives events from before it was linked.
+- Going back to 3.8.9 keeps your settings readable, also with the new reasoning levels.
+
+### Security
+
+- Fixes from an internal security review: stricter checks around recovery codes, backup phrases and approvals, no secret
+  phrase sent to the phone, undo no longer overwrites a file changed meanwhile, and a limit on link-code attempts per
+  address.
 
 ## What's new in 3.8.9
 
