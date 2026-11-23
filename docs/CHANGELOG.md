@@ -15,7 +15,7 @@ the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](
 
 ### Added
 
-- **Several accounts of the same agent.** Use more than one Claude, Codex or Cursor account. Each chat either keeps a
+- **Several accounts of the same agent.** Use more than one Claude or Codex account. Each chat either keeps a
   fixed account or lets Orb choose one automatically; Orb tells you when it switches or holds a message. Every account
   has its own mark and colour in the chat box, the lists and the tasks. Before each turn Orb checks that the signed-in
   identity is the one you picked, and Usage shows each account on its own. Android shows the account mark too.
@@ -27,7 +27,8 @@ the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](
 - **"I forgot everything" recovery.** Confirm with Windows Hello and your phone, then set a new password and a new code.
 - **Link a phone without the master password.** A one-time code (typed or from a QR) links a new phone; the PC shows its
   fingerprint and asks you to confirm the phone's name.
-- **Android app lock bound to a Keystore key.** The lock needs your biometrics and is invalidated if they change.
+- **Android app lock bound to a Keystore key.** On Android 11 and later the lock opens only through a key kept in the
+  phone's secure hardware, with your fingerprint, face or screen lock.
 - **Tailscale in Settings › Devices.** A new card installs and signs in to Tailscale and lists the devices on your
   tailnet. On Android, "Find my PC on Tailscale" fills in the address once you type the PC's name.
 - **Real reasoning levels for each model**, from the agent itself (Claude Low to Max, Codex Minimal to Extra high), and an
