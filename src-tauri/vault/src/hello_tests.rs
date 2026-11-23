@@ -198,7 +198,8 @@ fn without_hello_there_is_nothing_to_unlock() {
 #[test]
 fn a_changed_entry_fails_closed() {
   let (v, f, dir) = enabled(Mode::Ok);
-  v.lock().unwrap().set(HELLO_ID, json!({ "cuenta": "orb-test", "pub": "AAAA", "alg": ALG, "at": "x" })).unwrap();
+  let key = v.lock().unwrap().key_id().unwrap().to_string();
+  v.lock().unwrap().set(HELLO_ID, json!({ "cuenta": "orb-test", "pub": "AAAA", "alg": ALG, "at": "x", "keyId": key })).unwrap();
   assert_eq!(begin(&mut v.lock().unwrap(), "orb-1", None, NOW).unwrap().err().unwrap()["reason"], json!("changed"));
   assert_eq!(state(&mut v.lock().unwrap(), &f, NOW).unwrap()["valid"], json!(false));
   let _ = std::fs::remove_dir_all(dir);
@@ -352,5 +353,45 @@ fn disabling_keeps_an_enable_that_is_waiting() {
   v.lock().unwrap().hello.enabling = true;
   disable(&mut v.lock().unwrap(), &f).unwrap();
   assert!(v.lock().unwrap().hello.enabling);
+  let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn an_entry_of_another_data_key_does_not_count() {
+  let (v, f, dir) = enabled(Mode::Ok);
+  let mut e = v.lock().unwrap().get(HELLO_ID).unwrap();
+  assert!(e["keyId"].is_string(), "the key it was turned on under is kept");
+  e["keyId"] = json!("otra-clave");
+  v.lock().unwrap().set(HELLO_ID, e).unwrap();
+  assert_eq!(begin(&mut v.lock().unwrap(), "orb-1", None, NOW).unwrap().err().unwrap()["reason"], json!("none"));
+  assert_eq!(state(&mut v.lock().unwrap(), &f, NOW).unwrap()["enabled"], json!(false));
+  assert!(account(&mut v.lock().unwrap()).is_some(), "its OS key can still be deleted");
+  let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn whether_hello_is_set_up_is_asked_of_windows_once_a_minute() {
+  struct Counting(std::sync::atomic::AtomicUsize);
+  impl Hello for Counting {
+    fn available(&self) -> bool {
+      self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      true
+    }
+    fn create(&self, _: &str) -> Result<HelloKey, HelloError> {
+      Err(HelloError::Unavailable)
+    }
+    fn sign(&self, _: &str, _: &[u8]) -> Result<Vec<u8>, HelloError> {
+      Err(HelloError::Unavailable)
+    }
+    fn delete(&self, _: &str) {}
+  }
+  let (v, _, dir) = setup(Mode::Ok);
+  let c = Counting(std::sync::atomic::AtomicUsize::new(0));
+  for i in 0..5 {
+    assert_eq!(state(&mut v.lock().unwrap(), &c, NOW + i).unwrap()["available"], json!(true));
+  }
+  assert_eq!(c.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+  state(&mut v.lock().unwrap(), &c, NOW + 61_000).unwrap();
+  assert_eq!(c.0.load(std::sync::atomic::Ordering::SeqCst), 2);
   let _ = std::fs::remove_dir_all(dir);
 }

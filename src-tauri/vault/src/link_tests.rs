@@ -258,9 +258,10 @@ fn the_server_ops_need_the_token_and_never_touch_the_password_exchange() {
   };
   let srv = crate::server::tests_server(std::sync::Arc::new(crate::fake_hello::Fake::new(crate::fake_hello::Mode::Ok)));
   let q = |op: &str, req: Value| crate::server::tests_quick(op, req, &mut h.vault.lock().unwrap(), &srv);
-  assert_eq!(q("linkNew", json!({ "token": "x" })).err(), Some(Code::Locked));
+  let new = |token: &str| crate::server::slow("linkNew", &json!({ "token": token }), &h, srv.hello.as_ref(), || 1_800_000_000_000);
+  assert_eq!(new("x").err(), Some(Code::Locked));
   let t = token(&mut h.vault.lock().unwrap(), Strength::Hello, PURPOSE);
-  let made = q("linkNew", json!({ "token": t })).unwrap();
+  let made = new(&t).unwrap();
   assert_eq!(made["ok"], json!(true));
   assert_eq!(q("linkInfo", json!({})).unwrap()["ok"], json!(true));
   assert_eq!(q("linkCancel", json!({})).unwrap(), json!(true));
@@ -287,4 +288,16 @@ fn a_question_the_owner_is_answering_keeps_the_code_alive() {
 fn the_typed_secret_depends_on_the_pc_key() {
   let salt: Vec<u8> = (1..=16).collect();
   assert_ne!(typed_secret("abcdefgh", &salt, &[1u8; 32]).unwrap().as_str(), typed_secret("abcdefgh", &salt, &[2u8; 32]).unwrap().as_str());
+}
+
+#[test]
+fn a_code_is_not_installed_when_the_pc_keys_changed_during_the_stretch() {
+  let (mut v, dir) = new_vault("rekey-mid");
+  let t = token(&mut v, Strength::Hello, PURPOSE);
+  let prep = prepare(&mut v, &t, NOW).unwrap().ok().unwrap();
+  let typed = stretch(&prep).unwrap();
+  v.set("remote_keys", json!({ "priv": b64(&[6u8; 32]) })).unwrap();
+  assert_eq!(install(&mut v, prep, typed, NOW).err(), Some(Code::Locked));
+  assert_eq!(info(&mut v, NOW)["ok"], json!(false), "no code went live");
+  tidy(&dir);
 }

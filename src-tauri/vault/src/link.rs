@@ -92,23 +92,63 @@ pub fn typed_secret(code: &str, salt: &[u8], pc_pub: &[u8]) -> Option<Locked> {
   Some(text)
 }
 
-/// A new code, for a token of Hello's or the password's strength made for it (used up here). -> its parts, once.
-pub fn make(v: &mut Vault, token: &str, now: u64) -> Result<Value, Code> {
+/// What a new code is made of before its slow part (the typed code's scrypt) is done.
+pub struct Prep {
+  pc_pub: [u8; 32],
+  key_id: Option<String>,
+  code: Locked,
+  secret: Locked,
+  salt: Locked,
+}
+
+/// Step 1 of a new code, with the vault held: the token (for Hello's or the password's strength, made for it, used up here)
+/// and the parts. -> the parts, or the answer that refuses.
+pub fn prepare(v: &mut Vault, token: &str, now: u64) -> Result<Result<Prep, Value>, Code> {
   if !v.check_strength(token, Some(PURPOSE), Some(Strength::Hello), true, now) {
     return Err(Code::Locked);
   }
-  let Some(pc) = v.pc_private() else { return Ok(json!({ "ok": false, "reason": "noKeys" })) };
+  let Some(pc) = v.pc_private() else { return Ok(Err(json!({ "ok": false, "reason": "noKeys" }))) };
   let Ok(pc_arr) = <[u8; 32]>::try_from(pc.as_slice()) else { return Err(Code::Damaged) };
   let pc_pub = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(pc_arr));
-  let code = pick(8);
-  let secret = crypto::random(16);
-  let salt = crypto::random(16);
-  let Some(typed) = typed_secret(code.as_str().unwrap_or_default(), salt.as_slice(), pc_pub.as_bytes()) else { return Err(Code::Damaged) };
-  let qr = Locked::from_slice(b64url(secret.as_slice()).as_bytes());
+  Ok(Ok(Prep { pc_pub: *pc_pub.as_bytes(), key_id: v.key_id().map(String::from), code: pick(8), secret: crypto::random(16), salt: crypto::random(16) }))
+}
+/// The slow part, without the vault held.
+pub fn stretch(p: &Prep) -> Option<Locked> {
+  typed_secret(p.code.as_str().unwrap_or_default(), p.salt.as_slice(), &p.pc_pub)
+}
+/// Step 3, with the vault held again: the code goes live (never after the vault was locked meanwhile). -> its parts, once.
+pub fn install(v: &mut Vault, p: Prep, typed: Locked, now: u64) -> Result<Value, Code> {
+  // The vault may have been locked, or its data key or the PC's keys changed (a rekey), while the scrypt ran: the typed
+  // secret was made for the old PC key and would not open anything.
+  let same_pc = v.pc_private().and_then(|pc| <[u8; 32]>::try_from(pc.as_slice()).ok()).is_some_and(|a| x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(a)).as_bytes() == &p.pc_pub);
+  if !v.unlocked() || v.key_id().map(String::from) != p.key_id || !same_pc {
+    return Err(Code::Locked);
+  }
+  let qr = Locked::from_slice(b64url(p.secret.as_slice()).as_bytes());
   let until = now + LIFE_MS;
-  let out = json!({ "ok": true, "code": code.as_str().unwrap_or_default(), "secret": qr.as_str().unwrap_or_default(), "salt": b64url(salt.as_slice()), "until": until });
-  v.link.cur = Some(Live { qr, typed, salt: salt.as_slice().to_vec(), until, fails: 0, waiting: None });
+  let out = json!({ "ok": true, "code": p.code.as_str().unwrap_or_default(), "secret": qr.as_str().unwrap_or_default(), "salt": b64url(p.salt.as_slice()), "until": until });
+  v.link.cur = Some(Live { qr, typed, salt: p.salt.as_slice().to_vec(), until, fails: 0, waiting: None });
   Ok(out)
+}
+
+/// A new code in one go (the three steps with the vault held the whole time; the server runs them apart, see make_job).
+pub fn make(v: &mut Vault, token: &str, now: u64) -> Result<Value, Code> {
+  let p = match prepare(v, token, now)? {
+    Ok(p) => p,
+    Err(answer) => return Ok(answer),
+  };
+  let typed = stretch(&p).ok_or(Code::Damaged)?;
+  install(v, p, typed, now)
+}
+
+/// The job: the scrypt of the typed code runs while the vault is free for everything else.
+pub fn make_job(h: &crate::server::Handle, req: &Value, now: u64) -> Result<Value, Code> {
+  let prep = match prepare(&mut h.vault.lock().unwrap(), s(req, "token"), now)? {
+    Ok(p) => p,
+    Err(answer) => return Ok(answer),
+  };
+  let typed = stretch(&prep).ok_or(Code::Damaged)?;
+  install(&mut h.vault.lock().unwrap(), prep, typed, now)
 }
 
 /// What a phone that only has the typed code needs to stretch it: the salt (not a secret) and when the code ends.

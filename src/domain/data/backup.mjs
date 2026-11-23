@@ -80,8 +80,9 @@ export function newRecoveryCode() {
 
 // The recovery wrap kept on this machine (sealed with its secret): the scheduled copies use it without asking for the code.
 export const recoveryFile = (home) => path.join(paths(home).data, 'copia-clave.json');
-export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT } = {}) {
-  const kdf = { alg: 'scrypt', ...params, salt: b64(crypto.randomBytes(16)) };
+// salt: chosen by the caller when the vault's code file must name this wrap (master.mjs › setCode copyId).
+export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT, salt = null } = {}) {
+  const kdf = { alg: 'scrypt', ...params, salt: salt || b64(crypto.randomBytes(16)) };
   const kek = passKek(passphrase, kdf);
   const sealed = wrap(machineKek(secret), kek, 'orbbak:recovery');
   const file = recoveryFile(home);
@@ -89,6 +90,8 @@ export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT } =
   fs.writeFileSync(file, `${JSON.stringify({ v: 1, kdf, kek: sealed, at: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
   return { kdf, at: new Date().toISOString() };
 }
+// The salt of the recovery wrap in a folder, which says which code it was made for (the vault's code file names it).
+const wrapSaltOf = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')).kdf?.salt ?? null; } catch { return null; } };
 export function recoveryOf(home, secret) {
   let raw; try { raw = JSON.parse(fs.readFileSync(recoveryFile(home), 'utf8')); } catch { return null; }
   try { return { kdf: raw.kdf, kek: unwrap(machineKek(secret), raw.kek, 'orbbak:recovery'), at: raw.at }; } catch { return null; }
@@ -587,7 +590,7 @@ export async function settleEnvelopes(home, tmp, keys) {
     return false;
   }
   let byCode = false; let settled = false; let openedKey = null;
-  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : ''); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; } catch { byCode = false; } }
+  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : '', recoveryFile(tmp)); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; if (r?.turnedOff === true && keys.outcome) keys.outcome.turnedOff = true; } catch { byCode = false; } }
   // Without the vault's word on it, the copy's code wrap is never taken.
   if (!settled) fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
   // The same data key is what the vault opened, not what the copy's file says it is.
@@ -595,7 +598,19 @@ export async function settleEnvelopes(home, tmp, keys) {
   if (!(byCode || keys.proof === true || !inUse || sameKey)) { fs.rmSync(staged, { recursive: true, force: true }); return true; }
   // Restored with this PC's own key: this PC's code wrap stays when it is for that data key (the copy's was dropped).
   const own = path.join(current, SECRET_NAMES.code);
-  if (!byCode && sameKey && keyIdOf(own) === openedKey) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+  if (!byCode && sameKey && keyIdOf(own) === openedKey) {
+    // The code file names the copies' wrap it was made with (copyId). A copy from before the code was replaced brings an
+    // older wrap: this PC's code file would then be dropped at its first use and the code the person holds now would stop
+    // working, so this PC's own wrap comes along with it. When neither wrap is the one it names, the copy's decides.
+    const mine = wrapSaltOf(recoveryFile(home)); const brought = wrapSaltOf(recoveryFile(tmp));
+    let copyId = null; try { copyId = JSON.parse(fs.readFileSync(own, 'utf8')).copyId ?? null; } catch { /* unreadable: not taken */ }
+    if (copyId && copyId === brought) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+    else if (copyId && copyId === mine) {
+      fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+      fs.mkdirSync(path.dirname(recoveryFile(tmp)), { recursive: true });
+      fs.copyFileSync(recoveryFile(home), recoveryFile(tmp));
+    }
+  }
   return false;
 }
 
@@ -620,11 +635,12 @@ export async function stageRestore(home, file, keys = {}) {
       if (keys.secret && keys.passphrase) setRecovery(tmp, keys.secret, keys.passphrase);
       else { fs.rmSync(staged, { force: true }); recoveryOther = true; }
     }
-    const secretsKept = await settleEnvelopes(home, tmp, keys);
+    const outcome = { turnedOff: false };
+    const secretsKept = await settleEnvelopes(home, tmp, { ...keys, outcome });
     fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ recoveryOther, secretsKept, from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
     await fsp.rm(ready, { recursive: true, force: true });
     await fsp.rename(tmp, ready);
-    return { files: r.files, bytes: r.bytes, header: r.header, secretsKept };
+    return { files: r.files, bytes: r.bytes, header: r.header, secretsKept, turnedOff: outcome.turnedOff };
   } catch (error) { await fsp.rm(tmp, { recursive: true, force: true }); throw error; }
 }
 

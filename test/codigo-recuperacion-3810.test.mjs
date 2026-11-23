@@ -47,7 +47,7 @@ test('a clean PC with the copy and the code gets the secrets; a phrase never ope
   // A clean PC: another machine's secret, nothing of this PC's wrap.
   const pcB = crypto.randomBytes(32);
   const into = path.join(t.base, 'otro-pc');
-  const adopt = (dir, c) => adoptStaged(dir, c, pcB);
+  const adopt = (dir, c, copy) => adoptStaged(dir, c, pcB, copy);
   await K.restoreInto(into, made.path, { passphrase: code.toLowerCase(), secret: crypto.randomBytes(32), adopt });
   const dir = secretsOf(into);
   assert.ok(fs.existsSync(path.join(dir, FILES.code)), 'a code wrap written again for the restored key');

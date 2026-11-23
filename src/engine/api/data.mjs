@@ -117,11 +117,11 @@ export function dataApi({ board, emit = () => {}, log = () => {}, version = null
         proof = true;
       }
       // The vault settles what the copy's code wrap and its Hello entries may bring (master.mjs › adoptStaged).
-      const adopt = ctx.master ? (dir, code) => adoptStaged(dir, code) : null;
+      const adopt = ctx.master ? (dir, code, copy) => adoptStaged(dir, code, undefined, copy) : null;
       const r = await K.stageRestore(ctx.home, fileOf(file), { secret: secret(), passphrase: pass(passphrase), adopt, proof });
       log(`copia lista para restaurar: ${path.basename(file)} (${r.files} archivos)${r.secretsKept ? '; los secretos de este PC se quedan como estaban' : ''}`);
       emit('backup:restoreReady', { file: path.basename(file) });
-      return { ok: true, files: r.files, created: r.header.created, restartNeeded: true, secretsKept: r.secretsKept === true };
+      return { ok: true, files: r.files, created: r.header.created, restartNeeded: true, secretsKept: r.secretsKept === true, turnedOff: r.turnedOff === true };
     },
     // after «Empezar con una clave nueva», Windows opens the key from before again: go back to it at the
     // next start (src-tauri/vault/src/machine.rs › previous_key). Guarded like the recovery code.

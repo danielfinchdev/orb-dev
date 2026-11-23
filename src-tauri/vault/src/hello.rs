@@ -138,7 +138,12 @@ pub struct State {
   wait_until: u64,
   /// An enable is waiting for the OS key (one at a time).
   enabling: bool,
+  /// What Windows said about Hello being set up, and until when that holds: asking it is a blocking call and every protected
+  /// dialog asks for the state.
+  available: Option<(u64, bool)>,
 }
+/// How long «Hello is available» is taken as known.
+const AVAILABLE_MS: u64 = 60_000;
 impl State {
   pub(crate) fn drop_pending(&mut self) {
     self.pending = None;
@@ -155,9 +160,15 @@ fn refused(reason: &str) -> Value {
   json!({ "ok": false, "reason": reason })
 }
 
-fn entry(v: &mut Vault) -> Result<Option<Value>, Code> {
+fn raw_entry(v: &mut Vault) -> Result<Option<Value>, Code> {
   let e = v.get(HELLO_ID)?;
   Ok(if e.is_object() { Some(e) } else { None })
+}
+/// The entry as far as it counts: one made under another data key (it outlived a «He olvidado» done by an older version)
+/// was never proved against this one and is as good as absent.
+fn entry(v: &mut Vault) -> Result<Option<Value>, Code> {
+  let key_id = v.key_id().map(String::from);
+  Ok(raw_entry(v)?.filter(|e| key_id.is_some() && e.get("keyId").and_then(Value::as_str) == key_id.as_deref()))
 }
 fn text<'a>(e: &'a Value, k: &str) -> &'a str {
   e.get(k).and_then(Value::as_str).unwrap_or_default()
@@ -165,11 +176,18 @@ fn text<'a>(e: &'a Value, k: &str) -> &'a str {
 
 /// The account of the key kept here, if any (so the OS key can be deleted when the entry goes).
 pub fn account(v: &mut Vault) -> Option<String> {
-  entry(v).ok().flatten().map(|e| text(&e, "cuenta").to_string()).filter(|a| valid_account(a))
+  raw_entry(v).ok().flatten().map(|e| text(&e, "cuenta").to_string()).filter(|a| valid_account(a))
 }
 
 pub fn state(v: &mut Vault, hello: &dyn Hello, now: u64) -> Result<Value, Code> {
-  let available = hello.available();
+  let available = match v.hello.available {
+    Some((until, known)) if until > now => known,
+    _ => {
+      let asked = hello.available();
+      v.hello.available = Some((now + AVAILABLE_MS, asked));
+      asked
+    }
+  };
   let wait = if v.hello.wait_until > now { json!(crate::vault::iso(v.hello.wait_until)) } else { Value::Null };
   Ok(match entry(v)? {
     None => json!({ "available": available, "enabled": false }),
@@ -237,7 +255,7 @@ pub fn enable(vault: &std::sync::Mutex<Vault>, hello: &dyn Hello, account_name: 
       return Ok(refused("changed"));
     }
     v.hello.enabling = false;
-    let r = v.set(HELLO_ID, json!({ "cuenta": account_name, "pub": b64(&key.public), "alg": ALG, "tpm": key.tpm, "at": at }));
+    let r = v.set(HELLO_ID, json!({ "cuenta": account_name, "pub": b64(&key.public), "alg": ALG, "tpm": key.tpm, "at": at, "keyId": key_id }));
     if r.is_ok() {
       v.hello = State::default();
     }

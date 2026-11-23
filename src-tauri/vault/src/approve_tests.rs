@@ -402,3 +402,20 @@ fn a_rebuild_that_cannot_write_the_password_leaves_the_old_code() {
   assert!(!dir.join(crate::vault::CODE).exists(), "no code was left behind");
   tidy(&dir);
 }
+
+#[test]
+fn a_phone_entry_of_another_data_key_does_not_count() {
+  let (h, dir, _) = new_vault("other-key");
+  let mut v = h.vault.lock().unwrap();
+  let phone = Phone::new(7);
+  enroll_phone(&mut v, "dev-1", &phone);
+  assert_eq!(list(&mut v).unwrap().len(), 1);
+  let mut e = v.get(&id_of("dev-1")).unwrap();
+  assert!(e["keyId"].is_string());
+  e["keyId"] = json!("otra-clave");
+  v.set(&id_of("dev-1"), e).unwrap();
+  assert!(list(&mut v).unwrap().is_empty());
+  assert!(public_of(&mut v, "dev-1").unwrap().is_none());
+  drop(v);
+  tidy(&dir);
+}

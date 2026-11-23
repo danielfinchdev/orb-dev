@@ -107,7 +107,7 @@ function BackupsCard() {
         return call('backup.restore', { ...params, unlock });
       }
     });
-    if (r) notifyOk(t(r.secretsKept ? 'datos.restoreKept' : 'datos.restoreReady'), { ms: 10000 });
+    if (r) notifyOk(`${t(r.secretsKept ? 'datos.restoreKept' : 'datos.restoreReady')}${r.turnedOff ? ` ${t('datos.restoreHelloOff')}` : ''}`, { ms: 10000 });
   };
   // where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
   const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };

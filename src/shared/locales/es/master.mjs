@@ -270,6 +270,7 @@ export default {
   'recovery.printNote': 'Guárdalo fuera de este PC. Con él se abren tus copias en otro PC y se pone otra contraseña si la olvidas. No lo compartas.',
   'datos.restoreMaster': 'Tu contraseña maestra (opcional)',
   'datos.restoreMasterHint': 'Si la copia viene de otro PC, escríbela para recuperar sus secretos. Sin ella, los secretos de este PC se quedan como estaban.',
+  'datos.restoreHelloOff': 'Windows Hello y las aprobaciones del móvil se han desactivado: vuelve a activarlos.',
   'datos.restoreKept': 'Copia comprobada. Los secretos de este PC se quedan como estaban. Reinicia Orb para usarla.',
   'msg.approve.none': 'Ningún móvil enlazado puede aprobar acciones delicadas. Permítelo en Ajustes › Dispositivos.',
   'msg.approve.badMethod': 'Esta acción no se puede aprobar con el móvil.',

@@ -96,7 +96,7 @@ test('a file edited after the preview makes its hash stale; many files: diffs on
   const { undoPreviewFiles } = await import('../src/domain/tasks/checkpoints.mjs');
   const cp = board.settingJson(`checkpoint:${task.id}`).before;
   const plan = Array.from({ length: 5 }, (_, i) => ({ path: `a.txt`, action: 'restore', i }));
-  const rows = undoPreviewFiles(cp, plan, { maxDiffs: 2 });
+  const rows = await undoPreviewFiles(cp, plan, { maxDiffs: 2 });
   assert.equal(rows.filter((r) => r.noDiff).length, 3);
   assert.equal(rows.filter((r) => r.patch).length, 2);
   await call('tasks.undo', { id: task.id }); // leave the folder as it was
