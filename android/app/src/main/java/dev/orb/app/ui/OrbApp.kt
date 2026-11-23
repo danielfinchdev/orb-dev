@@ -168,6 +168,7 @@ fun OrbApp(container: AppContainer) {
                             Box(Modifier.fillMaxSize()) {
                                 OrbNav(container, start, nav)
                                 ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                                dev.orb.app.ui.approve.ApproveHost(container.approver)
                             }
                         }
                     }

@@ -310,12 +310,48 @@ function buildLink() {
   };
 }
 
+// ---------------------------------------------------------------- approvals
+// The bytes a phone signs to approve a sensitive action (src/domain/security/approve.mjs, the same layout as the vault's
+// src-tauri/vault/src/approve.rs) and the hash of the parameters' summary: Kotlin must build and read exactly these.
+async function buildApprove() {
+  const A = await import('../src/domain/security/approve.mjs');
+  const cases = [
+    { action: 'secrets.connector', params: { name: 'github' }, nonce: fill(32, (i) => i + 1), orbId: 'orb-1a2b', deviceId: '11111111-2222-3333-4444-555555555555', pcPub: fill(32, (i) => 255 - i), expires: 1_800_000_000_000 },
+    { action: 'secrets.saveConnector', params: { name: 'github', env: { GITHUB_TOKEN: 'ghp_secreto' }, unlock: 'tok' }, nonce: fill(32, (i) => i * 3), orbId: 'orb:x_y.z', deviceId: 'dev-2', pcPub: fill(32, (i) => i * 5), expires: 1_700_000_000_123 },
+    { action: 'approve.enroll', params: { name: 'Pixel de Dani' }, nonce: fill(32, (i) => 7), orbId: 'orb-1a2b', deviceId: 'dev-3', pcPub: fill(32, (i) => i), expires: 4_102_444_800_000 },
+    { action: 'master.rebuild', params: {}, nonce: fill(32, (i) => 200 + i), orbId: 'o', deviceId: 'd', pcPub: fill(32, () => 9), expires: 1 }
+  ];
+  const good = cases.map((c) => {
+    const summary = A.approveSummary(c.params);
+    const hash = A.summaryHash(summary);
+    const payload = A.buildPayload({ action: c.action, hash, nonce: c.nonce, orbId: c.orbId, deviceId: c.deviceId, pcPub: c.pcPub, expires: c.expires });
+    return { action: c.action, summary, hash, nonce: hex(c.nonce), orbId: c.orbId, deviceId: c.deviceId, pcPub: hex(c.pcPub), expires: c.expires, payload: hex(payload), purpose: A.approvePurpose(c.action, c.params) };
+  });
+  // Bytes that are not a payload of this protocol: Kotlin must refuse every one.
+  const base = Buffer.from(good[0].payload, 'hex');
+  const withField = (i, bytes) => { const f = []; let at = 0; while (at < base.length) { const n = base.readUInt32BE(at); f.push(base.subarray(at + 4, at + 4 + n)); at += 4 + n; } f[i] = bytes; return Buffer.concat(f.map((x) => { const l = Buffer.alloc(4); l.writeUInt32BE(x.length); return Buffer.concat([l, x]); })); };
+  const bad = {
+    empty: '',
+    truncated: hex(base.subarray(0, base.length - 1)),
+    extraByte: hex(Buffer.concat([base, Buffer.from([0])])),
+    otherTag: hex(withField(0, Buffer.from('orb-approve-v2'))),
+    shortHash: hex(withField(2, Buffer.alloc(31))),
+    shortNonce: hex(withField(3, Buffer.alloc(31))),
+    spaceInAction: hex(withField(1, Buffer.from('secrets connector'))),
+    emptyOrb: hex(withField(4, Buffer.alloc(0))),
+    longExpiry: hex(withField(7, Buffer.alloc(9))),
+    hugeLength: 'ffffffff00'
+  };
+  return { generatedBy: GENERATED_BY, source: sha('src/domain/security/approve.mjs'), good, bad };
+}
+
 // ---------------------------------------------------------------- write
 const out = path.resolve(process.argv[2] ?? path.join(ROOT, 'android/app/src/test/resources/vectors'));
 fs.mkdirSync(out, { recursive: true });
 const write = (name, data) => fs.writeFileSync(path.join(out, name), `${JSON.stringify(data, null, 2)}\n`);
 write('crypto.json', await buildCrypto());
 write('link-payload.json', buildLink());
+write('approve.json', await buildApprove());
 // The methods a linked phone may call (src/domain/security/permissions.mjs): the client's contract test checks every
 // method its API wrapper calls against this list, so a wrapper can never name a method the PC would refuse.
 const { REMOTE_METHODS } = await import('../src/domain/security/permissions.mjs');
