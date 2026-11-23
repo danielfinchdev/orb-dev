@@ -345,3 +345,12 @@ fn two_enables_at_once_and_a_new_key_in_between() {
   assert!(v.lock().unwrap().get(HELLO_ID).unwrap().is_null());
   let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn disabling_keeps_an_enable_that_is_waiting() {
+  let (v, f, dir) = enabled(Mode::Ok);
+  v.lock().unwrap().hello.enabling = true;
+  disable(&mut v.lock().unwrap(), &f).unwrap();
+  assert!(v.lock().unwrap().hello.enabling);
+  let _ = std::fs::remove_dir_all(dir);
+}
