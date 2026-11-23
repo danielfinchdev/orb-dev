@@ -3,6 +3,7 @@
 // takes it with Tab and it is never sent by itself. One request per turn, cancelled as soon as the user starts typing or sends.
 import { ctx } from '../platform/context.mjs';
 import { account as findAccount, defaultAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { checkIdentity } from './identity.mjs';
 import { adapter, executable, installed } from '../agents/index.mjs';
 import { UNGUARDED_AGENTS } from '../agents/unguarded.mjs';
 import { recordSpend } from '../domain/usage/budget.mjs';
@@ -60,11 +61,12 @@ export class Suggester {
     try {
       p.live = this.make(s.agent, {
         exe: executable(s.agent), cwd: ctx.paths.runs, model: light.model || (s.agent === 'claude' ? 'haiku' : null), reasoning: 'low', permission: 'leer',
-        mcpServers: {}, env: { ...accountEnv(acc), ...agentKeyEnv(ctx.master, s.agent) }, internalDir: ctx.paths.internal, lang: ctx.config.language,
+        mcpServers: {}, env: { ...accountEnv(acc), ...agentKeyEnv(ctx.master, s.agent, acc) }, internalDir: ctx.paths.internal, lang: ctx.config.language,
         ...(s.agent === 'claude' ? { tools: { allowed: [], disallowed: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Agent', 'Skill', 'Read', 'Glob', 'Grep'] } } : {}),
         log: () => {}, onEvent: () => {}
       });
       let timer = null;
+      if ((await checkIdentity({ acc, live: p.live })).block) return; // another login than the account's: nothing is spent
       const result = await Promise.race([p.live.send({ text: prompt }), new Promise((resolve) => { timer = setTimeout(() => resolve({ isError: true }), TIMEOUT_MS); })]).finally(() => clearTimeout(timer));
       try { recordSpend(this.sessions.board, { account: acc.id, session: id, task: null, usage: result?.usage ?? {} }); } catch { /* only a count */ }
       if (p.cancelled || result?.isError) return;

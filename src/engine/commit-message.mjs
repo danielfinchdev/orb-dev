@@ -3,6 +3,7 @@
 // guessed from the file names, so the dialog always has something to edit. It never commits: the user does.
 import { ctx } from '../platform/context.mjs';
 import { account, defaultAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { checkIdentity } from './identity.mjs';
 import { adapter, executable, installed } from '../agents/index.mjs';
 import { chooseModel } from './usage/catalog.mjs';
 import { redactSecrets } from '../shared/secrets-scan.mjs';
@@ -25,6 +26,7 @@ async function viaAgent(board, prompt) {
       ...(agent === 'claude' ? { tools: { allowed: [], disallowed: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill', 'Read', 'Glob', 'Grep'] } } : {}),
       onEvent: () => {}
     });
+    if ((await checkIdentity({ acc, live })).block) return ''; // another login than the account's: nothing is spent
     const result = await Promise.race([live.send({ text: prompt }), new Promise((resolve) => { timer = setTimeout(() => resolve({ isError: true }), TIMEOUT_MS); })]);
     return result?.isError ? '' : String(result.final || result.text || '');
   } catch { return ''; } finally { clearTimeout(timer); try { live?.close(); } catch { /* gone */ } }

@@ -10,6 +10,7 @@ import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, discover
 import { clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../domain/security/guard.mjs';
+import { identityFromCodex } from './identity.mjs';
 import { tr } from '../platform/context.mjs';
 
 // Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
@@ -49,15 +50,16 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
-    const acc = r?.account; if (!acc) return null;
-    // The e-mail and the workspace together: a personal plan and a Team one with the same e-mail are two accounts.
-    const id = acc.email || acc.accountId ? `${acc.email ?? ''}|${acc.accountId ?? ''}` : null;
-    return { plan: typeof acc.planType === 'string' ? acc.planType : null, who: id ? crypto.createHash('sha256').update(String(id).toLowerCase()).digest('hex').slice(0, 16) : null };
+    // an answer without an account (signed out) is not «no answer»: it holds no login
+    if (!r || typeof r !== 'object') return null;
+    return identityFromCodex(r.account ?? {});
   } catch { return null; } finally {
     try { peer?.close(); } catch { /* gone */ }
     try { killTree(child); } catch { /* gone */ }
   }
 }
+// The same, for the account's folder (the shape claude.mjs's accountIdentity answers).
+export const accountIdentity = (exe, _env, { dir } = {}) => accountInfo(exe, dir || codexHome());
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
@@ -414,6 +416,18 @@ export function createLive(o) {
   live.refreshUsage = async () => {
     if (closed || !peer) return false;
     try { const r = await peer.request('account/rateLimits/read', {}, { timeoutMs: 8000 }); if (!r?.rateLimits) return false; onNotification('account/rateLimits/updated', { rateLimits: r.rateLimits }); return true; } catch { return false; }
+  };
+  // Who this process is signed in as (account/read never refreshes the token and is no turn): the fingerprint and the hint, or
+  // null when Codex does not say. The start runs first so a mismatch is found before the first message goes.
+  live.whoami = async () => {
+    if (closed) return null;
+    try {
+      started ??= start().catch((error) => { live.close(); throw error; });
+      await started;
+      const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs: 10_000 });
+      if (!r || typeof r !== 'object') return null;
+      return identityFromCodex(r.account ?? {});
+    } catch { return null; }
   };
   live.isClosed = () => closed;
   return live;

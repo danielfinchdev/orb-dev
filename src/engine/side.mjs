@@ -9,6 +9,7 @@ import { adapter, executable } from '../agents/index.mjs';
 import { UNGUARDED_AGENTS, requireLevel } from '../agents/unguarded.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { accountEnv } from '../domain/usage/accounts.mjs';
+import { checkIdentity } from './identity.mjs';
 import { recordSpend, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
 import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
@@ -82,7 +83,7 @@ export class SideChats {
         e.account = acc.id;
         e.live = this.make(s.agent, {
           exe: executable(s.agent), cwd: s.cwd, model: s.model, reasoning: 'low', permission: 'leer', // never above the chat's, whatever it is
-          mcpServers: {}, env: { ...accountEnv(acc), ...agentKeyEnv(ctx.master, s.agent), ORB_AGENT: s.agent }, internalDir: ctx.paths.internal, lang: ctx.config.language,
+          mcpServers: {}, env: { ...accountEnv(acc), ...agentKeyEnv(ctx.master, s.agent, acc), ORB_AGENT: s.agent }, internalDir: ctx.paths.internal, lang: ctx.config.language,
           cfg: ctx.config.agents[s.agent] ?? {}, projectDir: s.project ? s.cwd : null, userAsked: () => [], android: () => false,
           ...(s.agent === 'claude' ? { tools: { allowed: [], disallowed: SIDE_DENIED } } : {}),
           log: () => {},
@@ -91,6 +92,9 @@ export class SideChats {
             if (ev.type === 'item' && ev.role === 'assistant' && ev.kind === 'text') { e.partial = `${e.partial ?? ''}${ev.body}`; }
           }
         });
+        // the process must be signed in as the account it was made for before any question goes to it
+        const who = await checkIdentity({ acc, live: e.live, fixed: Boolean(s.account_fixed) });
+        if (who.block) { try { e.live.close(); } catch { /* gone */ } e.live = null; throw new Error(who.text); }
         e.first = true;
       }
       const lead = e.first ? `${tr('sys.side.prompt')}\n\n<chat>\n${this.context(e.parent)}\n</chat>\n\n` : '';

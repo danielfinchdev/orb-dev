@@ -4,6 +4,8 @@
 // be used to hand any other variable (PATH, NODE_OPTIONS…) to an agent's process. The value goes only into the
 // environment of that agent's own process (src/engine/sessions.mjs) and is hidden from its session log.
 // The names come from each CLI's public documentation (not verified against the installed programs).
+import { loginState } from '../usage/accounts.mjs';
+
 export const AGENT_KEY_NAMES = Object.freeze({
   grok: Object.freeze(['XAI_API_KEY']),
   devin: Object.freeze(['WINDSURF_API_KEY']),
@@ -29,10 +31,15 @@ export function agentKeyState(master) {
   return out;
 }
 
-// What goes into the environment of the agent's process: { NAME: value } for the keys saved (none while the vault is locked).
-export function agentKeyEnv(master, agent) {
+// A key from the vault goes only to an account without a subscription login of its own: with a login in its folder the key
+// would cover that login and every account of the agent would end up spending the same way.
+export const keyEnvAllowed = (acc) => !acc || loginState(acc) !== 'si';
+
+// What goes into the environment of the agent's process: { NAME: value } for the keys saved (none while the vault is locked,
+// and none for an account that has a login of its own: see keyEnvAllowed).
+export function agentKeyEnv(master, agent, acc) {
   const env = {};
-  if (!master?.unlocked?.()) return env;
+  if (!master?.unlocked?.() || !keyEnvAllowed(acc)) return env;
   for (const name of agentKeyNames(agent)) {
     let v = null; try { v = master.get(agentKeyId(agent, name)); } catch { v = null; }
     if (typeof v === 'string' && v) env[name] = v;

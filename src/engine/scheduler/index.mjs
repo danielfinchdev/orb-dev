@@ -13,7 +13,7 @@ import { installed } from '../../agents/index.mjs';
 import { UNGUARDED_AGENTS } from '../../agents/unguarded.mjs';
 import { runDue } from '../../domain/schedules/schedules.mjs';
 import { wakeSnoozed, clearExpiredMutes } from '../../domain/conversations/inbox.mjs';
-import { usableAccounts, accountLabel } from '../../domain/usage/accounts.mjs';
+import { usableAccounts, accountLabel, fixedAccountOf } from '../../domain/usage/accounts.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { parallelLimits, taskTimeoutMinutes } from '../../domain/rules/rails.mjs';
 import { label, mixin } from './common.mjs';
@@ -307,6 +307,9 @@ Si necesita algo, resuélvelo con el tablero o contéstale con orb_send_message 
       const types = (task.agent === 'any' ? order.filter((a) => enabled.includes(a) && !UNGUARDED_AGENTS.includes(a)) : [task.agent].filter((a) => enabled.includes(a))).filter((a) => installed(a));
       // Every enabled account of those agents; a task pinned to an account only goes there.
       let candidates = types.flatMap((a) => usableAccounts(a)).filter((acc) => !task.account || acc.id === task.account);
+      // a task of a chat fixed to one account never runs on another account of that agent, whatever agent it was left open to
+      const fixed = fixedAccountOf(board, task.conversation_id);
+      if (fixed) candidates = candidates.filter((acc) => acc.agent !== fixed.agent || acc.id === fixed.id);
       // continuity.switchAccount off: a task that already ran on an account waits for that one instead of resuming on another.
       if (ctx.config.continuity?.switchAccount === false && task.run_account && candidates.some((acc) => acc.id === task.run_account)) candidates = candidates.filter((acc) => acc.id === task.run_account);
       // a task for an agent this PC cannot run (uninstalled or turned off after it was created) does not wait for

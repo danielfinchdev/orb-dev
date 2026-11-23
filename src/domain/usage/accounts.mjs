@@ -118,6 +118,13 @@ export function requireBrainAccount(value, agent) {
   return { account: id, account_fixed: 1 };
 }
 
+// The account a conversation is fixed to, or null (automatic, or no such conversation). A task of that conversation for the
+// same agent runs on it and on no other account of that agent.
+export function fixedAccountOf(board, conversationId) {
+  const c = conversationId ? board.conversation(conversationId) : null;
+  return c?.account_fixed && c.account ? account(c.account) : null;
+}
+
 export const accountLabel = (id) => account(id)?.label ?? id;
 
 // A new account id: claude-2, claude-3… never one used before (its usage, pauses and conversations stay with the old one).

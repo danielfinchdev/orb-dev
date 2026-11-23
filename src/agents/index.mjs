@@ -71,6 +71,17 @@ export async function discoverModels(agent, accountId = null) {
   } catch { return null; }
 }
 
+// Who an account's folder is signed in as ({ who, hint, viaKey, external, plan } or null), asked to the agent itself; no turn,
+// no plan spent. Cursor and the ACP agents have no way to say, and have one account.
+export async function accountIdentity(accountId) {
+  try {
+    const acc = account(accountId); if (!acc) return null;
+    const a = adapter(acc.agent); if (typeof a.accountIdentity !== 'function') return null;
+    const exe = a.detect(ctx.config.agents[acc.agent] ?? {}); if (!exe) return null;
+    return (await a.accountIdentity(exe, accountEnv(acc), { dir: accountDir(acc) })) ?? null;
+  } catch { return null; }
+}
+
 const versions = new Map(); // agent -> { exe, version } (asking the CLI takes a second; cached per executable)
 
 export async function status(agent, { refresh = false } = {}) {
