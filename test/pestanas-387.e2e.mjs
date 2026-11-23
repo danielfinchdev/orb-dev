@@ -92,7 +92,7 @@ try {
   await page.keyboard.press('Control+w'); // the last chat: the bar is gone, the chat closes
   await page.locator('[data-testid=tabs-empty]').waitFor();
   await shot('vacio');
-  await page.getByRole('button', { name: 'Nuevo chat' }).click();
+  await page.locator('[data-testid=tabs-empty]').getByRole('button', { name: 'Nuevo chat' }).click();
   await page.waitForSelector('[data-testid=tabs-empty]', { state: 'detached' });
   assert.deepEqual(errors, [], 'no page errors');
   console.log('pestañas: OK');

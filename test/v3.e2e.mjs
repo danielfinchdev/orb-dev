@@ -31,7 +31,8 @@ const call = (method, params = {}) => win.evaluate(([m, p]) => window.orb.call(m
 const count = (sel) => win.locator(sel).count();
 const shot = (name) => win.screenshot({ path: path.join(OUT, `v3-${name}.png`) });
 // 3.6: «Nuevo chat» is in the menu of the list's «+».
-const newChat = async () => { if (!(await win.locator('[data-testid=new-conversation]').isVisible())) await win.click('[data-testid=chats-new]'); await win.click('[data-testid=new-conversation]'); };
+// «New chat» opens the project picker: a project's row, or «No project» (new-conversation).
+const newChat = async (project) => { const row = project ? `[data-testid=new-chat-project-${project}]` : '[data-testid=new-conversation]'; if (!(await win.locator(row).isVisible())) await win.click('[data-testid=chats-new]'); await win.click(row); };
 const until = async (fn, what, ms = 20000) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await fn(); if (v) return v; await win.waitForTimeout(200); } throw new Error(`no llegó: ${what}`); };
 let step = 'inicio';
 try {
@@ -76,7 +77,7 @@ try {
   await call('projects.setActive', { name: 'tienda' });
   await until(async () => (await win.locator('[data-testid=project-picker]').innerText()).includes('tienda'), 'la carpeta elegida en el cuadro');
   for (const text of ['Revisa el README', 'Añade una página de contacto']) {
-    await newChat();
+    await newChat('tienda');
     await win.fill('[data-testid=chat-input]', text);
     await win.keyboard.press('Enter');
     await win.locator('[data-testid=session-input]').waitFor({ timeout: 15000 });
