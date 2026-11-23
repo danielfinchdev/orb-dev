@@ -46,14 +46,14 @@ test('una llamada sin respuesta se reenvia una sola vez; un error del PC nunca',
 
 test('web-bridge: el reenvio usa la misma peticion sellada (mismo nonce) y solo las llamadas', () => {
   assert.match(bridge, /const init = \{ method: 'POST'[^\n]*body: JSON\.stringify\(box\) \}/);
-  assert.match(bridge, /sendOnce\(\(\) => reach\(url, init, ms[^\n]*\{ again: kind === 'call' \}\)/);
+  assert.match(bridge, /sendOnce\(\(\) => \{[^\n]*reach\(url, init, ms[^\n]*\{ again: kind === 'call' \}\)/);
   assert.equal((bridge.match(/C\.seal\(s\.key/g) ?? []).length, 1, 'un solo sellado por llamada: sin nonce nuevo al reenviar');
 });
 
 test('web-bridge: guarda el ultimo id, reanuda con el y recarga todo ante resync', () => {
   assert.match(bridge, /if \(id\) lastId = id/);
   assert.match(bridge, /resumeRequest\(lastId, \{ crossOrigin: Boolean\(host\) \}\)/);
-  assert.match(bridge, /e === 'resync'\) \{ for \(const x of RESYNC_EVENTS\) fire\(x, \{\}\)/);
+  assert.match(bridge, /e === 'resync'\) \{ lastId = null; for \(const x of RESYNC_EVENTS\) fire\(x, \{\}\)/);
   assert.ok(RESYNC_EVENTS.includes('inbox:changed') && RESYNC_EVENTS.includes('board:changed'));
   assert.match(bridge, /res\.status === 410/);
   assert.match(bridge, /connect\(failures \+ 1\)/);
