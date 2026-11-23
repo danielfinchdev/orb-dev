@@ -26,20 +26,27 @@ import java.util.Base64
 
 /** A software key standing for the Keystore's: it signs with no fingerprint, and counts what was asked of it. */
 private class FakeCrypto : ApproveCrypto {
-    var pair = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+    private fun newPair() = KeyPairGenerator.getInstance("EC").apply { initialize(ECGenParameterSpec("secp256r1")) }.generateKeyPair()
+    var pair = newPair()
+    var pending: java.security.KeyPair? = null
     var has = false
     var created = 0
     var invalidated = false
+    var failing = false
     override fun hasKey() = has
-    override fun createKey(): Boolean { created += 1; has = true; invalidated = false; return true }
-    override fun publicKey(): ByteArray? = if (has) Sec1.of(pair.public as ECPublicKey) else null
-    override fun prepareSign(): ApproveSigner {
-        if (!has) return ApproveSigner.Missing
+    override fun createPending(): Boolean { created += 1; pending = newPair(); return true }
+    override fun commit() { pair = pending!!; pending = null; has = true; invalidated = false }
+    override fun discardPending() { pending = null }
+    private fun keys(p: Boolean) = if (p) pending else if (has) pair else null
+    override fun publicKey(pending: Boolean): ByteArray? = keys(pending)?.let { Sec1.of(it.public as ECPublicKey) }
+    override fun prepareSign(pending: Boolean): ApproveSigner {
+        val k = keys(pending) ?: return ApproveSigner.Missing
         if (invalidated) return ApproveSigner.Invalidated
-        return ApproveSigner.Ready(Signature.getInstance("SHA256withECDSA").apply { initSign(pair.private) })
+        if (failing) return ApproveSigner.Failed
+        return ApproveSigner.Ready(Signature.getInstance("SHA256withECDSA").apply { initSign(k.private) })
     }
     override fun sign(signature: Signature, message: ByteArray): ByteArray? = signature.run { update(message); sign() }
-    override fun clear() { has = false }
+    override fun clear() { has = false; pending = null }
 }
 
 private class FakeAuth(var strong: Boolean = true) : Authenticator {
@@ -84,7 +91,7 @@ class ApproverTest {
         val e = event(ApproveRules.ENROLL, """{"name":"Pixel de Dani"}""")
         approver.onEvent(e)
         approver.confirm()
-        auth.answer(AuthResult.Signed(crypto.prepareSign().let { (it as ApproveSigner.Ready).signature }))
+        auth.answer(AuthResult.Signed(crypto.prepareSign(pending = true).let { (it as ApproveSigner.Ready).signature }))
     }
 
     @Test fun aKeyIsMadeOnlyWhenThePcRegistersThePhoneAndThePersonConfirms() {
@@ -95,10 +102,11 @@ class ApproverTest {
         assertEquals("nothing is made by looking at the request", 0, crypto.created)
         approver.confirm()
         assertEquals(1, crypto.created)
+        assertFalse("the old key (none here) is untouched until the PC accepts", crypto.has)
         val asked = auth.requests.single()
         assertNotNull("bound to the signing key, strong biometrics only", asked.signature)
         assertNull(asked.cipher)
-        auth.answer(AuthResult.Signed(crypto.prepareSign().let { (it as ApproveSigner.Ready).signature }))
+        auth.answer(AuthResult.Signed(crypto.prepareSign(pending = true).let { (it as ApproveSigner.Ready).signature }))
         val (method, params) = sent.single()
         assertEquals("approve.enroll", method)
         val sig = Base64.getDecoder().decode(params.getValue("sig").let { (it as JsonPrimitive).content })
@@ -106,6 +114,7 @@ class ApproverTest {
         assertEquals(65, pub.size)
         assertEquals(4, pub[0].toInt())
         assertTrue(verifies(event(ApproveRules.ENROLL, """{"name":"Pixel de Dani"}"""), crypto.pair.public, sig))
+        assertTrue(crypto.has)
         assertEquals("nonce comes from the signed bytes", b64.encodeToString(ByteArray(32) { 7 }), (params.getValue("nonce") as JsonPrimitive).content)
         assertEquals("this PC is pinned from now on", "orb-1", store.getString("approve.orb"))
         assertTrue(store.getBoolean("approve.registered", false))
@@ -200,5 +209,49 @@ class ApproverTest {
         assertFalse(crypto.has)
         assertNull(store.getString("approve.orb"))
         assertNull(approver.ui.value)
+    }
+
+    @Test fun aRegistrationThatTheServerRefusesLeavesTheOldKeyInUse() {
+        register()
+        val old = crypto.pair
+        approver.dismiss()
+        reply = buildJsonObject { put("ok", false) }
+        approver.onEvent(event(ApproveRules.ENROLL, """{"name":"Pixel de Dani"}""", nonceByte = 11))
+        approver.confirm()
+        auth.answer(AuthResult.Signed(crypto.prepareSign(pending = true).let { (it as ApproveSigner.Ready).signature }))
+        assertTrue(crypto.pair === old)
+        assertNull(crypto.pending)
+        assertTrue(store.getBoolean("approve.registered", false))
+    }
+
+    @Test fun aSecondRequestWaitsBehindTheOneOnScreen() {
+        register(); approver.dismiss()
+        approver.onEvent(event("secrets.connector", """{"name":"uno"}""", nonceByte = 21))
+        approver.onEvent(event("agentKeys.save", """{"name":"dos"}""", nonceByte = 22))
+        approver.onEvent(event("agentKeys.save", """{"name":"dos"}""", nonceByte = 22))
+        assertEquals("""{"name":"uno"}""", approver.ui.value!!.summary)
+        approver.dismiss()
+        assertEquals("""{"name":"dos"}""", approver.ui.value!!.summary)
+        approver.dismiss()
+        assertNull("the repeated one was not queued twice", approver.ui.value)
+    }
+
+    @Test fun theFingerprintPromptSaysWhatIsBeingApproved() {
+        register(); sent.clear(); approver.dismiss()
+        approver.onEvent(event("secrets.connector", """{"name":"github"}""", nonceByte = 31))
+        approver.confirm()
+        val asked = auth.requests.last()
+        assertEquals(ApproveTexts.actionTitle("secrets.connector"), asked.title)
+        assertEquals("""{"name":"github"}""", asked.subtitle)
+    }
+
+    @Test fun aFailureThatIsNotAnInvalidationKeepsTheKey() {
+        register(); approver.dismiss()
+        crypto.failing = true
+        approver.onEvent(event("secrets.connector", "{}", nonceByte = 41))
+        approver.confirm()
+        assertTrue(crypto.has)
+        assertTrue(store.getBoolean("approve.registered", false))
+        assertEquals(ApproveTexts.FAILED, approver.ui.value!!.body)
     }
 }

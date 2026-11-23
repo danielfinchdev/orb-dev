@@ -26,10 +26,17 @@ object ApproveTexts {
     const val REFUSED = "El PC no ha aceptado la respuesta. Empieza de nuevo desde el PC."
 
     fun enrollBody(name: String) = "Tu PC pide que «$name» pueda aprobar acciones delicadas con tu huella o tu cara. Si no lo has pedido tú, rechaza."
+    /** What the fingerprint prompt says: the action, and for an approval the start of its parameters. */
+    fun promptTitle(r: ApproveRequest) = when (r.kind) {
+        ApproveKind.Enroll -> ENROLL_TITLE
+        ApproveKind.Rebuild -> REBUILD_TITLE
+        ApproveKind.Approve -> actionTitle(r.payload.action)
+    }
+
     fun promptSubtitle(r: ApproveRequest) = when (r.kind) {
         ApproveKind.Enroll -> "Confirma con tu huella o tu cara para permitirlo"
         ApproveKind.Rebuild -> "Confirma con tu huella o tu cara"
-        ApproveKind.Approve -> actionTitle(r.payload.action)
+        ApproveKind.Approve -> r.summary.let { if (it.length > 90) it.take(90) + "…" else it }
     }
 
     /** The action as the person reads it; anything not listed shows its own name, which is what was signed. */

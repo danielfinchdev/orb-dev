@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyPermanentlyInvalidatedException
 import android.security.keystore.KeyProperties
 import androidx.annotation.RequiresApi
+import dev.orb.app.ui.theme.KeyValueStore
 import java.security.GeneralSecurityException
 import java.security.KeyPairGenerator
 import java.security.KeyStore
@@ -22,6 +23,9 @@ sealed interface ApproveSigner {
 
     /** There is no key: nothing was registered, or it was lost. */
     data object Missing : ApproveSigner
+
+    /** The key could not be used this time for another reason: trying again is the whole advice, the key is not touched. */
+    data object Failed : ApproveSigner
 }
 
 /**
@@ -32,14 +36,23 @@ sealed interface ApproveSigner {
 interface ApproveCrypto {
     fun hasKey(): Boolean
 
-    /** Replaces any older key by a new one. False when the phone cannot make it (no strong biometric, or Android older than 11). */
-    fun createKey(): Boolean
+    /**
+     * Makes a new key beside the one in use, which stays as it is until [commit]. False when the phone cannot make it (no strong
+     * biometric, or Android older than 11).
+     */
+    fun createPending(): Boolean
 
-    /** The key's public half, SEC1 uncompressed (65 bytes), or null without a key. */
-    fun publicKey(): ByteArray?
+    /** The PC accepted the registration: the pending key replaces the old one. */
+    fun commit()
+
+    /** The registration did not happen: the pending key goes, the old one stays. */
+    fun discardPending()
+
+    /** The key's public half, SEC1 uncompressed (65 bytes), or null without that key. */
+    fun publicKey(pending: Boolean = false): ByteArray?
 
     /** The signature to authenticate with (the prompt unlocks it for one signing). */
-    fun prepareSign(): ApproveSigner
+    fun prepareSign(pending: Boolean = false): ApproveSigner
 
     /** After the prompt: signs [message] with the unlocked [signature] (DER, what the vault verifies). Null when it fails. */
     fun sign(signature: Signature, message: ByteArray): ByteArray?
@@ -51,19 +64,25 @@ interface ApproveCrypto {
 /** Android 10 or older: there is no key that only a strong biometric opens, so there is nothing to approve with. */
 object NoApproveCrypto : ApproveCrypto {
     override fun hasKey() = false
-    override fun createKey() = false
-    override fun publicKey(): ByteArray? = null
-    override fun prepareSign(): ApproveSigner = ApproveSigner.Missing
+    override fun createPending() = false
+    override fun commit() {}
+    override fun discardPending() {}
+    override fun publicKey(pending: Boolean): ByteArray? = null
+    override fun prepareSign(pending: Boolean): ApproveSigner = ApproveSigner.Missing
     override fun sign(signature: Signature, message: ByteArray): ByteArray? = null
     override fun clear() {}
 }
 
 /** Android 11 or later: `setUserAuthenticationParameters` (timeout 0, strong biometrics only) exists from there. */
 @RequiresApi(Build.VERSION_CODES.R)
-class KeystoreApproveCrypto(private val log: (String) -> Unit = {}) : ApproveCrypto {
+class KeystoreApproveCrypto(private val store: KeyValueStore, private val log: (String) -> Unit = {}) : ApproveCrypto {
     private fun keyStore() = KeyStore.getInstance(PROVIDER).apply { load(null) }
 
-    private fun spec(strongBox: Boolean) = KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_SIGN)
+    /** Two aliases take turns: the one in use, and the one a new registration is made under until the PC accepts it. */
+    private fun active() = if (store.getString(ACTIVE) == ALIAS_B) ALIAS_B else ALIAS_A
+    private fun pendingAlias() = if (active() == ALIAS_A) ALIAS_B else ALIAS_A
+
+    private fun spec(alias: String, strongBox: Boolean) = KeyGenParameterSpec.Builder(alias, KeyProperties.PURPOSE_SIGN)
         .setAlgorithmParameterSpec(ECGenParameterSpec("secp256r1"))
         .setDigests(KeyProperties.DIGEST_SHA256)
         .setUserAuthenticationRequired(true)
@@ -73,22 +92,27 @@ class KeystoreApproveCrypto(private val log: (String) -> Unit = {}) : ApproveCry
         .setIsStrongBoxBacked(strongBox)
         .build()
 
-    private fun generate(strongBox: Boolean) {
+    private fun generate(alias: String, strongBox: Boolean) {
         val generator = KeyPairGenerator.getInstance(KeyProperties.KEY_ALGORITHM_EC, PROVIDER)
-        generator.initialize(spec(strongBox))
+        generator.initialize(spec(alias, strongBox))
         generator.generateKeyPair()
     }
 
-    override fun hasKey(): Boolean = try { keyStore().containsAlias(ALIAS) } catch (e: GeneralSecurityException) { false }
+    private fun delete(alias: String) {
+        try { keyStore().deleteEntry(alias) } catch (e: GeneralSecurityException) { /* nothing to delete */ }
+    }
 
-    override fun createKey(): Boolean {
-        clear()
+    override fun hasKey(): Boolean = try { keyStore().containsAlias(active()) } catch (e: GeneralSecurityException) { false }
+
+    override fun createPending(): Boolean {
+        val alias = pendingAlias()
+        delete(alias)
         return try {
             try {
-                generate(strongBox = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                generate(alias, strongBox = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
             } catch (e: Exception) {
                 // A phone that says it has StrongBox but cannot make the key there: the normal hardware key still protects it.
-                generate(strongBox = false)
+                generate(alias, strongBox = false)
             }
             true
         } catch (e: Exception) {
@@ -98,21 +122,32 @@ class KeystoreApproveCrypto(private val log: (String) -> Unit = {}) : ApproveCry
         }
     }
 
-    override fun publicKey(): ByteArray? = try {
-        (keyStore().getCertificate(ALIAS)?.publicKey as? ECPublicKey)?.let { Sec1.of(it) }
+    override fun commit() {
+        val old = active()
+        store.edit { putString(ACTIVE, pendingAlias()) }
+        delete(old)
+    }
+
+    override fun discardPending() = delete(pendingAlias())
+
+    private fun alias(pending: Boolean) = if (pending) pendingAlias() else active()
+
+    override fun publicKey(pending: Boolean): ByteArray? = try {
+        (keyStore().getCertificate(alias(pending))?.publicKey as? ECPublicKey)?.let { Sec1.of(it) }
     } catch (e: GeneralSecurityException) {
         null
     }
 
-    override fun prepareSign(): ApproveSigner = try {
-        val key = keyStore().getKey(ALIAS, null) as? PrivateKey ?: return ApproveSigner.Missing
+    override fun prepareSign(pending: Boolean): ApproveSigner = try {
+        val key = keyStore().getKey(alias(pending), null) as? PrivateKey ?: return ApproveSigner.Missing
         val signature = Signature.getInstance("SHA256withECDSA")
         signature.initSign(key)
         ApproveSigner.Ready(signature)
     } catch (e: KeyPermanentlyInvalidatedException) {
         ApproveSigner.Invalidated
     } catch (e: GeneralSecurityException) {
-        ApproveSigner.Invalidated
+        // Only a key that Android says is permanently invalidated is one; anything else may pass on the next try.
+        ApproveSigner.Failed
     }
 
     override fun sign(signature: Signature, message: ByteArray): ByteArray? = try {
@@ -123,12 +158,16 @@ class KeystoreApproveCrypto(private val log: (String) -> Unit = {}) : ApproveCry
     }
 
     override fun clear() {
-        try { keyStore().deleteEntry(ALIAS) } catch (e: GeneralSecurityException) { /* nothing to delete */ }
+        delete(ALIAS_A)
+        delete(ALIAS_B)
+        store.edit { putString(ACTIVE, null) }
     }
 
     companion object {
         private const val PROVIDER = "AndroidKeyStore"
-        private const val ALIAS = "orb.approve"
+        private const val ALIAS_A = "orb.approve"
+        private const val ALIAS_B = "orb.approve.b"
+        private const val ACTIVE = "approve.alias"
 
     }
 }

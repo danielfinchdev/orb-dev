@@ -166,7 +166,7 @@ class AppContainer(private val app: Application) {
     private var linkIdentity: dev.orb.app.approve.LinkIdentity? = null
     private var approveJob: Job? = null
     val approver = dev.orb.app.approve.Approver(
-        crypto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) dev.orb.app.approve.KeystoreApproveCrypto(::lockLog) else dev.orb.app.approve.NoApproveCrypto,
+        crypto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) dev.orb.app.approve.KeystoreApproveCrypto(approveStore, ::lockLog) else dev.orb.app.approve.NoApproveCrypto,
         store = approveStore,
         identity = { linkIdentity },
         authenticator = { lock.authenticator },
