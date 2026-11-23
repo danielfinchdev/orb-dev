@@ -165,3 +165,22 @@ test('a Hello token does not tie the keys of a held connector to its new command
     assert.equal(held(other), false, 'the password ties them to the command as it is');
   } finally { await e.stop(); }
 });
+
+test('a restart with the vault open by this PC does not tie the keys of a held connector to a changed command', async () => {
+  const t = tempHome({ mcpServers: [GITHUB] });
+  const secret = crypto.randomBytes(32);
+  const file = path.join(t.home, 'core', 'orb.json');
+  const held = () => { const m = new Master(path.join(t.home, 'core', 'secretos'), { secret }); try { m.openWithMachine(); return keysHeld(m, JSON.parse(fs.readFileSync(file, 'utf8')).mcpServers[0]); } finally { m.close(); } };
+  let e = await startEngine(t.home, { secret: secret.toString('hex') });
+  try {
+    await e.call('master.create', { password: PASS });
+    await e.call('config.save', { patch: { mcpServers: [GITHUB] }, unlock: (await e.call('master.unlock', { password: PASS })).unlock });
+  } finally { await e.stop(); }
+  assert.equal(held(), false, 'tied to the command it was saved with');
+  const cfg = JSON.parse(fs.readFileSync(file, 'utf8'));
+  cfg.mcpServers[0].command = 'otro-programa';
+  fs.writeFileSync(file, JSON.stringify(cfg));
+  e = await startEngine(t.home, { secret: secret.toString('hex') });
+  try { await e.call('master.state'); } finally { await e.stop(); }
+  assert.equal(held(), true, 'the start did not approve the new command');
+});

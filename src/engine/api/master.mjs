@@ -83,7 +83,7 @@ export function migrateSecrets(board, master = ctx.master, { log = () => {}, emi
     try { board.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); } catch { /* not in WAL mode */ }
     moved.push('remote_keys');
   }
-  const sealed = sealConnectors(master, ctx.config.mcpServers ?? [], { trusted: true });
+  const sealed = sealConnectors(master, ctx.config.mcpServers ?? [], { trusted: 'unbound' });
   if (sealed) { const c = saveConfig({ mcpServers: sealed }); emit('config:changed', c); moved.push('mcpServers'); }
   else if (bindMissing(master, ctx.config.mcpServers ?? [])) moved.push('mcpBindings');
   if (moved.length) log(`secretos: ${moved.join(', ')} cifrados con la clave de datos`);
