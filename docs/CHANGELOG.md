@@ -15,20 +15,22 @@ the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](
 
 **A phone link that mends itself.** If the connection between the phone and the PC drops, it comes back on its own, also
 when Tailscale starts late or after the PC wakes from sleep, and the phone says what is wrong after 30 seconds instead
-of staying silent. "This phone" and Settings › Devices show how each way in (Wi-Fi, Tailscale, the tunnel) is doing.
+of staying silent. "This phone" and Settings › Devices show how each way in (Wi-Fi, Tailscale) is doing and when it last worked.
 Messages are neither lost nor sent twice when the link comes back: the phone resumes the live stream where it stopped
 and an answer that got lost is asked for again, not repeated.
 
 **Safer by default.** Windsurf and Zed are only opened when they carry their own publisher's signature. Undo works on
 tasks that were launched again. A scheduled task that was never approved needs what you saw to run, and "accept" only
 takes the point and the run the report shows. A hand-over that stopped half-way shows what is left, and can be undone
-or tried again from the PC and from the phone. A new connection to a fake PC over plain http is refused.
+or tried again from the PC and from the phone. A fake PC on the same Wi-Fi can no longer unlink the phone or move its
+clock.
 
 **Android.** The line that shows the agent is writing no longer overlaps the finished answer, the text box sits right
-above the keyboard, the icons of the system bar are readable in the light theme, and the app asks for the local network
-permission the link needs.
+above the keyboard, the icons of the system bar are readable in the light theme, and the app declares the local network
+permission that Android 16 brings.
 
-**Starts lighter.** Orb opens without the black window and loads the English texts only when they are used.
+**Starts lighter.** Orb shows its window only once the interface is drawn, so there is no black window, and it loads
+the English texts only when they are used. It reaches the main screen about a tenth of a second sooner than 3.8.7.
 
 **Smaller fixes in the app.** Tetris keeps a held direction moving while a piece turns. Places that do not fit go
 behind the "more" button, and the places row has an even gap. Menu separators, repeated titles and the "Worktree"
