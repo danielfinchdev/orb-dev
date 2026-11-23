@@ -9,6 +9,7 @@ import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, migrateAppearance } from '../shared/appearance.mjs';
 import { ADAPTIVE_THEMES } from '../shared/music.mjs';
+import { REASONING_LEVELS } from '../shared/reasoning-levels.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
