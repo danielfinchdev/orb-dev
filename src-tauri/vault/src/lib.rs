@@ -12,6 +12,8 @@ pub mod machine;
 pub mod server;
 pub mod transport;
 pub mod vault;
+#[cfg(windows)]
+pub mod windows_hello;
 
 pub use server::Server;
 pub use transport::{start_grants, EngineChannel};

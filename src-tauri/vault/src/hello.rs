@@ -257,7 +257,8 @@ pub fn enable(vault: &std::sync::Mutex<Vault>, hello: &dyn Hello, account_name: 
 pub fn disable(v: &mut Vault, hello: &dyn Hello) -> Result<Value, Code> {
   let old = account(v);
   v.set(HELLO_ID, Value::Null)?;
-  v.hello = State::default();
+  // An enable may be waiting for the OS key: its flag is not this entry's to clear.
+  v.hello = State { enabling: v.hello.enabling, ..State::default() };
   if let Some(a) = old {
     hello.delete(&a);
   }
