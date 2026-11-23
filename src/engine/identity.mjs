@@ -53,6 +53,8 @@ export async function checkIdentity({ acc, live, fixed = false, emit = () => {} 
   const ask = async () => { try { return await live.whoami(); } catch { return null; } };
   const me = account(acc.id) ?? acc;
   let r = await ask();
+  // The agent did not even start: the turn itself reports the real reason, not a failed check.
+  if (!r && live.startFailed?.()) return none;
   // An account that was checked before and now does not answer: one more try; a fixed chat then does not go on, an automatic one says so.
   if (!r && me.who) r = await ask();
   // Never could be checked (an old CLI without the call, no answer in time): the turn goes; the own folder and the clean

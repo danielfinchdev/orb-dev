@@ -21,7 +21,7 @@ import { runLog } from '../platform/log.mjs';
 import { oneLine } from '../shared/text.mjs';
 import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { git, isGitRepo, repoRoot } from '../platform/git.mjs';
-import { account as findAccount, accountEnv, brainAccount } from '../domain/usage/accounts.mjs';
+import { account as findAccount, accountEnv, brainAccount, fixedAccountOf } from '../domain/usage/accounts.mjs';
 import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { checkIdentity } from './identity.mjs';
 import { pickAccount, recordSpend, resolveAccount, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
@@ -398,9 +398,16 @@ export class Sessions {
 
   // Before the first message of a new process: who the folder is signed in as. A different login (or none by e-mail where
   // there was one) holds the message back and says so; an API key or a duplicated account is told and the turn goes on.
+  // A chat fixed to this account, or a task of a chat that is: a missing answer from the agent stops them.
+  isFixedFor(id, acc) {
+    const s = this.get(id);
+    if (s?.account_fixed) return true;
+    const conv = s?.task_id ? this.board.conversationOfTask(s.task_id) : null;
+    return fixedAccountOf(this.board, conv)?.id === acc.id;
+  }
   async identityGate(id, acc, entry) {
     if (entry.identityChecked) return null;
-    const r = await checkIdentity({ acc, live: entry.live, fixed: Boolean(this.get(id)?.account_fixed), emit: (event, payload) => this.emit(event, payload) });
+    const r = await checkIdentity({ acc, live: entry.live, fixed: this.isFixedFor(id, acc), emit: (event, payload) => this.emit(event, payload) });
     for (const line of r.notes) this.addItem(id, 'system', 'status', line);
     if (!r.block) { entry.identityChecked = true; return null; }
     const problem = { kind: { noMail: 'identityNoMail', unknown: 'identityUnknown' }[r.kind] ?? 'identity', account: acc.id };
@@ -850,12 +857,15 @@ ${p.text}` : body, images: p.images });
     const acc = res.acc;
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     const entry = this.getLive(s, acc);
-    // «Compactar» starts a process too: it is checked like a message before /compact goes
-    const held = await this.identityGate(id, acc, entry);
-    if (held) throw new Error(held.final);
     if (typeof entry.live.compact !== 'function') throw new Error(tr('msg.sessions.cannotCompact', { label: a.label }));
+    // The chat is marked as working before the identity check (which may wait for the agent): a message arriving meanwhile queues.
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };
     this.running.set(id, run);
+    // «Compactar» starts a process too: it is checked like a message before /compact goes
+    let held;
+    try { held = await this.identityGate(id, acc, entry); }
+    catch (error) { if (this.running.get(id) === run) this.running.delete(id); throw error; }
+    if (held) { if (this.running.get(id) === run) this.running.delete(id); throw new Error(held.final); }
     this.update(id, { status: 'running', settled: false });
     let r;
     try { r = await entry.live.compact({}); }

@@ -339,3 +339,39 @@ test('this PC may see which login «recordar esta» would adopt; a phone neither
   assert.ok(!remote.includes('o***@e***.net'));
   assert.ok(guardCall(board, 'accounts.identityFound', {}), 'a phone cannot call it');
 });
+
+test('«Compactar» marks the chat as working before the identity check: a message in the gap does not start a second turn', async () => {
+  forget();
+  answer = { email: MAIL_A, apiProvider: 'firstParty' };
+  const c = chat({ account: 'claude-2' }); sessions.send(c.id, 'hola'); await idle(c.id); sessions.closeLive(c.id);
+  const realGet = sessions.getLive.bind(sessions);
+  let release; const gate = new Promise((r) => { release = r; });
+  sessions.getLive = (...a) => { const e = realGet(...a); const w = e.live.whoami; e.live.whoami = async () => { await gate; return w(); }; return e; };
+  const compacting = sessions.compact(c.id);
+  await until(() => sessions.running.has(c.id), 'marked as working');
+  const run = sessions.running.get(c.id);
+  assert.throws(() => sessions.send(c.id, 'en el hueco'), /./);
+  release(); sessions.getLive = realGet;
+  const r = await compacting;
+  assert.equal(r.ok, true);
+  assert.equal(sessions.running.has(c.id), false);
+  assert.ok(run.compacting);
+  // a block releases the mark too
+  sessions.closeLive(c.id);
+  answer = { email: MAIL_B, apiProvider: 'firstParty' };
+  await assert.rejects(() => sessions.compact(c.id), /No coincide/);
+  assert.equal(sessions.running.has(c.id), false);
+});
+
+test('a task of a chat fixed to the account counts as fixed; an agent that does not start is not «no se pudo comprobar»', async () => {
+  const fixedChat = board.createConversation({ title: 'f', agent: 'claude', account: 'claude-2', account_fixed: 1 });
+  const task = board.createTask({ project: 'web', title: 't', description: 'd', agent: 'claude', conversation_id: fixedChat.id }, 'asistente');
+  const s = chat(); board.run('UPDATE sessions SET task_id = ?, account_fixed = 0 WHERE id = ?', task.id, s.id);
+  assert.equal(sessions.isFixedFor(s.id, acct('claude-2')), true);
+  assert.equal(sessions.isFixedFor(s.id, acct('claude')), false);
+  const { checkIdentity } = await import('../src/engine/identity.mjs');
+  acct('claude-2').who = 'abcdabcdabcdabcd';
+  const dead = { whoami: async () => null, startFailed: () => new Error('spawn failed') };
+  assert.equal((await checkIdentity({ acc: acct('claude-2'), live: dead, fixed: true })).block, false, 'the turn reports the real start error');
+  assert.equal((await checkIdentity({ acc: acct('claude-2'), live: { whoami: async () => null }, fixed: true })).kind, 'unknown');
+});

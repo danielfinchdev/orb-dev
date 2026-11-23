@@ -412,6 +412,7 @@ export function createLive(o) {
   live.close = () => { if (closed && !query) return; closed = true; approvals.clear(); input.close(); try { query?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } try { killTree(child); } catch { /* gone */ } };
   // Who this process is signed in as. The SDK's input is held back until the first send(), so asking now is no turn and
   // spends nothing; the answer is null when Claude Code does not say within 10 s (an old version without accountInfo).
+  live.startFailed = () => startError;
   live.whoami = async () => {
     if (closed) return null;
     try {
