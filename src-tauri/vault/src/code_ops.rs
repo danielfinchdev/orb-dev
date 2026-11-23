@@ -226,7 +226,10 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
     return Err(Code::Locked);
   }
   if drop {
-    h.vault.lock().unwrap().drop_code();
+    let mut v = h.vault.lock().unwrap();
+    v.drop_code();
+    // The password check above was for this change, not for a window token.
+    v.may_issue = false;
     return Ok(json!({ "ok": true }));
   }
   if rekey {
@@ -254,6 +257,7 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
     return Ok(json!({ "ok": true, "rekeyed": true }));
   }
   write_code(h, &new_code.0, copy_id.as_deref(), now)?;
+  h.vault.lock().unwrap().may_issue = false;
   Ok(json!({ "ok": true, "rekeyed": false }))
 }
 

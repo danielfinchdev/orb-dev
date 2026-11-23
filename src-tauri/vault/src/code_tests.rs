@@ -363,3 +363,13 @@ fn a_phrase_known_only_to_the_copies_does_not_unlock() {
   assert!(r.get("ok") != Some(&json!(true)));
   tidy(&[&dir]);
 }
+
+#[test]
+fn setting_a_code_with_the_password_issues_no_window_token() {
+  let (h, dir, fake) = pc("no-token", 1, Some(CODE_A));
+  assert_eq!(run("codeSet", json!({ "code": CODE_B, "password": PASSWORD }), &h, &fake).unwrap(), json!({ "ok": true, "rekeyed": false }));
+  assert!(h.vault.lock().unwrap().issue(None, NOW).is_err(), "the password check was for the change only");
+  assert_eq!(run("codeSet", json!({ "drop": true, "password": PASSWORD }), &h, &fake).unwrap()["ok"], json!(true));
+  assert!(h.vault.lock().unwrap().issue(None, NOW).is_err());
+  tidy(&[&dir]);
+}
