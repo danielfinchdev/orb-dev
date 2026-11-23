@@ -520,7 +520,7 @@ export default {
   "msg.schedules.needsApproval": " La ha creado el asistente. Apruébala en «Programadas» para activarla.",
   "msg.schedules.monthly": "el día {day} de cada mes a las {time}",
   "msg.schedules.noProject": "no existe el proyecto {project}",
-  "msg.schedules.needsHash": "para aprobarla hace falta la huella de lo que ves; ábrela de nuevo y vuelve a aprobar",
+  "msg.schedules.needsHash": "para aprobarla hace falta la huella de lo que ves; ábrela de nuevo y vuelve a aprobar (desde el móvil, actualiza la app de Orb en el móvil)",
   "msg.schedules.changedSince": "esta programada ha cambiado desde que la abriste; revísala otra vez",
   "msg.schedules.approveAlone": "esta programada se aprueba sola, sin cambiar nada más a la vez",
   "msg.schedules.noSchedule": "esa tarea programada ya no existe",
