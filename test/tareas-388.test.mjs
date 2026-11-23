@@ -55,10 +55,10 @@ test('every action keeps its call, its parameters and its confirmation', () => {
   const approval = read('src/ui/components/task-approval.jsx');
   assert.match(approval, /call\('tasks\.approve', \{ id: full\.id, decision: 'approved', hash: full\.previewHash \}\)/);
   assert.match(approval, /call\('tasks\.approve', \{ id: full\.id, decision: 'rejected', hash: full\.previewHash \}\)/);
-  // «Deshacer» of a held task: the same confirmation as before
+  // «Deshacer» of a held task: the same dialog, now with the preview of the files (3.8.10)
   const state = read('src/ui/components/task-state.jsx');
-  assert.match(state, /confirm\(t\('tasks\.undo\.title'\), undoBody\(t, task\), \{ ok: t\('tasks\.undo\.ok'\), danger: true, tone: 'primary' \}\)/);
-  assert.match(state, /call\('tasks\.undo', \{ id: task\.id \}\)/);
+  assert.match(state, /form\(t\('tasks\.undo\.title'\), \{/);
+  assert.match(state, /call\('tasks\.undo', \{ id: task\.id, \.\.\.\(v\.hash \? \{ hash: v\.hash \} : \{\}\) \}\)/);
   // the buttons behind the dialog are not dimmed; the per-task lock stops a second click instead
   assert.match(state, /undoing\.has\(task\.id\)/);
   assert.doesNotMatch(tasks, /run\(undo\)/);

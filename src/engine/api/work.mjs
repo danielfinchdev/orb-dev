@@ -147,7 +147,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
-    'tasks.undo': ({ id, checkpoint }, principal) => {
+    // hash (optional): the fingerprint of the preview the PC's window showed (tasks.undoPreview); if the plan changed, nothing is undone.
+    'tasks.undo': ({ id, checkpoint, hash }, principal) => {
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.undo.rerunSinceUndo'));
       // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
@@ -159,7 +160,13 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         if (finalPhotoOf(board, tid) === false) fail(tr('msg.undo.noFinalState'));
         assertPointCurrent(board, tid);
       }
-      return scheduler.undo(tid);
+      return scheduler.undo(tid, hash === undefined ? {} : { hash: str(hash, 'huella', 64) });
+    },
+    // What «Deshacer» would do, read only, for the PC's window: every file's final state and the diff of those it changes.
+    // Its `hash` goes back with tasks.undo, which recomputes the same plan before writing anything.
+    'tasks.undoPreview': async ({ id }, principal) => {
+      if (principal && principal.channel !== 'desktop') fail(tr('msg.remote.pcOnly'));
+      return scheduler.undoPreview(int(id, 'tarea'));
     },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
