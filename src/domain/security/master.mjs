@@ -236,12 +236,11 @@ export class Master {
   // → { ok: true } | the refusals of attempt() | { ok: false, reason: 'noCode' | 'noKey' }.
   unlockWithCode(code, copy) { return this.serial(() => this.job('codeUnlock', { code: normalizeCode(code), copy: path.resolve(copy) })); }
   // A new generated code, or (drop) a phrase in its place. password or current (the code now in force) is checked in the
-  // vault. rekey: a new data key too (needs the password; keep(id): the secrets that go on). → { ok: true, rekeyed }
+  // vault. rekey: a new data key too (needs the password; the vault itself keeps every secret but the phones' keys and Hello's). → { ok: true, rekeyed }
   // or a refusal (attempt()'s, or reason 'needsAuth').
-  setCode({ code = '', password = '', current = '', copy, rekey = false, drop = false, keep = () => true }) {
+  setCode({ code = '', password = '', current = '', copy, rekey = false, drop = false }) {
     return this.serial(async () => {
-      const ids = rekey && this.unlocked() ? this.ids('').filter((id) => keep(id)) : [];
-      return this.job('codeSet', { code: normalizeCode(code), password: typed(password), current: normalizeCode(current), copy: path.resolve(copy), rekey, drop, keep: ids });
+      return this.job('codeSet', { code: normalizeCode(code), password: typed(password), current: normalizeCode(current), copy: path.resolve(copy), rekey, drop });
     });
   }
   // A restore being prepared (dir: its staged core\secretos, never the live one): what the copy's code wrap may bring.

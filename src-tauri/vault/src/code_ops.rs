@@ -188,6 +188,10 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
     match check_code(h, s(req, "current"), s(req, "copy"), "recovery", now)? {
       Err(answer) => return Ok(answer),
       Ok(p) => {
+        // A phrase the copies know is no authority to make a code that opens the data key.
+        if !p.generated {
+          return Ok(json!({ "ok": false, "reason": "wrong" }));
+        }
         if let Source::Vault(Some(k)) = p.source {
           h.vault.lock().unwrap().open_with_code(k);
         } else {
@@ -212,7 +216,9 @@ pub(crate) fn set(req: &Value, h: &Handle, hello: &dyn Hello, now: u64) -> Answe
     let (old_hello, created) = {
       let mut v = h.vault.lock().unwrap();
       let old = hello::account(&mut v);
-      let keep: Vec<String> = req.get("keep").and_then(Value::as_array).map(|a| a.iter().filter_map(|x| x.as_str().map(String::from)).collect()).unwrap_or_default();
+      // The vault decides what goes on (never the caller's list): everything but what the old key authenticated and the
+      // phones' keys. If the secrets cannot be read, nothing is rotated.
+      let keep: Vec<String> = v.ids("")?.into_iter().filter(|id| id != "remote_keys" && id != hello::HELLO_ID && !id.starts_with(crate::vault::APPROVE_PREFIX)).collect();
       let created = v.master_file().and_then(|m| m.get("created").and_then(Value::as_str).map(String::from));
       v.rotate(&keep)?;
       (old, created)

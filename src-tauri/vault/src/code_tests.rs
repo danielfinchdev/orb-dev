@@ -308,3 +308,23 @@ fn reset_takes_the_code_wrap_and_hello_with_it() {
   assert!(fake.accounts.lock().unwrap().is_empty(), "the OS key goes too");
   tidy(&[&dir]);
 }
+
+#[test]
+fn a_new_data_key_with_the_vault_closed_keeps_the_secrets_and_a_phrase_makes_no_code() {
+  let (_a, dir, fake) = pc("rekey-closed", 1, Some(CODE_A));
+  let closed = handle(&dir, 9); // another PC's secret: the data key is not open
+  assert!(!closed.vault.lock().unwrap().unlocked());
+  let r = run("codeSet", json!({ "code": CODE_B, "password": PASSWORD, "rekey": true, "keep": [] }), &closed, &fake).unwrap();
+  assert_eq!(r, json!({ "ok": true, "rekeyed": true }));
+  assert_eq!(closed.vault.lock().unwrap().get("conector/clave").unwrap(), json!("sk-secreto"), "the vault, not the caller, decides what goes on");
+  // a phrase the copies know cannot authorize a code that opens the data key
+  write_copy_wrap(&dir.join("copia-clave.json"), 9, "mi frase de recuperacion");
+  std::fs::remove_file(dir.join(CODE)).unwrap();
+  let copy = dir.join("copia-clave.json").display().to_string();
+  let other = handle(&dir, 9);
+  other.vault.lock().unwrap().open_with_machine().ok();
+  let no = run("codeSet", json!({ "code": CODE_A, "current": "mi frase de recuperacion", "copy": copy }), &closed, &fake).unwrap();
+  assert_eq!(no["reason"], json!("wrong"));
+  assert!(!dir.join(CODE).exists());
+  tidy(&[&dir]);
+}
