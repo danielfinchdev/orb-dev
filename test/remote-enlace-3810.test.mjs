@@ -23,3 +23,10 @@ test('el PC reanuda con el momento del enlace de ese dispositivo', () => {
   const src = fs.readFileSync(path.join(ROOT, 'src/engine/transport/remote.mjs'), 'utf8');
   assert.match(src, /journal\.since\(lastId, \{ notBefore: Date\.parse\(device\.created_at\)/);
 });
+
+test('el PC devuelve la respuesta guardada de un nonce ya visto antes de mirar la hora', () => {
+  const src = fs.readFileSync(path.join(ROOT, 'src/engine/transport/remote.mjs'), 'utf8');
+  const open = src.slice(src.indexOf('function openRequest'));
+  assert.ok(open.indexOf("answers.get(device.id)?.get(box.n)") < open.indexOf('freshness(device.id, box.n'), 'la respuesta guardada va antes de la hora');
+  assert.match(open, /seen\.get\(device\.id\)\?\.has\(box\.n\)/);
+});

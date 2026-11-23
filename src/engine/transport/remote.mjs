@@ -154,6 +154,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   function openRequest(device, box, expected) {
     let msg; try { msg = open(keyOf(device), box, AAD.request(device.id)); } catch { return null; }
     if (!msg || msg.m !== expected) return null;
+    // A resent call whose first request already got through: its answer comes before the time check (the resend carries the
+    // first request's stamp, which may have aged). Only for a nonce the PC holds an answer for, so new nonces are checked as ever.
+    if (expected === 'call') {
+      const kept = answers.get(device.id)?.get(box.n);
+      if (kept && kept.exp > Date.now() && seen.get(device.id)?.has(box.n)) return { again: kept, nonce: box.n };
+    }
     const f = freshness(device.id, box.n, Number(msg.t));
     // Same device, same nonce, still inside its window, and a call already run or running: not a new request. It only
     // got through the device's own key and a fresh time stamp, and what it is given is sealed for that device alone.

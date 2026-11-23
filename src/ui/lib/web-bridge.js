@@ -99,7 +99,11 @@ if (!window.orb) {
     const init = { method: 'POST', credentials: 'omit', headers: { ...headersOf(s), 'Content-Type': 'application/json' }, body: JSON.stringify(box) };
     // A call with no answer is sent once more with this same sealed request (same nonce): the PC answers from what it already
     // did, so it never runs twice. Never with a new nonce.
-    const res = await sendOnce(() => reach(url, init, ms, { once: kind !== 'me' }), { again: kind === 'call' });
+    let resent = false;
+    const res = await sendOnce(() => { const first = !resent; resent = true; return reach(url, init, ms, { once: kind !== 'me' }).then((r) => { if (!first) r.resent = true; return r; }); }, { again: kind === 'call' });
+    // A resend carries the first request's time stamp: if the PC finds it too old (409) it is never sealed again, which would
+    // be a new nonce and could run the call twice; the state is read anew instead, as for a 410.
+    if (res.resent && res.status === 409) { for (const e of RESYNC_EVENTS) fire(e, {}); throw new Error(await tl('app.pcSlow')); }
     if (retry && await clockFixed(res)) return post(url, kind, body, false, ms);
     return answer(res, s, box.n);
   };
@@ -111,6 +115,7 @@ if (!window.orb) {
   // the PC writes a ping every 15 s; nothing at all for TIMEOUTS.eventsIdle (the PC asleep, the Wi-Fi gone
   // without a word) means a dead stream: it is dropped, the window hears link:offline and it connects again.
   let stream = null; let live = false; let connecting = false;
+  let clockTried = false; // a 409 on the events is answered at once only once in a row
   let lastId = null; // the id of the last numbered event seen: the PC replays what came after it
   const connect = async (failures = 0) => {
     stream?.abort(); const ctrl = new AbortController(); stream = ctrl;
@@ -124,10 +129,10 @@ if (!window.orb) {
       const resume = resumeRequest(lastId, { crossOrigin: Boolean(host) });
       const res = await reach(`/api/events${resume.query}`, { headers: { ...headersOf(s), ...resume.headers, 'X-Orb-Auth': await authHeader(s, 'events') }, credentials: 'omit', signal: ctrl.signal }, TIMEOUTS.events);
       if (res.status === 401) { connecting = false; return unpaired(); }
-      if (await clockFixed(res)) { clearTimeout(watchdog); connecting = false; return connect(0); } // again at once, with the PC's time
+      if (!clockTried && await clockFixed(res)) { clockTried = true; clearTimeout(watchdog); connecting = false; return connect(0); } // again at once, with the PC's time, once
       if (!res.ok) throw new Error(res.status); // retried with the growing pause, not every second
       const reader = res.body.getReader(); const dec = new TextDecoder(); let buf = '';
-      failures = 0; live = true; connecting = false; arm();
+      failures = 0; clockTried = false; live = true; connecting = false; arm();
       for (;;) {
         const { value, done } = await reader.read(); if (done) break;
         arm();
@@ -136,7 +141,7 @@ if (!window.orb) {
         while ((i = buf.indexOf('\n\n')) >= 0) {
           const block = buf.slice(0, i); buf = buf.slice(i + 2);
           const { id, data } = parseBlock(block);
-          if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); if (id) lastId = id; if (e === 'resync') { for (const x of RESYNC_EVENTS) fire(x, {}); } else fire(e, p); } catch { /* not for us */ } }
+          if (data) { try { const { e, p } = C.openText(s.key, data, C.AAD.event(s.id)); if (id) lastId = id; if (e === 'resync') { lastId = null; for (const x of RESYNC_EVENTS) fire(x, {}); } else fire(e, p); } catch { /* not for us */ } }
         }
       }
     } catch { if (ctrl.signal.aborted && !idle) { clearTimeout(watchdog); if (stream === ctrl) { live = false; connecting = false; } return; } }

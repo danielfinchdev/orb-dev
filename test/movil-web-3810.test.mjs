@@ -58,3 +58,11 @@ test('web-bridge: guarda el ultimo id, reanuda con el y recarga todo ante resync
   assert.match(bridge, /res\.status === 410/);
   assert.match(bridge, /connect\(failures \+ 1\)/);
 });
+
+test('web-bridge: un 409 en un reenvio nunca vuelve a sellar; un 409 en los eventos se reintenta al momento una sola vez; resync olvida el id', () => {
+  assert.match(bridge, /res\.resent && res\.status === 409\) \{ for \(const e of RESYNC_EVENTS\) fire\(e, \{\}\); throw/);
+  assert.ok(bridge.indexOf('res.resent && res.status === 409') < bridge.indexOf('await clockFixed(res)) return post('), 'antes de volver a sellar');
+  assert.match(bridge, /!clockTried && await clockFixed\(res\)\) \{ clockTried = true;/);
+  assert.match(bridge, /failures = 0; clockTried = false;/);
+  assert.match(bridge, /e === 'resync'\) \{ lastId = null;/);
+});
