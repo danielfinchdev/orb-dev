@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "528bc617b43f41be2fe6f57ac5be5cff9f1b16c6572f1a8ec06bcb9fba9aa978",
+  "source": "29b4dec2a48a4496d5e9f29818ac0667bc16f5220fcdfedcf40cc99ed4961260",
   "constants": {
     "CLOCK_SKEW_MS": 300000,
     "PAIR_KDF": {
@@ -508,27 +508,32 @@
     {
       "code": "abcd-efgh",
       "saltB64": "AQIDBAUGBwgJCgsMDQ4PEA",
-      "secret": "corto4:rPnLoUvFVfy_IovMAGuaHnrO3SgDzh4WMJ0k_ktBItk"
+      "pcPubB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "secret": "corto5:UhFuWnvnn73uNzlwqb9hkuk9sNtdx9_5xhDXq98cuZM"
     },
     {
       "code": "ABCDEFGH",
       "saltB64": "AQIDBAUGBwgJCgsMDQ4PEA",
-      "secret": "corto4:rPnLoUvFVfy_IovMAGuaHnrO3SgDzh4WMJ0k_ktBItk"
+      "pcPubB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "secret": "corto5:UhFuWnvnn73uNzlwqb9hkuk9sNtdx9_5xhDXq98cuZM"
     },
     {
       "code": "23456789",
       "saltB64": "8O_u7ezr6uno5-bl5OPi4Q",
-      "secret": "corto4:_oZq6N2jDKhNkVYa756rsTBSm8J5dTh777_TTqNjokE"
+      "pcPubB64": "hHwNLDdSNPNl5mCVUYejc1oPdhPRYJ06ak2MU66qWiI",
+      "secret": "corto5:cfFn4n3Zw5U2WMU6uTOXLvfPi_P3aoN-i-icpuv5K0U"
     },
     {
       "code": " q w-e r t y u i ",
       "saltB64": "8O_u7ezr6uno5-bl5OPi4Q",
-      "secret": "corto4:WsRi_ZqSsq2PKynGERjakQM6GXWE_OP9LyBImbziuwg"
+      "pcPubB64": "hHwNLDdSNPNl5mCVUYejc1oPdhPRYJ06ak2MU66qWiI",
+      "secret": "corto5:9BpseKRhT56y8JE-zbYcX_E7za2Rl9bNCHmzKfdDA3I"
     },
     {
       "code": "código",
       "saltB64": "AQIDBAUGBwgJCgsMDQ4PEA",
-      "secret": "corto4:W3hOBqbQv701G0cqH6IofG20UkN59nuwQBtfUtfONMk"
+      "pcPubB64": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "secret": "corto5:kRb1OVnzRLs1eGQjfQQ_gWwXe3iEZ-fJ5au0OfEZk8E"
     }
   ],
   "verifier": {

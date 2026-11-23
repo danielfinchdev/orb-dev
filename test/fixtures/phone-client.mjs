@@ -93,7 +93,7 @@ export function createPhone({ name = 'Móvil de prueba', kind = 'phone', passwor
         if (!(Number(h.short) >= 3)) throw err('ese Orb es de una versión anterior: enlaza con su QR');
         urls = [base]; pcPub = C.b64.dec(h.pc); secret = code; via = 'code3';
         // Short 4: a code that links without the password; its own salt stretches the typed 8 characters.
-        if (Number(h.short) === 4) { via = 'linkcode'; secret = await C.linkSecret(code, h.salt); }
+        if (Number(h.short) === 4) { via = 'linkcode'; secret = await C.linkSecret(code, h.salt, pcPub); }
         // The fingerprint is worked out from the key received (never the other side's word) and compared with the PC's.
         if (fp && String(fp).toLowerCase() !== C.fingerprint(pcPub)) throw err('la huella no coincide: no lo enlaces');
       }

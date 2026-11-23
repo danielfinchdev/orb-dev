@@ -433,6 +433,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   // Linking with a one-use code, no password (see linkLive). Same two steps as pair(), then the owner's yes at this PC: only
   // after it does the vault hand over its MAC, and without it no device is made. A wrong try counts in the vault, which kills
   // the code at the third.
+  // What a phone calls itself, as shown to the owner and kept: one line, no control or invisible format characters.
+  const deviceName = (raw) => oneLine((typeof raw === 'string' ? raw : '').replace(/[\p{Cc}\p{Cf}]/gu, ' '), 60).trim() || tr('msg.remote.defaultName');
   function closeLinkCode() {
     const live = linkLive; linkLive = null;
     if (live?.waiting) live.waiting.answer(false);
@@ -479,7 +481,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (r.reason === 'dead' || r.reason === 'gone') { if (linkLive === live) closeLinkCode(); log('enlace: código anulado'); return send(res, 403, { error: tr('msg.link.codeDead'), reason: 'newCode' }); }
       return fail();
     }
-    const name = oneLine(typeof x.name === 'string' && x.name ? x.name : tr('msg.remote.defaultName'), 60);
+    const name = deviceName(x.name);
     // The owner sees the phone's name (and where it comes from) at this PC and says yes or no; no answer is a no.
     const yes = await new Promise((resolve) => {
       const until = Date.now() + LINK_CONFIRM_MS;
@@ -523,7 +525,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (pairing !== issued || Date.now() > issued.expires) return fail(); // used or gone while the password was checked
     const { route } = pairing;
     pairing = null; // one use
-    const name = oneLine(typeof x.name === 'string' && x.name ? x.name : tr('msg.remote.defaultName'), 60);
+    const name = deviceName(x.name);
     board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       id, name, `clave:${id}`, now(), now(), body.pub, route, x.kind, who, JSON.stringify({ v: Number(x.v) || PAIR_PROTOCOL }));
     board.event(null, 'usuario', 'device.paired', name);

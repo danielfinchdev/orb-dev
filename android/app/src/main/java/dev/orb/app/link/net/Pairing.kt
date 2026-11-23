@@ -156,7 +156,7 @@ class Pairing(
         val via = when (link.via) { LinkVia.CODE -> "code3"; LinkVia.LINK -> "link"; LinkVia.LINKCODE -> "linkcode"; else -> "qr" }
         val secret = when (link.via) {
             LinkVia.CODE -> LinkCrypto.shortSecretAsync(normalCode(link.code), link.pc)
-            LinkVia.LINKCODE -> LinkCrypto.linkSecretAsync(link.code, link.salt ?: fail(PairError.OldOrb))
+            LinkVia.LINKCODE -> LinkCrypto.linkSecretAsync(link.code, link.salt ?: fail(PairError.OldOrb), link.pcPub)
             else -> pairingSecret(LinkPayload(null, link.urls, link.pc, link.code, link.name, null, link.via))
         }
         var last: PairingException? = null

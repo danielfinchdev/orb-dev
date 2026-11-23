@@ -324,7 +324,7 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
             }
             if (pc.passwordFree) {
                 // A one-use code: no password. The PC shows this phone's name to its owner, who confirms it there.
-                OrbNote("Este móvil se enlaza con un código de un solo uso, sin contraseña. Cuando sigas, el PC te preguntará si quieres enlazarlo: confírmalo allí.")
+                OrbNote("Este móvil se enlaza con un código de un solo uso, sin contraseña. Antes de seguir, comprueba que la huella es la que enseña el PC. Cuando sigas, el PC te preguntará si quieres enlazarlo: confírmalo allí.")
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Label("Contraseña maestra del PC")
                 val shown = if (state.checking) "•".repeat(state.passwordLength) else state.password

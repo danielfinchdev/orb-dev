@@ -135,6 +135,8 @@ function LinkCodeCard() {
   const [now, setNow] = useState(Date.now());
   const [busy, setBusy] = useState(false);
   const [wasExpired, setWasExpired] = useState(false);
+  // The phone access has to be on already: Windows Hello never turns it on.
+  const [needOn, setNeedOn] = useState(false);
   const alive = useRef(true);
   const reqN = useRef(0);
   const asking = useRef(null);
@@ -156,6 +158,10 @@ function LinkCodeCard() {
   useEffect(() => { call('link.codeWaiting').then((q) => { if (q) question(q); }).catch(quiet); }, []);
   const make = async () => {
     const n = ++reqN.current;
+    const st = await call('remote.status').catch(() => null);
+    if (!alive.current || n !== reqN.current) return;
+    setNeedOn(!st?.running);
+    if (!st?.running) return;
     // Windows Hello (or the password) first: the code is made only for a token of that.
     const unlock = await unlockCore('linkCode');
     if (!unlock || !alive.current || n !== reqN.current) return;
@@ -169,7 +175,8 @@ function LinkCodeCard() {
   };
   const cancel = () => { reqN.current += 1; setCode(null); setBusy(false); call('link.codeCancel').catch(quiet); };
   const expired = code && now >= code.expiresAt;
-  useEffect(() => { if (expired) { setWasExpired(true); setCode(null); call('link.codeCancel').catch(quiet); } }, [expired]);
+  // Not while the PC's question about a phone is open: the vault keeps the code alive until it is answered.
+  useEffect(() => { if (expired && !asking.current) { setWasExpired(true); setCode(null); call('link.codeCancel').catch(quiet); } }, [expired]);
   const showing = code && !expired;
   return (
     <Block title={t('link.code.title')} note={t('link.code.hint')} data-testid="link-code-card">
@@ -182,6 +189,9 @@ function LinkCodeCard() {
               <span className="text-muted-foreground text-caption">{t('link.code.scan')}</span>
               <code className="bg-muted w-fit rounded-ctl px-2.5 py-1 font-mono text-[20px] font-semibold tracking-widest tabular-nums select-all" data-testid="link-code-text">{code.code}</code>
               <code className="text-muted-foreground font-mono text-caption break-all">{code.address}</code>
+              <span className="text-muted-foreground text-caption">{t('link.fpLabel')}</span>
+              <code className="font-mono text-caption break-all" data-testid="link-code-fp">{code.pc}</code>
+              <span className="text-muted-foreground text-caption">{t('link.code.fpHint')}</span>
               <span className="text-muted-foreground text-caption">{t('link.code.once')}</span>
               <span className="text-muted-foreground flex items-start gap-1.5 text-caption" data-testid="link-code-noapprove"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />{t('link.code.noApprove')}</span>
               <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -198,6 +208,7 @@ function LinkCodeCard() {
                 : <Button size="sm" onClick={make} data-testid="link-code-make"><KeyRound />{wasExpired ? t('link.code.again') : t('link.code.make')}</Button>}
               {wasExpired ? <span className="text-muted-foreground text-caption">{t('link.code.expired')}</span> : null}
             </div>
+            {needOn ? <span className="text-warning-ink text-caption" role="alert" data-testid="link-code-needon">{t('link.code.needOn')}</span> : null}
           </Stack>
         )}
       </Panel>

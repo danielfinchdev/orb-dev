@@ -145,7 +145,7 @@ class LinkCryptoVectorsTest {
 
     @Test fun linkSecret() {
         for (s in v.a("linkSecret").objs()) {
-            assertEquals(s.s("secret"), LinkCrypto.linkSecret(s.s("code"), s.s("saltB64")))
+            assertEquals(s.s("secret"), LinkCrypto.linkSecret(s.s("code"), s.s("saltB64"), B64.dec(s.s("pcPubB64"))))
             hit("linkSecret")
         }
     }

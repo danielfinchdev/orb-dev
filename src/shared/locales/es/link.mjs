@@ -72,4 +72,6 @@ export default {
   "link.code.confirmYes": "Enlazar",
   "link.code.confirmNo": "No enlazar",
   "link.code.confirmLeft": "Te queda",
+  "link.code.fpHint": "Compárala con la que enseña el móvil antes de seguir: si no coincide, no lo enlaces.",
+  "link.code.needOn": "Activa primero el acceso desde el móvil (Ajustes › Acceso desde otros dispositivos).",
 };

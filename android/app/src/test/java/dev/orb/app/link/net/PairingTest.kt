@@ -79,7 +79,7 @@ class PairingTest {
         val e = env()
         val salt = B64.enc(ByteArray(16) { (it + 1).toByte() })
         e.pc.hello = buildJsonObject { put("v", 4); put("short", 4); put("salt", salt); put("pc", e.pc.pcB64); put("name", "Orb de Dani") }
-        e.pc.setupPairing(FakePc.PairSetup(LinkCrypto.linkSecret("abcd-efgh", salt), "", kdf, "linkcode", noPassword = true))
+        e.pc.setupPairing(FakePc.PairSetup(LinkCrypto.linkSecret("abcd-efgh", salt, e.pc.keys.pub), "", kdf, "linkcode", noPassword = true))
         val typed = parseManual(code = "abcd-efgh", address = "192.168.1.5:3131")
         val link = e.pairing.resolve(typed).getOrThrow()
         assertEquals(LinkVia.LINKCODE, link.via)
@@ -95,7 +95,7 @@ class PairingTest {
         val e = env()
         val salt = B64.enc(ByteArray(16) { (it + 1).toByte() })
         e.pc.hello = buildJsonObject { put("v", 4); put("short", 4); put("salt", salt); put("pc", e.pc.pcB64) }
-        e.pc.setupPairing(FakePc.PairSetup(LinkCrypto.linkSecret("abcdefgh", B64.enc(ByteArray(16))), "", kdf, "linkcode", noPassword = true))
+        e.pc.setupPairing(FakePc.PairSetup(LinkCrypto.linkSecret("abcdefgh", B64.enc(ByteArray(16)), e.pc.keys.pub), "", kdf, "linkcode", noPassword = true))
         val link = e.pairing.resolve(parseManual(code = "abcdefgh", address = "192.168.1.5:3131")).getOrThrow()
         val err = e.pairing.link(link, "", "Pixel").exceptionOrNull() as PairingException
         assertTrue(err.error is PairError.Refused)

@@ -7,6 +7,9 @@ use std::path::PathBuf;
 
 const NOW: u64 = 1_800_000_000_000;
 const PC_PRIV: [u8; 32] = [5u8; 32];
+fn pc_pub() -> Vec<u8> {
+  x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(PC_PRIV)).as_bytes().to_vec()
+}
 
 fn new_vault(tag: &str) -> (Vault, PathBuf) {
   let dir = std::env::temp_dir().join(format!("orb-vault-link-{tag}-{}-{}", std::process::id(), b64url(crypto::random(4).as_slice())));
@@ -109,7 +112,7 @@ fn the_qr_secret_links_only_after_the_owner_says_yes() {
 #[test]
 fn a_typed_code_gives_the_secret_the_phone_works_out() {
   let salt: Vec<u8> = (1..=16).collect();
-  assert_eq!(typed_secret("abcd-efgh", &salt).unwrap().as_str().unwrap(), "corto4:rPnLoUvFVfy_IovMAGuaHnrO3SgDzh4WMJ0k_ktBItk");
+  assert_eq!(typed_secret("abcd-efgh", &salt, &pc_pub()).unwrap().as_str().unwrap(), "corto5:XbczoOyPNyqK8GarG2sAsax8iln0jfSnuLBlPxLahso");
 }
 
 #[test]
@@ -118,11 +121,11 @@ fn a_typed_code_is_stretched_with_its_salt() {
   let c = made(&mut v);
   let salt = unb64(c["salt"].as_str().unwrap()).unwrap();
   // with the QR's secret by hand the typed way does not open, and the typed way needs the 8 letters and the salt
-  let typed = typed_secret(c["code"].as_str().unwrap(), &salt).unwrap();
+  let typed = typed_secret(c["code"].as_str().unwrap(), &salt, &pc_pub()).unwrap();
   let typed = typed.as_str().unwrap().to_string();
-  assert!(typed.starts_with("corto4:"));
+  assert!(typed.starts_with("corto5:"));
   let lower = format!("{}-{}", &c["code"].as_str().unwrap()[..4].to_lowercase(), &c["code"].as_str().unwrap()[4..]);
-  assert_eq!(typed_secret(&lower, &salt).unwrap().as_str().unwrap(), typed, "case and the dash do not matter");
+  assert_eq!(typed_secret(&lower, &salt, &pc_pub()).unwrap().as_str().unwrap(), typed, "case and the dash do not matter");
   assert_eq!(probe(&mut v, "linkcode", &dev_pub(), NOW).unwrap()["ok"], json!(true));
   let f = finish(&mut v, &finish_req("linkcode", &typed, "sid-t", "dev-t", None), NOW).unwrap();
   assert_eq!(f["waiting"], json!(true), "{f}");
@@ -134,7 +137,7 @@ fn the_typed_secret_does_not_open_the_qr_way_and_the_other_way_round() {
   let (mut v, dir) = new_vault("ways");
   let c = made(&mut v);
   let salt = unb64(c["salt"].as_str().unwrap()).unwrap();
-  let typed = typed_secret(c["code"].as_str().unwrap(), &salt).unwrap().as_str().unwrap().to_string();
+  let typed = typed_secret(c["code"].as_str().unwrap(), &salt, &pc_pub()).unwrap().as_str().unwrap().to_string();
   let f = finish(&mut v, &finish_req("link", &typed, "s", "d", None), NOW).unwrap();
   assert_eq!(f["reason"], json!("wrong"));
   let f = finish(&mut v, &finish_req("linkcode", c["secret"].as_str().unwrap(), "s", "d", None), NOW).unwrap();
@@ -229,7 +232,7 @@ fn the_code_is_never_written_and_never_given_back() {
   let c = made(&mut v);
   let (code, secret) = (c["code"].as_str().unwrap().to_string(), c["secret"].as_str().unwrap().to_string());
   let salt = unb64(c["salt"].as_str().unwrap()).unwrap();
-  let typed = typed_secret(&code, &salt).unwrap().as_str().unwrap().to_string();
+  let typed = typed_secret(&code, &salt, &pc_pub()).unwrap().as_str().unwrap().to_string();
   finish(&mut v, &finish_req("link", &secret, "s1", "d1", None), NOW).unwrap();
   let answers = [info(&mut v, NOW), probe(&mut v, "link", &dev_pub(), NOW).unwrap(), fail(&mut v, NOW), confirm(&mut v, "d1", &dev_pub(), true, NOW)];
   for a in answers.iter().map(|a| a.to_string()) {
@@ -264,4 +267,24 @@ fn the_server_ops_need_the_token_and_never_touch_the_password_exchange() {
   assert_eq!(q("linkInfo", json!({})).unwrap()["ok"], json!(false));
   drop(h);
   tidy(&dir);
+}
+
+#[test]
+fn a_question_the_owner_is_answering_keeps_the_code_alive() {
+  let (mut v, dir) = new_vault("waiting");
+  let c = made(&mut v);
+  let secret = c["secret"].as_str().unwrap().to_string();
+  finish(&mut v, &finish_req("link", &secret, "s1", "d1", None), NOW + LIFE_MS - 10).unwrap();
+  // the code's 5 minutes are over, the question (100 s) is not
+  let late = NOW + LIFE_MS + 1000;
+  assert_eq!(info(&mut v, late)["ok"], json!(true));
+  assert_eq!(confirm(&mut v, "d1", &dev_pub(), true, late)["ok"], json!(true));
+  assert_eq!(info(&mut v, late)["ok"], json!(false), "used up");
+  tidy(&dir);
+}
+
+#[test]
+fn the_typed_secret_depends_on_the_pc_key() {
+  let salt: Vec<u8> = (1..=16).collect();
+  assert_ne!(typed_secret("abcdefgh", &salt, &[1u8; 32]).unwrap().as_str(), typed_secret("abcdefgh", &salt, &[2u8; 32]).unwrap().as_str());
 }

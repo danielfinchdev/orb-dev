@@ -11,6 +11,7 @@ use crate::locked::Locked;
 use crate::server::s;
 use crate::vault::{Code, Strength, Vault};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 /// The purpose of the one-use token (Hello's or the password's) that makes a code.
 pub const PURPOSE: &str = "linkCode";
@@ -20,7 +21,7 @@ pub const CONFIRM_MS: u64 = 100_000;
 pub const MAX_FAILS: u32 = 3;
 /// The letters of the pairing code on screen (no 0/O, no 1/I/L).
 const ALPHABET: &[u8] = b"ABCDEFGHJKMNPQRSTVWXYZ23456789";
-const TYPED_N: u64 = 1 << 14;
+const TYPED_N: u64 = 1 << 16;
 
 struct Waiting {
   until: u64,
@@ -47,7 +48,8 @@ pub struct State {
 
 impl State {
   fn live(&mut self, now: u64) -> Option<&mut Live> {
-    if self.cur.as_ref().is_some_and(|l| l.until <= now) {
+    // A question the owner is answering keeps the code alive until it is answered (confirm() ends it either way).
+    if self.cur.as_ref().is_some_and(|l| l.until <= now && !l.waiting.as_ref().is_some_and(|w| w.until > now)) {
       self.cur = None;
     }
     self.cur.as_mut()
@@ -75,10 +77,17 @@ pub fn normalize(text: &str) -> String {
 }
 
 /// What a typed code becomes on both sides (src/shared/mobile-crypto.mjs > linkSecret).
-pub fn typed_secret(code: &str, salt: &[u8]) -> Option<Locked> {
-  let k = crypto::scrypt(normalize(code).as_bytes(), salt, TYPED_N, 8, 1)?;
+/// The scrypt salt mixes in the PC's public key, so a table made for a salt a fake PC chose is no good against another PC.
+pub fn typed_secret(code: &str, salt: &[u8], pc_pub: &[u8]) -> Option<Locked> {
+  let mut mix = Sha256::new();
+  mix.update(b"orb-corto-v5");
+  for part in [salt, pc_pub] {
+    mix.update((part.len() as u16).to_be_bytes());
+    mix.update(part);
+  }
+  let k = crypto::scrypt(normalize(code).as_bytes(), mix.finalize().as_slice(), TYPED_N, 8, 1)?;
   let mut text = Locked::with_capacity(7 + 44);
-  text.extend(b"corto4:");
+  text.extend(b"corto5:");
   text.extend(b64url(k.as_slice()).as_bytes());
   Some(text)
 }
@@ -88,13 +97,13 @@ pub fn make(v: &mut Vault, token: &str, now: u64) -> Result<Value, Code> {
   if !v.check_strength(token, Some(PURPOSE), Some(Strength::Hello), true, now) {
     return Err(Code::Locked);
   }
-  if v.pc_private().is_none() {
-    return Ok(json!({ "ok": false, "reason": "noKeys" }));
-  }
+  let Some(pc) = v.pc_private() else { return Ok(json!({ "ok": false, "reason": "noKeys" })) };
+  let Ok(pc_arr) = <[u8; 32]>::try_from(pc.as_slice()) else { return Err(Code::Damaged) };
+  let pc_pub = x25519_dalek::PublicKey::from(&x25519_dalek::StaticSecret::from(pc_arr));
   let code = pick(8);
   let secret = crypto::random(16);
   let salt = crypto::random(16);
-  let Some(typed) = typed_secret(code.as_str().unwrap_or_default(), salt.as_slice()) else { return Err(Code::Damaged) };
+  let Some(typed) = typed_secret(code.as_str().unwrap_or_default(), salt.as_slice(), pc_pub.as_bytes()) else { return Err(Code::Damaged) };
   let qr = Locked::from_slice(b64url(secret.as_slice()).as_bytes());
   let until = now + LIFE_MS;
   let out = json!({ "ok": true, "code": code.as_str().unwrap_or_default(), "secret": qr.as_str().unwrap_or_default(), "salt": b64url(salt.as_slice()), "until": until });

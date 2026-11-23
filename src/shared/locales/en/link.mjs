@@ -72,4 +72,6 @@ export default {
   "link.code.confirmYes": "Link",
   "link.code.confirmNo": "Do not link",
   "link.code.confirmLeft": "Time left",
+  "link.code.fpHint": "Compare it with the one the phone shows before going on: if it differs, do not link it.",
+  "link.code.needOn": "Turn on phone access first (Settings > Access from other devices).",
 };

@@ -206,3 +206,24 @@ test('linking with the master password works as before', async () => {
     assert.ok(await said(bad.connect({ qr: (await e.call('link.qr', { device: 'phone' })).url })));
   });
 });
+
+test('the phone access has to be on already: Hello never turns it on', async () => {
+  await withPc(async ({ e, code }) => {
+    await e.call('remote.enable', { enabled: false });
+    const unlock = (await e.call('master.unlockHello', { purpose: 'linkCode' })).unlock;
+    assert.match(await said(e.call('link.codeNew', { unlock, kind: 'wifi' })), /activa primero|enable/i);
+    assert.equal((await e.call('remote.status')).running, false);
+  });
+});
+
+test('the phone name loses control and invisible characters before it is asked and kept', async () => {
+  await withPc(async ({ e, code, newPhone, asked }) => {
+    const c = await code();
+    const linking = newPhone({ name: 'Pixel‮de Dani​' }).connect({ qr: c.url });
+    const q = await asked();
+    assert.doesNotMatch(q.name, /[\p{Cc}\p{Cf}]/u);
+    await e.call('link.codeAnswer', { id: q.id, accept: true });
+    await linking;
+    assert.doesNotMatch((await e.call('link.devices'))[0].name, /[\p{Cc}\p{Cf}]/u);
+  });
+});

@@ -103,9 +103,11 @@ export const LINK_VIAS = Object.freeze(['link', 'linkcode']);
 export const LINK_KDF = Object.freeze({ N: 0, r: 0, p: 0, salt: '' });
 export const LINK_GIVE_UP_MS = 2 * 60_000;
 export const normalLinkCode = (code) => String(code ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-const LINK_TYPED_KDF = { N: 2 ** 14, r: 8, p: 1, dkLen: 32 };
-export const linkSecret = async (code, saltB64) => `corto4:${b64.enc(await scryptAsync(normalLinkCode(code), b64.dec(saltB64), LINK_TYPED_KDF))}`;
-export const linkSecretSync = (code, saltB64) => `corto4:${b64.enc(scrypt(normalLinkCode(code), b64.dec(saltB64), LINK_TYPED_KDF))}`;
+const LINK_TYPED_KDF = { N: 2 ** 16, r: 8, p: 1, dkLen: 32, maxmem: 2 ** 29 };
+// The scrypt salt mixes in the PC's public key: a table made for a salt a fake PC chose is no good against another PC.
+const linkSalt = (saltB64, pcPub) => sha256(cat(enc.encode('orb-corto-v5'), field(b64.dec(saltB64)), field(pcPub)));
+export const linkSecret = async (code, saltB64, pcPub) => `corto5:${b64.enc(await scryptAsync(normalLinkCode(code), linkSalt(saltB64, pcPub), LINK_TYPED_KDF))}`;
+export const linkSecretSync = (code, saltB64, pcPub) => `corto5:${b64.enc(scrypt(normalLinkCode(code), linkSalt(saltB64, pcPub), LINK_TYPED_KDF))}`;
 export const MAC_PHONE = 'orb-pake:movil';
 export const macPc = (id) => `orb-pake:pc:${id}`;
 export function sameBytes(a, b) {

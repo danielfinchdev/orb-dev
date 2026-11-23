@@ -111,7 +111,8 @@ async function linkSecretVectors() {
   const out = [];
   for (const [code, i] of [['abcd-efgh', 0], ['ABCDEFGH', 0], ['23456789', 1], [' q w-e r t y u i ', 1], ['código', 0]]) {
     const saltB64 = b64.enc(salts[i]);
-    out.push({ code, saltB64, secret: await C.linkSecret(code, saltB64) });
+    const pcPubB64 = b64.enc(pubOf(i === 0 ? 'seq' : 'ff'));
+    out.push({ code, saltB64, pcPubB64, secret: await C.linkSecret(code, saltB64, b64.dec(pcPubB64)) });
   }
   return out;
 }

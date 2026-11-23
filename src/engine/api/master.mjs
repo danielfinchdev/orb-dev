@@ -286,10 +286,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       const m = master(); const remote = remoteRef.current;
       const via = oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined);
       if (typeof unlock !== 'string' || !m.hasPassword()) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
-      if (!remote.status().running) {
-        if (!ctx.config.mobile?.enabled) { const c = saveConfig({ mobile: { enabled: true } }); emit('config:changed', c); }
-        await remote.start();
-      }
+      // Windows Hello never turns the phone access on: it has to be on already (Ajustes).
+      if (!remote.status().running) throw userError('msg.remote.enableFirst', {}, { reason: 'off' });
       let made; try { made = m.linkNew(unlock); } catch (error) { throw error instanceof MasterError && error.code === 'locked' ? userError('msg.master.needUnlock', {}, { reason: 'unlock' }) : asUser(error); }
       if (!made.ok) throw userError('msg.link.noKeys', {}, { reason: made.reason });
       log('enlace sin contraseña: código nuevo');
