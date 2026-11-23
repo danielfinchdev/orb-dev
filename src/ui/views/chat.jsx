@@ -271,7 +271,7 @@ function OrchestratorSwitch({ on, onChange, name, cursor, locked = false }) {
   return (
     <BubbleTip title={t('chat.orchestratorTip', { name })} text={locked ? t('chat.orchestratorLocked', { name }) : cursor ? t('chat.orchestratorCursor', { name }) : on ? t('chat.orchestratorOn') : t('chat.orchestratorOff')} side="top">
       <label className={cn('flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] px-2 text-control', locked ? 'cursor-default' : 'hover:bg-accent/60 cursor-pointer')} data-testid="orchestrator">
-        <OrchestratorIcon className={cn('size-4', on ? 'text-primary' : 'text-muted-foreground')} />
+        <OrchestratorIcon className={cn('size-4', on ? 'text-primary-text' : 'text-muted-foreground')} />
         {/* locked is a fixed fact of the conversation, not a switched-off control: it keeps the full accent (no dimming) */}
         <Switch size="sm" className="disabled:opacity-100" checked={on} disabled={locked} onCheckedChange={(v) => onChange(v === true)} aria-label={t('chat.orchestrator')} data-testid="orchestrator-check" />
       </label>
@@ -520,7 +520,8 @@ export function ChatView({ route, onConversation, project: inProject }) {
   // The permissions menu of a new chat is the one of a started chat (session.jsx). A level beyond «Auto»/«Preguntar», or the
   // phone, only exists in a direct chat, so choosing one turns the «Orquestador» off.
   const newChatAccess = {
-    value: orchestrate || !access.permission ? globalLevel : alone ? (fullHere ? 'total' : 'leer') : access.permission,
+    // without a project a direct chat is created read-only (or with full access when chosen): show that, not «Auto»
+    value: orchestrate ? globalLevel : alone ? (fullHere ? 'total' : 'leer') : access.permission || globalLevel,
     more: alone ? [{ value: 'leer', label: PERMISSION.leer }, ...(bridge.mobile ? [] : [{ value: 'total', label: t('session.fullPc') }])] : options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total')),
     ...(alone ? { main: ['leer'] } : {}),
     extra: bridge.mobile || fullHere ? [] : [{ key: 'android', testid: 'session-android', Icon: Smartphone, label: t('session.android'), tip: access.android ? t('session.androidOn') : t('session.androidOff'), checked: access.android, onToggle: () => { setAccess((a) => ({ ...a, android: !a.android })); if (orchestrate) goDirect(); } }],

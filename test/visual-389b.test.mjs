@@ -22,6 +22,7 @@ test('43: the new chat has the full permissions menu and applies it to the chat 
   const chat = src('views', 'chat.jsx');
   assert.match(chat, /<AutonomySwitch \{\.\.\.newChatAccess\} testid="chat-autonomy"/);
   assert.match(chat, /options\(PERMISSION\)\.filter/);
+  assert.match(chat, /value: orchestrate \? globalLevel : alone \? \(fullHere \? 'total' : 'leer'\) : access\.permission \|\| globalLevel/, 'a direct chat without project shows the level it is created with');
   assert.match(chat, /key: 'android'/);
   // the chosen level goes to sessions.create; the total level and the phone are granted with the master password
   assert.match(chat, /\{ permission: level \}/);
