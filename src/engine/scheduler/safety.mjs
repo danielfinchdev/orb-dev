@@ -6,7 +6,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { eventKey, userName } from '../../domain/tasks/board.mjs';
 import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
-import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, undoPreviewFiles, snapshotCommitAsync, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
+import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, undoCheckpointAsync, newKnown, undoPreviewFiles, snapshotCommitAsync, fullSnapshot, missedByAsync } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { isRailOn } from '../../domain/rules/rails.mjs';
 import { lastLaunchId } from './run-id.mjs';
@@ -129,17 +129,17 @@ export class SafetyPart {
   // after it. Meanwhile no task starts in that project (holding) and a second undo of the same task is refused.
   // The files of an undo, from a full snapshot. dry: nothing is written (the preview), and the result carries `plan` (the
   // same decisions the real undo takes, undoCheckpoint › dry). The caller holds the project.
-  async undoOutcome(task, cp, dry, shared = null) {
+  async undoOutcome(task, cp, dry, shared = null, known = null) {
     const full = shared ?? await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
     if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
     const after = cp.after?.commit ? cp.after : full;
-    const out = undoCheckpoint(cp.before, after, { dry });
+    const out = await undoCheckpointAsync(cp.before, after, { dry, known });
     const later = [];
-    const missed = after === full ? [] : missedBy(cp.before.repo, after, full, later);
+    const missed = after === full ? [] : await missedByAsync(cp.before.repo, after, full, later);
     out.skipped.push(...later.filter((x) => !out.skipped.includes(x)));
     if (dry) for (const p of later) if (!out.plan.some((x) => x.path === p)) out.plan.push({ path: p, action: 'conflict' });
     if (missed.length) {
-      const more = undoCheckpoint(cp.before, full, { only: new Set(missed.map((c) => c.path)), dry });
+      const more = await undoCheckpointAsync(cp.before, full, { only: new Set(missed.map((c) => c.path)), dry, known });
       for (const k of ['restored', 'removed', 'skipped']) out[k].push(...more[k]);
       if (dry) out.plan.push(...more.plan);
       else this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
@@ -161,7 +161,7 @@ export class SafetyPart {
       const full = cp.before.kind === 'git' ? await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' }) : null;
       if (cp.before.kind === 'git' && !full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
       const out = full ? await this.undoOutcome(task, cp, true, full) : undoCheckpoint(cp.before, cp.after ?? {}, { dry: true });
-      const files = undoPreviewFiles(cp.before, out.plan);
+      const files = await undoPreviewFiles(cp.before, out.plan);
       return { hash: undoPlanHash(cp, out.plan, full?.commit), files, counts: countPlan(out.plan), noDiff: files.filter((x) => x.noDiff).length };
     } finally { release(); }
   }
@@ -179,13 +179,13 @@ export class SafetyPart {
       try {
         // With the fingerprint of a preview, the plan is worked out again first and nothing is written if it changed.
         // one full snapshot serves the check and the real run
-        let full = null;
+        let full = null; const known = newKnown(); // what the check read of the commits is not read again by the run
         if (hash !== undefined) {
           full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
           if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
-          if (undoPlanHash(cp, (await this.undoOutcome(task, cp, true, full)).plan, full.commit) !== hash) throw new Error(tr('msg.undo.previewStale'));
+          if (undoPlanHash(cp, (await this.undoOutcome(task, cp, true, full, known)).plan, full.commit) !== hash) throw new Error(tr('msg.undo.previewStale'));
         }
-        out = await this.undoOutcome(task, cp, false, full);
+        out = await this.undoOutcome(task, cp, false, full, known);
       } finally { release(); }
     } else {
       if (hash !== undefined && undoPlanHash(cp, undoCheckpoint(cp.before, cp.after ?? {}, { dry: true }).plan) !== hash) throw new Error(tr('msg.undo.previewStale'));
@@ -228,7 +228,7 @@ export class SafetyPart {
       const full = await fullSnapshot(cp.before.repo, { message: `orb: foto después de la tarea #${task.id} (todo releído)` });
       const now = this.board.settingJson(key);
       if (!full || now?.after?.commit !== cp.after.commit) return; // undone or run again meanwhile
-      const missed = missedBy(cp.before.repo, cp.after, full);
+      const missed = await missedByAsync(cp.before.repo, cp.after, full);
       if (missed.length) this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
       git(cp.before.repo, 'update-ref', `${REF_PREFIX}/t${task.id}-despues`, full.commit);
       this.board.settingJson(key, { ...now, after: { ...now.after, commit: full.commit, at, full: true } });
