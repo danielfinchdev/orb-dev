@@ -15,6 +15,7 @@ export default {
   'msg.undo.rerunSinceUndo': 'the task has run again since you opened “Undo”; open it again to review it',
   'msg.undo.joinedByHand': 'this task was joined by hand on the PC; undo it from the PC',
   'msg.undo.noFinalState': 'the PC did not save the final state of this task; undoing it would put its whole folder back as it was before, including what changed afterwards. Do it from the PC if you really want that',
+  'msg.undo.previewStale': 'the files changed since the preview was worked out; open it again before undoing',
   'msg.accept.rerunSinceSeen': 'the task has run again since you saw it; open it again to review it',
   'msg.accept.held': 'the task is held by the guard; review its changes on the PC before accepting it',
   'msg.accept.statusChanged': 'the task can no longer be accepted: its status has changed; open it again'

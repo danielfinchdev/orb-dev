@@ -528,11 +528,18 @@ const MTIME_SLACK_MS = 2000;
 // cannot be trusted is kept and reported.
 // safe: a file behind a link or junction is skipped, and a file that cannot be written or removed is reported in `skipped`
 // instead of stopping the whole undo (a conversation's rewind must always finish so that it can itself be undone).
-export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null } = {}) {
+// dry: the same decisions without writing or removing anything; the result also carries `plan`, one { path, action } per file
+// (restore, recreate, remove, unchanged, conflict, kept, skipped), so a preview is computed by this very code and cannot
+// drift from what the undo then does.
+export function undoCheckpoint(before, after, { only = null, safe = false, madeAfter = null, dry = false } = {}) {
   const restored = []; const removed = []; const skipped = []; const kept = [];
+  const plan = [];
+  const note = (rel, action) => plan.push({ path: rel, action });
+  const finish = (out) => (dry ? { ...out, plan } : out);
   if (before.kind === 'git') {
     const repo = before.repo; const cfg = before.raw ? RAW_GIT : []; // a raw checkpoint is read and compared raw
-    const attempt = (rel, write) => { try { write(); return true; } catch (error) { if (!safe) throw error; skipped.push(rel); return false; } };
+    const attempt = (rel, write) => { if (dry) return true; try { write(); return true; } catch (error) { if (!safe) throw error; skipped.push(rel); return false; } };
+    const hashOf = (file) => [cfg, ...(cfg.length ? [[]] : [])].map((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim());
     const list = changedBetween(repo, before.commit, after.commit).filter((c) => !only || only.has(c.path));
     // On a file system that ignores letter case, a file renamed only in case shows up as a deleted path and an added one that
     // are the same file on disk: removing the added one would delete the file for good, so such a pair is put back by renaming.
@@ -545,30 +552,39 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
         // the pair is handled once, from its added path (the spelling the folder has now)
         if (status !== 'A') continue;
         const target = twins.get(rel);
-        if (safe && (!linkFree(repo, file) || !linkFree(repo, path.join(repo, target)))) { skipped.push(target); continue; }
+        if (safe && (!linkFree(repo, file) || !linkFree(repo, path.join(repo, target)))) { skipped.push(target); note(target, 'skipped'); continue; }
         const blobAfter = git(repo, 'rev-parse', '--verify', '--quiet', `${after.commit}:${rel}`).stdout.trim();
-        if (![cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === blobAfter)) { skipped.push(target); continue; }
+        if (!hashOf(file).some((h) => h === blobAfter)) { skipped.push(target); note(target, 'conflict'); continue; }
         const old = gitBuffer(repo, ...cfg, 'cat-file', '--filters', `${before.commit}:${target}`);
-        if (old.status !== 0) { skipped.push(target); continue; }
+        if (old.status !== 0) { skipped.push(target); note(target, 'skipped'); continue; }
+        if (dry) { restored.push(target); note(target, 'restore'); continue; }
         try { respellPath(repo, rel, target, respelled); fs.writeFileSync(path.join(repo, target), old.stdout); restored.push(target); }
         catch (error) { if (!safe) throw error; skipped.push(`${target}: ${error.message}`); }
         continue;
       }
 
-      if (safe && !linkFree(repo, file)) { skipped.push(rel); continue; }
+      if (safe && !linkFree(repo, file)) { skipped.push(rel); note(rel, 'skipped'); continue; }
       const nowExists = fs.existsSync(file);
       const blobAfter = git(repo, 'rev-parse', '--verify', '--quiet', `${after.commit}:${rel}`).stdout.trim();
       // (The snapshot after may have been taken either way: an older one, normalized.)
       const same = nowExists ? [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === blobAfter) : blobAfter === '';
       // a file the task removed that is on disk and already as it was before: nothing to put back (a rewind kept it)
-      if (!same && status === 'D' && nowExists && !blobAfter && [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${rel}`).stdout.trim())) continue;
-      if (!same) { skipped.push(rel); continue; } // changed again after the task: the user decides
+      if (!same && status === 'D' && nowExists && !blobAfter && [cfg, ...(cfg.length ? [[]] : [])].some((c) => git(repo, ...c, 'hash-object', '--', file).stdout.trim() === git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${rel}`).stdout.trim())) { note(rel, 'unchanged'); continue; }
+      if (!same) {
+        // changed again after the task: the user decides. The plan tells apart a file that already is as it was before
+        // (nothing to do either way) from one that really differs from both.
+        skipped.push(rel);
+        const blobBefore = git(repo, 'rev-parse', '--verify', '--quiet', `${before.commit}:${rel}`).stdout.trim();
+        const already = dry && (nowExists ? Boolean(blobBefore) && hashOf(file).some((h) => h === blobBefore) : status === 'A');
+        note(rel, already ? 'unchanged' : 'conflict');
+        continue;
+      }
       // Only a file the task created is removed; whatever else cannot be read back is left alone and reported.
       if (status === 'A') {
         // never remove a path whose letter-case twin is on the list and still on disk: on a file system that ignores case
         // it may be the very same file, and when that cannot be told the file is left alone
         const low = rel.toLowerCase();
-        if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); continue; }
+        if (nowExists && list.some((c) => c.status !== 'A' && c.path !== rel && c.path.toLowerCase() === low && fs.existsSync(path.join(repo, c.path)))) { skipped.push(rel); note(rel, 'skipped'); continue; }
         if (nowExists && madeAfter !== null) {
           // Made by the turn: created after the cutoff. A file that already existed and was written during the turn is kept.
           // One brought from elsewhere or renamed keeps its creation and write dates but gets a new change date: removed.
@@ -578,19 +594,19 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
           const made = st && (st.birthtimeMs >= madeAfter || (st.mtimeMs < madeAfter && st.ctimeMs >= madeAfter));
           if (st && !made && st.mtimeMs < madeAfter && blobAfter) {
             deletedBlobs ??= blobsOf(repo, before.commit, list.filter((c) => c.status === 'D').map((c) => c.path));
-            if (deletedBlobs.has(blobAfter) && newFolderAbove(repo, rel, madeAfter)) { /* a moved file: remove it */ } else { kept.push(rel); continue; }
-          } else if (!made) { kept.push(rel); continue; }
+            if (deletedBlobs.has(blobAfter) && newFolderAbove(repo, rel, madeAfter)) { /* a moved file: remove it */ } else { kept.push(rel); note(rel, 'kept'); continue; }
+          } else if (!made) { kept.push(rel); note(rel, 'kept'); continue; }
         }
-        if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) removed.push(rel);
+        if (nowExists && attempt(rel, () => fs.rmSync(file, { force: true }))) { removed.push(rel); note(rel, 'remove'); } else if (nowExists) note(rel, 'skipped');
         continue;
       }
       // --filters: the file as it was on disk (the attributes' line endings, Git LFS), not git's stored form; a raw
       // checkpoint holds it byte for byte (core.autocrlf off).
       const old = gitBuffer(repo, ...cfg, 'cat-file', '--filters', `${before.commit}:${rel}`);
-      if (old.status === 0) { if (attempt(rel, () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); })) restored.push(rel); }
-      else skipped.push(rel);
+      if (old.status === 0) { if (attempt(rel, () => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, old.stdout); })) { restored.push(rel); note(rel, status === 'D' ? 'recreate' : 'restore'); } else note(rel, 'skipped'); }
+      else { skipped.push(rel); note(rel, 'skipped'); }
     }
-    return { restored, removed, skipped, kept };
+    return finish({ restored, removed, skipped, kept });
   }
   // Copy checkpoint: files that differ from the copy come back; files the task created (not in the copy) are removed.
   // A file is the user's, not the task's, when it was written after the task ended (mtime rule, always available because
@@ -607,19 +623,78 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
   for (const rel of inCopy) {
     const src = path.join(before.copy, rel); const dst = path.join(before.dir, rel);
     if (!fs.existsSync(dst) || !fs.readFileSync(src).equals(fs.readFileSync(dst))) {
-      if (!untouched(rel)) { skipped.push(rel); continue; }
-      fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst); restored.push(rel);
+      if (!untouched(rel)) { skipped.push(rel); note(rel, 'conflict'); continue; }
+      const existed = fs.existsSync(dst);
+      if (!dry) { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst); }
+      restored.push(rel); note(rel, existed ? 'restore' : 'recreate');
     }
   }
   for (const rel of walkFiles(before.dir)) {
     if (inCopy.has(rel)) continue;
     const file = path.join(before.dir, rel); const st = fs.statSync(file);
     if (st.mtimeMs < before.at) continue;
-    if (!untouched(rel)) { skipped.push(rel); continue; }
-    if (st.size > MAX_COPY_FILE) { skipped.push(rel); continue; } // never in the copy, so it may predate the task: the user decides
-    fs.rmSync(file, { force: true }); removed.push(rel);
+    if (!untouched(rel)) { skipped.push(rel); note(rel, 'conflict'); continue; }
+    if (st.size > MAX_COPY_FILE) { skipped.push(rel); note(rel, 'skipped'); continue; } // never in the copy, so it may predate the task: the user decides
+    if (!dry) fs.rmSync(file, { force: true });
+    removed.push(rel); note(rel, 'remove');
   }
-  return { restored, removed, skipped };
+  return finish({ restored, removed, skipped });
+}
+
+// The preview of an undo for the window: the plan of undoCheckpoint({ dry }) with, for each file the undo will change, its
+// diff from how it is now to how it will be (read only; the files are only read). A binary or oversized file has no
+// patch, only its state; secret-looking paths are left out of the patches and the text of the rest is redacted.
+// → [{ path, action, binary, tooBig, cut, added, removed, patch }]
+export function undoPreviewFiles(before, plan, { maxBytes = 512 * 1024, maxPatch = 200_000, maxTotal = 2_000_000, maxDiffs = 200 } = {}) {
+  const dir = before.kind === 'git' ? before.repo : before.dir;
+  const cfg = before.raw ? RAW_GIT : [];
+  let tmp = null; let total = 0; let diffs = 0;
+  const out = [];
+  try {
+    for (const { path: rel, action } of plan) {
+      const row = { path: rel, action, binary: false, tooBig: false, cut: false, added: 0, removed: 0, patch: '' };
+      out.push(row);
+      if (!['restore', 'recreate', 'remove'].includes(action) || isSecretPath(rel) || isSecretPath(rel.toLowerCase())) continue;
+      // past the cap (each diff costs several git runs) a file shows only its state; a link is never followed to read it
+      if (diffs >= maxDiffs) { row.noDiff = true; continue; }
+      if (!linkFree(dir, path.join(dir, rel))) continue;
+      diffs++;
+      try {
+        let target = null; let now = null;
+        if (action !== 'remove') {
+          if (before.kind === 'git') {
+            const size = git(dir, ...cfg, 'cat-file', '-s', `${before.commit}:${rel}`);
+            if (size.status === 0 && Number(size.stdout.trim()) > maxBytes) { row.tooBig = true; continue; }
+            const blob = gitBuffer(dir, ...cfg, 'cat-file', '--filters', `${before.commit}:${rel}`);
+            if (blob.status !== 0) continue;
+            if (blob.stdout.length > maxBytes) { row.tooBig = true; continue; } // --filters (LFS) may give more than the stored size
+            target = blob.stdout;
+          } else {
+            const src = path.join(before.copy, rel);
+            if (fs.statSync(src).size > maxBytes) { row.tooBig = true; continue; }
+            target = fs.readFileSync(src);
+          }
+        }
+        if (action !== 'recreate') {
+          const file = path.join(dir, rel);
+          if (fs.statSync(file).size > maxBytes) { row.tooBig = true; continue; }
+          now = fs.readFileSync(file);
+        }
+        if ((target && target.subarray(0, 8000).includes(0)) || (now && now.subarray(0, 8000).includes(0))) { row.binary = true; continue; }
+        tmp ??= fs.mkdtempSync(path.join(os.tmpdir(), 'orb-undo-'));
+        const a = path.join(tmp, 'now'); const b = path.join(tmp, 'then');
+        fs.writeFileSync(a, now ?? ''); fs.writeFileSync(b, target ?? '');
+        // exit status 1 only says the files differ; never a program of the project, no colour, paths relative to tmp
+        const r = git(tmp, 'diff', '--no-index', '--no-color', '--no-ext-diff', '--no-textconv', '--', 'now', 'then');
+        if (r.status !== 0 && r.status !== 1) continue;
+        let patch = redactSecrets(r.stdout);
+        for (const l of patch.split('\n')) { if (l.startsWith('+') && !l.startsWith('+++')) row.added++; else if (l.startsWith('-') && !l.startsWith('---')) row.removed++; }
+        if (patch.length > maxPatch || total + patch.length > maxTotal) { row.cut = true; patch = ''; }
+        total += patch.length; row.patch = patch;
+      } catch { /* unreadable now: the state alone is shown */ }
+    }
+  } finally { if (tmp) try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp */ } }
+  return out;
 }
 
 // Pairs of changed paths (a deleted one and an added one) that differ only in letter case and are one file on disk:

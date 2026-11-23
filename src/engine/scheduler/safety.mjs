@@ -1,11 +1,12 @@
 // What protects the project folder around a task: the checkpoint before it, the safety checks after it and undo.
 // Part of the Scheduler (index.mjs adds these methods to it).
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { eventKey, userName } from '../../domain/tasks/board.mjs';
 import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
-import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, snapshotCommitAsync, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
+import { treeState, saveTreeState, stateFileOf, dropTreeState, takeCheckpoint, changedBetweenAsync, undoCheckpoint, undoPreviewFiles, snapshotCommitAsync, fullSnapshot, missedBy } from '../../domain/tasks/checkpoints.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { isRailOn } from '../../domain/rules/rails.mjs';
 import { lastLaunchId } from './run-id.mjs';
@@ -126,7 +127,46 @@ export class SafetyPart {
   // «Deshacer» does not trust the fast snapshots (checkpoints.mjs › fullSnapshot): it reads every
   // file again first, off the event loop, and also gives back what the task changed while hiding it from the snapshot
   // after it. Meanwhile no task starts in that project (holding) and a second undo of the same task is refused.
-  async undo(taskId) {
+  // The files of an undo, from a full snapshot. dry: nothing is written (the preview), and the result carries `plan` (the
+  // same decisions the real undo takes, undoCheckpoint › dry). The caller holds the project.
+  async undoOutcome(task, cp, dry, shared = null) {
+    const full = shared ?? await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
+    if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
+    const after = cp.after?.commit ? cp.after : full;
+    const out = undoCheckpoint(cp.before, after, { dry });
+    const later = [];
+    const missed = after === full ? [] : missedBy(cp.before.repo, after, full, later);
+    out.skipped.push(...later.filter((x) => !out.skipped.includes(x)));
+    if (dry) for (const p of later) if (!out.plan.some((x) => x.path === p)) out.plan.push({ path: p, action: 'conflict' });
+    if (missed.length) {
+      const more = undoCheckpoint(cp.before, full, { only: new Set(missed.map((c) => c.path)), dry });
+      for (const k of ['restored', 'removed', 'skipped']) out[k].push(...more[k]);
+      if (dry) out.plan.push(...more.plan);
+      else this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
+    }
+    return out;
+  }
+
+  // What «Deshacer» would do now, read only: every file with its final state and, for the ones it changes, the diff from
+  // how it is to how it will be. `hash` is the fingerprint of that plan; undo(id, { hash }) refuses when the plan it would
+  // carry out differs, so what the window showed is what happens.
+  async undoPreview(taskId) {
+    const task = this.board.task(taskId); if (!task) throw new Error(tr('msg.scheduler.noTask', { id: taskId }));
+    if (this.running.has(task.id) || this.finishing.has(task.id)) throw new Error(tr('msg.scheduler.undoRunning'));
+    const cp = this.board.settingJson(`checkpoint:${task.id}`);
+    if (!cp?.before) throw new Error(tr('msg.scheduler.noPhoto'));
+    if (this.held(task.project)) throw new Error(tr('msg.scheduler.undoBusy'));
+    const release = this.hold(task.project);
+    try {
+      const full = cp.before.kind === 'git' ? await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' }) : null;
+      if (cp.before.kind === 'git' && !full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
+      const out = full ? await this.undoOutcome(task, cp, true, full) : undoCheckpoint(cp.before, cp.after ?? {}, { dry: true });
+      const files = undoPreviewFiles(cp.before, out.plan);
+      return { hash: undoPlanHash(cp, out.plan, full?.commit), files, counts: countPlan(out.plan), noDiff: files.filter((x) => x.noDiff).length };
+    } finally { release(); }
+  }
+
+  async undo(taskId, { hash } = {}) {
     const task = this.board.task(taskId); if (!task) throw new Error(tr('msg.scheduler.noTask', { id: taskId }));
     if (this.running.has(task.id) || this.finishing.has(task.id)) throw new Error(tr('msg.scheduler.undoRunning'));
     const cp = this.board.settingJson(`checkpoint:${task.id}`);
@@ -137,20 +177,20 @@ export class SafetyPart {
     if (cp.before.kind === 'git') {
       const release = this.hold(task.project);
       try {
-        const full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
-        if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
-        const after = cp.after?.commit ? cp.after : full;
-        out = undoCheckpoint(cp.before, after);
-        const later = [];
-        const missed = after === full ? [] : missedBy(cp.before.repo, after, full, later);
-        out.skipped.push(...later.filter((x) => !out.skipped.includes(x)));
-        if (missed.length) {
-          const more = undoCheckpoint(cp.before, full, { only: new Set(missed.map((c) => c.path)) });
-          for (const k of ['restored', 'removed', 'skipped']) out[k].push(...more[k]);
-          this.board.event(task.id, 'orb', 'checkpoint.missed', oneLine(`cambiados sin dejar rastro en su fecha: ${missed.map((c) => c.path).join(', ')}`, 400));
+        // With the fingerprint of a preview, the plan is worked out again first and nothing is written if it changed.
+        // one full snapshot serves the check and the real run
+        let full = null;
+        if (hash !== undefined) {
+          full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
+          if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
+          if (undoPlanHash(cp, (await this.undoOutcome(task, cp, true, full)).plan, full.commit) !== hash) throw new Error(tr('msg.undo.previewStale'));
         }
+        out = await this.undoOutcome(task, cp, false, full);
       } finally { release(); }
-    } else out = undoCheckpoint(cp.before, cp.after ?? {});
+    } else {
+      if (hash !== undefined && undoPlanHash(cp, undoCheckpoint(cp.before, cp.after ?? {}, { dry: true }).plan) !== hash) throw new Error(tr('msg.undo.previewStale'));
+      out = undoCheckpoint(cp.before, cp.after ?? {});
+    }
     try { logUndone(this.board, task, out); } catch (error) { this.log?.(`bitácora deshacer #${task.id}: ${error.message}`); }
     this.board.event(task.id, 'usuario', 'task.undone', `restaurados ${out.restored.length}, quitados ${out.removed.length}, sin tocar ${out.skipped.length}`);
     // the task stays «Deshecha» (its result can no longer be accepted) and its photo goes: a second undo over a folder
@@ -194,4 +234,30 @@ export class SafetyPart {
       this.board.settingJson(key, { ...now, after: { ...now.after, commit: full.commit, at, full: true } });
     } finally { release(); }
   }
+}
+
+// The fingerprint of what an undo would do: the two photos it goes between and each file with its final state. The preview
+// shows this plan and the undo that carries its hash recomputes it, so the two cannot disagree.
+export function undoPlanHash(cp, plan, fullCommit = null) {
+  // The state each changing file has right now is part of it: a file edited after the preview is a different plan. Nothing
+  // is read: git hands the blob ids of the full snapshot in one call (a copy checkpoint, size and time of the file).
+  const changing = plan.filter((p) => ['restore', 'remove', 'recreate'].includes(p.action));
+  const now = new Map();
+  if (changing.length && fullCommit && cp.before?.repo) {
+    const want = new Set(changing.map((p) => p.path));
+    const r = git(cp.before.repo, 'ls-tree', '-r', '-z', fullCommit);
+    for (const row of r.stdout.split(' ')) {
+      const tab = row.indexOf('	');
+      if (tab > 0 && want.has(row.slice(tab + 1))) now.set(row.slice(tab + 1), row.slice(0, tab).split(' ')[2]);
+    }
+  } else if (changing.length && cp.before?.dir) {
+    for (const p of changing) { try { const st = fs.lstatSync(path.join(cp.before.dir, p.path)); now.set(p.path, `${st.size}:${st.mtimeMs}`); } catch { /* absent */ } }
+  }
+  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => [p.action, p.path, changing.includes(p) ? (now.get(p.path) ?? 'absent') : ''].join('	'));
+  return crypto.createHash('sha256').update(JSON.stringify([cp.before?.commit ?? cp.before?.copy ?? '', cp.after?.commit ?? '', rows])).digest('hex').slice(0, 32);
+}
+export function countPlan(plan) {
+  const n = {};
+  for (const p of plan) n[p.action] = (n[p.action] ?? 0) + 1;
+  return n;
 }
