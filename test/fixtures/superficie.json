@@ -325,7 +325,6 @@
   "android.pairStart",
   "backup.newKey",
   "backup.previousKey",
-  "backup.recovery",
   "backup.restore",
   "backup.verify",
   "extensions.remove",

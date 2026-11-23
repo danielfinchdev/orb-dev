@@ -14,12 +14,13 @@ import { agentKeyState, saveAgentKey } from '../../domain/security/agent-keys.mj
 import { needsUnlock, freshPurpose, FRESH_PURPOSES, RULE_TARGET_METHODS, RAILS_PURPOSE } from '../../domain/security/permissions.mjs';
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
-import { isRecoveryCode, hasRecovery } from '../../domain/data/backup.mjs';
+import * as K from '../../domain/data/backup.mjs';
 import { str } from './common.mjs';
+import { HELLO_ID_PREFIXES } from '../../domain/security/permissions.mjs';
 import { scrubVaultedSecrets, DONE_AT } from '../../domain/data/legacy/migrate-38.mjs';
 
 const userError = (key, vars, extra = {}) => Object.assign(new Error(tr(key, vars)), { userFacing: true, status: 403, ...extra });
-const WORDS = { short: 'msg.master.short', long: 'msg.master.long', exists: 'msg.master.exists', lost: 'msg.master.lost', locked: 'msg.master.locked', damaged: 'msg.master.damaged', none: 'msg.master.none' };
+const WORDS = { phrase: 'msg.master.codePhrase', needsPassword: 'msg.master.rekeyNeedsPassword', short: 'msg.master.short', long: 'msg.master.long', exists: 'msg.master.exists', lost: 'msg.master.lost', locked: 'msg.master.locked', damaged: 'msg.master.damaged', none: 'msg.master.none' };
 const asUser = (error) => (error instanceof MasterError ? userError(WORDS[error.code] ?? 'msg.master.damaged', { n: MIN_LENGTH }, { reason: error.code }) : error);
 // The causes master.lock is told (the window: 'idle' and 'hand'; the app: 'windows' and 'sleep'); anything else is not known.
 const LOCK_REASONS = { idle: 'idle', hand: 'manual', windows: 'windows', sleep: 'sleep' };
@@ -27,6 +28,9 @@ const LOCK_REASONS = { idle: 'idle', hand: 'manual', windows: 'windows', sleep: 
 export function refused(r, { code = false } = {}) {
   if (r.reason === 'none') return userError('msg.master.none', {}, { reason: 'none' });
   if (r.reason === 'tries') return userError('msg.master.tries', {}, { reason: 'tries' });
+  if (r.reason === 'needsAuth') return userError('msg.master.needProof', {}, { reason: 'needsAuth' });
+  if (r.reason === 'noCode') return userError('msg.master.noRecovery', {}, { reason: 'noRecovery' });
+  if (r.reason === 'noKey') return userError('msg.master.codeNoKey', {}, { reason: 'noKey' });
   if (r.until) return userError(r.reason === 'wrong' ? (code ? 'msg.master.codeWrongWait' : 'msg.master.wrongWait') : 'msg.master.wait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }, { reason: 'wait', until: r.until });
   // nextWait: the seconds the vault will make the user wait once the free tries are gone (absent in an older vault).
   const next = Number.isFinite(r.nextWait) && r.nextWait > 0 ? r.nextWait : 0;
@@ -50,6 +54,7 @@ export function openMaster(home, secret, { mirror = null, log = () => {}, notice
   try { const back = restoreMissing(dir, mirror); if (back.length) log(`secretos: ${back.join(', ')} recuperados de la copia fuera de core`); } catch (error) { log(`secretos: copia: ${error.message}`); }
   const master = new Master(dir, { secret });
   master.onChange = () => { try { mirrorTo(dir, mirror); } catch (error) { log(`secretos: copia: ${error.message}`); } };
+  master.onStale = (what) => { log(`secretos: envolturas de otra clave de datos quitadas (${what.join(', ')})`); notice(tr('msg.master.staleWraps')); };
   master.onFails = (channel, n) => { log(`contraseña maestra: ${n} intentos incorrectos seguidos (${channel})`); notice(tr('msg.master.failsNotice', { n, where: tr(WHERE[channel] ?? WHERE.pc) })); };
   try { if (!master.openWithMachine()) log('secretos: este PC no puede abrirlos solo; hace falta la contraseña maestra'); } catch (error) { log(`secretos: ${error.message}`); }
   try { master.onChange(); } catch { /* next change */ }
@@ -123,6 +128,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   const password = (v) => (typeof v === 'string' ? v : '');
   const connector = (name) => { const n = str(name, 'conector', 40); const s = (ctx.config.mcpServers ?? []).find((x) => x.name === n); if (!s) throw userError('msg.master.noConnector', { name: n }); return s; };
   const machineSecret = () => machineKeys().backup; // this PC's backup key (the recovery wrap)
+  // The secrets that go on under a new data key: not the phones' keys (every phone is unlinked), nor what the old key authenticated.
+  const keepOnRekey = (id) => id !== 'remote_keys' && !HELLO_ID_PREFIXES.some((x) => id === x || id.startsWith(`${x}/`));
   // Every phone and browser goes (they link again with the new password); this PC's keys for them are read again.
   const unlinkAll = (why) => {
     let n = 0;
@@ -143,11 +150,12 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     // canForget: «He olvidado la contraseña» can keep the secrets (this PC opened them and has a recovery code).
     'master.state': () => {
       const m = master();
-      let recovery = false; try { recovery = hasRecovery(ctx.home, machineSecret()); } catch { recovery = false; }
+      let recovery = false; try { recovery = K.hasRecovery(ctx.home, machineSecret()); } catch { recovery = false; }
       // upgraded: the data came from Orb 3.7 (the first start after upgrading asks for the password with its own words).
       const screenLocked = screen && m.hasPassword();
       // lockedAt / lockReason only while the screen is locked; this PC's window only (master.state is never a phone's call).
-      return { ...m.state(), canForget: m.unlocked() && recovery, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, screenLocked, ...(screenLocked ? { lockedAt, lockReason } : {}), upgraded: Boolean(board.setting(DONE_AT)) };
+      const st = m.state();
+      return { ...st, canForget: (m.unlocked() && recovery) || st.hasCode === true, minLength: MIN_LENGTH, unlockMinutes: UNLOCK_MS / 60_000, screenLocked, ...(screenLocked ? { lockedAt, lockReason } : {}), upgraded: Boolean(board.setting(DONE_AT)) };
     },
     // The first one (the welcome, or the first start after upgrading from 3.7): no current one to ask for. → a token (the window is unlocked).
     'master.create': async ({ password: p }) => {
@@ -159,10 +167,12 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       return m.issue();
     },
     // purpose: one of FRESH_PURPOSES (an action that asks every time): a token for that action only.
-    'master.unlock': async ({ password: p, purpose }) => {
+    // code: the generated recovery code instead of the password (it opens the data key by itself, on any PC).
+    'master.unlock': async ({ password: p, code, purpose }) => {
       const m = master(); const wasLocked = !m.unlocked();
-      const r = await m.verify(password(p), 'pc');
-      if (!r.ok) throw refused(r);
+      const byCode = typeof code === 'string' && code !== '' && !password(p);
+      let r; try { r = byCode ? await m.unlockWithCode(code, K.recoveryFile(ctx.home)) : await m.verify(password(p), 'pc'); } catch (error) { throw asUser(error); }
+      if (!r.ok) throw refused(r, { code: byCode });
       if (wasLocked) { log('secretos: abiertos con la contraseña maestra'); opened(); }
       if (screen) log('pantalla de bloqueo: desbloqueada');
       screenOff();
@@ -191,22 +201,61 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       emit('master:locked', {}); screenOff();
       return master().issue();
     },
-    // «He olvidado la contraseña»: the backups' recovery code proves it is the owner (with the same waits as a password).
-    // The secrets stay, encrypted again with a new data key; this PC's keys for the phones are new and every phone goes.
+    // «He olvidado la contraseña»: the recovery code proves it is the owner (the vault checks it, with the same waits as a
+    // password). A generated code opens the data key: the secrets, this PC's keys for the phones and every phone stay. A
+    // phrase the user chose makes a new data key (the secrets are encrypted again, every phone goes), as it always did.
     'master.forgot': async ({ code, password: p, confirm }) => {
       if (confirm !== true) throw userError('msg.master.confirmForgot');
-      const m = master();
-      let next; try { if (!m.unlocked()) throw new MasterError('locked'); next = checkPassword(password(p)); } catch (error) { throw asUser(error); }
-      if (isRecoveryCode(ctx.home, machineSecret(), '') === null) throw userError('msg.master.noRecovery', {}, { reason: 'noRecovery' });
-      const r = await m.attempt('recovery', () => isRecoveryCode(ctx.home, machineSecret(), typeof code === 'string' ? code : '') === true);
+      const m = master(); const wasLocked = !m.unlocked();
+      let next; try { next = checkPassword(password(p)); } catch (error) { throw asUser(error); }
+      let r; try { r = await m.forgot(next, { code: typeof code === 'string' ? code : '', copy: K.recoveryFile(ctx.home), keep: keepOnRekey }); } catch (error) { throw asUser(error); }
       if (!r.ok) throw refused(r, { code: true });
-      try { await m.forgot(next, { keep: (id) => id !== 'remote_keys' }); } catch (error) { throw asUser(error); }
-      const unlinked = unlinkAll('olvido');
-      log(`contraseña maestra nueva con el código de recuperación (clave de datos nueva); ${unlinked} dispositivo(s) desenlazados`);
-      board.notice(tr('msg.master.forgotDone', { n: unlinked }), 'warning');
+      let unlinked = 0;
+      if (r.rotated) {
+        unlinked = unlinkAll('olvido');
+        log(`contraseña maestra nueva con el código de recuperación (clave de datos nueva); ${unlinked} dispositivo(s) desenlazados`);
+        board.notice(tr('msg.master.forgotDone', { n: unlinked }), 'warning');
+      } else {
+        log('contraseña maestra nueva con el código de recuperación (misma clave de datos)');
+        board.notice(tr('msg.master.forgotKept'), 'warning');
+      }
       locked('contraseña nueva');
       emit('master:locked', {}); screenOff();
+      if (wasLocked) opened();
       return { ...m.issue(), unlinked };
+    },
+    // The recovery code: a new generated one is made and shown once (the user writes it down); a phrase of the user's own
+    // takes its place for the copies only. Asked for with the password or the code now in force (current), both checked in
+    // the vault: a token proves nothing here, because the code opens the vault. rekey (default: yes when a code is replaced)
+    // also makes a new data key: the old code, and every copy from before it, stop opening what is kept from now on.
+    // confirm: the phrase will take the generated code's place (the vault's wrap goes).
+    'backup.recovery': async ({ code, password: p, current, rekey, confirm } = {}) => {
+      const m = master();
+      const chosen = code != null && code !== '';
+      const value = chosen ? String(code) : K.newRecoveryCode();
+      if (value.length < 12 || value.length > 200) throw userError('data.backup.err.shortPassphrase');
+      const secret = machineSecret();
+      const hadCode = m.state().hasCode === true;
+      const replaces = hadCode || K.hasRecovery(ctx.home, secret);
+      if (chosen && hadCode && confirm !== true) throw userError('msg.master.phraseDropsCode', {}, { reason: 'dropsCode' });
+      const wantRekey = !chosen && (typeof rekey === 'boolean' ? rekey : replaces);
+      let r;
+      try {
+        r = await m.setCode({ code: chosen ? '' : value, drop: chosen, password: typeof p === 'string' ? p : '', current: typeof current === 'string' ? current : '', copy: K.recoveryFile(ctx.home), rekey: wantRekey, keep: keepOnRekey });
+      } catch (error) { throw asUser(error); }
+      if (!r.ok) throw refused(r, { code: !password(p) });
+      K.setRecovery(ctx.home, secret, value);
+      const at = new Date().toISOString();
+      if (r.rekeyed) {
+        const unlinked = unlinkAll('código nuevo');
+        log(`código de recuperación nuevo con clave de datos nueva; ${unlinked} dispositivo(s) desenlazados`);
+        board.notice(tr('msg.master.codeRekeyed', { n: unlinked }), 'warning');
+        emit('master:locked', {});
+        return { code: value, at, rekeyed: true, unlinked, ...m.issue() };
+      }
+      log(chosen ? 'código de recuperación: frase propia (el código ya no abre la bóveda)' : 'código de recuperación nuevo (misma clave de datos)');
+      // Only a replaced code can still be out there: copies made before keep its wrap, and with them the old code opens what they hold.
+      return { code: chosen ? null : value, at, rekeyed: false, ...(!chosen && replaces ? { warn: tr('msg.master.codeKeptKey') } : {}) };
     },
     // «Borrar secretos y empezar de cero» (confirm: the user read what it does): without the recovery code, or on a PC that
     // cannot open them. The secrets go (here and in the copy outside core; never the backups), every phone is unlinked and

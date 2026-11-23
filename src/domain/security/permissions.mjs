@@ -108,16 +108,17 @@ export const METHODS = Object.freeze({
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
 
 // what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api/master.mjs):
-// restoring a backup, checking one or making a new recovery code (the code opens the backups, and a check would try codes),
+// restoring a backup and checking one (a check would try codes),
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (the app asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
 // «Cosas que nadie toca», deleting a project (its folder; every time, see FRESH_UNLOCK) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
-// with. Changing the password asks for the current one instead.
+// with. Changing the password asks for the current one instead, and so does making a new recovery code (backup.recovery: the
+// password or the current code, checked in the vault; a token is no proof there).
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'backup.newKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.previousKey', 'backup.newKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid', 'mcpExt.createToken', 'mcpExt.setProjects',
   // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
   // see freshPurpose) and everything about the rails asks for the password every time
@@ -220,3 +221,5 @@ export function mustOwnTask(board, who, id) {
   if (!ownsTask(board, who, id)) throw Object.assign(new Error(tr('msg.authz.notYourTask', { id })), { userFacing: true });
   return true;
 }
+// The vault's own entries that a data key authenticates and a new one never carries over (Hello's public key and the phones' approval keys).
+export const HELLO_ID_PREFIXES = Object.freeze(['master/hello', 'master/approve']);
