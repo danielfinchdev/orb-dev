@@ -113,6 +113,10 @@ pub(crate) fn unlock(req: &Value, h: &Handle, now: u64) -> Answer {
         Source::Vault(Some(key)) => h.vault.lock().unwrap().open_with_code(key),
         Source::Vault(None) => {}
         Source::Copy => {
+          // A phrase the copies know is no authority here, as in codeSet: only a generated code stands for the password.
+          if !p.generated {
+            return Ok(json!({ "ok": false, "reason": "wrong" }));
+          }
           // The copies' wrap proves the code but opens nothing here: with the data key closed there is nothing to unlock.
           if !h.vault.lock().unwrap().unlocked() {
             return Ok(json!({ "ok": false, "reason": "noKey" }));

@@ -352,3 +352,14 @@ fn a_code_replaced_by_an_older_version_does_not_leave_its_wrap_working() {
   assert_eq!(read(&dir, CODE)["copyId"], read(&dir.clone(), "copia-clave.json")["kdf"]["salt"], "and the code file is written again for it");
   tidy(&[&dir]);
 }
+
+#[test]
+fn a_phrase_known_only_to_the_copies_does_not_unlock() {
+  let (h, dir, fake) = pc("phrase-unlock", 1, None);
+  let copy = dir.join("copia-clave.json");
+  write_copy_wrap(&copy, 1, "mi frase propia de recuperacion");
+  let r = run("codeUnlock", json!({ "code": "mi frase propia de recuperacion", "copy": copy.display().to_string() }), &h, &fake).unwrap();
+  assert_eq!(r["reason"], json!("wrong"));
+  assert!(r.get("ok") != Some(&json!(true)));
+  tidy(&[&dir]);
+}
