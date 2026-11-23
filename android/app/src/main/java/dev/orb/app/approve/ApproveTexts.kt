@@ -17,9 +17,9 @@ object ApproveTexts {
     const val DONE_TITLE = "Aprobado"
     const val DONE_BODY = "Ya puedes seguir en el PC."
     const val REREGISTER_TITLE = "Vuelve a permitir las aprobaciones desde el PC"
-    const val REREGISTER_BODY = "Este móvil no puede aprobar ahora (se añadió una huella o se perdió la clave). En el PC: Ajustes › Dispositivos › Permitir que apruebe."
+    const val REREGISTER_BODY = "Este móvil ya no puede aprobar: cambió su huella o su cara. En el PC, ve a Ajustes › Dispositivos y elige «Permitir que apruebe»."
 
-    const val NO_STRONG = "Hace falta una huella o una cara de seguridad alta (clase 3) en este móvil."
+    const val NO_STRONG = "Este móvil no tiene una huella o una cara de seguridad alta, así que no puede aprobar."
     const val NOT_RECOGNIZED = "No se reconoció. Prueba otra vez."
     const val BLOCKED = "Demasiados intentos. Espera un momento."
     const val FAILED = "No se pudo comprobar. Inténtalo otra vez."

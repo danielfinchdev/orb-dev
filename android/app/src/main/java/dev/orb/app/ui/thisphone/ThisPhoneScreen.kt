@@ -162,6 +162,8 @@ fun ThisPhoneScreen(
                             ThisPhoneTexts.LINK_TEST, subtitle = ThisPhoneTexts.LINK_TEST_HINT, onClick = onLinkTest,
                             trailing = { Chevron() },
                         )
+                        // Only the PC allows a phone to approve; here it is just said whether this one may.
+                        OrbSettingRow(ThisPhoneTexts.approveTitle(), subtitle = ThisPhoneTexts.approveLine(state.approve))
                         // What the person can change about Orb in Android, shown as the system has it right now.
                         OrbSettingRow(
                             ThisPhoneTexts.CAMERA, subtitle = when (state.camera) {

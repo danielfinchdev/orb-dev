@@ -9,6 +9,7 @@ import dev.orb.app.link.net.PathError
 import dev.orb.app.link.net.PathStatus
 import dev.orb.app.link.net.PcEntry
 import dev.orb.app.link.net.pcDisplayName
+import dev.orb.app.approve.ApproveStatus
 import dev.orb.app.lock.AuthCapability
 import dev.orb.app.lock.AuthResult
 import dev.orb.app.lock.LockDelay
@@ -78,6 +79,9 @@ interface ThisPhoneBackend {
     val lock: StateFlow<LockSettings>
     fun lockCapability(): AuthCapability
 
+    /** Whether this phone may approve the PC's sensitive actions (the PC registers it; the phone only reports). */
+    fun approveStatus(): ApproveStatus = ApproveStatus.NotYet
+
     /** Turns the lock on after the system authenticated the person right now. */
     fun enableLock(onDone: (AuthResult) -> Unit)
     fun disableLock()
@@ -119,6 +123,7 @@ class RuntimeThisPhoneBackend(private val container: AppContainer) : ThisPhoneBa
         container.runtime.value?.client?.me()?.map { } ?: Result.failure(IllegalStateException("not linked"))
     override val lock get() = container.lock.settings
     override fun lockCapability() = container.lock.capability()
+    override fun approveStatus() = container.approver.status()
     override fun enableLock(onDone: (AuthResult) -> Unit) = container.lock.enable(onDone)
     override fun disableLock() = container.lock.disable()
     override fun setLockDelay(delay: LockDelay) = container.lock.setDelay(delay)
@@ -162,6 +167,7 @@ data class ThisPhoneState(
     /** False when the phone has neither biometrics nor a PIN: the lock cannot be turned on. */
     val lockAvailable: Boolean = true,
     val lockMessage: String? = null,
+    val approve: ApproveStatus = ApproveStatus.NotYet,
 ) {
     val online: Boolean get() = connection is ConnectionState.Online
 }
@@ -180,6 +186,7 @@ class ThisPhoneViewModel(
     private val measuring = MutableStateFlow(false)
     private val camera = MutableStateFlow(backend.cameraState())
     private val battery = MutableStateFlow(backend.batteryRestricted())
+    private val approve = MutableStateFlow(backend.approveStatus())
 
     val state: StateFlow<ThisPhoneState> = combine(
         backend.pcName, backend.connection, backend.settings, backend.noticeStatus, combine(busy, done) { b, d -> b to d },
@@ -195,8 +202,8 @@ class ThisPhoneViewModel(
         st.copy(paths = ThisPhoneTexts.pathLines(p, e, wallClock()))
     }.combine(combine(latency, measuring) { l, m -> l to m }) { st, (l, m) ->
         st.copy(latencyMs = l.takeIf { st.online }, measuring = m)
-    }.combine(combine(camera, battery) { c, b -> c to b }) { st, (c, b) ->
-        st.copy(camera = c, batteryRestricted = b)
+    }.combine(combine(camera, battery, approve) { c, b, a -> Triple(c, b, a) }) { st, (c, b, a) ->
+        st.copy(camera = c, batteryRestricted = b, approve = a)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ThisPhoneState())
 
     /**
@@ -250,6 +257,7 @@ class ThisPhoneViewModel(
         backend.refreshPermissions()
         camera.value = backend.cameraState()
         battery.value = backend.batteryRestricted()
+        approve.value = backend.approveStatus()
         refreshLock()
     }
 
@@ -306,6 +314,27 @@ object ThisPhoneTexts {
     const val ALLOW = "Permitir"
     const val OPEN_SETTINGS = "Abrir ajustes"
     const val SETTINGS = "Ajustes"
+    const val APPROVE = "Aprobar acciones del PC"
+    const val APPROVE_ALLOWED = "Este móvil puede aprobar acciones del PC con tu huella o tu cara."
+    const val APPROVE_AGAIN = "Vuelve a permitir las aprobaciones desde el PC: Ajustes › Dispositivos."
+    const val APPROVE_NO_STRONG = "Tu móvil no tiene huella o cara de seguridad alta, así que no puede aprobar acciones del PC."
+    const val APPROVE_NOT_YET = "Para aprobar acciones del PC con tu huella, permítelo en el PC: Ajustes › Dispositivos."
+    const val APPROVE_ALLOWED_EN = "This phone can approve PC actions with your fingerprint or face."
+    const val APPROVE_AGAIN_EN = "Allow approvals again from your PC: Settings › Devices."
+    const val APPROVE_NO_STRONG_EN = "Your phone has no strong fingerprint or face unlock, so it cannot approve PC actions."
+    const val APPROVE_NOT_YET_EN = "To approve PC actions with your fingerprint, allow it on your PC: Settings › Devices."
+
+    /** The title and the line of the approvals row; they follow the phone's language (Spanish by default). */
+    fun approveTitle(language: String = Locale.getDefault().language) = if (language == "en") "Approve PC actions" else APPROVE
+    fun approveLine(s: ApproveStatus, language: String = Locale.getDefault().language): String {
+        val en = language == "en"
+        return when (s) {
+            ApproveStatus.Allowed -> if (en) APPROVE_ALLOWED_EN else APPROVE_ALLOWED
+            ApproveStatus.NeedsAgain -> if (en) APPROVE_AGAIN_EN else APPROVE_AGAIN
+            ApproveStatus.NoStrong -> if (en) APPROVE_NO_STRONG_EN else APPROVE_NO_STRONG
+            ApproveStatus.NotYet -> if (en) APPROVE_NOT_YET_EN else APPROVE_NOT_YET
+        }
+    }
     const val CAMERA = "Cámara"
     const val CAMERA_ON = "Permitida. Orb solo la usa para leer el QR de tu PC."
     const val CAMERA_OFF = "No permitida. Sin ella no se puede escanear el QR: escribe el código a mano o pega el enlace. Orb la pide al abrir el escáner."
