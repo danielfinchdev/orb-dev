@@ -774,9 +774,7 @@ ${body}`;
     prepared.then(async (p) => { if (direct && !run.stopped) await snapshotBeforeTurn(s.cwd, id, alive, { mark: shown?.id }); return p; }).then(async (p) => {
       if (run.stopped) return { final: '', text: '', isError: true };
       const held = await this.identityGate(id, acc, entry); // a process of another login never gets the message
-      return held ?? entry.live.send({ text: p.text ? `${body}
-
-${p.text}` : body, images: p.images });
+      return held ?? entry.live.send({ text: p.text ? `${body}\n\n${p.text}` : body, images: p.images });
     }).then((result) => {
       clearInterval(timer);
       entry.lastUsed = Date.now();
