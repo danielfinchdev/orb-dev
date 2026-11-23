@@ -54,7 +54,7 @@ test('the master password and the recovery key keep their calls and their warnin
   assert.match(setup, /<MasterCreate wizard onDone=\{afterMaster\} onBack=\{\(\) => setStep\('tema'\)\} \/>/);
   const master = read('src/ui/views/master.jsx');
   assert.match(master, /call\('master\.create', \{ password: v\.next \}\)/);
-  assert.match(master, /type="password" autoComplete="new-password"/);
+  assert.match(read('src/ui/views/new-password.jsx'), /type="password" autoComplete="new-password"/);
   assert.ok(master.includes("<WizardPage step={wizard ? 'maestra' : undefined}>"));
   assert.doesNotMatch(read('src/ui/app.css'), /wz-master/);
   for (const key of ['master.warnTitle', 'master.warnBody', 'master.ack', 'master.protects', 'master.match']) assert.ok(master.includes(key), key);
