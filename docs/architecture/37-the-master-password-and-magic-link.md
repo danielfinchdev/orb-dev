@@ -220,3 +220,23 @@ from scratch; phones of before 3.8 unlinked once; the guard with environment var
   `newKeyDone` («Orb has started with a new key. The old one is kept…») and `newKeyFailed` join the existing
   `previousOpens`, `previousBack`, `previousNew` and `previousFailed`. A recovery code made with the key that is no longer
   in use stops opening backups (`switchedKey`); a notice (`sys.engine.recoveryOtherKey`) says so.
+
+## A phone's fingerprint approves sensitive actions (3.8.10)
+
+What shows, saves or hands out a secret asks for the password, or for the approval of a registered phone. Code:
+`src-tauri/vault/src/approve.rs` (the checks), `src/domain/security/approve.mjs` (the text both sides agree on),
+`src/engine/api/master.mjs` (`approve.*`, `checkUnlock`) and `android/.../approve/` (the phone).
+
+- **The key.** The phone makes an ECDSA P-256 key in its Keystore that only a strong biometric (class 3, no PIN) can use,
+  and only when this PC registers it (Ajustes › Dispositivos, with the password or code typed there and the phone's name in
+  sight). Registering is a challenge signed with the new key, so the PC knows it is there. The public half is kept in
+  `secretos.json` as `master/approve/<deviceId>`. A new fingerprint kills the key: the phone never makes another by itself.
+- **What is signed.** One challenge per approval, drawn in Rust (nonce of 32 bytes, one use, two minutes), over
+  `len32(field)` + field for: `"orb-approve-v1"`, action, SHA-256 of the parameters' summary, nonce, orbId, deviceId, this PC's
+  public key and the expiry. The phone shows the action from those bytes and checks that the summary it shows hashes to the
+  signed hash. A valid signature spends the challenge and gives a one-use token of `mobile` strength whose purpose is
+  `approve:<action>:<hash>`, so it opens that call with those parameters and nothing else (`check` takes it only by name).
+- **Unlinking** a phone (`link.revoke`, `remote.revoke`, `unlinkAll`), `rotate`, `reset` and `wipe_all` delete its entry.
+- **«Lo he olvidado todo»** (no password, no code): Hello's token with the purpose `rebuild-master`, then the registered
+  phone signs `master.rebuild`, then a new password and a new generated code are made in one request (`rebuildFinish`). The
+  data key stays, so no phone is unlinked. With no registered phone nothing is made.

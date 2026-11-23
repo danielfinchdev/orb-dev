@@ -121,6 +121,9 @@ sealed interface AuthResult {
 
     /** Authenticated through a [AuthRequest.cipher]: the system unlocked that cipher for one operation. */
     class Crypto(val cipher: Cipher) : AuthResult
+
+    /** Authenticated through a [AuthRequest.signature]: the system unlocked that signature for one signing. */
+    class Signed(val signature: java.security.Signature) : AuthResult
     data object Cancelled : AuthResult
 
     /** Too many wrong tries: the system blocks the sensor for a while. Nothing is lost. */
@@ -132,12 +135,26 @@ sealed interface AuthResult {
     data object NothingSet : AuthResult
 }
 
-/** [cipher]: when set, the prompt is bound to it (a `CryptoObject`) and the answer is [AuthResult.Crypto]. */
-data class AuthRequest(val title: String, val subtitle: String?, val credentialOnly: Boolean = false, val cipher: Cipher? = null)
+/**
+ * [cipher]: when set, the prompt is bound to it (a `CryptoObject`) and the answer is [AuthResult.Crypto].
+ * [signature]: the same for a signing key, answered by [AuthResult.Signed]; it takes strong biometrics only (no PIN), so the prompt
+ * needs its own [negative] button text.
+ */
+data class AuthRequest(
+    val title: String,
+    val subtitle: String?,
+    val credentialOnly: Boolean = false,
+    val cipher: Cipher? = null,
+    val signature: java.security.Signature? = null,
+    val negative: String? = null,
+)
 
 /** The system's authentication, behind an interface so the lock can be tested without Android. */
 interface Authenticator {
     fun capability(): AuthCapability
+
+    /** A strong (class 3) fingerprint or face is enrolled: the only thing that may approve the PC's sensitive actions. */
+    fun strongBiometric(): Boolean = false
     fun authenticate(request: AuthRequest, onResult: (AuthResult) -> Unit)
 }
 
@@ -220,7 +237,7 @@ class AppLock(
     private fun report(result: AuthResult) {
         when (result) {
             AuthResult.Blocked -> _notice.value = LockNotice.Blocked
-            AuthResult.Failed, AuthResult.NothingSet, is AuthResult.Crypto -> _notice.value = LockNotice.Failed
+            AuthResult.Failed, AuthResult.NothingSet, is AuthResult.Crypto, is AuthResult.Signed -> _notice.value = LockNotice.Failed
             AuthResult.NotRecognized -> _notice.value = LockNotice.NotRecognized
             AuthResult.Cancelled, AuthResult.Success -> Unit
         }

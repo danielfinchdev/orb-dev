@@ -11,7 +11,17 @@ import { machineKeys } from '../../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../../domain/security/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../../domain/security/connector-secrets.mjs';
 import { agentKeyState, saveAgentKey } from '../../domain/security/agent-keys.mjs';
-import { needsUnlock, needsPassword, freshPurpose, FRESH_PURPOSES, HELLO_PURPOSES, HELLO_ENABLE_PURPOSE, RULE_TARGET_METHODS, RAILS_PURPOSE } from '../../domain/security/permissions.mjs';
+import { needsUnlock, needsPassword, freshPurpose, FRESH_PURPOSES, HELLO_PURPOSES, HELLO_ENABLE_PURPOSE, RULE_TARGET_METHODS, RAILS_PURPOSE, mobileMayApprove, APPROVE_REGISTER_PURPOSE, REBUILD_PURPOSE } from '../../domain/security/permissions.mjs';
+import { approveSummary, approvePurpose, SUMMARY_MAX } from '../../domain/security/approve.mjs';
+import crypto from 'node:crypto';
+
+// The key that keeps the secrets in an approval's summary from being guessed: made once, kept in the vault, never sent to a phone.
+function approveKey() {
+  const m = ctx.master;
+  let k = m.get('approve_summary_key');
+  if (typeof k !== 'string' || k.length < 32) { k = crypto.randomBytes(32).toString('hex'); m.set('approve_summary_key', k); }
+  return Buffer.from(k, 'hex');
+}
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
 import * as K from '../../domain/data/backup.mjs';
@@ -113,8 +123,13 @@ export function checkUnlock(method, params, { defer = false } = {}) {
   const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
   const purpose = freshPurpose(method, params, { ...facts, current: ctx.config });
   // Windows Hello's token is enough everywhere but where a secret is shown, saved or given away (needsPassword).
-  // (The phone's one-use approval will be the other proof a password-only action takes: it plugs in here, beside the password's.)
   const hello = !needsPassword(method, params, ctx.config);
+  // The phone's one-use approval is the other proof a password-only action takes: it is good for this action with these very
+  // parameters (the vault holds the purpose the phone signed for) and is spent here.
+  if (!hello && typeof params?.unlock === 'string' && m.tokenStrength(params.unlock) === 'mobile') {
+    if (!mobileMayApprove(method, params, ctx.config) || !m.checkToken(params.unlock, approvePurpose(method, params, approveKey()), { consume: true, mobile: true })) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+    return defer ? { unlocked: 'mobile', settle: () => {} } : true;
+  }
   // A Hello token handed to a password-only action is told apart, so the window asks for the password and not for Hello again.
   const needed = () => (!hello && typeof params?.unlock === 'string' && m.tokenStrength(params.unlock) === 'hello'
     ? userError('msg.master.needPassword', {}, { reason: 'password' })
@@ -151,7 +166,39 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   const unlinkAll = (why) => {
     let n = 0;
     try { n = board.one('SELECT COUNT(*) AS n FROM devices').n; if (remoteRef.current) remoteRef.current.revokeAll(); else board.run('DELETE FROM devices'); } catch (error) { log(`${why}: móviles: ${error.message}`); }
+    try { master().approveForgetAll(); } catch (error) { log(`${why}: aprobaciones del móvil: ${error.message}`); }
     return n;
+  };
+
+  // ---- a phone's fingerprint (the vault checks every signature: src-tauri/vault/src/approve.rs). This PC asks and waits; the phone answers.
+  // What the window waits for, by request: { nonce, device, kind: 'approve' | 'enroll' | 'rebuild', state, until, token? }.
+  const requests = new Map();
+  const orbId = () => K.orbIdOf(ctx.home).orbId;
+  const sweepRequests = () => { for (const [id, r] of requests) if (r.until <= Date.now()) { requests.delete(id); remoteRef.current?.stopAsking(r.device); } };
+  const phones = () => board.all("SELECT id, name, last_seen FROM devices WHERE public_key IS NOT NULL AND kind = 'phone' ORDER BY last_seen DESC");
+  // The phone to ask: the one named, or else the registered one seen last.
+  const registeredPhone = (id) => {
+    const reg = new Set(master().approveList().map((r) => r.id));
+    const list = phones().filter((p) => reg.has(p.id));
+    const pick = id == null ? list[0] : list.find((p) => p.id === String(id));
+    if (!pick) throw userError('msg.approve.none', {}, { reason: 'none' });
+    return pick;
+  };
+  const refusedApproval = (r) => userError(r?.reason === 'big' ? 'msg.approve.big' : r?.reason === 'noKeys' ? 'msg.approve.noKeys' : 'msg.approve.none', {}, { reason: r?.reason ?? 'none' });
+  // The challenge goes to the phone as a sealed event; the window gets an id to poll.
+  const startRequest = (kind, phone, ch) => {
+    sweepRequests();
+    const id = crypto.randomUUID();
+    requests.set(id, { nonce: ch.nonce, device: phone.id, kind, state: 'waiting', until: ch.until });
+    const delivered = remoteRef.current?.sendTo(phone.id, { e: 'approve', p: { kind, nonce: ch.nonce, payload: ch.payload, summary: ch.summary, until: ch.until, deviceId: phone.id } }, { until: ch.until }) ?? 0;
+    return { id, device: phone.name, delivered: delivered > 0, until: ch.until };
+  };
+  // Who answers: the linked phone itself. This PC's own window may name it (the vault checks the signature, which only the phone's key makes).
+  const answeringDevice = (principal, params) => (principal?.channel === 'phone' ? principal.device : principal?.channel === 'desktop' && typeof params?.device === 'string' ? params.device : null);
+  const answered = (device, nonce, patch) => {
+    remoteRef.current?.stopAsking(device);
+    const r = [...requests.values()].find((x) => x.nonce === nonce && x.device === device);
+    if (r) Object.assign(r, patch);
   };
   // Orb's own lock screen (the owner's decision): after the minutes of Ajustes › Datos without use, when
   // Windows locks or the PC sleeps (Rust's power.rs calls master.lock), or by hand, the window shows only the password.
@@ -218,7 +265,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
     // password. → { ok: true, unlock, until, strength: 'hello' }.
     'master.unlockHello': async ({ purpose } = {}) => {
       const m = master();
-      if (purpose != null && !HELLO_PURPOSES.includes(purpose)) throw helloRefused({ reason: 'purpose' });
+      // REBUILD_PURPOSE is the first step of «Lo he olvidado todo»: its token starts nothing but master.rebuildStart.
+      if (purpose != null && purpose !== REBUILD_PURPOSE && !HELLO_PURPOSES.includes(purpose)) throw helloRefused({ reason: 'purpose' });
       if (!m.hasPassword()) throw userError(m.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
       let r; try { r = await m.helloUnlock(K.orbIdOf(ctx.home).orbId, purpose ?? null); } catch (error) { throw asUser(error); }
       if (!r.ok) throw helloRefused(r);
@@ -231,6 +279,120 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       if (!r?.ok) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
       log('Windows Hello desactivado');
       return { ok: true };
+    },
+    // ---- a phone approves sensitive actions with its fingerprint
+    // The linked phones and whether each may approve; a registration whose phone was unlinked is dropped on the way.
+    'approve.devices': () => {
+      const m = master();
+      const reg = new Map(m.approveList().map((r) => [r.id, r]));
+      for (const id of [...reg.keys()]) if (!board.one('SELECT 1 AS x FROM devices WHERE id = ?', id)) { try { m.approveForget(id); } catch { /* next time */ } reg.delete(id); }
+      return { phones: phones().map((p) => ({ id: p.id, name: p.name, registered: reg.has(p.id), at: reg.get(p.id)?.at ?? null })) };
+    },
+    // Registering a phone takes the password or the recovery code typed now, with its name in sight; the phone then makes its key
+    // and signs the first challenge with its fingerprint. → { id } to poll.
+    'approve.register': async ({ id, password: p, code }) => {
+      const m = master();
+      const phone = phones().find((x) => x.id === String(id));
+      if (!phone) throw userError('msg.approve.notPhone', {}, { reason: 'notPhone' });
+      const byCode = typeof code === 'string' && code !== '' && !password(p);
+      let r; try { r = byCode ? await m.unlockWithCode(code, K.recoveryFile(ctx.home)) : await m.verify(password(p), 'pc'); } catch (error) { throw asUser(error); }
+      if (!r.ok) throw refused(r, { code: byCode });
+      let ch; try { ch = m.approveBegin({ token: m.issue(APPROVE_REGISTER_PURPOSE).unlock, orbId: orbId(), deviceId: phone.id, name: phone.name }); } catch (error) { throw asUser(error); }
+      if (!ch.ok) throw refusedApproval(ch);
+      log(`aprobaciones del móvil: registro pedido a «${phone.name}»`);
+      return startRequest('enroll', phone, ch);
+    },
+    'approve.unregister': ({ id }) => {
+      master().approveForget(String(id)); remoteRef.current?.stopAsking(String(id));
+      for (const [k, r] of requests) if (r.device === String(id)) requests.delete(k);
+      log('aprobaciones del móvil: quitadas');
+      return { ok: true };
+    },
+    // Asks the phone to approve `method` with `params` (what a password-only action would take). The token that comes back is for
+    // that call and nothing else: poll it, then make the call with it as `unlock`.
+    'approve.request': ({ method, params, device }) => {
+      const m = master();
+      if (typeof method !== 'string' || !params || typeof params !== 'object' || Array.isArray(params) || !mobileMayApprove(method, params, ctx.config)) throw userError('msg.approve.badMethod', {}, { reason: 'method' });
+      const summary = approveSummary(params, approveKey());
+      if (summary.length > SUMMARY_MAX) throw userError('msg.approve.big', {}, { reason: 'big' });
+      const phone = registeredPhone(device);
+      let ch; try { ch = m.approveAsk({ orbId: orbId(), deviceId: phone.id, action: method, summary }); } catch (error) { throw asUser(error); }
+      if (!ch.ok) throw refusedApproval(ch);
+      return startRequest('approve', phone, ch);
+    },
+    // → { state: 'waiting' | 'done' | 'refused' | 'expired' | 'gone', unlock?, until?, strength? }. A token is handed over once.
+    'approve.poll': ({ id }) => {
+      const r = requests.get(String(id));
+      if (!r) return { state: 'gone' };
+      // A phone unlinked or removed since it answered: what it made is not handed over.
+      if (!master().approveList().some((x) => x.id === r.device) && r.kind !== 'enroll') { requests.delete(String(id)); return { state: 'gone' }; }
+      if (r.state === 'waiting' && r.until <= Date.now()) { requests.delete(String(id)); remoteRef.current?.stopAsking(r.device); return { state: 'expired' }; }
+      if (r.state === 'refused') { requests.delete(String(id)); return { state: 'refused' }; }
+      if (r.state === 'done' && r.kind !== 'rebuild') { requests.delete(String(id)); return { state: 'done', ...(r.token ? { unlock: r.token, until: r.tokenUntil, strength: 'mobile' } : {}) }; }
+      return { state: r.state };
+    },
+    // The phone's side: its public key and the first signature (it proves the key is there, behind the fingerprint).
+    'approve.enroll': ({ nonce, pub, sig, ...rest }, principal) => {
+      const device = answeringDevice(principal, rest);
+      if (!device) throw userError('msg.approve.badMethod', {}, { reason: 'method' });
+      const r = master().approveEnroll(device, str(nonce, 'nonce', 64), str(pub, 'clave', 200), str(sig, 'firma', 200));
+      if (!r.ok) { answered(device, nonce, { state: 'refused' }); return { ok: false, reason: r.reason }; }
+      answered(device, nonce, { state: 'done' });
+      log(`aprobaciones del móvil: «${r.name}» puede aprobar`);
+      board.notice(tr('msg.approve.registered', { name: r.name }), 'info');
+      return { ok: true, orbId: orbId() };
+    },
+    // The phone's answer to an approval (or to the rebuild's step): only the signature; the token never goes back to the phone.
+    'approve.respond': ({ nonce, sig, ...rest }, principal) => {
+      const device = answeringDevice(principal, rest);
+      if (!device) throw userError('msg.approve.badMethod', {}, { reason: 'method' });
+      const r = master().approveSign(device, str(nonce, 'nonce', 64), str(sig, 'firma', 200));
+      if (!r.ok) { answered(device, nonce, { state: 'refused' }); return { ok: false, reason: r.reason }; }
+      answered(device, nonce, { state: 'done', ...(r.unlock ? { token: r.unlock, tokenUntil: r.until } : {}) });
+      log(r.kind === 'rebuild' ? 'aprobaciones del móvil: aprobado el último paso de «Lo he olvidado todo»' : 'aprobaciones del móvil: acción aprobada');
+      return { ok: true };
+    },
+    // «Lo he olvidado todo» (no password, no code): Windows Hello first (master.unlockHello with purpose 'rebuild-master'), then the
+    // phone that was registered, then a new password and code in one request. Without that phone nothing is made.
+    'master.rebuildStart': ({ unlock, device }) => {
+      const m = master();
+      if (!m.hasPassword()) throw userError(m.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
+      const phone = registeredPhone(device);
+      let ch; try { ch = m.rebuildBegin({ token: typeof unlock === 'string' ? unlock : '', orbId: orbId(), deviceId: phone.id }); } catch (error) { throw asUser(error); }
+      if (!ch.ok) throw refusedApproval(ch);
+      log('aprobaciones del móvil: «Lo he olvidado todo» pide la aprobación del móvil');
+      return startRequest('rebuild', phone, ch);
+    },
+    // Like approve.poll, but the rebuild's yes stays until master.rebuildFinish uses it.
+    'master.rebuildPoll': ({ id }) => {
+      const r = requests.get(String(id));
+      if (!r || r.kind !== 'rebuild') return { state: 'gone' };
+      if (!master().approveList().some((x) => x.id === r.device)) { requests.delete(String(id)); return { state: 'gone' }; }
+      if (r.state === 'waiting' && r.until <= Date.now()) { requests.delete(String(id)); remoteRef.current?.stopAsking(r.device); return { state: 'expired' }; }
+      if (r.state === 'refused') requests.delete(String(id));
+      return { state: r.state };
+    },
+    'master.rebuildFinish': async ({ id, password: p }) => {
+      const m = master();
+      const r = requests.get(String(id));
+      if (!r || r.kind !== 'rebuild' || r.state !== 'done') throw userError('msg.approve.notYet', {}, { reason: 'approval' });
+      let next; try { next = checkPassword(password(p)); } catch (error) { throw asUser(error); }
+      const value = K.newRecoveryCode(); const secret = machineSecret();
+      let out; try { out = await m.rebuildFinish(next, value); } catch (error) { throw asUser(error); }
+      if (!out.ok) throw userError('msg.approve.notYet', {}, { reason: 'approval' });
+      requests.delete(String(id));
+      let copyWrapFailed = false;
+      try { K.setRecovery(ctx.home, secret, value); } catch (error) {
+        copyWrapFailed = true;
+        try { fs.rmSync(K.recoveryFile(ctx.home), { force: true, recursive: true }); } catch { /* the notice says it */ }
+        log(`código de recuperación: copia-clave.json: ${error.message}`);
+        board.notice(tr('msg.master.codeCopyWrap'), 'warning');
+      }
+      log('contraseña maestra y código de recuperación nuevos con la aprobación del móvil (misma clave de datos)');
+      board.notice(tr('msg.approve.rebuilt'), 'warning');
+      locked('contraseña nueva');
+      emit('master:locked', {}); screenOff();
+      return { code: value, at: new Date().toISOString(), ...(copyWrapFailed ? { copyWrapFailed } : {}), ...m.issue() };
     },
     // Windows locked or the PC sleeps (the app), Orb unused for a while (the window) or «Bloquear» by hand: every token
     // goes and, with a master password, the window shows the lock screen (screen: true) until it is typed.

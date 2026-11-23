@@ -158,6 +158,22 @@ class AppContainer(private val app: Application) {
         log = ::lockLog,
     )
 
+    /**
+     * The PC's sensitive actions, approved with this phone's fingerprint. The key exists only after the PC registers this phone
+     * (Ajustes › Dispositivos on the PC); Android 10 and older have none.
+     */
+    private val approveStore = SharedPrefsStore(app.getSharedPreferences("orb.approve", android.content.Context.MODE_PRIVATE))
+    private var linkIdentity: dev.orb.app.approve.LinkIdentity? = null
+    private var approveJob: Job? = null
+    val approver = dev.orb.app.approve.Approver(
+        crypto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) dev.orb.app.approve.KeystoreApproveCrypto(approveStore, ::lockLog) else dev.orb.app.approve.NoApproveCrypto,
+        store = approveStore,
+        identity = { linkIdentity },
+        authenticator = { lock.authenticator },
+        send = { method, params -> _runtime.value?.client?.call(method, params) ?: Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.NotLinked)) },
+        scope = scope,
+    )
+
     /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
     val gate: dev.orb.app.share.AppGate get() = lock.gate
 
@@ -314,6 +330,9 @@ class AppContainer(private val app: Application) {
         scope.launch { client.connection.map { it::class.simpleName ?: "?" }.distinctUntilChanged().collect { log.add("conexión $it") } }
         scope.launch { lastContact.track(client.connection, System::currentTimeMillis) }
         notifierJob?.cancel()
+        linkIdentity = dev.orb.app.approve.LinkIdentity(session.id, session.pcPub)
+        approveJob?.cancel()
+        approveJob = scope.launch { client.events.collect { if (it.name == "approve") approver.onEvent(it.payload) } }
         notifier = Notifier(client.events, { notifyPrefs.settings.value.copy(appLock = lockPrefs.settings.value.enabled) }, { foreground }, notePoster, log::add)
         notifierJob = notifier?.start(scope)
         notifyPrefs.linked = true
@@ -332,6 +351,9 @@ class AppContainer(private val app: Application) {
         val current = synchronized(runtimeLock) { _runtime.value.also { _runtime.value = null; notes?.second?.close(); notes = null } }
         current?.client?.stop()
         current?.sender?.cancel()
+        approveJob?.cancel()
+        linkIdentity = null
+        approver.forget()
         notifierJob?.cancel()
         notifier = null
         notePoster.clearNotes()

@@ -234,16 +234,19 @@ impl Tried {
 
 /// What proved the person is there. A password token is good for everything; a Hello token is not good for the secrets
 /// (the engine's permissions say which actions: src/domain/security/permissions.mjs), so the strength travels with it.
+/// A phone's approval (approve.rs) is the third: a one-use token for one action and its parameters, taken only by name.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Strength {
   Password,
   Hello,
+  Mobile,
 }
 impl Strength {
   pub fn as_str(self) -> &'static str {
     match self {
       Self::Password => "password",
       Self::Hello => "hello",
+      Self::Mobile => "mobile",
     }
   }
 }
@@ -264,6 +267,8 @@ pub struct Vault {
   tokens: HashMap<String, (u64, Option<String>, Strength)>,
   /// Windows Hello: the pending nonce and the limit of prompts (hello.rs); memory only.
   pub(crate) hello: crate::hello::State,
+  /// The phones' approvals: challenges waiting for a signature and the rebuild's step (approve.rs); memory only.
+  pub(crate) approve: crate::approve::State,
   fails: HashMap<String, u64>,
   fails_until: HashMap<String, u64>,
   had_machine: bool,
@@ -289,6 +294,7 @@ impl Vault {
       cache: Cache::Unread,
       tokens: HashMap::new(),
       hello: Default::default(),
+      approve: Default::default(),
       fails: HashMap::new(),
       fails_until: HashMap::new(),
       had_machine: false,
@@ -622,6 +628,7 @@ impl Vault {
     self.use_key(crypto::random(32));
     // A new data key never carries Hello over: its public key was authenticated by the old one. Its code wrap goes too.
     self.hello = Default::default();
+    self.approve = Default::default();
     self.tokens.clear();
     let _ = std::fs::remove_file(self.file(CODE));
     self.write_items(&kept.0)
@@ -634,6 +641,7 @@ impl Vault {
     self.had_machine = false;
     self.use_key(crypto::random(32));
     self.hello = Default::default();
+    self.approve = Default::default();
     self.tokens.clear();
     self.write_items(&Map::new())
   }
@@ -662,9 +670,16 @@ impl Vault {
   pub fn check_token(&mut self, token: &str, purpose: Option<&str>, consume: bool, now: u64) -> bool {
     self.check_strength(token, purpose, None, consume, now)
   }
-  /// `need`: the weakest strength accepted (Some(Password) refuses a Hello token).
+  /// `need`: the weakest strength accepted (Some(Password) refuses a Hello token; Some(Hello) takes a password's or Hello's;
+  /// Some(Mobile) takes only a phone's approval, which nothing else does).
   pub fn check_strength(&mut self, token: &str, purpose: Option<&str>, need: Option<Strength>, consume: bool, now: u64) -> bool {
-    let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose && need.is_none_or(|n| n == Strength::Hello || t.2 == Strength::Password));
+    let fits = |have: Strength| match need {
+      None => true,
+      Some(Strength::Password) => have == Strength::Password,
+      Some(Strength::Hello) => matches!(have, Strength::Password | Strength::Hello),
+      Some(Strength::Mobile) => have == Strength::Mobile,
+    };
+    let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose && fits(t.2));
     if ok && consume {
       self.tokens.remove(token);
     }
@@ -673,9 +688,19 @@ impl Vault {
   pub fn strength_of(&self, token: &str, now: u64) -> Option<Strength> {
     self.tokens.get(token).filter(|t| t.0 > now).map(|t| t.2)
   }
+  /// Drops these tokens (a phone's approvals when it is unlinked).
+  pub(crate) fn drop_tokens(&mut self, list: &[String]) {
+    for t in list {
+      self.tokens.remove(t);
+    }
+  }
+  pub(crate) fn token_alive(&self, token: &str, now: u64) -> bool {
+    self.tokens.get(token).is_some_and(|t| t.0 > now)
+  }
   pub fn lock(&mut self) {
     self.tokens.clear();
     self.hello.drop_pending();
+    self.approve = Default::default();
     self.may_issue = false;
   }
 

@@ -24,6 +24,8 @@ import { cn, errorText } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
 import { Block, Panel, Setting } from './settings/rows.jsx';
 import { HelloBox, HelloNotes, HelloPasswordOnly, HelloSetting, HelloOffer, helloOfferable } from './hello.jsx';
+import { MobileBox } from './approve.jsx';
+import { mobileReady } from '@/lib/approve.js';
 
 const MIN = MASTER_MIN;
 const BAR = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];
@@ -444,8 +446,9 @@ function LockStatus() {
 // an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
 // With Windows Hello on, the dialog first says in Orb's own words what is being approved (Windows' notice is generic) and offers
 // Hello; an action Hello never opens (what shows or saves a secret) says it needs the password instead.
-setMasterAsker(async (action, { fresh = false, what = null } = {}) => {
+setMasterAsker(async (action, { fresh = false, what = null, request = null } = {}) => {
   const state = bridge.mobile ? null : await call('master.helloState').catch(() => null);
+  const withPhone = !bridge.mobile && await mobileReady(call, request);
   const usable = helloUsable(state);
   const offerHello = usable && canUseHello(action);
   let got = null; // the token Hello gave: the dialog's submit hands it back
@@ -455,6 +458,7 @@ setMasterAsker(async (action, { fresh = false, what = null } = {}) => {
     body: (v, set) => (<>
       {offerHello ? <HelloBox action={action} what={what} purpose={fresh ? action : null} wait={state.waitUntil} onToken={(r) => { got = r; }} /> : null}
       {helloMode(state) === 'changed' ? <HelloNotes changed /> : null}
+      {withPhone ? <MobileBox request={request} onToken={(r) => { got = r; }} /> : null}
       <Field label={tNow('master.password')}><Input type="password" autoComplete="current-password" autoFocus={!offerHello} value={v.password} onChange={(e) => set({ password: e.target.value })} data-testid="master-ask" /></Field>
       {usable && !offerHello ? <HelloPasswordOnly /> : null}
     </>),
@@ -522,7 +526,7 @@ function LockMinutes() {
 // A connector's keys (Ajustes › Conectores): seen and changed after the password; one «NAME=value» per line.
 const KEY_LINE = /^([A-Za-z_][A-Za-z0-9_]{0,99})=(.*)$/;
 export async function connectorKeys(server) {
-  const unlock = await unlockCore('secrets');
+  const unlock = await unlockCore('secrets', { request: { method: 'secrets.connector', params: { name: server.name } } });
   if (!unlock) return;
   let current; try { current = await call('secrets.connector', { name: server.name, unlock }); } catch (error) { notifyError(error); return; }
   const text = Object.entries(current.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n');

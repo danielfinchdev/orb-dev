@@ -1,12 +1,14 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "1f441981a53145cc6053ee09efd414f992d63d8f87dfc6befbdb5da6431b21f0",
+  "source": "9288bbaa2109552ddaa896d371aa8aa8e4155662da52bc696c45db6772c369bb",
   "methods": [
     "activity.list",
     "activity.report",
     "agents.status",
     "app.state",
     "approvals.list",
+    "approve.enroll",
+    "approve.respond",
     "chat.accept",
     "chat.answer",
     "chat.compact",

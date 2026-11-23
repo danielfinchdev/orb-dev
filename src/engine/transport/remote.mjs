@@ -52,6 +52,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   const orbName = () => orbNameOf(ctx.config);
   const failures = new Map(); // address -> timestamps of wrong pairing attempts (one noisy device cannot lock out the others)
   const clients = new Set(); // live-event streams: { res, device, key }
+  // The approval each phone was last asked for (device -> { value, until }): a phone that opens its stream within the two minutes still gets it.
+  const asking = new Map();
   const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
   const keys = new Map(); // device id -> session key
   // device id -> Map(nonce -> { exp, done }): the sealed answer of each call (or the one still being worked out), so a phone
@@ -258,6 +260,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
+      const ask = asking.get(device.id);
+      if (ask && ask.until > Date.now()) { try { res.write(`data: ${sealText(client.key, ask.value, AAD.event(device.id))}
+
+`); } catch { /* closed */ } } else asking.delete(device.id);
       const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* closed */ } }, PING_MS);
       req.on('close', () => { clearInterval(ping); clients.delete(client); });
       return undefined;
@@ -887,9 +893,23 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
         device: forKind,
         browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' };
     },
+    // One sealed event to one phone (an approval it is asked for): not journaled, because it dies with its challenge.
+    // → how many of its open streams it went to.
+    sendTo(device, value, { until }) {
+      asking.set(String(device), { value, until });
+      let n = 0;
+      for (const c of clients) if (c.device === device) { try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}
+
+`); n += 1; } catch { clients.delete(c); } }
+      return n;
+    },
+    stopAsking(device) { asking.delete(String(device)); },
     revoke(id) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
+      asking.delete(d.id);
+      // Its key to approve goes with it: linking again does not bring it back.
+      try { ctx.master?.approveForget(d.id); } catch (error) { log(`enlace: aprobación del móvil: ${error.message}`); }
       if (!board.one('SELECT 1 AS x FROM devices WHERE public_key IS NOT NULL')) clearNotes();
       keys.delete(d.id); seen.delete(d.id); answers.delete(d.id);
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
@@ -904,6 +924,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     revokeAll() {
       const list = board.all('SELECT id, name FROM devices');
       board.run('DELETE FROM devices');
+      asking.clear();
+      try { ctx.master?.approveForgetAll(); } catch (error) { log(`enlace: aprobación del móvil: ${error.message}`); }
       clearNotes();
       keys.clear(); seen.clear(); answers.clear(); pairing = null; ownKeys = null;
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }

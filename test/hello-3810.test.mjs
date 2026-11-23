@@ -88,7 +88,7 @@ test('turning Hello on takes the password; a token from Hello opens the usual ac
     assert.match(await said(e.call('projects.deleteCheck', { name: 'nada', unlock: del.unlock })), GUARD, 'a one-use token is spent');
     assert.doesNotMatch(await said(e.call('rails.set', { rails: {}, unlock: (await e.call('master.unlockHello', { purpose: 'rails' })).unlock })), GUARDS);
     // the purposes of the secrets and of a new key are the password's
-    for (const p of ['secretSave', 'secretSaved', 'newKey', 'rebuild-master', 'hello.enable', 'nonsense']) assert.match((await fails(e.call('master.unlockHello', { purpose: p }))).message, NEEDS_PASSWORD, p);
+    for (const p of ['secretSave', 'secretSaved', 'newKey', 'hello.enable', 'nonsense']) assert.match((await fails(e.call('master.unlockHello', { purpose: p }))).message, NEEDS_PASSWORD, p);
     // switching it off: any token of the window is the proof
     assert.equal((await e.call('master.helloDisable', { unlock: h.unlock })).ok, true);
     assert.equal((await e.call('master.helloState')).enabled, false);
