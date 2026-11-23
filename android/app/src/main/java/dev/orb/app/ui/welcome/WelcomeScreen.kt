@@ -293,7 +293,7 @@ private fun TailscaleSearch(state: WelcomeUiState, a: WelcomeActions) {
 private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
     val pc = state.pc ?: return
     // The master password is typed here: keep it out of the app switcher and screenshots even when the app lock is off.
-    dev.orb.app.ui.SecureWhileShown("master-password")
+    if (!pc.passwordFree) dev.orb.app.ui.SecureWhileShown("master-password")
     Column(Modifier.fillMaxSize()) {
         OrbTopBar(
             "Comprueba que es tu PC", sideWidth = 56.dp,
@@ -322,7 +322,10 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
                 }
                 OrbNote("Tiene que coincidir con la que ves en el PC.")
             }
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (pc.passwordFree) {
+                // A one-use code: no password. The PC shows this phone's name to its owner, who confirms it there.
+                OrbNote("Este móvil se enlaza con un código de un solo uso, sin contraseña. Cuando sigas, el PC te preguntará si quieres enlazarlo: confírmalo allí.")
+            } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Label("Contraseña maestra del PC")
                 val shown = if (state.checking) "•".repeat(state.passwordLength) else state.password
                 OrbTextField(
@@ -345,10 +348,10 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
             state.error?.let { Text(it, color = OrbKit.destructive, fontSize = 13.sp, lineHeight = 18.sp) }
             if (state.checking) {
                 Waiting()
-                OrbNote("Comprobando la contraseña en segundo plano…", Modifier.fillMaxWidth())
+                OrbNote(if (pc.passwordFree) "Esperando la confirmación en el PC…" else "Comprobando la contraseña en segundo plano…", Modifier.fillMaxWidth())
             }
             OrbButton(
-                when { state.checking -> "Comprobando…"; pc.viaCode -> "Coincide con la del PC"; else -> "Coincide, enlazar" },
+                when { state.checking -> if (pc.passwordFree) "Esperando al PC…" else "Comprobando…"; pc.passwordFree -> "Coincide, enlazar"; pc.viaCode -> "Coincide con la del PC"; else -> "Coincide, enlazar" },
                 a.confirm, kind = OrbButtonKind.Primary, block = true, enabled = !state.checking, big = true,
             )
         }
@@ -377,7 +380,7 @@ private fun LinkingPage(state: WelcomeUiState, a: WelcomeActions) {
                 text = if (done && pc != null) androidx.compose.ui.text.AnnotatedString("${pc.name} está enlazado." + if (state.noticesOn) " Avisos activados." else "") else null,
             )
             Spacer(Modifier.height(24.dp))
-            val labels = listOf(if (pc?.viaCode == true) "Código corto válido" else "Código QR válido", "Contraseña comprobada", "Guardando la llave en este móvil")
+            val labels = listOf(if (pc?.viaCode == true) "Código corto válido" else "Código QR válido", if (pc?.passwordFree == true) "Confirmado en el PC" else "Contraseña comprobada", "Guardando la llave en este móvil")
             Column(Modifier.padding(horizontal = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 labels.forEachIndexed { i, text ->
                     val ok = i < state.stepsDone

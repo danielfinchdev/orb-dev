@@ -35,7 +35,16 @@ object LinkErrors {
 
 class LinkPayloadException(val key: String) : Exception(key)
 
-enum class LinkVia(val wire: String) { QR("qr"), CODE("code") }
+enum class LinkVia(val wire: String) {
+    QR("qr"),
+    CODE("code"),
+
+    /** The QR of a link without the master password: its code is a 128-bit one-use secret. */
+    LINK("link"),
+
+    /** The 8 characters typed for a link without the master password (the PC said so in GET /api/hello). */
+    LINKCODE("linkcode"),
+}
 
 /**
  * What the QR or the typed form gives. [v] is null where the JS number was NaN (or infinite, which JSON also writes as
@@ -53,6 +62,7 @@ data class LinkPayload(
 
 data class UpdateNeeded(val has: Int, val need: Double)
 
+private val LINK_SECRET = Regex("[A-Za-z0-9_-]{22}") // 16 random bytes, base64url
 private val PC_KEY = Regex("[A-Za-z0-9+/_-]{43}=?") // a 32-byte key in base64 (matches() = whole string, like ^…$ in JS)
 
 private fun fail(key: String) = LinkPayloadException(key)
@@ -136,13 +146,15 @@ fun parseLinkPayload(input: String?): LinkPayload {
         return parseLinkPayload(el as? JsonObject ?: throw fail(LinkErrors.BAD_QR))
     }
     val u = WhatwgUrl.parseHttp(q) ?: throw fail(LinkErrors.BAD_QR)
-    val code = WhatwgUrl.formGet(u.fragment, "vincular")
+    val secret = WhatwgUrl.formGet(u.fragment, "enlace")
+    val code = secret ?: WhatwgUrl.formGet(u.fragment, "vincular")
     val pc = WhatwgUrl.formGet(u.fragment, "pc")
     if (code.isNullOrEmpty()) throw fail(LinkErrors.BAD_QR)
+    if (secret != null && !LINK_SECRET.matches(secret)) throw fail(LinkErrors.BAD_QR)
     if (pc.isNullOrEmpty()) throw fail(LinkErrors.OLD_QR)
     val others = (WhatwgUrl.formGet(u.fragment, "a") ?: "").split(",").filter { startsWithHttpScheme(it) }
     val v = WhatwgUrl.formGet(u.fragment, "v")?.let { JsCompat.number(it) } ?: 1.0
-    return finish(v, listOf("${u.protocol}//${u.host}") + others, pc, code, WhatwgUrl.formGet(u.fragment, "n"), WhatwgUrl.formGet(u.fragment, "r"))
+    return finish(v, listOf("${u.protocol}//${u.host}") + others, pc, code, WhatwgUrl.formGet(u.fragment, "n"), WhatwgUrl.formGet(u.fragment, "r"), secret != null)
 }
 
 /** The JSON form { v, urls | url, pc, code, name, role }. */
@@ -151,19 +163,20 @@ fun parseLinkPayload(q: JsonObject): LinkPayload {
     val rawUrls = (q["urls"] as? JsonArray)?.toList() ?: listOf(q["url"])
     val urls = rawUrls.mapNotNull { str(it) }.filter { startsWithHttpScheme(it) }
     val pc = str(q["pc"])
-    val code = str(q["code"])
+    val secret = str(q["link"])
+    val code = secret ?: str(q["code"])
     if (urls.isEmpty() || pc == null || code == null) throw fail(LinkErrors.BAD_QR)
     val vEl = q["v"]
     val v = if (vEl == null || vEl == JsonNull) 2.0 else JsCompat.number(vEl)
     // name / role are shown as text; a non-string value from a hand-made JSON is dropped instead of displayed.
-    return finish(v, urls, pc, code, str(q["name"]), str(q["role"]))
+    return finish(v, urls, pc, code, str(q["name"]), str(q["role"]), secret != null)
 }
 
-private fun finish(v: Double, urls: List<String>, pc: String, code: String, name: String?, role: String?): LinkPayload {
+private fun finish(v: Double, urls: List<String>, pc: String, code: String, name: String?, role: String?, link: Boolean = false): LinkPayload {
     val ordered = orderBases(urls)
     if (ordered.isEmpty()) throw fail(LinkErrors.INSECURE)
     if (!PC_KEY.matches(pc)) throw fail(LinkErrors.OLD_QR)
-    return LinkPayload(if (v.isFinite()) v else null, ordered, pc, code, name, role, LinkVia.QR)
+    return LinkPayload(if (v.isFinite()) v else null, ordered, pc, code, name, role, if (link) LinkVia.LINK else LinkVia.QR)
 }
 
 /** What the person typed in the «by hand» form: a pasted link (or JSON) or the short code plus the address. */

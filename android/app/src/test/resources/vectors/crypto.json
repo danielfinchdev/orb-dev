@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "4fb2f1c3036a7149e058b935c8714c5b2dcc5f7fc58bc2b8bf4510f5ff48f28d",
+  "source": "528bc617b43f41be2fe6f57ac5be5cff9f1b16c6572f1a8ec06bcb9fba9aa978",
   "constants": {
     "CLOCK_SKEW_MS": 300000,
     "PAIR_KDF": {
@@ -504,6 +504,33 @@
       "secret": "corto3:c2Ut78JBgzAri4F6uOlql3CU1aFnJW5zJr8RNMfs6P0"
     }
   ],
+  "linkSecret": [
+    {
+      "code": "abcd-efgh",
+      "saltB64": "AQIDBAUGBwgJCgsMDQ4PEA",
+      "secret": "corto4:rPnLoUvFVfy_IovMAGuaHnrO3SgDzh4WMJ0k_ktBItk"
+    },
+    {
+      "code": "ABCDEFGH",
+      "saltB64": "AQIDBAUGBwgJCgsMDQ4PEA",
+      "secret": "corto4:rPnLoUvFVfy_IovMAGuaHnrO3SgDzh4WMJ0k_ktBItk"
+    },
+    {
+      "code": "23456789",
+      "saltB64": "8O_u7ezr6uno5-bl5OPi4Q",
+      "secret": "corto4:_oZq6N2jDKhNkVYa756rsTBSm8J5dTh777_TTqNjokE"
+    },
+    {
+      "code": " q w-e r t y u i ",
+      "saltB64": "8O_u7ezr6uno5-bl5OPi4Q",
+      "secret": "corto4:WsRi_ZqSsq2PKynGERjakQM6GXWE_OP9LyBImbziuwg"
+    },
+    {
+      "code": "código",
+      "saltB64": "AQIDBAUGBwgJCgsMDQ4PEA",
+      "secret": "corto4:W3hOBqbQv701G0cqH6IofG20UkN59nuwQBtfUtfONMk"
+    }
+  ],
   "verifier": {
     "seeds": [
       {
@@ -779,6 +806,19 @@
           "salt": "QEFCQ0RFRkdISUpLTE1OTw"
         },
         "transcript": "348cd1ab60407470bb077505d0ab05d17ee64c6005349f5f95c3512a6755e2aa"
+      },
+      {
+        "via": "link",
+        "devPub": "07a37cbc142093c8b755dc1b10e86cb426374ad16aa853ed0bdfc0b2b86d1c7c",
+        "pcPub": "847c0d2c375234f365e660955187a3735a0f7613d1609d3a6a4d8c53aeaa5a22",
+        "sid": "sid-0123456789abcdef",
+        "kdf": {
+          "N": 0,
+          "r": 0,
+          "p": 0,
+          "salt": ""
+        },
+        "transcript": "46902a4e067d216aca6bf0a61510d6ffefb73d8ab2a9c65dc756a27439dbe07b"
       }
     ],
     "keys": [
@@ -819,6 +859,26 @@
             "id": "dispositivo-ñ",
             "label": "orb-pake:pc:dispositivo-ñ",
             "mac": "98e8a6765dfbabb7cc6f56a0c02e271eac3f9d4082357a34b7d25fb0ba6c7db3"
+          }
+        ]
+      },
+      {
+        "secret": "AbCdEfGhIjKlMnOpQrStUv",
+        "dhDevice": "fa1ff3a9f068a2003f979f92db26432a7c232bfa85bb99cfcb6028d583fba860",
+        "dhPassword": "",
+        "transcript": "46902a4e067d216aca6bf0a61510d6ffefb73d8ab2a9c65dc756a27439dbe07b",
+        "key": "8cc89111655ce2658c2f0ee5eabec76edaacd7596256f0a8dd3f1bfce12a4c13",
+        "macPhone": "aa873855f9d242ccf45db7aba3e8f69f27a48cfd51e8814c8c32e2bce187f6f9",
+        "macPc": [
+          {
+            "id": "dev-1",
+            "label": "orb-pake:pc:dev-1",
+            "mac": "023e9598b118b82269c38b0a3eca48140cfc1ed6dcf0fb119329abe2ada3c304"
+          },
+          {
+            "id": "dispositivo-ñ",
+            "label": "orb-pake:pc:dispositivo-ñ",
+            "mac": "c3c8583803fcc17e813636392781afe08eee7ed0c5afbc68d72e541a0b7fb03e"
           }
         ]
       }

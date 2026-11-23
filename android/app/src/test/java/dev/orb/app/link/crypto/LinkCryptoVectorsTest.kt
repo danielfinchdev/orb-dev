@@ -143,6 +143,13 @@ class LinkCryptoVectorsTest {
         }
     }
 
+    @Test fun linkSecret() {
+        for (s in v.a("linkSecret").objs()) {
+            assertEquals(s.s("secret"), LinkCrypto.linkSecret(s.s("code"), s.s("saltB64")))
+            hit("linkSecret")
+        }
+    }
+
     @Test fun verifier() {
         val vf = v.o("verifier")
         for (s in vf.a("seeds").objs()) {
