@@ -643,10 +643,11 @@ export default {
   "msg.acct.switchedGone": "Continuing with **{to}**: the account {from} is no longer available.",
   "msg.acct.switchedLimit": "Continuing with **{to}**: {from} has reached its limit (back at {time}).",
   "msg.acct.switchedBrake": "Continuing with **{to}**: {from} is close to its usage limit.",
-  "msg.acct.switchedFresh": "This conversation now continues with {to}, from a summary of what came before.",
+  "msg.acct.switchedFresh": "Continuing on {to} from a summary of what came before.",
   "msg.acct.badAgent": "that account is not an {agent} one",
   "msg.acct.noSession": "that account is not signed in",
   "msg.acct.pending": "The change to **{to}** will apply when this turn ends.",
   "msg.api.accountQueued": "this account has messages waiting in a conversation. Wait for them to be answered or remove them",
-  "msg.api.holdNone": "this chat is not waiting for an account"
+  "msg.api.holdNone": "this chat is not waiting for an account",
+  "msg.api.accountPending": "a change to this account is waiting in a chat for its turn to end. Wait a moment"
 };

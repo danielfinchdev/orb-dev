@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig } from '../../platform/config.mjs';
-import { requireBrainAccount, brainAccount } from '../../domain/usage/accounts.mjs';
+import { requireBrainAccount, brainAccount, configuredAccount, accountSettings } from '../../domain/usage/accounts.mjs';
 import { brainOf } from '../orchestrator.mjs';
 import { slashCommand } from '../../shared/slash.mjs';
 import { oneLine, localStamp } from '../../shared/text.mjs';
@@ -227,7 +227,11 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       if (remote && (conversation == null || orchestrate !== undefined)) throw new PermissionError('config.save');
       const o = brainOf();
       const conv = conversation == null ? null : board.conversation(conversationId(conversation));
-      const base = conv ? { agent: conv.agent, account: conv.account, fixed: Boolean(conv.account_fixed && conv.account), model: conv.model, reasoning: conv.reasoning } : { ...o, fixed: Boolean(o.account && o.account !== 'auto') };
+      // What the chat will have once its waiting change applies: checks and comparisons are made against that, not against
+      // what the turn in progress still has.
+      const eff = conv ? { ...conv, ...(board.settingJson(`pending_brain:${conv.id}`) ?? {}) } : null;
+      const base = eff ? { agent: eff.agent, account: eff.account, fixed: Boolean(eff.account_fixed && eff.account), model: eff.model, reasoning: eff.reasoning }
+        : { ...o, fixed: configuredAccount(o, o.agent || 'claude') !== 'auto', account: configuredAccount(o, o.agent || 'claude') === 'auto' ? null : o.account };
       const patch = {};
       if (agent !== undefined) {
         if (!modelCatalog(board).some((a) => a.id === agent)) fail(tr('msg.api.agentUnavailable', { agent: String(agent).slice(0, 40) }));
@@ -237,8 +241,8 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // 'auto' (or empty): the chat follows the agent's accounts; an id: that account only. It must exist, be signed in and be
       // of the chat's agent, from the PC and from a phone alike.
       let chosen = null;
-      if (acc !== undefined) { chosen = requireBrainAccount(str(acc, 'cuenta', 40, { optional: true }) || 'auto', brain); patch.account = chosen.account ?? 'auto'; }
-      else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) { chosen = brainAccount('auto', brain); patch.account = 'auto'; } // another agent: automatic among its accounts
+      if (acc !== undefined) { chosen = requireBrainAccount(str(acc, 'cuenta', 40, { optional: true }) || 'auto', brain); Object.assign(patch, accountSettings(chosen.account ?? 'auto', brain)); }
+      else if (patch.agent && patch.agent !== (base.agent ?? 'claude')) { chosen = brainAccount('auto', brain); Object.assign(patch, accountSettings('auto', brain)); } // another agent: automatic among its accounts
       if (model !== undefined) {
         const m = String(model ?? '');
         if (brain === 'claude' && m && !o.models.some((x) => x.id === m) && !/^(sonnet|opus|haiku)$/.test(m)) {
@@ -254,7 +258,7 @@ export function chatMethods({ project, conversationId, accept, allowedImage, wit
       // Only a level the model takes: one asked for now that it lacks is refused; a saved one the new model lacks drops
       // to the closest it takes. An agent without levels (Cursor) keeps whatever is saved.
       if (reasoning !== undefined || patch.model !== undefined || patch.agent !== undefined) {
-        const takes = levelsOf(modelCatalog(board), brain, patch.model ?? base.model, chosen ? chosen.account : base.account !== 'auto' ? base.account : null);
+        const takes = levelsOf(modelCatalog(board), brain, patch.model ?? base.model, chosen ? chosen.account : base.account);
         const now = patch.reasoning ?? base.reasoning;
         if (takes.length && !takes.includes(now)) {
           if (reasoning !== undefined) fail(tr('msg.api.reasoningUnavailable'));

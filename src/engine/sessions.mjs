@@ -160,6 +160,7 @@ export class Sessions {
     // the periodic sweep must never throw: a database already closed (the app is leaving) is not worth an uncaught error
     this.sweeper = setInterval(() => { try { this.closeIdle(); } catch (error) { this.log?.(`limpieza de sesiones: ${error.message}`); } }, 60_000);
     this.sweeper.unref?.();
+    this.holds = new Map(); // chat id -> { problem, sig, timer }: a fixed chat whose account cannot take its queued messages
     this.side = new SideChats(this); // «/side»: questions apart, in memory only (side.mjs)
     this.suggest = new Suggester(this); // the grey next message in the box, when Ajustes has it on (suggest.mjs)
   }
@@ -208,6 +209,8 @@ export class Sessions {
       this.emit('session:update', { ...this.must(id), pendingAccount: later });
       return Object.keys(rest).length ? this.update(id, rest) : this.get(id);
     }
+    // A change made now replaces one that was waiting for the end of a turn.
+    if (keys.some((k) => k === 'account' || k === 'account_fixed') && !fields.applyPending) this.board.settingJson(`pending_account:${id}`, null);
     // Another account: the agent's own conversation lives in the old account's folder, so the chat goes on from its summary.
     if ('account' in fields && fields.account !== this.get(id)?.account && !('cli_session' in fields)) { fields = { ...fields, cli_session: null, context: null }; keys.push('cli_session', 'context'); }
     if ('permission' in fields && !PERMISSIONS.includes(fields.permission)) throw new Error(tr('msg.sessions.badPermission'));
@@ -224,7 +227,10 @@ export class Sessions {
       if ('reasoning' in fields && !this.running.has(id)) this.closeLive(id);
       if ('cwd' in fields || 'account' in fields) this.closeLive(id); // not while running: that case waited above
     }
-    const s = this.get(id); this.emit('session:update', s); return s;
+    const s = this.get(id); this.emit('session:update', s);
+    // the messages a fixed chat held for its account go when the account is changed (a turn that just ended handles its own queue)
+    if (this.holds.has(id) && ('account' in fields || 'account_fixed' in fields) && !fields.applyPending) this.kickQueue(id);
+    return s;
   }
 
   remove(id) {
@@ -336,7 +342,29 @@ export class Sessions {
     const ids = this.board.all('SELECT id FROM sessions WHERE account = ?', accountId).map((r) => r.id);
     if (ids.some((id) => this.running.has(id))) return 'busy';
     if (this.side.processesOf(accountId).some((e) => e.status === 'running')) return 'busy';
-    return ids.some((id) => this.queue(id).length) ? 'queued' : null;
+    if (ids.some((id) => this.queue(id).length)) return 'queued';
+    // an account change waiting for the end of a turn (also one saved before Orb restarted)
+    return this.board.all("SELECT value FROM settings WHERE key LIKE 'pending_account:%'").some((r) => { try { return JSON.parse(r.value)?.account === accountId; } catch { return false; } }) ? 'pending' : null;
+  }
+  // The messages a fixed chat held (its account could not take them) go now, if it can: in order, one at a time.
+  kickQueue(id) {
+    const s = this.get(id);
+    if (!s || s.kind !== 'chat' || this.running.has(id) || !this.queue(id).length || this.accountFor(s).problem) return;
+    const hold = this.holds.get(id); if (hold?.timer) clearTimeout(hold.timer);
+    this.holds.delete(id);
+    const next = this.takeQueued(id);
+    if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
+  }
+  // «Esperar»: the held messages go by themselves when the account's limit ends.
+  holdWait(id) {
+    const hold = this.holds.get(String(id));
+    if (!hold) throw new Error(tr('msg.api.holdNone'));
+    if (hold.timer) clearTimeout(hold.timer);
+    const ms = hold.problem.until ? Math.max(1000, hold.problem.until - Date.now() + 5000) : 60_000;
+    hold.timer = setTimeout(() => { hold.timer = null; this.kickQueue(String(id)); }, Math.min(ms, 2_147_000_000));
+    hold.timer.unref?.();
+    this.emit('session:account', { id: String(id), problem: hold.problem, waiting: true });
+    return { ok: true };
   }
   // The account change asked for during a turn, now that it has ended.
   applyPendingAccount(id) {
@@ -345,7 +373,7 @@ export class Sessions {
     this.board.settingJson(`pending_account:${id}`, null);
     const moved = 'account' in later && later.account !== this.get(id).account;
     this.update(id, { ...later, applyPending: true });
-    if (moved) this.addItem(id, 'system', 'status', tr('msg.acct.switchedFresh'));
+    if (moved) this.addItem(id, 'system', 'status', tr('msg.acct.switchedFresh', { to: findAccount(later.account)?.label ?? later.account }));
   }
   // A chat's account for its next turn: fixed (its own or a problem) or automatic (stays, or moves between turns).
   // The conversation of the agent lives in its account's folder: an automatic chat that never talked is free to choose.
@@ -566,7 +594,7 @@ export class Sessions {
   // step) or queue it (sent when the turn ends). mode: 'auto' (steer when the agent can, else queue) | 'steer' | 'queue'.
   message(id, text, { images = [], mode = 'auto', context = '', asked } = {}) {
     // context: what @ attached (another task, conversation or log), added for the agent but not shown as typed.
-    if (!this.running.has(id)) { this.send(id, text, { images, asked, prompt: context ? `${text}${context}` : undefined }); return { sent: true }; }
+    if (!this.running.has(id)) { const run = this.send(id, text, { images, asked, prompt: context ? `${text}${context}` : undefined }); return run ? { sent: true } : { queued: true, held: true }; }
     const entry = this.lives.get(id);
     const onFail = () => { this.addItem(id, 'system', 'status', tr('msg.sessions.steerLate')); this.enqueue(id, text, []); };
     if (mode !== 'queue' && !images.length && !this.running.get(id)?.compacting && entry?.live.caps.steer && entry.live.steer({ text: context ? `${text}${context}` : text, onFail })) {
@@ -647,22 +675,34 @@ export class Sessions {
     if (!String(text ?? '').trim() && !images.length) throw new Error(tr('msg.sessions.writeMessage'));
     // its project is being deleted (project-close.mjs): no new turn in a folder that is going away.
     if (s.kind !== 'task' && s.project && this.board.isDeleting(s.project)) throw new Error(tr('msg.projects.deleting', { name: s.project }));
+    // An account change asked for during the last turn goes before the account is settled.
+    if (this.board.settingJson(`pending_account:${id}`)) { this.applyPendingAccount(id); chat = this.must(id); s = planOnly ? { ...chat, permission: 'leer' } : chat; }
     // The conversation's own account. A fixed chat never moves: when its account cannot take the turn the message does not go
     // and the chat says why (an automatic one moves to another account of its agent, and says so).
     const res = this.accountFor(s);
     if (res.problem) {
-      const text = accountProblemText(res.problem);
-      this.board.settingJson(`account_problem:${id}`, res.problem);
-      this.addItem(id, 'system', 'status', text);
-      this.emit('session:account', { id, problem: res.problem });
-      throw Object.assign(new Error(text), { problem: res.problem });
+      const line = accountProblemText(res.problem);
+      const sig = `${res.problem.kind}:${res.problem.account}:${Math.round((res.problem.until ?? 0) / 600_000)}`;
+      // what the user typed is not lost: it waits in the chat's queue until the account can take it or the chat is changed
+      const held = showUser && !onFinish && s.kind === 'chat';
+      if (held) this.enqueue(id, text, images);
+      if (this.holds.get(id)?.sig !== sig) {
+        const old = this.holds.get(id); if (old?.timer) clearTimeout(old.timer);
+        if (held) this.holds.set(id, { problem: res.problem, sig, timer: null });
+        this.board.settingJson(`account_problem:${id}`, res.problem);
+        this.addItem(id, 'system', 'status', line);
+        this.emit('session:account', { id, problem: res.problem });
+      }
+      if (held) return null;
+      throw Object.assign(new Error(line), { problem: res.problem });
     }
+    this.holds.delete(id);
     const acc = res.acc;
     if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
     if (res.switched || (s.kind === 'chat' && s.account !== acc.id)) {
       const had = Boolean(s.cli_session);
       this.update(id, { account: acc.id, ...(res.switched && had ? { cli_session: null, context: null } : {}) });
-      if (res.switched) this.addItem(id, 'system', 'status', `${accountSwitchText(res.switched, acc)}${had ? ` ${tr('msg.acct.switchedFresh')}` : ''}`);
+      if (res.switched) this.addItem(id, 'system', 'status', `${accountSwitchText(res.switched, acc)}${had ? ` ${tr('msg.acct.switchedFresh', { to: acc.label ?? acc.id })}` : ''}`);
       chat = this.must(id); s = planOnly ? { ...chat, permission: 'leer' } : chat;
     }
     const a = adapter(s.agent);
@@ -747,6 +787,7 @@ ${body}`;
       this.log(`turno ${id}: ${error.stack}`);
       clearInterval(timer);
       if (this.running.get(id) === run) this.running.delete(id);
+      try { this.applyPendingAccount(id); } catch (e) { this.log(`cambio de cuenta ${id}: ${e.message}`); }
       const final = `${a.label}: ${error.message}`;
       try { this.update(id, { status: 'error' }); this.addItem(id, 'error', 'text', final); } catch { /* the conversation may be gone */ }
       if (!onFinish && s.kind === 'chat') { try { goalFailed(this, id, final); } catch { /* the conversation may be gone */ } }

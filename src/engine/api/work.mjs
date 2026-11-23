@@ -426,6 +426,8 @@ ${block}` : ''}` });
       }
       return sessions.update(s.id, fields);
     },
+    // «Esperar» on a chat whose fixed account is at its limit: what it held goes when the limit ends.
+    'sessions.holdWait': ({ id }) => sessions.holdWait(str(id, 'conversación', 64)),
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
     // the worktrees of direct chats (src/engine/chat-worktrees.mjs)
     'worktrees.branches': ({ project: name }) => chatTrees.branches(project(name).path),

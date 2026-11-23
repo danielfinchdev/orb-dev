@@ -643,10 +643,11 @@ export default {
   "msg.acct.switchedGone": "Sigue con **{to}**: la cuenta {from} ya no está disponible.",
   "msg.acct.switchedLimit": "Sigue con **{to}**: {from} ha llegado al límite (vuelve a las {time}).",
   "msg.acct.switchedBrake": "Sigue con **{to}**: {from} está cerca del límite de uso.",
-  "msg.acct.switchedFresh": "Esta conversación sigue ahora con {to}, con el resumen de lo anterior.",
+  "msg.acct.switchedFresh": "Sigue con {to} a partir del resumen de lo anterior.",
   "msg.acct.badAgent": "esa cuenta no es de {agent}",
   "msg.acct.noSession": "esa cuenta no tiene sesión iniciada",
   "msg.acct.pending": "El cambio a **{to}** se aplicará cuando acabe este turno.",
   "msg.api.accountQueued": "esta cuenta tiene mensajes en cola en alguna conversación. Espera a que se atiendan o quítalos",
-  "msg.api.holdNone": "este chat no está esperando una cuenta"
+  "msg.api.holdNone": "este chat no está esperando una cuenta",
+  "msg.api.accountPending": "un cambio a esta cuenta espera en un chat a que acabe su turno. Espera un momento"
 };

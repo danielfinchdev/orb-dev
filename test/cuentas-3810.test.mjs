@@ -16,7 +16,7 @@ import { Sessions } from '../src/engine/sessions.mjs';
 import { Orchestrator } from '../src/engine/orchestrator.mjs';
 import { buildApi } from '../src/engine/api/index.mjs';
 import { DESKTOP } from '../src/domain/security/permissions.mjs';
-import { brainAccount } from '../src/domain/usage/accounts.mjs';
+import { brainAccount, configuredAccount, accountSettings } from '../src/domain/usage/accounts.mjs';
 import { resolveAccount, pauseAccount, clearCooldown } from '../src/domain/usage/budget.mjs';
 import { configFrom } from '../src/platform/config-file.mjs';
 
@@ -35,7 +35,7 @@ before(() => {
     { id: 'claude-2', agent: 'claude', label: 'STAMINA', home: folders.stamina, enabled: true },
     { id: 'codex', agent: 'codex', label: 'Codex', home: '', enabled: true }
   ];
-  ctx.config.orchestrator.account = 'auto';
+  Object.assign(ctx.config.orchestrator, { account: 'claude', accountMode: 'auto' });
   process.env.ORB_FAKE_LOG = logFile;
   board = new Board();
   project = createProject(board, { name: 'web' }, 'usuario');
@@ -49,7 +49,7 @@ const lines = (id) => board.chat(id, 200, {});
 const system = (id) => lines(id).filter((l) => l.role === 'system').map((l) => l.body);
 const conv = (id) => board.conversation(id);
 const calm = (id) => until(() => { const l = orchestrator.lanes.get(id); return l && !l.busy && !l.inflight && !l.queue.length; }, `conversation ${id} at rest`);
-const reset = () => { for (const id of ['claude', 'claude-2']) clearCooldown(board, id); board.settingJson('rate:claude', null); board.settingJson('rate:claude-2', null); };
+const reset = () => { for (const l of orchestrator.lanes.values()) { l.queue = []; if (l.hold) l.clearHold(); } board.run('DELETE FROM session_queue'); sessions.holds.clear(); for (const id of ['claude', 'claude-2']) clearCooldown(board, id); board.settingJson('rate:claude', null); board.settingJson('rate:claude-2', null); };
 const chat = (extra = {}) => sessions.create({ agent: 'claude', cwd: project.path, project: 'web', title: 'chat', ...extra });
 const idle = (id) => until(() => !sessions.isRunning(id), `turn of ${id}`);
 const folderOfTurns = () => fs.readFileSync(logFile, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
@@ -76,10 +76,15 @@ test('migration: chats on another account than the main one become fixed, the re
   assert.equal(board.conversation(c).account_fixed, 0, 'a later choice of «automática» is not undone');
 });
 
-test('an old config naming the main account as the assistant account becomes automatic; one picked by hand stays', () => {
-  assert.equal(configFrom({ version: 5, orchestrator: { agent: 'claude', account: 'claude' } }).orchestrator.account, 'auto');
-  assert.equal(configFrom({ version: 5, orchestrator: { agent: 'claude', account: 'claude-2' } }).orchestrator.account, 'claude-2');
-  assert.equal(configFrom({}).orchestrator.account, 'auto');
+test('the assistant account stays a valid account for an older Orb; a new field says whether it is a choice', () => {
+  const auto = (o) => configuredAccount(configFrom({ orchestrator: o }).orchestrator, 'claude');
+  assert.equal(auto({ agent: 'claude', account: 'claude' }), 'auto', 'an old file naming the main account is automatic');
+  assert.equal(auto({ agent: 'claude', account: 'claude-2' }), 'claude-2', 'one picked by hand stays');
+  assert.equal(auto({ agent: 'claude', account: 'claude', accountMode: 'fixed' }), 'claude', 'the main account can be chosen on purpose');
+  const fresh = configFrom({}).orchestrator;
+  assert.deepEqual([fresh.account, fresh.accountMode, configFrom({}).version], ['claude', undefined, 5], 'no new value an older Orb would not know');
+  assert.deepEqual(accountSettings('claude-2', 'claude'), { account: 'claude-2', accountMode: 'fixed' });
+  assert.deepEqual(accountSettings('auto', 'claude'), { account: 'claude', accountMode: 'auto' });
 });
 
 test('resolveAccount: fixed never answers with another account; automatic moves only when it must', () => {
@@ -188,7 +193,7 @@ test('assistant: automatic, its account reaches its limit: next turn moves to th
   await calm(c.id);
   assert.equal(conv(c.id).account, 'claude-2');
   assert.equal(conv(c.id).account_fixed, 0, 'still automatic');
-  assert.ok(system(c.id).some((s) => /Sigue con \*\*STAMINA\*\*: PGC ha llegado al límite/.test(s)), system(c.id).join(' | '));
+  assert.ok(system(c.id).some((s) => /Sigue con \*\*STAMINA\*\*: PGC ha llegado al límite.*STAMINA a partir del resumen/.test(s)), system(c.id).join(' | '));
   assert.equal(lines(c.id).filter((l) => l.role === 'orb').length, 2);
   const dirs = folderOfTurns().filter((l) => l.claudeDir);
   assert.equal(dirs.at(-1).claudeDir, folders.stamina);
@@ -233,13 +238,13 @@ test('chat.settings: the account must exist, have a session and be of the chat\'
 });
 
 test('a new chat takes the choice as columns (automatic by default; the one chosen on this PC, fixed)', async () => {
-  ctx.config.orchestrator.account = 'auto';
+  Object.assign(ctx.config.orchestrator, { account: 'claude', accountMode: 'auto' });
   const auto = orchestrator.startConversation({ text: 'uno' });
   assert.deepEqual([auto.account, auto.account_fixed], [null, 0]);
-  ctx.config.orchestrator.account = 'claude-2';
+  Object.assign(ctx.config.orchestrator, { account: 'claude-2', accountMode: 'fixed' });
   const fixed = orchestrator.startConversation({ text: 'dos' });
   assert.deepEqual([fixed.account, fixed.account_fixed], ['claude-2', 1]);
-  ctx.config.orchestrator.account = 'auto';
+  Object.assign(ctx.config.orchestrator, { account: 'claude', accountMode: 'auto' });
 });
 
 test('direct chats: fixed stays put and refuses at the limit; automatic moves; the process gets its account\'s folder', async () => {
@@ -250,14 +255,19 @@ test('direct chats: fixed stays put and refuses at the limit; automatic moves; t
   await idle(fixed.id);
   assert.equal(folderOfTurns().filter((l) => l.claudeDir).at(-1).claudeDir, folders.stamina);
   pauseAccount(board, 'claude-2', 3_600_000, '');
-  assert.throws(() => sessions.send(fixed.id, 'otra vez'), /STAMINA.*límite/);
+  assert.equal(sessions.send(fixed.id, 'otra vez'), null, 'the message is held, not sent');
+  assert.deepEqual(sessions.queue(fixed.id).map((q) => q.text), ['otra vez'], 'and not lost');
   assert.equal(sessions.get(fixed.id).account, 'claude-2', 'no silent change');
   assert.equal(sessions.items(fixed.id).filter((i) => i.role === 'user').length, 1, 'the second message did not go');
+  assert.equal(sessions.send(fixed.id, 'y otra'), null); assert.equal(sessions.queue(fixed.id).length, 2);
+  assert.equal(sessions.items(fixed.id).filter((i) => i.kind === 'status' && /STAMINA/.test(i.body)).length, 1, 'told once');
+  sessions.editQueued(fixed.id, sessions.queue(fixed.id)[1].id, { remove: true });
   assert.ok(sessions.items(fixed.id).some((i) => i.kind === 'status' && /STAMINA/.test(i.body)));
   // the same chat becomes automatic: it goes on, on the other account
   sessions.update(fixed.id, { account_fixed: 0 });
-  sessions.send(fixed.id, 'ahora sí');
+  await until(() => sessions.items(fixed.id).filter((i) => i.role === 'user').length === 2, 'the held message goes');
   await idle(fixed.id);
+  assert.deepEqual(sessions.queue(fixed.id), []);
   assert.equal(sessions.get(fixed.id).account, 'claude');
   assert.ok(sessions.items(fixed.id).some((i) => i.kind === 'status' && /Sigue con \*\*PGC\*\*/.test(i.body)), 'it says so');
   reset();
@@ -282,6 +292,84 @@ test('direct chats: an account change asked for during a turn waits for its end'
   assert.equal(board.settingJson(`pending_account:${s.id}`), null);
 });
 
+test('a change that waited is replaced by a newer one, applied before the account is settled (also after a restart), and counted for removal', async () => {
+  reset();
+  const c = board.createConversation({ title: 'pend', agent: 'claude', account: 'claude', account_fixed: 0 });
+  const lane = orchestrator.lane(c.id);
+  // while a turn runs: an account change waits; a change of agent replaces it
+  lane.busy = true;
+  lane.change({ account: 'claude-2', account_fixed: 1 });
+  assert.equal(orchestrator.info(c.id).pending.account, 'claude-2');
+  assert.equal(orchestrator.workingOn('claude-2'), 'pending', 'removing that account is refused meanwhile');
+  lane.change({ agent: 'codex', account: null, account_fixed: 0 });
+  assert.deepEqual(board.settingJson(`pending_brain:${c.id}`), { agent: 'codex', account: null, account_fixed: 0 }, 'another agent replaces what waited');
+  lane.change({ agent: 'claude', account: 'claude-2', account_fixed: 1 });
+  lane.busy = false;
+  // restart: a lane that has never run reads what was saved and applies it before settling the account
+  orchestrator.lanes.delete(c.id);
+  orchestrator.ask('hola', '', { conversation: c.id });
+  await calm(c.id);
+  assert.deepEqual([conv(c.id).account, conv(c.id).account_fixed], ['claude-2', 1]);
+  assert.equal(board.settingJson(`pending_brain:${c.id}`), null);
+  // a change made at rest drops a stale one
+  board.settingJson(`pending_brain:${c.id}`, { account: 'claude', account_fixed: 1 });
+  orchestrator.lane(c.id).pending = null;
+  orchestrator.setBrain(c.id, { account: 'claude', account_fixed: 0 });
+  assert.equal(board.settingJson(`pending_brain:${c.id}`), null);
+  // the same for a direct chat
+  const s = chat({ account: 'claude' });
+  board.settingJson(`pending_account:${s.id}`, { account: 'claude-2', account_fixed: 1 });
+  assert.equal(sessions.workingOn('claude-2'), 'pending');
+  sessions.send(s.id, 'hola');
+  await idle(s.id);
+  assert.deepEqual([sessions.get(s.id).account, sessions.get(s.id).account_fixed], ['claude-2', 1], 'applied by send before resolving');
+  board.settingJson(`pending_account:${s.id}`, { account: 'claude', account_fixed: 1 });
+  sessions.update(s.id, { account_fixed: 0 });
+  assert.equal(board.settingJson(`pending_account:${s.id}`), null, 'a change now drops the one that waited');
+  assert.equal(sessions.workingOn('claude-2'), null);
+});
+
+test('fixed to automatic on the same account keeps the chat own conversation; another account does not', async () => {
+  reset();
+  const c = board.createConversation({ title: 'sesion', agent: 'claude', account: 'claude-2', account_fixed: 1 });
+  board.updateConversation(c.id, { session_id: 'abc', turns: 3 });
+  await call('chat.settings', { conversation: c.id, account: 'auto' });
+  assert.equal(conv(c.id).session_id, 'abc', 'same account: nothing to forget');
+  await call('chat.settings', { conversation: c.id, account: 'claude' });
+  assert.equal(conv(c.id).session_id, null, 'another account: it goes on from the summary');
+});
+
+test('a fixed direct chat at its limit can be told to wait: its held messages go when the limit ends', async () => {
+  reset();
+  const s = chat({ account: 'claude-2' });
+  pauseAccount(board, 'claude-2', 3_600_000, '');
+  assert.equal(sessions.send(s.id, 'uno'), null);
+  await call('sessions.holdWait', { id: s.id });
+  assert.ok(sessions.holds.get(s.id).timer, 'a timer waits for the reset');
+  await assert.rejects(() => call('sessions.holdWait', { id: chat().id }), /./, 'nothing held, nothing to wait for');
+  clearCooldown(board, 'claude-2');
+  sessions.kickQueue(s.id);
+  await until(() => sessions.items(s.id).some((i) => i.role === 'user'), 'it goes');
+  await idle(s.id);
+  assert.equal(sessions.holds.has(s.id), false);
+});
+
+test('the side chat uses the chat account and says when an automatic chat had to use another', async () => {
+  reset();
+  const s = chat({ account: 'auto' });
+  sessions.send(s.id, 'hola');
+  await idle(s.id);
+  const own = sessions.get(s.id).account;
+  const other = own === 'claude' ? 'STAMINA' : 'PGC';
+  pauseAccount(board, own, 3_600_000, '');
+  const side = sessions.side.ask(s.id, 'una duda');
+  await until(() => sessions.side.list(s.id).find((x) => x.id === side.id)?.status === 'done', 'side answer');
+  const answer = sessions.side.list(s.id).find((x) => x.id === side.id).turns[0].a;
+  assert.ok(answer.startsWith(`Sigue con **${other}**`), answer);
+  assert.equal(sessions.get(s.id).account, own, 'the chat itself was not moved by the side chat');
+  reset();
+});
+
 test('accounts.remove and accounts.logout refuse with a turn running, a message waiting, or a chat of it in use', async () => {
   reset();
   const busy = board.createConversation({ title: 'ocupada', agent: 'claude', account: 'claude-2', account_fixed: 1 });
@@ -304,7 +392,6 @@ test('accounts.remove and accounts.logout refuse with a turn running, a message 
   assert.equal(orchestrator.workingOn('claude-2'), 'queued');
   reset();
   orchestrator.stop(held.id);
-  sessions.editQueued(s.id, sessions.queue(s.id)[0].id, { remove: true });
   assert.equal(sessions.workingOn('claude-2'), null);
   await until(() => !orchestrator.workingOn('claude-2'), 'nothing left on the account');
   assert.equal(await call('accounts.remove', { id: 'claude-2' }), true, 'with nothing going on it goes');

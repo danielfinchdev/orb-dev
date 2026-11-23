@@ -9,7 +9,7 @@ import { adapter, executable } from '../agents/index.mjs';
 import { UNGUARDED_AGENTS, requireLevel } from '../agents/unguarded.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { accountEnv } from '../domain/usage/accounts.mjs';
-import { recordSpend, accountProblemText } from '../domain/usage/budget.mjs';
+import { recordSpend, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
 import { agentKeyEnv } from '../domain/security/agent-keys.mjs';
 import { oneLine } from '../shared/text.mjs';
 
@@ -77,6 +77,8 @@ export class SideChats {
         if (res.problem) throw new Error(accountProblemText(res.problem));
         const acc = res.acc;
         if (!acc) throw new Error(tr('msg.sessions.accountGone', { account: s.account }));
+        // The chat's own account unless an automatic chat cannot use it now: then the answer says which one it came from.
+        e.note = res.switched ? accountSwitchText(res.switched, acc) : null;
         e.account = acc.id;
         e.live = this.make(s.agent, {
           exe: executable(s.agent), cwd: s.cwd, model: s.model, reasoning: 'low', permission: 'leer', // never above the chat's, whatever it is
@@ -97,6 +99,7 @@ export class SideChats {
       if (result.timedOut || (result.isError && !result.final)) { try { e.live?.close(); } catch { /* gone */ } e.live = null; } // a stuck process does not go on reading
       if (!this.map.has(e.id)) return; // closed meanwhile
       turn.a = String(result.final || result.text || e.partial || '').slice(0, 20000);
+      if (e.note && turn.a) { turn.a = `${e.note}\n\n${turn.a}`.slice(0, 20000); e.note = null; }
       e.partial = '';
       if (result.isError) { e.status = 'error'; e.error = oneLine(turn.a, 300) || tr('msg.side.failed'); if (!result.final) turn.a = ''; }
       else e.status = 'done';

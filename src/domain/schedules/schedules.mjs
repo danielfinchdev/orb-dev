@@ -8,7 +8,7 @@ import { createHash } from 'node:crypto';
 import { oneLine } from '../../shared/text.mjs';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS as AGENTS } from '../../platform/config-file.mjs';
-import { brainAccount } from '../usage/accounts.mjs';
+import { brainAccount, configuredAccount } from '../usage/accounts.mjs';
 import { nextLocalRun, systemTz, ownerTz, isValidTz } from '../../shared/tz.mjs';
 
 export const EVERY = ['once', 'hourly', 'every_hours', 'daily', 'weekly', 'monthly'];
@@ -159,7 +159,7 @@ function chatOf(board, s) {
   if (!s.same_chat) return null;
   if (s.conversation_id != null && board.conversation(s.conversation_id)) return s.conversation_id;
   const o = ctx.config?.orchestrator ?? {};
-  const c = board.createConversation({ title: s.title, project: s.project, agent: o.agent || 'claude', ...brainAccount(o.account, o.agent || 'claude'), model: o.model || null, reasoning: o.reasoning || 'medium' });
+  const c = board.createConversation({ title: s.title, project: s.project, agent: o.agent || 'claude', ...brainAccount(configuredAccount(o, o.agent || 'claude'), o.agent || 'claude'), model: o.model || null, reasoning: o.reasoning || 'medium' });
   board.updateConversation(c.id, { titled: true });
   board.run('UPDATE schedules SET conversation_id = ? WHERE id = ?', c.id, s.id);
   return c.id;

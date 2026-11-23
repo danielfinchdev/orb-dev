@@ -5,11 +5,11 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig, checkAccountHome } from '../../platform/config.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, logoutKind, closeAccountSession } from '../../domain/usage/accounts.mjs';
+import { configuredAccount, MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, logoutKind, closeAccountSession } from '../../domain/usage/accounts.mjs';
 import { devToolsReport } from '../../platform/dev-tools.mjs';
 import { PACKAGES, updateInfo, checkUpdates } from '../usage/versions.mjs';
 import { accountInfo as codexAccountInfo } from '../../agents/codex.mjs';
-import { clearCooldown, resolveAccount } from '../../domain/usage/budget.mjs';
+import { clearCooldown } from '../../domain/usage/budget.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable } from '../../agents/index.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../../agents/login.mjs';
@@ -28,6 +28,7 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
     const state = [orchestrator?.workingOn?.(id), sessions?.workingOn?.(id)];
     if (state.includes('busy')) fail(tr('msg.api.accountBusy'));
     if (state.includes('queued')) fail(tr('msg.api.accountQueued'));
+    if (state.includes('pending')) fail(tr('msg.api.accountPending'));
   };
   // What the window needs besides the agent's state: whether Orb can close each account's session (logout: 'orb' = it can,
   // 'tool' = only the agent's own command can, absent = no session to close) and what the last update check found.
@@ -142,7 +143,7 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
       if (acc.id === acc.agent) fail(tr('msg.api.mainAccount'));
       if (board.one("SELECT COUNT(*) AS n FROM tasks WHERE status = 'running' AND run_account = ?", acc.id).n) fail(tr('msg.api.accountRunning'));
       if (board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running' AND account = ?", acc.id).n) fail(tr('msg.api.accountBusy'));
-      if (ctx.config.orchestrator.account === acc.id) fail(tr('msg.api.accountAssistant'));
+      if (configuredAccount(ctx.config.orchestrator, ctx.config.orchestrator.agent || 'claude') === acc.id) fail(tr('msg.api.accountAssistant'));
       busyOrQueued(acc.id);
       // The folder (and its login) stays on disk: removing an account from the app never signs anyone out.
       const c = saveConfig({ accounts: ctx.config.accounts.filter((a) => a.id !== acc.id) }); emit('config:changed', c);
@@ -159,7 +160,8 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
       if (board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running' AND account = ?", acc.id).n) fail(tr('msg.api.accountBusy'));
       // The assistant: the account it really uses now (the process it has open, else the one it would be given).
       const o = ctx.config.orchestrator ?? {};
-      if (o.account === acc.id || resolveAccount(board, { agent: o.agent || 'claude', account: o.account !== 'auto' ? o.account || null : null, fixed: o.account !== 'auto' && Boolean(o.account) }).acc?.id === acc.id) fail(tr('msg.api.accountAssistant'));
+      // Only a fixed choice names the account; an automatic one is covered by the turn, queue and process checks below.
+      if (configuredAccount(o, o.agent || 'claude') === acc.id) fail(tr('msg.api.accountAssistant'));
       busyOrQueued(acc.id);
       // Any process still open on the account (also chats at rest, which stay open up to 20 minutes, and side chats) keeps
       // reading its login: a turn in progress stops this; resting ones are closed first.

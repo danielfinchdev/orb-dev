@@ -5,7 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { migrateTo38 } from './legacy/migrate-38.mjs';
-import { brainAccount } from '../usage/accounts.mjs';
+import { brainAccount, configuredAccount } from '../usage/accounts.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -419,7 +419,7 @@ function splitChat(db, get) {
     const at = p.lines.at(-1).at;
     // With the brain configured then (its account and model: the live conversation of the last one continues there).
     const o = ctx.config?.orchestrator ?? {};
-    const brain = brainAccount(o.account, o.agent || 'claude');
+    const brain = brainAccount(configuredAccount(o, o.agent || 'claude'), o.agent || 'claude');
     const { lastInsertRowid } = db.prepare(`INSERT INTO conversations (title, titled, project, agent, account, account_fixed, model, reasoning, status, done_at, created_at, updated_at, session_id, turns)
       VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(title, project, o.agent || 'claude', brain.account, brain.account_fixed, o.model || null, o.reasoning || 'medium', last ? 'open' : 'done', last ? null : at, from, at,
       last ? (get('orchestrator_session') || null) : null, last ? Number(get('orchestrator_turns') ?? 0) : 0);

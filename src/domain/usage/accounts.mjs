@@ -95,6 +95,17 @@ export function brainAccount(value, agent) {
   return { account: id, account_fixed: 1 };
 }
 
+// The account choice new chats start with, from the assistant's settings: 'auto' or an account id. `account` keeps naming an
+// account (the main one when automatic) so an older Orb reading the same file still finds a valid one; `accountMode` says
+// whether it is a choice. A file without it (made by an older Orb) is automatic when it names the agent's main account.
+export function configuredAccount(o, agent) {
+  const mode = o?.accountMode;
+  if (mode === 'auto' || (mode !== 'fixed' && (!o?.account || o.account === (o.agent || agent)))) return 'auto';
+  return o.account;
+}
+// The settings that say the same choice back (see configuredAccount): the account and its mode.
+export const accountSettings = (choice, agent) => (choice && choice !== 'auto' ? { account: choice, accountMode: 'fixed' } : { account: agent, accountMode: 'auto' });
+
 // The same choice, checked for a person's request (the window or a linked phone): the account must exist, be of this
 // agent and be signed in. An id the user can no longer pick (a limit is not a reason: that is told when the message goes).
 export function requireBrainAccount(value, agent) {
