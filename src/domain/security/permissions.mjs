@@ -80,6 +80,7 @@ export const METHODS = Object.freeze({
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'backup.previousKey': 'pc', 'backup.newKey': 'pc', 'backup.cancelKey': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
   // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
+  'master.helloState': 'pc', 'master.helloEnable': 'pc', 'master.unlockHello': 'pc', 'master.helloDisable': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
   // the agents' own API keys (Grok, Devin, Droid): the state says only which are saved, saving needs the unlock
   'agentKeys.state': 'pc', 'agentKeys.save': 'pc',
@@ -138,7 +139,18 @@ export const RAILS_PURPOSE = 'rails';
 // a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
 // token is for that one action); the purpose depends on what the card does.
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
-export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
+// The one-use token that turns Windows Hello on (the vault takes it only when it was made with the password).
+export const HELLO_ENABLE_PURPOSE = 'hello.enable';
+export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES), HELLO_ENABLE_PURPOSE])]);
+// Two strengths of token (the vault keeps the strength inside each one): the password's opens everything above; Windows Hello's
+// is only a proof of presence, so it opens none of what shows, saves or hands out a secret, nor a restore of the copies (a
+// copy brings the secrets of another PC). Those ask for the password, or for the phone's approval (a one-use token of that
+// strength is the only other proof they will take; src/engine/api/master.mjs › checkUnlock is where it plugs in).
+export const SECRET_METHODS = Object.freeze(new Set(['secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'mcpExt.createToken', 'sessions.grantTotal', 'backup.restore']));
+// What changes the keys' own state asks for the password too, always: Hello neither makes a new key nor proves who forgot it.
+export const PASSWORD_ONLY_METHODS = Object.freeze(new Set([...SECRET_METHODS, 'backup.newKey']));
+// The purposes whose token Hello may make: every action that asks every time, except the secrets' and the new key's.
+export const HELLO_PURPOSES = Object.freeze(Object.values(FRESH_UNLOCK).filter((p) => p !== FRESH_UNLOCK['backup.newKey']));
 // Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
 export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete', 'rules.save']));
 // The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).
@@ -150,6 +162,19 @@ export function freshPurpose(method, params, facts = {}) {
   if (method === 'config.save') return params?.patch?.rails !== undefined || railValuesChange(params?.patch, facts.current) ? RAILS_PURPOSE : null;
   if (RULE_TARGET_METHODS.has(method)) return facts.seedRule === true ? RULE_PURPOSE : null;
   return FRESH_UNLOCK[method] ?? null;
+}
+// Whether this call may be answered only by a password-strength token: a secret is shown, saved or given away, or a
+// connector that has keys is changed (the touchesKeys case), or a connector's keys are written in clear.
+export function needsPassword(method, params, current = {}) {
+  if (PASSWORD_ONLY_METHODS.has(method)) return true;
+  if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
+  if (method !== 'config.save') return false;
+  const servers = params?.patch?.mcpServers;
+  return Array.isArray(servers) && writesKeys(current, servers);
+}
+function writesKeys(current, servers) {
+  if (servers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)))) return true;
+  return touchesKeys(current?.mcpServers ?? [], servers);
 }
 export function needsUnlock(method, params, current = {}) {
   if (UNLOCK_METHODS.has(method)) return true;
@@ -163,9 +188,7 @@ export function needsUnlock(method, params, current = {}) {
   if (railValuesChange(patch, current)) return true;
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;
   if (Array.isArray(patch.protected) && (current?.protected ?? []).some((x) => !patch.protected.includes(x))) return true;
-  if (!Array.isArray(patch.mcpServers)) return false;
-  if (patch.mcpServers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)))) return true;
-  return touchesKeys(current?.mcpServers ?? [], patch.mcpServers);
+  return Array.isArray(patch.mcpServers) && writesKeys(current, patch.mcpServers);
 }
 
 // A refused call: 403, with a message the user may read.

@@ -96,7 +96,9 @@ function connect() {
     const dir = unix ? fs.mkdtempSync(path.join(os.tmpdir(), 'orb-boveda-')) : null;
     name = unix ? path.join(dir, 'c') : `\\\\.\\pipe\\orb-boveda-${id}`;
     const grants = unix ? path.join(dir, 'claves.sock') : `\\\\.\\pipe\\orb-claves-${id}`;
-    const args = ['--channel', name, '--grants', grants, ...(process.env.NODE_TEST_CONTEXT ? ['--test'] : [])];
+    // The tests' Windows Hello (a mode of src-tauri/vault/src/fake_hello.rs): the vault itself refuses it without --test.
+    const fake = process.env.NODE_TEST_CONTEXT && /^[a-z-]{0,20}$/.test(process.env.ORB_VAULT_FAKE_HELLO ?? '') ? process.env.ORB_VAULT_FAKE_HELLO : '';
+    const args = ['--channel', name, '--grants', grants, ...(process.env.NODE_TEST_CONTEXT ? ['--test', ...(fake ? [`--fake-hello=${fake}`] : [])] : [])];
     const child = spawn(bin, args, { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
     child.unref();
   }
@@ -213,10 +215,25 @@ export class Master {
   // ---- the window's unlock: a token for 5 minutes (kept in Rust), dropped when the window locks or closes.
   // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/domain/security/permissions.mjs): FRESH_MS.
   issue(purpose = null) { return this.call('issue', { purpose: purpose ?? null }); }
-  checkToken(token, purpose = null, { consume = false } = {}) {
+  // hello: a Windows Hello token passes too (only where Hello is enough: needsPassword() in permissions.mjs); by default only the password's.
+  checkToken(token, purpose = null, { consume = false, hello = false } = {}) {
     if (typeof token !== 'string' || token.length > 200) return false;
-    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume) });
+    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume), ...(hello ? { need: 'hello' } : {}) });
   }
+
+  // ---- Windows Hello (the proof is checked in Rust: src-tauri/vault/src/hello.rs). These never go through serial(): they wait
+  // for the person at the Windows prompt, and a password check must not wait behind it.
+  // → { available, enabled, valid?, tpm?, at?, waitUntil? }; a closed vault has no Hello to speak of.
+  helloState() {
+    try { return this.call('helloState'); } catch (error) { if (error.code === 'noVault') throw error; return { available: false, enabled: false }; }
+  }
+  // token: a one-use password token made for it (issue('hello.enable')). → { ok: true, tpm, at } | { ok: false, reason }.
+  helloEnable(account, token) { return this.job('helloEnable', { account, token }); }
+  // → { ok: true, unlock, until, strength: 'hello' } | { ok: false, reason, until? }.
+  helloUnlock(orbId, purpose = null) { return this.job('helloUnlock', { orbId, purpose: purpose ?? null }); }
+  // 'hello' | 'password' | null (no such token, or it ran out): the strength only, never what the token opens.
+  tokenStrength(token) { return typeof token === 'string' && token.length <= 200 ? this.call('tokenStrength', { token }) : null; }
+  helloDisable(token) { return this.call('helloDisable', { token }); }
   lock() { this.call('lock'); }
 
   // Changing it: the current one first (the same waits). The data key stays (only wrapped again).

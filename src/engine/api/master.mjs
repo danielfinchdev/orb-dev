@@ -11,7 +11,7 @@ import { machineKeys } from '../../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../../domain/security/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../../domain/security/connector-secrets.mjs';
 import { agentKeyState, saveAgentKey } from '../../domain/security/agent-keys.mjs';
-import { needsUnlock, freshPurpose, FRESH_PURPOSES, RULE_TARGET_METHODS, RAILS_PURPOSE } from '../../domain/security/permissions.mjs';
+import { needsUnlock, needsPassword, freshPurpose, FRESH_PURPOSES, HELLO_PURPOSES, HELLO_ENABLE_PURPOSE, RULE_TARGET_METHODS, RAILS_PURPOSE } from '../../domain/security/permissions.mjs';
 import { readRule, isRuleId } from '../../domain/rules/rules.mjs';
 import { DEFAULT_IDS } from '../../domain/rules/defaults.mjs';
 import * as K from '../../domain/data/backup.mjs';
@@ -42,6 +42,12 @@ export function refused(r, { code = false } = {}) {
   }
   if (code) return userError('msg.master.codeWrong', { n: r.left }, { reason: 'wrong', left: r.left });
   return userError(r.left === 1 ? 'msg.master.wrongOne' : 'msg.master.wrong', { n: r.left }, { reason: 'wrong', left: r.left });
+}
+// What a refused Windows Hello says (hello.rs's reasons). Nothing of the proof itself is in a message or in the error's fields.
+const HELLO_WORDS = { changed: 'msg.master.helloChanged', alg: 'msg.master.helloChanged', cancelled: 'msg.master.helloCancelled', unavailable: 'msg.master.helloUnavailable', failed: 'msg.master.helloFailed', busy: 'msg.master.helloBusy', none: 'msg.master.helloNone', nonce: 'msg.master.helloExpired', expired: 'msg.master.helloExpired', purpose: 'msg.master.helloNeedsPassword' };
+export function helloRefused(r) {
+  if (r.reason === 'wait') return userError('msg.master.helloWait', { s: Math.max(1, Math.ceil((Date.parse(r.until) - Date.now()) / 1000)) }, { reason: 'wait', until: r.until });
+  return userError(HELLO_WORDS[r.reason] ?? 'msg.master.helloFailed', {}, { reason: HELLO_WORDS[r.reason] ? r.reason : 'failed' });
 }
 // Where the wrong tries came from, for the owner's notice.
 const WHERE = { pc: 'msg.master.wherePc', pair: 'msg.master.wherePair', recovery: 'msg.master.whereRecovery' };
@@ -105,17 +111,23 @@ export function checkUnlock(method, params, { defer = false } = {}) {
   // counts even when its file is hidden or broken, so there is no state in which the password is skipped.
   const facts = RULE_TARGET_METHODS.has(method) ? { seedRule: isRuleId(params?.id) && (DEFAULT_IDS.has(params.id) || readRule(params.id)?.de_serie === true) } : {};
   const purpose = freshPurpose(method, params, { ...facts, current: ctx.config });
-  const needed = () => userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+  // Windows Hello's token is enough everywhere but where a secret is shown, saved or given away (needsPassword).
+  // (The phone's one-use approval will be the other proof a password-only action takes: it plugs in here, beside the password's.)
+  const hello = !needsPassword(method, params, ctx.config);
+  // A Hello token handed to a password-only action is told apart, so the window asks for the password and not for Hello again.
+  const needed = () => (!hello && typeof params?.unlock === 'string' && m.tokenStrength(params.unlock) === 'hello'
+    ? userError('msg.master.needPassword', {}, { reason: 'password' })
+    : userError('msg.master.needUnlock', {}, { reason: 'unlock' }));
   // Only the rails token waits: its handlers validate the values (saveConfig) before any effect. The other one-use tokens
   // (secrets, rules, project delete) are spent as soon as they are checked: their handlers can fail after their effect.
   if (!defer || purpose !== RAILS_PURPOSE) {
-    if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose) })) throw needed();
+    if (!m.checkToken(params?.unlock, purpose, { consume: Boolean(purpose), hello })) throw needed();
     return defer ? { unlocked: true, settle: () => {} } : true;
   }
   const token = params?.unlock;
-  if (typeof token !== 'string' || inflight.has(token) || !m.checkToken(token, purpose)) throw needed();
+  if (typeof token !== 'string' || inflight.has(token) || !m.checkToken(token, purpose, { hello })) throw needed();
   inflight.add(token);
-  return { unlocked: true, settle: (ok) => { inflight.delete(token); if (ok) { try { m.checkToken(token, purpose, { consume: true }); } catch { /* the token was already gone */ } } } };
+  return { unlocked: true, settle: (ok) => { inflight.delete(token); if (ok) { try { m.checkToken(token, purpose, { consume: true, hello }); } catch { /* the token was already gone */ } } } };
 }
 
 // onLock(why): Orb locked (or its password changed): what the master password gave the chats goes
@@ -127,6 +139,8 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
   const opened = () => { migrateSecrets(board, master(), { log, emit }); try { onUnlocked(); } catch (error) { log(`secretos: ${error.message}`); } };
   const password = (v) => (typeof v === 'string' ? v : '');
   const connector = (name) => { const n = str(name, 'conector', 40); const s = (ctx.config.mcpServers ?? []).find((x) => x.name === n); if (!s) throw userError('msg.master.noConnector', { name: n }); return s; };
+  // Windows keeps Hello's key under this name (vault accepts letters, digits and . _ - :): one per workspace.
+  const helloAccount = () => `orb-${K.orbIdOf(ctx.home).orbId}`;
   const machineSecret = () => machineKeys().backup; // this PC's backup key (the recovery wrap)
   // The secrets that go on under a new data key: not the phones' keys (every phone is unlinked), nor what the old key authenticated.
   const keepOnRekey = (id) => id !== 'remote_keys' && !HELLO_ID_PREFIXES.some((x) => id === x || id.startsWith(`${x}/`));
@@ -177,6 +191,43 @@ export function masterMethods({ board, emit, log, remoteRef, onUnlocked = () => 
       if (screen) log('pantalla de bloqueo: desbloqueada');
       screenOff();
       return m.issue(FRESH_PURPOSES.includes(purpose) ? purpose : null);
+    },
+    // ---- Windows Hello (the proof is checked in the vault; src-tauri/vault/src/hello.rs). This PC's window only.
+    'master.helloState': () => {
+      const m = master();
+      const st = m.helloState();
+      return { ...st, ...(st.enabled === true && st.valid === false ? { changed: true } : {}) };
+    },
+    // Turning it on takes the password or the recovery code, whatever token the window holds: the vault takes only the
+    // one-use token of password strength made here for it.
+    'master.helloEnable': async ({ password: p, code }) => {
+      const m = master();
+      const byCode = typeof code === 'string' && code !== '' && !password(p);
+      let r; try { r = byCode ? await m.unlockWithCode(code, K.recoveryFile(ctx.home)) : await m.verify(password(p), 'pc'); } catch (error) { throw asUser(error); }
+      if (!r.ok) throw refused(r, { code: byCode });
+      let out; try { out = await m.helloEnable(helloAccount(), m.issue(HELLO_ENABLE_PURPOSE).unlock); } catch (error) { throw asUser(error); }
+      if (!out.ok) throw helloRefused(out);
+      log('Windows Hello activado');
+      return { ok: true, tpm: out.tpm === true, at: out.at };
+    },
+    // A token from Windows Hello: purpose is one of HELLO_PURPOSES (the actions that ask every time and may take Hello), or
+    // none for the window's own 5 minutes (it also lifts the lock screen). The secrets' and the new key's purposes want the
+    // password. → { ok: true, unlock, until, strength: 'hello' }.
+    'master.unlockHello': async ({ purpose } = {}) => {
+      const m = master();
+      if (purpose != null && !HELLO_PURPOSES.includes(purpose)) throw helloRefused({ reason: 'purpose' });
+      if (!m.hasPassword()) throw userError(m.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
+      let r; try { r = await m.helloUnlock(K.orbIdOf(ctx.home).orbId, purpose ?? null); } catch (error) { throw asUser(error); }
+      if (!r.ok) throw helloRefused(r);
+      if (purpose == null) { if (screen) log('pantalla de bloqueo: desbloqueada con Windows Hello'); screenOff(); }
+      return { ok: true, unlock: r.unlock, until: r.until, strength: 'hello' };
+    },
+    // Any token of the window proves it (the vault checks it).
+    'master.helloDisable': ({ unlock } = {}) => {
+      let r; try { r = master().helloDisable(typeof unlock === 'string' ? unlock : ''); } catch (error) { throw asUser(error); }
+      if (!r?.ok) throw userError('msg.master.needUnlock', {}, { reason: 'unlock' });
+      log('Windows Hello desactivado');
+      return { ok: true };
     },
     // Windows locked or the PC sleeps (the app), Orb unused for a while (the window) or «Bloquear» by hand: every token
     // goes and, with a master password, the window shows the lock screen (screen: true) until it is typed.
