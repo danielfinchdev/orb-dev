@@ -123,6 +123,88 @@ function PairCard({ device, pair, onPair }) {
   );
 }
 
+// «Enlazar sin contraseña»: a phone without the master password, with a one-use code that the PC shows after Windows Hello (or
+// the password). The code lives only in this component (and in the vault, in memory): leaving, locking or a device linking takes
+// it off the screen. When a phone proves it has the code, the PC asks here whether to link it, with the phone's name; without
+// a yes there is no link. A phone linked this way cannot approve anything with its fingerprint (that is registered later, with
+// the password).
+function LinkCodeCard() {
+  const t = useT();
+  const [via, setVia] = useState('tailscale');
+  const [code, setCode] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  const [busy, setBusy] = useState(false);
+  const [wasExpired, setWasExpired] = useState(false);
+  const alive = useRef(true);
+  const reqN = useRef(0);
+  const asking = useRef(null);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; reqN.current += 1; }; }, []);
+  useEffect(() => { if (!code) return undefined; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [code]);
+  // The question of the PC: «¿Enlazar «name»?». Answered here, and only here.
+  const question = async (q) => {
+    if (!q?.id || asking.current === q.id) return;
+    asking.current = q.id;
+    const yes = await confirm(t('link.code.confirmTitle', { name: q.name }), t('link.code.confirmBody', { name: q.name, ip: q.ip || '?' }), { ok: t('link.code.confirmYes'), cancel: t('link.code.confirmNo'), noClose: true });
+    asking.current = null;
+    await call('link.codeAnswer', { id: q.id, accept: yes === true }).catch(quiet);
+  };
+  useEffect(() => bridge.on('*', (event, payload) => {
+    if (event === 'link:confirm') question(payload);
+    // A device linked, or Orb locked: the code is spent or cancelled.
+    if (event === 'link:devices' || event === 'master:locked') { reqN.current += 1; setCode(null); setBusy(false); }
+  }), []);
+  useEffect(() => { call('link.codeWaiting').then((q) => { if (q) question(q); }).catch(quiet); }, []);
+  const make = async () => {
+    const n = ++reqN.current;
+    // Windows Hello (or the password) first: the code is made only for a token of that.
+    const unlock = await unlockCore('linkCode');
+    if (!unlock || !alive.current || n !== reqN.current) return;
+    setBusy(true);
+    const r = await act(call('link.codeNew', { unlock, kind: via }));
+    if (!alive.current || n !== reqN.current) return;
+    const svg = r ? await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : null;
+    if (!alive.current || n !== reqN.current) return;
+    if (r) { setCode({ ...r, svg }); setVia(r.kind); setWasExpired(false); }
+    setBusy(false); setNow(Date.now());
+  };
+  const cancel = () => { reqN.current += 1; setCode(null); setBusy(false); call('link.codeCancel').catch(quiet); };
+  const expired = code && now >= code.expiresAt;
+  useEffect(() => { if (expired) { setWasExpired(true); setCode(null); call('link.codeCancel').catch(quiet); } }, [expired]);
+  const showing = code && !expired;
+  return (
+    <Block title={t('link.code.title')} note={t('link.code.hint')} data-testid="link-code-card">
+      <Panel>
+        {showing ? (
+          <div className="animate-in fade-in-0 flex items-start gap-4 px-3.5 py-3 duration-200 max-sm:flex-col" data-testid="link-code-shown">
+            <img alt={t('link.qrAlt')} className="size-40 shrink-0 rounded-card bg-white p-2" src={`data:image/svg+xml;utf8,${encodeURIComponent(code.svg)}`} data-testid="link-code-qr" />
+            <div className="flex min-w-0 flex-col gap-1.5 text-control">
+              <b className="font-medium">{t('link.code.expires')} <span className="tabular-nums" data-testid="link-code-countdown">{countdown(code.expiresAt, now)}</span></b>
+              <span className="text-muted-foreground text-caption">{t('link.code.scan')}</span>
+              <code className="bg-muted w-fit rounded-ctl px-2.5 py-1 font-mono text-[20px] font-semibold tracking-widest tabular-nums select-all" data-testid="link-code-text">{code.code}</code>
+              <code className="text-muted-foreground font-mono text-caption break-all">{code.address}</code>
+              <span className="text-muted-foreground text-caption">{t('link.code.once')}</span>
+              <span className="text-muted-foreground flex items-start gap-1.5 text-caption" data-testid="link-code-noapprove"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />{t('link.code.noApprove')}</span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <Button size="sm" variant="outline" onClick={cancel} data-testid="link-code-cancel">{t('link.code.cancel')}</Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Stack>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select caret="solid" value={via} onValueChange={setVia} title={t('link.via')} data-testid="link-code-via"
+                options={PAIR_VIA.map((k) => ({ value: k, label: t(k === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs') }))} />
+              {busy ? <LoaderCircle className="text-muted-foreground size-5 animate-spin" />
+                : <Button size="sm" onClick={make} data-testid="link-code-make"><KeyRound />{wasExpired ? t('link.code.again') : t('link.code.make')}</Button>}
+              {wasExpired ? <span className="text-muted-foreground text-caption">{t('link.code.expired')}</span> : null}
+            </div>
+          </Stack>
+        )}
+      </Panel>
+    </Block>
+  );
+}
+
 // What the drawing does not show, for «Más opciones»: what is being linked, and how to reach this PC from outside home.
 function PairMore({ device, onDevice }) {
   const t = useT();
@@ -278,6 +360,7 @@ export function MagicLinkPanel({ grouped = false, phoneAccess = null }) {
     <div className="grid gap-4 [&>*]:min-w-0" data-testid="magic-link">
       <SubSection id="dispositivos" title={title('dispositivos')}>
         <PairCard device={device} pair={pair} onPair={ask} />
+        <LinkCodeCard />
         <DevicesCard devices={devices} reload={load} onPair={ask} />
         <TailscaleCard />
         {/* phoneAccess draws «Acceso desde otros dispositivos» and puts the pairing options inside its «Más opciones» */}

@@ -19,7 +19,7 @@ export function waitSeconds(until, now = Date.now()) {
   return Number.isFinite(at) && at > now ? Math.ceil((at - now) / 1000) : 0;
 }
 // The actions Windows Hello may approve, with the words that finish «Vas a …»; the others read the generic line.
-const DO_KEYS = new Set(['open', 'backupFolder', 'legacy', 'protected', 'unlink', 'deleteProject', 'previousKey', 'removeExtension', 'rails', 'ruleSeed', 'rules', 'android', 'androidPair', 'androidEmulator', 'lock']);
+const DO_KEYS = new Set(['open', 'backupFolder', 'legacy', 'protected', 'unlink', 'deleteProject', 'previousKey', 'removeExtension', 'rails', 'ruleSeed', 'rules', 'linkCode', 'android', 'androidPair', 'androidEmulator', 'lock']);
 export const helloDoKey = (action, what = null) => {
   if (action === 'deleteProject' && what) return 'hello.do.deleteProjectNamed';
   return DO_KEYS.has(action) ? `hello.do.${action}` : 'hello.do.other';
