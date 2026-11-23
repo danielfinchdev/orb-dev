@@ -368,3 +368,30 @@ fn an_entry_of_another_data_key_does_not_count() {
   assert!(account(&mut v.lock().unwrap()).is_some(), "its OS key can still be deleted");
   let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn whether_hello_is_set_up_is_asked_of_windows_once_a_minute() {
+  struct Counting(std::sync::atomic::AtomicUsize);
+  impl Hello for Counting {
+    fn available(&self) -> bool {
+      self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      true
+    }
+    fn create(&self, _: &str) -> Result<HelloKey, HelloError> {
+      Err(HelloError::Unavailable)
+    }
+    fn sign(&self, _: &str, _: &[u8]) -> Result<Vec<u8>, HelloError> {
+      Err(HelloError::Unavailable)
+    }
+    fn delete(&self, _: &str) {}
+  }
+  let (v, _, dir) = setup(Mode::Ok);
+  let c = Counting(std::sync::atomic::AtomicUsize::new(0));
+  for i in 0..5 {
+    assert_eq!(state(&mut v.lock().unwrap(), &c, NOW + i).unwrap()["available"], json!(true));
+  }
+  assert_eq!(c.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+  state(&mut v.lock().unwrap(), &c, NOW + 61_000).unwrap();
+  assert_eq!(c.0.load(std::sync::atomic::Ordering::SeqCst), 2);
+  let _ = std::fs::remove_dir_all(dir);
+}

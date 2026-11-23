@@ -138,7 +138,12 @@ pub struct State {
   wait_until: u64,
   /// An enable is waiting for the OS key (one at a time).
   enabling: bool,
+  /// What Windows said about Hello being set up, and until when that holds: asking it is a blocking call and every protected
+  /// dialog asks for the state.
+  available: Option<(u64, bool)>,
 }
+/// How long «Hello is available» is taken as known.
+const AVAILABLE_MS: u64 = 60_000;
 impl State {
   pub(crate) fn drop_pending(&mut self) {
     self.pending = None;
@@ -175,7 +180,14 @@ pub fn account(v: &mut Vault) -> Option<String> {
 }
 
 pub fn state(v: &mut Vault, hello: &dyn Hello, now: u64) -> Result<Value, Code> {
-  let available = hello.available();
+  let available = match v.hello.available {
+    Some((until, known)) if until > now => known,
+    _ => {
+      let asked = hello.available();
+      v.hello.available = Some((now + AVAILABLE_MS, asked));
+      asked
+    }
+  };
   let wait = if v.hello.wait_until > now { json!(crate::vault::iso(v.hello.wait_until)) } else { Value::Null };
   Ok(match entry(v)? {
     None => json!({ "available": available, "enabled": false }),
