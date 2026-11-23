@@ -105,6 +105,8 @@ export default {
   'tasks.undo.preview.tooBig': 'File too large: no diff',
   'tasks.undo.preview.cut': 'Diff too long: no diff',
   'tasks.undo.preview.noText': 'No diff to show',
+  'tasks.undo.preview.noDiffRow': 'Too many files: no diff',
+  'tasks.undo.preview.moreNoDiff': 'And {n} more without a diff.',
   'tasks.undo.preview.show': 'View diff',
   'tasks.undo.preview.hide': 'Hide diff',
   'tasks.undo.preview.conflicts': '{n} in conflict: left as they are',

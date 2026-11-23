@@ -85,3 +85,19 @@ test('tasks.undo with the hash of a preview that no longer holds writes nothing'
   const out = await call('tasks.undo', { id: task.id });
   assert.ok(out.skipped.includes('a.txt'));
 });
+
+test('a file edited after the preview makes its hash stale; many files: diffs only up to the cap, links are never read', async () => {
+  fs.writeFileSync(path.join(repo, 'mine.txt'), 'x\n'); fs.writeFileSync(path.join(repo, 'a.txt'), 'one\ntwo\nthree\n');
+  const task = finishedTask();
+  const p = await call('tasks.undoPreview', { id: task.id });
+  fs.writeFileSync(path.join(repo, 'new.txt'), 'hello, edited\n'); // still «remove», but another content
+  await assert.rejects(call('tasks.undo', { id: task.id, hash: p.hash }), /cambiado|changed/);
+  assert.ok(fs.existsSync(path.join(repo, 'new.txt')));
+  const { undoPreviewFiles } = await import('../src/domain/tasks/checkpoints.mjs');
+  const cp = board.settingJson(`checkpoint:${task.id}`).before;
+  const plan = Array.from({ length: 5 }, (_, i) => ({ path: `a.txt`, action: 'restore', i }));
+  const rows = undoPreviewFiles(cp, plan, { maxDiffs: 2 });
+  assert.equal(rows.filter((r) => r.noDiff).length, 3);
+  assert.equal(rows.filter((r) => r.patch).length, 2);
+  await call('tasks.undo', { id: task.id }); // leave the folder as it was
+});

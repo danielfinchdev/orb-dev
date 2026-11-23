@@ -129,8 +129,8 @@ export class SafetyPart {
   // after it. Meanwhile no task starts in that project (holding) and a second undo of the same task is refused.
   // The files of an undo, from a full snapshot. dry: nothing is written (the preview), and the result carries `plan` (the
   // same decisions the real undo takes, undoCheckpoint › dry). The caller holds the project.
-  async undoOutcome(task, cp, dry) {
-    const full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
+  async undoOutcome(task, cp, dry, shared = null) {
+    const full = shared ?? await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
     if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
     const after = cp.after?.commit ? cp.after : full;
     const out = undoCheckpoint(cp.before, after, { dry });
@@ -159,7 +159,8 @@ export class SafetyPart {
     const release = this.hold(task.project);
     try {
       const out = cp.before.kind === 'git' ? await this.undoOutcome(task, cp, true) : undoCheckpoint(cp.before, cp.after ?? {}, { dry: true });
-      return { hash: undoPlanHash(cp, out.plan), files: undoPreviewFiles(cp.before, out.plan), counts: countPlan(out.plan) };
+      const files = undoPreviewFiles(cp.before, out.plan);
+      return { hash: undoPlanHash(cp, out.plan), files, counts: countPlan(out.plan), noDiff: files.filter((x) => x.noDiff).length };
     } finally { release(); }
   }
 
@@ -175,8 +176,14 @@ export class SafetyPart {
       const release = this.hold(task.project);
       try {
         // With the fingerprint of a preview, the plan is worked out again first and nothing is written if it changed.
-        if (hash !== undefined && undoPlanHash(cp, (await this.undoOutcome(task, cp, true)).plan) !== hash) throw new Error(tr('msg.undo.previewStale'));
-        out = await this.undoOutcome(task, cp, false);
+        // one full snapshot serves the check and the real run
+        let full = null;
+        if (hash !== undefined) {
+          full = await fullSnapshot(cp.before.repo, { message: 'orb: foto para deshacer (todo releído)' });
+          if (!full) throw new Error(tr('msg.scheduler.cannotReadFolder'));
+          if (undoPlanHash(cp, (await this.undoOutcome(task, cp, true, full)).plan) !== hash) throw new Error(tr('msg.undo.previewStale'));
+        }
+        out = await this.undoOutcome(task, cp, false, full);
       } finally { release(); }
     } else {
       if (hash !== undefined && undoPlanHash(cp, undoCheckpoint(cp.before, cp.after ?? {}, { dry: true }).plan) !== hash) throw new Error(tr('msg.undo.previewStale'));
@@ -230,7 +237,13 @@ export class SafetyPart {
 // The fingerprint of what an undo would do: the two photos it goes between and each file with its final state. The preview
 // shows this plan and the undo that carries its hash recomputes it, so the two cannot disagree.
 export function undoPlanHash(cp, plan) {
-  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => `${p.action}\t${p.path}`);
+  // the content each changing file has right now is part of it: a file edited after the preview is a different plan
+  const dir = cp.before?.kind === 'git' ? cp.before.repo : cp.before?.dir;
+  const nowOf = (p) => {
+    if (!['restore', 'remove', 'recreate'].includes(p.action) || !dir) return '';
+    try { return crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, p.path))).digest('hex'); } catch { return 'absent'; }
+  };
+  const rows = [...plan].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)).map((p) => `${p.action}\t${p.path}	${nowOf(p)}`);
   return crypto.createHash('sha256').update(JSON.stringify([cp.before?.commit ?? cp.before?.copy ?? '', cp.after?.commit ?? '', rows])).digest('hex').slice(0, 32);
 }
 export function countPlan(plan) {

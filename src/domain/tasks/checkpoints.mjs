@@ -645,16 +645,20 @@ export function undoCheckpoint(before, after, { only = null, safe = false, madeA
 // diff from how it is now to how it will be (read only; the files are only read). A binary or oversized file has no
 // patch, only its state; secret-looking paths are left out of the patches and the text of the rest is redacted.
 // → [{ path, action, binary, tooBig, cut, added, removed, patch }]
-export function undoPreviewFiles(before, plan, { maxBytes = 512 * 1024, maxPatch = 200_000, maxTotal = 2_000_000 } = {}) {
+export function undoPreviewFiles(before, plan, { maxBytes = 512 * 1024, maxPatch = 200_000, maxTotal = 2_000_000, maxDiffs = 200 } = {}) {
   const dir = before.kind === 'git' ? before.repo : before.dir;
   const cfg = before.raw ? RAW_GIT : [];
-  let tmp = null; let total = 0;
+  let tmp = null; let total = 0; let diffs = 0;
   const out = [];
   try {
     for (const { path: rel, action } of plan) {
       const row = { path: rel, action, binary: false, tooBig: false, cut: false, added: 0, removed: 0, patch: '' };
       out.push(row);
       if (!['restore', 'recreate', 'remove'].includes(action) || isSecretPath(rel) || isSecretPath(rel.toLowerCase())) continue;
+      // past the cap (each diff costs several git runs) a file shows only its state; a link is never followed to read it
+      if (diffs >= maxDiffs) { row.noDiff = true; continue; }
+      if (!linkFree(dir, path.join(dir, rel))) continue;
+      diffs++;
       try {
         let target = null; let now = null;
         if (action !== 'remove') {
@@ -663,6 +667,7 @@ export function undoPreviewFiles(before, plan, { maxBytes = 512 * 1024, maxPatch
             if (size.status === 0 && Number(size.stdout.trim()) > maxBytes) { row.tooBig = true; continue; }
             const blob = gitBuffer(dir, ...cfg, 'cat-file', '--filters', `${before.commit}:${rel}`);
             if (blob.status !== 0) continue;
+            if (blob.stdout.length > maxBytes) { row.tooBig = true; continue; } // --filters (LFS) may give more than the stored size
             target = blob.stdout;
           } else {
             const src = path.join(before.copy, rel);

@@ -19,7 +19,7 @@ export function sortPlan(files) {
 function Row({ f }) {
   const t = useT();
   const [open, setOpen] = useState(false);
-  const note = f.binary ? t('tasks.undo.preview.binary') : f.tooBig ? t('tasks.undo.preview.tooBig') : f.cut ? t('tasks.undo.preview.cut') : !f.patch ? t('tasks.undo.preview.noText') : null;
+  const note = f.noDiff ? t('tasks.undo.preview.noDiffRow') : f.binary ? t('tasks.undo.preview.binary') : f.tooBig ? t('tasks.undo.preview.tooBig') : f.cut ? t('tasks.undo.preview.cut') : !f.patch ? t('tasks.undo.preview.noText') : null;
   const changes = f.action === 'restore' || f.action === 'recreate' || f.action === 'remove';
   return (
     <li className="grid gap-1.5 py-1.5" data-testid="undo-preview-file" data-action={f.action}>
@@ -57,7 +57,7 @@ export function UndoPreview({ taskId, set }) {
     <div className="grid gap-2" data-testid="undo-preview">
       <b className="text-control font-semibold">{t('tasks.undo.preview.heading')}</b>
       {conflicts ? <p className="text-warning m-0 text-caption" data-testid="undo-preview-conflicts">{t('tasks.undo.preview.conflicts', { n: conflicts })}</p> : null}
-      <p className="text-muted-foreground m-0 text-caption">{t('tasks.undo.preview.diffNote')}</p>
+      <p className="text-muted-foreground m-0 text-caption">{t('tasks.undo.preview.diffNote')}{state.preview?.noDiff ? ` ${t('tasks.undo.preview.moreNoDiff', { n: state.preview.noDiff })}` : ''}</p>
       <ul className="divide-border m-0 max-h-80 list-none divide-y overflow-auto p-0">{files.map((f) => <Row key={f.path} f={f} />)}</ul>
     </div>
   );
