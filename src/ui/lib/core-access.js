@@ -10,14 +10,16 @@
 //   layoutTitle / layoutOptions: the rows of «Ordenar carpetas» (views/layout.jsx; app.layoutPlan's items).
 import { CATEGORIES } from '../../shared/layout.mjs';
 
-let held = null; // { unlock, until }
-let asker = null; // (action) => Promise<{ unlock, until } | null>
+let held = null; // { unlock, until, strength }
+let asker = null; // (action, { fresh, what }) => Promise<{ unlock, until, strength? } | null>
 export const setMasterAsker = (fn) => { asker = fn; };
-// A token the engine just gave (master.create, master.change, master.forgot) is kept the same way.
-export const keepUnlock = (r) => { held = r?.unlock ? { unlock: r.unlock, until: Number(r.until) || 0 } : held; return r?.unlock ?? null; };
+// A token the engine just gave (master.create, master.change, master.forgot, master.unlockHello) is kept the same way.
+// strength: 'hello' for a token made with Windows Hello (a proof of presence), anything else is the password's.
+export const keepUnlock = (r) => { held = r?.unlock ? { unlock: r.unlock, until: Number(r.until) || 0, strength: r.strength === 'hello' ? 'hello' : 'password' } : held; return r?.unlock ?? null; };
 export const dropUnlock = () => { held = null; };
-// Still good for a few seconds more (the call that uses it must arrive in time).
-export const heldUnlock = (now = Date.now()) => (held && held.until - 5000 > now ? held.unlock : null);
+// Still good for a few seconds more (the call that uses it must arrive in time). needsPassword: the caller is an action that
+// shows or saves secrets, which a Windows Hello token never opens (src/domain/security/permissions.mjs › SECRET_METHODS).
+export const heldUnlock = (now = Date.now(), { needsPassword = false } = {}) => (held && held.until - 5000 > now && !(needsPassword && held.strength === 'hello') ? held.unlock : null);
 // When the held unlock ends (ms), or null when there is none: read-only, for «desbloqueado, quedan N min». The token itself is never exposed.
 export const heldUntil = (now = Date.now()) => (held && held.until - 5000 > now ? held.until : null);
 
@@ -30,12 +32,20 @@ export const heldUntil = (now = Date.now()) => (held && held.until - 5000 > now 
 // changing a shipped text rule (ruleSeed).
 // «Acceso total» and the Android phone take the usual 5-minute unlock, like editing a rule of your own (rules).
 export const FRESH_ACTIONS = Object.freeze(['deleteProject', 'secretSave', 'secretSaved', 'rails', 'ruleSeed', 'newKey']);
-export async function unlockCore(action) {
+// The actions only the password (or the phone's approval) opens, never Windows Hello: what shows, saves or hands out a secret,
+// restoring a copy (it brings the secrets of another PC), the new key and turning Hello on. Mirrors PASSWORD_ONLY_METHODS and
+// SECRET_PURPOSES; the engine refuses a Hello token for them anyway, this only keeps the window from offering it.
+export const PASSWORD_ACTIONS = Object.freeze(['restore', 'secrets', 'connector', 'secretSave', 'secretSaved', 'fullAccess', 'mcpExt', 'newKey', 'hello']);
+// The «ask every time» actions Windows Hello may approve (permissions.mjs › HELLO_PURPOSES).
+const HELLO_FRESH = Object.freeze(['deleteProject', 'rails', 'ruleSeed']);
+export const canUseHello = (action) => !PASSWORD_ACTIONS.includes(action) && (!FRESH_ACTIONS.includes(action) || HELLO_FRESH.includes(action));
+// what: the thing the action is about (a project's name), said before Windows' own notice.
+export async function unlockCore(action, { what = null } = {}) {
   const fresh = FRESH_ACTIONS.includes(action);
-  const have = fresh ? null : heldUnlock();
+  const have = fresh ? null : heldUnlock(Date.now(), { needsPassword: PASSWORD_ACTIONS.includes(action) });
   if (have) return have;
   if (!asker) return null;
-  const r = await asker(action, { fresh });
+  const r = await asker(action, { fresh, what });
   return fresh ? r?.unlock ?? null : keepUnlock(r);
 }
 

@@ -67,7 +67,7 @@ test('3: the words promise nothing false (no «al abrir Orb», the code is not t
 
 test('4: the recovery code is made only when there is none, shown once, kept nowhere, and a failure asks the user', () => {
   assert.match(create, /call\('backup\.status'\)\.then\(\(s\) => setHasCode\(Boolean\(s\?\.recovery\)\)\)/);
-  assert.match(create, /if \(hasCode === true\) \{ onDone\?\.\(\); return; \}/);
+  assert.match(create, /if \(hasCode === true\) \{ finish\(\); return; \}/);
   assert.match(create, /\(await call\('master\.state'\)\)\?\.canForget\) return \{ have: true \}/);
   assert.match(create, /call\('backup\.recovery', \{ unlock, password: v\.next \}\)/);
   assert.match(create, /const unlock = heldUnlock\(\);\s*if \(!unlock\) return \{ error: 'expired' \};/);
@@ -75,7 +75,7 @@ test('4: the recovery code is made only when there is none, shown once, kept now
   // A failed code is no toast: the card says so and the user retries or goes on.
   assert.doesNotMatch(create, /notifyWarn/);
   assert.match(create, /const retry = async \(\) => \{ setBusy\(true\); showIssue\(await issue\(\)\); \};/);
-  assert.match(create, /onRetry=\{retry\} onLater=\{\(\) => onDone\?\.\(\)\} onDone=\{\(\) => onDone\?\.\(\)\}/);
+  assert.match(create, /onRetry=\{retry\} onLater=\{finish\} onDone=\{finish\}/);
   assert.match(code, /master\.codeError[\s\S]*master-code-later[\s\S]*master-code-retry/);
   assert.match(code, /error === 'expired' \? null :/);
   assert.match(es, /'master\.codeError': 'No se ha podido crear el código de recuperación\.'/);

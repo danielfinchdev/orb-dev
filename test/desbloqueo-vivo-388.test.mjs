@@ -35,7 +35,7 @@ test('the dialog that asks before a guarded action still says what for, and send
 test('the lock screen has no new way to unlock: one master.unlock call (plus the read of when it locked) and the old forgot flow', () => {
   const calls = [...master.matchAll(/call\('(master\.[a-z]+)'/g)].map((m) => m[1]);
   assert.deepEqual([...new Set(calls)].sort(), ['master.change', 'master.create', 'master.forgot', 'master.lock', 'master.reset', 'master.state', 'master.unlock']);
-  assert.equal([...locked.matchAll(/call\('/g)].length, 2);
+  assert.equal([...locked.matchAll(/call\('/g)].length, 3); // + whether Windows Hello is on (the button)
   assert.match(locked, /call\('master\.state'\)/);
   assert.match(locked, /call\('master\.unlock', \{ password \}\)/);
   assert.match(locked, /forgotFlow\(\{ canForget \}\)/);
