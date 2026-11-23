@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "084e6d31a644bacc2050227399ea8b0943fe0608695f513f04117fec6bbb4140",
+  "source": "1f441981a53145cc6053ee09efd414f992d63d8f87dfc6befbdb5da6431b21f0",
   "methods": [
     "activity.list",
     "activity.report",
@@ -11,6 +11,7 @@
     "chat.answer",
     "chat.compact",
     "chat.editQueued",
+    "chat.holdWait",
     "chat.list",
     "chat.notes",
     "chat.pin",
@@ -85,6 +86,7 @@
     "sessions.fork",
     "sessions.goal",
     "sessions.handoff",
+    "sessions.holdWait",
     "sessions.items",
     "sessions.list",
     "sessions.modes",

@@ -2,7 +2,9 @@
  "methods": {
   "accounts.add": "pc",
   "accounts.clearCooldown": "pc",
+  "accounts.identityFound": "pc",
   "accounts.logout": "pc",
+  "accounts.rememberIdentity": "pc",
   "accounts.remove": "pc",
   "accounts.scan": "pc",
   "accounts.update": "pc",
