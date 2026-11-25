@@ -24,6 +24,7 @@ import { AccountMark } from '@/components/brain-picker.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
+import { isMissingMethod } from '@/lib/rules-access.js';
 import { Block, Panel, Setting, save } from './settings/rows.jsx';
 
 const usd = (n, locale) => `$${Number(n ?? 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -302,6 +303,8 @@ export function UsageView() {
   const [hidden, setHidden] = useState({});
   const [shown, setShown] = useState(8);
   const [data, setData] = useState(null);
+  // a PC on an older Orb has no `usage.records`: the charts say so, the limits do not need it
+  const [oldEngine, setOldEngine] = useState(false);
   const [accounts, setAccounts] = useState(null);
   const [local, setLocal] = useState(null);
   const [tick, setTick] = useState(0);
@@ -312,7 +315,7 @@ export function UsageView() {
   const askToday = localToday();
   const askWin = windowOf(period, custom, askToday);
   const need = daysNeeded(askWin, askToday);
-  useEffect(() => { let alive = true; call('usage.records', { days: need }).then((r) => alive && setData({ ...r, need })).catch(() => alive && setData(false)); return () => { alive = false; }; }, [need, version, tick]);
+  useEffect(() => { let alive = true; call('usage.records', { days: need }).then((r) => alive && (setOldEngine(false), setData({ ...r, need }))).catch((e) => alive && (setOldEngine(isMissingMethod(e)), setData(false))); return () => { alive = false; }; }, [need, version, tick]);
   const reload = () => call('usage.get').then((r) => setAccounts(r ?? [])).catch(quiet);
   useEffect(() => { let alive = true; call('usage.get').then((r) => alive && setAccounts(r ?? [])).catch(() => alive && setAccounts((a) => a ?? [])); return () => { alive = false; }; }, [version, tick]);
   const localDays = askWin.days <= 1 ? 1 : askWin.days <= 7 ? 7 : askWin.days <= 30 ? 30 : 90;
@@ -467,7 +470,7 @@ export function UsageView() {
               </Block>
               {fullPc() ? <Limits cfg={cfg} accounts={accounts ?? []} windowHours={accounts?.[0]?.windowHours ?? cfg.budget?.windowHours ?? 5} /> : null}
             </>
-          ) : data === null || loading ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t('usage.unavailable')} /> : (
+          ) : data === null || loading ? <Spinner /> : data === false ? <Empty icon={Gauge} title={t(oldEngine ? 'usage.engineOld' : 'usage.unavailable')} /> : (
             <>
               <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-2.5" data-testid="usage-kpis">
                 {kpis.map(([label, value, extra]) => (

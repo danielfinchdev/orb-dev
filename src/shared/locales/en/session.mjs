@@ -144,6 +144,7 @@ export default {
   'history.readOnly': 'Read only · {agent}',
   'history.truncated': 'The chat is very long: only the start is shown.',
   'usage.unavailable': 'Usage could not be loaded',
+  'usage.engineOld': 'Update Orb on the PC to see this chart',
   'session.switchAgent': 'Continue with another agent',
   'session.switchAgentDesc': 'Opens a new chat with a summary of this one. The original is kept.',
   'session.switchAgentOk': 'Continue',
