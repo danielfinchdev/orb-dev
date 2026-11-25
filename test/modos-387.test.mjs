@@ -89,9 +89,9 @@ test('/goal pauses when the account hits its usage limit, and refuses to start b
   assert.match(goal.reason, /límite de uso/);
   assert.equal(agentTurns(s.id).length, 1);
   // the account is in its cooldown now: a new goal (or «continuar») is refused by the same brake that holds tasks back
-  await assert.rejects(call('sessions.send', { id: s.id, text: '/goal continuar' }), /freno de uso/i);
+  await assert.rejects(call('sessions.send', { id: s.id, text: '/goal continuar' }), /pausa por límite de uso/i);
   const other = await chat(call);
-  await assert.rejects(call('sessions.send', { id: other.id, text: '/goal AVANZA otra vez' }), /freno de uso/i);
+  await assert.rejects(call('sessions.send', { id: other.id, text: '/goal AVANZA otra vez' }), /pausa por límite de uso/i);
   assert.equal(agentTurns(other.id).length, 0);
 });
 
@@ -100,7 +100,7 @@ test('/goal stops between turns when the real usage reaches the brake', async ()
   const s = await chat(call);
   await call('sessions.send', { id: s.id, text: '/goal RATE 99 AVANZA' });
   const goal = await goalIn(call, s.id, ['paused']);
-  assert.match(goal.reason, /freno de uso/i);
+  assert.match(goal.reason, /pausa por límite de uso/i);
   assert.equal(agentTurns(s.id).length, 1, 'the second turn was not sent');
 });
 
