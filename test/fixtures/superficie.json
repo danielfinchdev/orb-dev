@@ -151,6 +151,8 @@
   "installer.devTools": "pc",
   "installer.progress": "pc",
   "installer.start": "pc",
+  "installer.suggest": "pc",
+  "installer.updates": "pc",
   "keys.get": "pc",
   "keys.save": "pc",
   "legacy.delete": "pc",
