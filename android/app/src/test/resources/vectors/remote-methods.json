@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "ef218eccf501114153ccb5719c9c7e180ba085dce3ffd0eceec3666898bee9b6",
+  "source": "de4c543a94c2f5ca1facce9876e586fae575f9380135f1dec0598c64b795f7a9",
   "methods": [
     "activity.list",
     "activity.report",
@@ -129,6 +129,7 @@
     "usage.get",
     "usage.history",
     "usage.now",
+    "usage.records",
     "usage.refresh",
     "whiteboard.canvasNote",
     "whiteboard.load",
