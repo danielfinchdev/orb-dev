@@ -241,7 +241,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'webviaproject'], ['nav-agents', '07-agentes', 'Agentes nativos'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Creaste la tarea'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'webviaproject'], ['nav-agents', '07-agentes', 'Agentes y cuentas'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Creaste la tarea'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -269,7 +269,7 @@ try {
   await win.waitForTimeout(400);
   await shot('10-ajustes');
   // 3.6: six sections; some of the old ones are now a part of one (clicked under its name in the menu).
-  const PARTS = { apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'], experto: ['avanzado', 'experto'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+  const PARTS = { actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'], experto: ['avanzado', 'experto'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
   const section = async (name) => {
     const [id, part] = PARTS[name] ?? [name];
     await win.click(`[data-testid=settings-nav-${id}]`);
@@ -282,13 +282,13 @@ try {
   await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
   await win.locator('[data-testid=settings-about]', { hasText: /Instalada: \d+\.\d+\.\d+/ }).waitFor();
   // 3.8: «Datos» has the master password's card (change it, «He olvidado la contraseña»).
-  await section('datos');
+  await section('permisos');
   await win.locator('[data-testid=master-card] [data-testid=master-change]').waitFor();
   await win.waitForTimeout(300);
   await shot('10j-ajustes-datos');
   // 3.8: one person per Orb: no Usuarios, PIN nor admin anywhere in Ajustes.
   for (const id of ['usuarios', 'personas', 'conexiones', 'servidor']) assert.equal(await win.locator(`[data-testid=settings-nav-${id}]`).count(), 0, `sin la sección ${id}`);
-  await section('general');
+  await section('apariencia');
   await win.locator('[data-testid=skin-picker]').waitFor();
   await shot('10e-ajustes-apariencia');
   // A visual theme applies at once to the whole app; the professional one has no robot.

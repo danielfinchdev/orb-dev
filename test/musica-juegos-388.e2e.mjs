@@ -67,6 +67,7 @@ try {
 
   step('silent first: the volume of Ajustes at zero');
   await page.click('[data-testid=nav-settings]');
+  await page.click('[data-testid=settings-nav-apariencia]');
   await page.locator('[data-testid=music-volume]').focus();
   await page.keyboard.press('Home');
   await until(async () => (await ui()).music?.volume === 0, 'the volume at zero');
