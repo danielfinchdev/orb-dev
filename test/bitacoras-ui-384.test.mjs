@@ -99,7 +99,7 @@ test('texts: both languages, the privacy note says «se ocultan», and no raw pi
   const keys = Object.keys(es).filter((k) => k.startsWith('logbooks.') || k.startsWith('nav.logbooks'));
   assert.ok(keys.length > 30);
   for (const k of keys) assert.ok(en[k], `en has ${k}`);
-  assert.match(es['logbooks.reportPrivacy'], /se ocultan las claves y tokens que se reconocen/);
+  assert.match(es['logbooks.reportPrivacy'], /Ocultamos tus claves antes de copiar/);
   assert.doesNotMatch(es['logbooks.reportPrivacy'], /se quitan/);
   for (const f of ['views/memories.jsx', 'views/logs.jsx', 'views/activity.jsx', 'views/activity-report.jsx', 'views/rules.jsx']) assert.doesNotMatch(src(f), /text-\[/, f);
 });
