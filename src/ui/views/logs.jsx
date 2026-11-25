@@ -13,8 +13,8 @@ import { IconButton, ListCard, NavRow, SearchInput } from '@/components/ui/primi
 import { useStore, call } from '@/lib/store.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
-import { highlightIn } from '@/lib/highlight.js';
-import { groupLogs, parseEntries, authorAgent, countHits } from '@/lib/logbook.js';
+import { highlightIn, foldText } from '@/lib/mark-matches.js';
+import { groupLogs, parseEntries, authorAgent, foldedEntries, countFolded } from '@/lib/logbook.js';
 import { BitacorasPage } from './bitacoras-page.jsx';
 
 const kb = (size) => `${Math.max(1, Math.ceil(size / 1024))} KB`;
@@ -34,33 +34,44 @@ function stamp(e, t, locale) {
 function Lbl({ children }) { return <div className="lbl text-faint-foreground px-2.5 pt-2.5 pb-1 text-micro uppercase first:pt-1">{children}</div>; }
 
 function Entry({ e, t, locale, query }) {
-  const ref = useRef(null);
-  // the match is marked on the drawn text; the cleanup puts the original text back before the next one
-  useEffect(() => highlightIn(ref.current, query), [query, e]);
   return (
-    <article ref={ref} className="entry bg-card border-border rounded-card [&_mark]:bg-primary-soft [&_mark]:text-foreground border px-3.5 py-3 [&_mark]:rounded-sm [&_mark]:px-0.5" data-testid="log-entry">
-      <div className="top text-muted-foreground flex items-center gap-2 text-caption">
-        <span data-agent={authorAgent(e.author)} aria-hidden="true" className="inline-flex"><Circle className="size-2 fill-current" /></span>
-        {e.author ? <b className="text-foreground font-medium">{e.author}</b> : null}
-        {e.date ? <time>{stamp(e, t, locale)}</time> : null}
-        <span className="ml-auto">#{e.n}</span>
-      </div>
-      <h3 className="mt-1.5 mb-1 font-(family-name:--title) text-card-title font-semibold">{e.topic}</h3>
-      {e.parts?.length ? (
-        <>
-          {e.lead ? <div className="text-body"><Markdown>{e.lead}</Markdown></div> : null}
-          <dl className="kv mt-2 mb-0 grid grid-cols-[80px_minmax(0,1fr)] gap-x-2.5 gap-y-2.25 text-body" data-testid="log-entry-parts">
-            {e.parts.map((p, i) => (
-              <Fragment key={i}>
-                <dt className="text-muted-foreground" data-part={p.key}>{t(`logbooks.part.${p.key}`)}</dt>
-                <dd className="m-0 min-w-0 [&_p]:m-0"><Markdown>{p.text}</Markdown></dd>
-              </Fragment>
-            ))}
-          </dl>
-        </>
-      ) : e.body ? <div className="text-body"><Markdown>{e.body}</Markdown></div> : null}
+    <article className="entry bg-card border-border rounded-card [&_mark]:bg-primary-soft [&_mark]:text-foreground border px-3.5 py-3 [&_mark]:rounded-sm [&_mark]:px-0.5" data-testid="log-entry">
+      {/* the key holds the query: a new one draws the entry again, so React never reconciles text nodes the marks replaced */}
+      <MarkedBody key={query} query={query}>
+        <div className="top text-muted-foreground flex items-center gap-2 text-caption">
+          <span data-agent={authorAgent(e.author)} aria-hidden="true" className="inline-flex"><Circle className="size-2 fill-current" /></span>
+          {e.author ? <b className="text-foreground font-medium">{e.author}</b> : null}
+          {e.date ? <time>{stamp(e, t, locale)}</time> : null}
+          <span className="ml-auto">#{e.n}</span>
+        </div>
+        <h3 className="mt-1.5 mb-1 font-(family-name:--title) text-card-title font-semibold">{e.topic}</h3>
+        {e.parts?.length ? (
+          <>
+            {e.lead ? <div className="text-body"><Markdown>{e.lead}</Markdown></div> : null}
+            <dl className="kv mt-2 mb-0 grid grid-cols-[80px_minmax(0,1fr)] gap-x-2.5 gap-y-2.25 text-body" data-testid="log-entry-parts">
+              {e.parts.map((p, i) => (
+                <Fragment key={i}>
+                  <dt className="text-muted-foreground" data-part={p.key}>{t(`logbooks.part.${p.key}`)}</dt>
+                  <dd className="m-0 min-w-0 [&_p]:m-0"><Markdown>{p.text}</Markdown></dd>
+                </Fragment>
+              ))}
+            </dl>
+          </>
+        ) : e.body ? <div className="text-body"><Markdown>{e.body}</Markdown></div> : null}
+      </MarkedBody>
     </article>
   );
+}
+
+// Marks the query on the text nodes once the children are drawn. The cleanup is guarded: the nodes may be gone already.
+function MarkedBody({ query, children }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    let undo = () => {};
+    try { undo = highlightIn(ref.current, query); } catch { /* an entry without marks is still readable */ }
+    return () => { try { undo(); } catch { /* removed with the entry */ } };
+  }, [query]);
+  return <div ref={ref}>{children}</div>;
 }
 
 const displayName = (name, t) => (name === 'general' ? t('logs.general') : name.replace(/\s*eliminad[oa]$/i, ''));
@@ -73,33 +84,48 @@ export function LogsView({ route, tabs }) {
   const dir = logs.find((l) => l.dir)?.dir;
   const [selected, setSelected] = useState(route.name ?? 'general');
   const [whole, setWhole] = useState(false);
-  const [body, setText] = useState(null);
+  const [read, setRead] = useState({ log: null, text: null });
   const [q, setQ] = useState('');
+  const [dq, setDq] = useState('');
   const [scope, setScope] = useState('here');
   const [hits, setHits] = useState(null);
   const [tick, setTick] = useState(0);
   const cache = useRef({});
-  const needle = q.trim().toLowerCase();
+  // the filter, the marks and the other logs wait for a pause in the typing
+  useEffect(() => { const h = setTimeout(() => setDq(q), 180); return () => clearTimeout(h); }, [q]);
+  const shown = dq.trim();
+  const needle = foldText(shown);
+  // the text of this log stays on view while the whole one is read (the list keeps its scroll); another log starts empty
+  const body = read.log === selected ? read.text : null;
   // a search in this log reads it whole: the short reading only has its latest entries
   const full = whole || needle.length > 0;
   useEffect(() => { call('logs.list').then(setLogs).catch(quiet); }, [version, tick]);
-  useEffect(() => { setText(null); call('logs.read', { project: selected, whole: full }).then(setText).catch((e) => setText(e.message)); }, [selected, full, version, tick]);
+  useEffect(() => {
+    let alive = true;
+    const put = (text) => { if (alive) setRead({ log: selected, text }); };
+    call('logs.read', { project: selected, whole: full }).then(put).catch((e) => put(e.message));
+    return () => { alive = false; };
+  }, [selected, full, version, tick]);
   useEffect(() => { cache.current = {}; }, [tick]);
   // The search across all of them reads each log whole (the short reading only has the latest entries) and one after
   // another, and keeps it until its size changes: a refresh of the app while agents work reads nothing again.
   const sizes = logs.map((l) => `${l.name}:${l.size}`).join('|');
-  const searching = needle.length >= 2;
+  const searching = shown.length >= 2;
   useEffect(() => {
-    if (!searching) { setHits(null); return undefined; }
+    setHits(null);
+    if (!searching) return undefined;
     let alive = true;
     const h = setTimeout(async () => {
       for (const l of logs) {
         if (!alive) return;
-        if (cache.current[l.name]?.size === l.size) continue;
-        const text = await call('logs.read', { project: l.name, whole: true }).then((b) => String(b ?? ''), () => '');
-        cache.current[l.name] = { size: l.size, text };
+        if (cache.current[l.name]?.size !== l.size) {
+          const text = await call('logs.read', { project: l.name, whole: true }).then((b) => String(b ?? ''), () => '');
+          cache.current[l.name] = { size: l.size, entries: foldedEntries(text) };
+        }
+        // give the window a turn between two logs
+        await new Promise((done) => { setTimeout(done, 0); });
       }
-      if (alive) setHits(countHits(Object.fromEntries(logs.map((l) => [l.name, cache.current[l.name]?.text ?? ''])), needle));
+      if (alive) setHits(countFolded(Object.fromEntries(logs.map((l) => [l.name, cache.current[l.name]?.entries ?? []])), needle));
     }, 300);
     return () => { alive = false; clearTimeout(h); };
     // `sizes` stands for `logs`: the list is a new array on every refresh, its sizes only change when a log is written
@@ -108,11 +134,13 @@ export function LogsView({ route, tabs }) {
   const groups = useMemo(() => groupLogs(logs), [logs]);
   const partial = body?.startsWith('(');
   const parsed = useMemo(() => (body == null ? null : parseEntries(body)), [body]);
+  // each entry folded once; the filter and the marks use the same folding (no case, no accents)
+  const folded = useMemo(() => (parsed ? parsed.entries.map((e) => foldText(e.raw)) : null), [parsed]);
   const entries = useMemo(() => {
     if (!parsed) return null;
-    const list = needle ? parsed.entries.filter((e) => e.raw.toLowerCase().includes(needle)) : parsed.entries;
+    const list = needle ? parsed.entries.filter((e, i) => folded[i].includes(needle)) : parsed.entries;
     return [...list].reverse();
-  }, [parsed, needle]);
+  }, [parsed, folded, needle]);
   const pick = (name) => { setSelected(name); setWhole(false); setScope('here'); };
   const row = (l, title, mark) => (
     <NavRow key={l.name} label={title} active={selected === l.name} onClick={() => pick(l.name)} iconEl={mark}>
@@ -161,12 +189,12 @@ export function LogsView({ route, tabs }) {
             <div className="bhead flex min-h-(--ctl) items-center gap-2">
               <Library className="size-4 shrink-0" />
               <h2 className="m-0 font-(family-name:--title) text-title font-semibold">{t('logbooks.allTitle')}</h2>
-              {hits ? <span className="text-muted-foreground text-caption" data-testid="log-all-count">{t('logbooks.hitsTitle', { n: Object.values(hits).reduce((a, b) => a + b, 0), q: q.trim() })}</span> : null}
+              {hits ? <span className="text-muted-foreground text-caption" data-testid="log-all-count">{t('logbooks.hitsTitle', { n: Object.values(hits).reduce((a, b) => a + b, 0), q: shown })}</span> : null}
             </div>
             {hits == null ? <Spinner /> : ranked.length === 0 ? (
               <Empty icon={BookOpen} title={t('logbooks.noHits')}>
                 <p className="m-0 mb-3">{t('logbooks.noHitsHint')}</p>
-                <Button variant="outline" onClick={() => setQ('')} data-testid="log-search-clear"><X />{t('logbooks.clearSearch')}</Button>
+                <Button variant="outline" onClick={() => { setQ(''); setDq(''); }} data-testid="log-search-clear"><X />{t('logbooks.clearSearch')}</Button>
               </Empty>
             ) : (
               <ListCard>
@@ -190,6 +218,7 @@ export function LogsView({ route, tabs }) {
               <Badge variant="secondary" title={t('logbooks.readOnlyHint')}>{t('logbooks.readOnly')}</Badge>
             </div>
             <p className="bintro text-muted-foreground -mt-1.5 text-control">{t(selected === 'general' ? 'logbooks.introGeneral' : 'logbooks.intro', { name: title })}</p>
+            {searching && hits == null ? <p className="text-muted-foreground m-0 flex items-center gap-2 text-caption" data-testid="log-also-loading"><Spinner />{t('logbooks.searching')}</p> : null}
             {searching && others.length ? (
               <div className="also flex flex-wrap items-center gap-2" data-testid="log-also">
                 <span className="text-muted-foreground text-caption">{t('logbooks.alsoIn')}</span>
@@ -206,7 +235,7 @@ export function LogsView({ route, tabs }) {
             ) : null}
             <div className="flex flex-col gap-3" data-testid="log-body">
               {partial && !needle && parsed?.pre ? <p className="text-muted-foreground text-caption">{parsed.pre}</p> : null}
-              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} query={needle} />)}
+              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} query={shown} />)}
               {partial && !whole && !needle && entries?.length ? (
                 <div className="viewing text-muted-foreground flex items-center justify-center gap-2 text-control" data-testid="log-viewing">
                   <span>{t('logbooks.viewing', { n: loaded })}</span><span aria-hidden="true">·</span>
