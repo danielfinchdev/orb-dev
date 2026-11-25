@@ -35,11 +35,23 @@ const ITEMS = [
 for (const x of EXTRA_ITEMS) ITEMS.push({ ...x, install: x.wingetKey ? wingetInstall(x.wingetKey) : x.install, needsWinget: Boolean(x.wingetKey), optional: true, extra: true });
 const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
 
+// `--version` runs the file, so it only runs files outside the engine's working directory: Windows looks a bare name up
+// there first, and a PATH entry inside it (a project folder) could hold a planted program. Folders the user can write
+// (~/.local/bin, ~/.cargo/bin, WinGet/Links…) are detected by the file's existence at load; their version is only asked
+// when the user opens the block by hand (check({ versions: true })).
+const within = (f, root) => { const rel = path.relative(path.resolve(root).toLowerCase(), path.resolve(f).toLowerCase()); return rel === '' || (rel !== '..' && !rel.startsWith('..' + path.sep) && !path.isAbsolute(rel)); };
+const underCwd = (f) => within(f, process.cwd());
+const userWritable = (dir) => [process.env.USERPROFILE, process.env.LOCALAPPDATA].some((r) => r && within(dir, r));
+async function versionByName(name, args) {
+  if (!IS_WIN) return versionOf(name, args);
+  const file = inPath(name).find((f) => !underCwd(f));
+  return file ? versionOf(file, args) : null;
+}
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
 
 // One tool of the catalog: its program answers (by name, then in the folders its installer uses) or its marker is there.
-async function probeExtra(id) {
+async function probeExtra(id, { versions = false } = {}) {
   if (id === 'playwright') return { installed: playwrightInstalled(), version: null };
   if (id === 'buildTools') {
     const r = IS_WIN ? await quickRun(vswhere(), ['-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-latest', '-property', 'installationVersion'], { timeoutMs: 8000 }) : { ok: false, out: '' };
@@ -52,8 +64,15 @@ async function probeExtra(id) {
   }
   const probe = PROBES[id]; if (!probe) return { installed: false, version: null };
   const name = IS_WIN ? `${probe.exe}.exe` : probe.exe;
-  let version = await versionOf(name, probe.args);
-  if (!version && IS_WIN) for (const dir of probe.dirs()) { version = await versionOf(path.join(dir, name), probe.args); if (version) break; }
+  let version = await versionByName(probe.exe, probe.args);
+  if (!version && IS_WIN) {
+    for (const dir of probe.dirs()) {
+      const file = path.join(dir, name);
+      if (!fs.existsSync(file)) continue;
+      if (userWritable(dir)) return { installed: true, version: versions ? await versionOf(file, probe.args) : null };
+      version = await versionOf(file, probe.args); if (version) break;
+    }
+  }
   return { installed: Boolean(version), version };
 }
 
@@ -65,7 +84,7 @@ export function cachedUpgrades() { return upgrades?.found ?? null; }
 export async function checkUpgrades({ force = false, run = quickRun } = {}) {
   if (!IS_WIN) return { at: null, found: {}, available: false };
   if (!force && upgrades && Date.now() - upgrades.at < UPGRADE_TTL) return { at: upgrades.at, found: upgrades.found, available: true };
-  const r = await run('winget', ['upgrade', '--source', 'winget', '--accept-source-agreements', '--disable-interactivity'], { timeoutMs: 60_000 });
+  const r = await run('winget', ['upgrade', '--source', 'winget', '--accept-source-agreements', '--disable-interactivity'], { timeoutMs: 60_000, maxOut: 500_000 }); // a long table must not be cut mid-row
   if (!r.out) return { at: upgrades?.at ?? null, found: upgrades?.found ?? {}, available: false };
   upgrades = { at: Date.now(), found: parseUpgrades(r.out) };
   return { at: upgrades.at, found: upgrades.found, available: true };
@@ -79,25 +98,27 @@ export async function suggest(dir) {
   const out = [];
   for (const w of wanted) {
     const item = ITEMS.find((i) => i.id === w.tool);
-    if (!item) { out.push({ tool: w.tool, file: w.file, label: w.tool === 'flutter' ? 'Flutter' : w.tool, installable: false }); continue; }
+    if (!item) {
+      if (w.tool === 'flutter' && checkDevTools().find((x) => x.id === 'flutter')?.path) continue; // already installed
+      out.push({ tool: w.tool, file: w.file, label: w.tool === 'flutter' ? 'Flutter' : w.tool, installable: false }); continue; }
     if ((await probeExtra(item.id)).installed) continue;
     out.push({ tool: item.id, file: w.file, label: item.label, installable: true });
   }
   return out;
 }
 
-export async function check() {
+export async function check({ versions: askVersions = false } = {}) {
   const out = {};
   for (const agent of AGENT_ITEMS) out[agent] = Boolean(ADAPTERS[agent]?.detect(ctx.config.agents[agent] ?? {}));
   // A tool is there when its program answers or, at least, when its executable is in the PATH: on a busy PC a version
   // call can fail for a moment, and «No instalado» (ticked) would make the user install it again.
   const versions = {};
-  const present = async (name, args) => { versions[name] = await versionOf(IS_WIN ? `${name}.exe` : name, args); return Boolean(versions[name]) || inPath(name).length > 0; };
+  const present = async (name, args) => { versions[name] = await versionByName(name, args); return Boolean(versions[name]) || inPath(name).length > 0; };
   out.git = await present('git');
   out.node = await present('node');
   out.gh = await present('gh');
   out.tailscale = Boolean(await versionOf(tailscaleExe(), ['version']));
-  await Promise.all(EXTRA_ITEMS.map(async (x) => { const r = await probeExtra(x.id); out[x.id] = r.installed; versions[x.id] = r.version; }));
+  await Promise.all(EXTRA_ITEMS.map(async (x) => { const r = await probeExtra(x.id, { versions: askVersions }); out[x.id] = r.installed; versions[x.id] = r.version; }));
   const found = upgrades?.found ?? {};
   return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id], version: versions[i.id] ?? null,
     ...(i.group ? { group: i.group } : {}), ...(i.extra ? { extra: true } : {}), ...(i.wingetKey ? { canUpdate: true } : {}), ...(out[i.id] && found[i.id] ? { update: found[i.id] } : {}) }));

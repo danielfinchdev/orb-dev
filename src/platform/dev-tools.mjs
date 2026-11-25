@@ -68,7 +68,9 @@ export function checkDevTools({ env = process.env, platform = process.platform, 
   const sdk = sdkRoots(env, platform);
   tool('androidSdk', sdk, (d) => ['platform-tools', 'platforms', 'cmdline-tools', 'build-tools'].some((x) => isDir(p.join(d, x))), [env.ANDROID_HOME, env.ANDROID_SDK_ROOT, ...entries.filter((d) => /android[\\/]+sdk/i.test(d))]);
   const studio = win && env.ProgramFiles ? p.join(env.ProgramFiles, 'Android', 'Android Studio', 'jbr', 'bin') : null;
-  tool('java', [env.JAVA_HOME ? p.join(env.JAVA_HOME, 'bin') : null, ...entries.filter((d) => isFile(p.join(d, exe('java')))), studio], (d) => isFile(p.join(d, exe('java'))), [env.JAVA_HOME]);
+  // winget's Microsoft OpenJDK lands in %ProgramFiles%\Microsoft\jdk-*, and a process started before the install has no PATH for it
+  const msJdks = win && env.ProgramFiles ? listDir(p.join(env.ProgramFiles, 'Microsoft')).filter((n) => /^jdk-/i.test(n)).sort().reverse().map((n) => p.join(env.ProgramFiles, 'Microsoft', n, 'bin')) : [];
+  tool('java', [env.JAVA_HOME ? p.join(env.JAVA_HOME, 'bin') : null, ...entries.filter((d) => isFile(p.join(d, exe('java')))), ...msJdks, studio], (d) => isFile(p.join(d, exe('java'))), [env.JAVA_HOME]);
   return out;
 }
 

@@ -44,10 +44,10 @@ export function executable(agent) {
 }
 
 // Runs a short command and returns its output (never throws; resolves with { ok, out }).
-export function quickRun(cmd, args, { timeoutMs = 15000, env } = {}) {
+export function quickRun(cmd, args, { timeoutMs = 15000, env, maxOut = 2000 } = {}) {
   return new Promise((resolve) => {
     let out = ''; let done = false;
-    const finish = (ok) => { if (!done) { done = true; resolve({ ok, out: out.trim().slice(0, 2000) }); } };
+    const finish = (ok) => { if (!done) { done = true; resolve({ ok, out: out.trim().slice(0, maxOut) }); } };
     let child;
     try { child = spawn(cmd, args, { windowsHide: true, env: env ?? cleanEnv(), stdio: ['ignore', 'pipe', 'pipe'] }); } catch (error) { out = error.message; return finish(false); }
     child.stdout.on('data', (c) => { out += c; }); child.stderr.on('data', (c) => { out += c; });

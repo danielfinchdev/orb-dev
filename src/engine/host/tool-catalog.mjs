@@ -106,11 +106,14 @@ export function parseUpgrades(text) {
   };
   const out = {};
   for (const line of String(text ?? '').split(/\r?\n/)) {
-    const cols = line.trim().split(/\s{2,}/);
+    // Read by tokens, not by runs of spaces: winget may leave a single space after the longest value of a column, and a name
+    // holds spaces, but an Id and the versions never do, so the Id and the two tokens after it are the row's data.
+    const cols = line.trim().split(/\s+/);
     const i = cols.findIndex((c) => toolOf(c));
     if (i < 0) continue;
-    const current = cols[i + 1]; const latest = cols[i + 2];
-    if (current && latest && /\d/.test(latest)) out[toolOf(cols[i])] = { current: current.replace(/^[<>]\s*/, ''), latest };
+    const rest = cols.slice(i + 1).filter((c) => !/^[<>~]+$/.test(c));
+    const current = rest[0]?.replace(/^[<>~]+/, ''); const latest = rest[1];
+    if (current && latest && /\d/.test(current) && /\d/.test(latest)) out[toolOf(cols[i])] = { current, latest };
   }
   return out;
 }

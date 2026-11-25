@@ -249,3 +249,51 @@ test('an install that outlives its time limit leaves no step open in Activity', 
 test('update is normalised once in the handler', () => {
   assert.match(read('src/engine/api/index.mjs'), /const upd = update === true;[\s\S]*?const have = upd \? null[\s\S]*?\{ update: upd, have, onEvent \}/);
 });
+
+test('winget upgrade rows are read by tokens: one space after the longest Id, Build Tools, many rows, Spanish header', () => {
+  const es = [
+    'Nombre                          Id                                    Versión  Disponible Origen',
+    '-----------------------------------------------------------------------------------------------',
+    'Visual Studio Build Tools 2022  Microsoft.VisualStudio.2022.BuildTools 17.8.3   17.10.1    winget',
+    'Git                             Git.Git                               < 2.43.0   2.50.1     winget',
+    'ripgrep MSVC                    BurntSushi.ripgrep.MSVC               14.0.0     14.1.1     winget'
+  ].join('\n');
+  assert.deepEqual(parseUpgrades(es), {
+    buildTools: { current: '17.8.3', latest: '17.10.1' }, git: { current: '2.43.0', latest: '2.50.1' }, rg: { current: '14.0.0', latest: '14.1.1' }
+  });
+  const one = 'Name  Id  Version  Available  Source\n----\nVisual Studio Build Tools 2022 Microsoft.VisualStudio.2022.BuildTools 17.1 17.2 winget\n1 upgrades available.';
+  assert.deepEqual(parseUpgrades(one), { buildTools: { current: '17.1', latest: '17.2' } });
+  const many = ['Name  Id  Version  Available  Source', '---'];
+  for (let n = 0; n < 20; n++) many.push(`Other ${n}  Vendor.Other${n}  1.${n}  2.${n}  winget`);
+  many.push('PowerShell  Microsoft.PowerShell  7.4.0  7.4.6  winget');
+  assert.deepEqual(parseUpgrades(many.join('\n')), { pwsh: { current: '7.4.0', latest: '7.4.6' } });
+});
+
+test('winget upgrade is asked without the 2000-character cap of quickRun', async () => {
+  installer.forgetUpgrades();
+  let seen;
+  await installer.checkUpgrades({ force: true, run: async (cmd, args, opts) => { seen = opts; return { ok: true, out: '' }; } });
+  assert.ok(seen.maxOut >= 100_000);
+  const { quickRun } = await import('../src/agents/index.mjs');
+  const r = await quickRun(process.execPath, ['-e', "process.stdout.write('x'.repeat(5000))"], { maxOut: 4000 });
+  assert.equal(r.out.length, 4000);
+  assert.equal((await quickRun(process.execPath, ['-e', "process.stdout.write('x'.repeat(5000))"])).out.length, 2000, 'the default stays');
+});
+
+test('a newly installed Microsoft OpenJDK is found without a PATH entry', async () => {
+  const { checkDevTools } = await import('../src/platform/dev-tools.mjs');
+  const pf = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-pf-'));
+  try {
+    const bin = path.join(pf, 'Microsoft', 'jdk-21.0.5.11-hotspot', 'bin');
+    fs.mkdirSync(bin, { recursive: true }); fs.writeFileSync(path.join(bin, 'java.exe'), '');
+    const java = checkDevTools({ env: { ProgramFiles: pf, PATH: '' }, platform: 'win32' }).find((x) => x.id === 'java');
+    assert.equal(java.path, bin);
+  } finally { fs.rmSync(pf, { recursive: true, force: true }); }
+});
+
+test('user-writable folders are detected by the file, not run; the error detail keeps no profile path', () => {
+  const src = read('src/engine/host/installer.mjs');
+  assert.match(src, /userWritable\(dir\)\) return \{ installed: true, version: versions \?/);
+  assert.match(src, /inPath\(name\)\.find\(\(f\) => !underCwd\(f\)\)/);
+  assert.match(read('src/engine/api/index.mjs'), /hideUserProfile\(detail\)/);
+});
