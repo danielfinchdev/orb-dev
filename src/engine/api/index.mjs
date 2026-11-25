@@ -6,6 +6,7 @@
 // projects, schedules, logs, whiteboard and usage; api-link.mjs, api-accounts.mjs, api-inbox.mjs and api-data.mjs the
 // rest. Window actions by topic: projects.mjs (projects, Android), chat.mjs (conversations, chat, whiteboard), work.mjs (models, tasks, sessions, schedules).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig } from '../../platform/config.mjs';
@@ -70,6 +71,13 @@ const prRef = ({ id, session, number, headRefOid }) => ({
   id: int(id, 'petición'), session: str(session, 'conversación', 200), number: int(number, 'pull request'),
   headRefOid: headRefOid == null ? null : str(headRefOid, 'commit', 64)
 });
+
+// An install error kept in Activity must not carry the Windows user's profile folder (their account name) with it.
+const hideUserProfile = (text) => {
+  const profile = process.env.USERPROFILE || os.homedir();
+  const out = String(text);
+  return profile ? out.split(profile).join('~').split(profile.replaceAll('\\', '/')).join('~') : out;
+};
 
 const htmlRef = ({ id, session }) => ({ id: str(id, 'página', 64), session: str(session, 'conversación', 200) });
 
@@ -259,7 +267,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     },
 
     // Git is needed for undo with history, isolated copies and GitHub: the Agents screen warns when it is missing.
-    'installer.check': async () => (await inst()).check(),
+    // versions: true is sent when the user opens «Herramientas» by hand; the page's own load only checks that the files exist
+    'installer.check': async (p) => (await inst()).check({ versions: p?.versions === true }),
     // Installing or updating happens only from this PC's window (permissions.mjs: 'pc') and only for ids of the fixed catalog
     // (tool-catalog.mjs). Each step is written to Activity; a tool that is already there is never installed again.
     'installer.start': async ({ ids, update }) => {
@@ -267,7 +276,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       const installer = await inst();
       const upd = update === true;
       const have = upd ? null : new Set((await installer.check()).filter((i) => i.installed).map((i) => i.id));
-      const onEvent = ({ label, state, detail }) => board.event(null, 'usuario', state === 'instalando' ? 'tools.install_start' : state === 'hecho' ? 'tools.install_done' : 'tools.install_error', `${label}${state === 'error' && detail ? `: ${String(detail).slice(0, 160)}` : ''}`);
+      const onEvent = ({ label, state, detail }) => board.event(null, 'usuario', state === 'instalando' ? 'tools.install_start' : state === 'hecho' ? 'tools.install_done' : 'tools.install_error', `${label}${state === 'error' && detail ? `: ${hideUserProfile(detail).slice(0, 160)}` : ''}`);
       try { return installer.start(ids, emit, { update: upd, have, onEvent }); } catch (error) { fail(error.message); }
     },
     // What winget says is newer for the catalog's tools: asked only when the block opens or «Comprobar» is pressed, kept 30 min.
