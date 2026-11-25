@@ -330,6 +330,7 @@
   "usage.get": "remote",
   "usage.history": "remote",
   "usage.now": "remote",
+  "usage.records": "remote",
   "usage.refresh": "remote",
   "whiteboard.attach": "pc",
   "whiteboard.canvasNote": "remote",

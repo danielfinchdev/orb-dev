@@ -10,31 +10,27 @@ const locale = (lang) => fs.readFileSync(path.join(ROOT, 'src', 'shared', 'local
 const usage = src('views', 'usage.jsx');
 const agents = src('views', 'agents.jsx');
 
-test('1: the period is Hoy / 7 / 30 and «Ver 90 días» is an item of the header «⋯» with the same call', () => {
-  assert.match(usage, /\['1', '7', '30'\]\.map/);
-  assert.match(usage, /<DropdownMenuItem onSelect=\{\(\) => setDays\('90'\)\} data-testid="usage-range-90">/);
-  assert.match(usage, /testid: `usage-range-\$\{d\}`/);
-  for (const l of ['es', 'en']) assert.match(locale(l), /'usage\.view90'/);
+test('1: the period is a filter with Hoy, 7, 30, 90 days and dates of your own', () => {
+  assert.match(usage, /\['1', '7', '30', '90'\]\.map/);
+  assert.match(usage, /value: 'custom'/);
+  assert.match(usage, /data-testid="usage-date-apply"/);
+  for (const l of ['es', 'en']) assert.match(fs.readFileSync(path.join(ROOT, 'src/shared/locales', l, 'uso.mjs'), 'utf8'), /'usage\.pickDates'/);
 });
 
-test('2: «Al llegar al límite» is in view after «Por agente y modelo», with the switch and the warning selector', () => {
-  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
-  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
-  assert.ok(!more.includes('<Limits cfg='));
+test('2: «Al llegar al límite» closes «Límites», with the switch and the warning selector', () => {
   const at = usage.indexOf('<Limits cfg=');
-  assert.ok(at > usage.indexOf('byAgentModel') && at < start);
+  assert.ok(at > usage.indexOf('<LimitCard key='));
   for (const id of ['usage-switch-account', 'usage-warn-at']) assert.ok(usage.includes(`data-testid="${id}"`), id);
 });
 
-test('3: the legend of «Uso por día» names the warning only when one is set', () => {
-  assert.match(usage, /function DaysLegend\(\{ byDay, order, warn = 0 \}\)/);
-  assert.match(usage, /\{warn > 0 \? <span[^>]*data-testid="usage-days-legend-warn"><TriangleAlert[^>]*\/>\{t\('usage\.legendWarn', \{ pct: Math\.round\(warn \* 100\) \}\)\}<\/span> : null\}/);
+test('3: the legend of «Límites» names the warning only when one is set', () => {
+  assert.match(usage, /\{warn > 0 \? <span[^>]*data-testid="usage-legend-warn"><TriangleAlert[^>]*\/>\{t\('usage\.legendWarn', \{ pct: Math\.round\(warn \* 100\) \}\)\}<\/span> : null\}/);
 });
 
-test('4: what the mock-up does not draw in Uso stays under «Más opciones»', () => {
-  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
-  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
-  for (const piece of ['data-testid="usage-turns"', '<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
+test('4: what Orb adds to the mock-up in Uso stays in its own fold at the end', () => {
+  const start = usage.indexOf('<LocalUsage data=');
+  assert.ok(start > usage.indexOf('data-testid="usage-top"'));
+  for (const piece of ['data-testid="usage-local-toggle"', 'data-testid="usage-heat"']) assert.ok(usage.includes(piece), piece);
 });
 
 test('5: an account row says its state as Activa / En pausa / Sin sesión, with the plan only when known', () => {

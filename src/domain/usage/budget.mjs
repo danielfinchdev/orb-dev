@@ -410,3 +410,30 @@ export function usageHistory(board, { days = 30, now = new Date() } = {}) {
   const most = (a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut);
   return { from: list[0], to: list.at(-1), days: [...byDay.values()], agents: [...byAgent.values()].sort(most), models: [...byModel.values()].sort(most), total, tokensCache: cache.total, byDay: [...cache.days.values()] };
 }
+
+// The ledger as flat records for the filters of the usage page: one per day, account and chat, task or agent session.
+// Agent, model and project come from what the turn was in; rows from before an account, project or title was recorded
+// keep '' there and the page names them («Cuenta principal», «Sin proyecto»). `days` counts back from today.
+export function usageRecords(board, { days = 30, now = new Date() } = {}) {
+  const tz = ownerTz(ctx.config);
+  const [y, m, d] = localDay(now, tz).split('-').map(Number);
+  const iso = (back) => new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+  const from = iso(days - 1); const to = iso(0);
+  const agentOf = new Map(accounts().map((a) => [a.id, a.agent]));
+  const rows = board.all(`SELECT u.day, u.account_id AS account, u.conversation_id AS conv, u.session_id AS session, u.task_id AS task,
+      SUM(u.turns) AS turns, SUM(u.tokens_in) AS tin, SUM(u.tokens_out) AS tout, SUM(u.tokens_cache) AS tcache, SUM(u.usd) AS usd,
+      MAX(COALESCE(s.agent, t.assigned_to, t.agent, c.agent)) AS agent, MAX(COALESCE(s.model, t.model, c.model)) AS model,
+      MAX(COALESCE(t.project, s.project, c.project, '')) AS project, MAX(t.title) AS ttitle, MAX(s.title) AS stitle, MAX(c.title) AS ctitle
+    FROM usage_ledger u LEFT JOIN sessions s ON s.id = u.session_id LEFT JOIN tasks t ON t.id = u.task_id LEFT JOIN conversations c ON c.id = u.conversation_id
+    WHERE u.day >= ? AND u.day <= ? GROUP BY u.day, u.account_id, u.conversation_id, u.session_id, u.task_id`, from, to);
+  const records = rows.map((r) => {
+    const kind = r.task != null ? 'task' : r.session ? 'session' : r.conv != null ? 'chat' : 'other';
+    const id = kind === 'task' ? r.task : kind === 'session' ? r.session : kind === 'chat' ? r.conv : null;
+    return {
+      day: r.day, account: r.account ?? '', agent: agentOf.get(r.account) ?? r.agent ?? 'claude', model: r.model ?? '', project: r.project ?? '',
+      kind, id, title: (kind === 'task' ? r.ttitle : kind === 'session' ? r.stitle : r.ctitle) ?? '',
+      turns: r.turns ?? 0, tokensIn: r.tin ?? 0, tokensOut: r.tout ?? 0, tokensCache: r.tcache ?? 0, usd: r.usd ?? 0
+    };
+  }).filter((r) => r.tokensIn + r.tokensOut + r.tokensCache || r.usd || r.turns);
+  return { from, to, records };
+}

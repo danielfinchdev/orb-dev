@@ -12,7 +12,7 @@ import { saveConfig } from '../../platform/config.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { CATEGORIES } from '../../platform/paths.mjs';
 import { accountsOf, accountDir } from '../../domain/usage/accounts.mjs';
-import { usageReport, usageHistory, modelName } from '../../domain/usage/budget.mjs';
+import { usageReport, usageHistory, usageRecords, modelName } from '../../domain/usage/budget.mjs';
 import { syncProjects, projectHasWork } from '../../domain/projects/projects.mjs';
 import { guardedCore } from '../desktop-home.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
@@ -356,6 +356,20 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
         .map(({ r, acc }) => ({ account: acc.id, agent: acc.agent, label: acc.label, turns: r.turns, tokensIn: r.tin, tokensOut: r.tout, usd: r.usd })).filter((x) => x.tokensIn + x.tokensOut || x.usd)
         .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
       return { ...out, projects, byAccount, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+    },
+    // the ledger as flat records (day, account, agent, model, project, chat or task) for the filters of the usage page,
+    // up to a year back; the page adds, filters and groups them.
+    'usage.records': ({ days }) => {
+      const n = Math.max(1, Math.min(366, Math.floor(Number(days)) || 30));
+      const out = usageRecords(board, { days: n });
+      const label = new Map((ctx.config.accounts ?? []).map((a) => [a.id, a.label]));
+      const names = new Map();
+      const records = out.records.map((r) => {
+        const k = r.model ? `${r.agent} ${r.account} ${r.model}` : null;
+        if (k && !names.has(k)) names.set(k, modelLabelOf(r.agent, r.account || r.agent, r.model));
+        return { ...r, modelLabel: k ? names.get(k) : '', accountLabel: r.account ? (label.get(r.account) ?? '') : '' };
+      });
+      return { ...out, records };
     },
     // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.

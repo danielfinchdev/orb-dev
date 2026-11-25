@@ -37,10 +37,10 @@ test('3: the account switch says in one line which account it would pass from an
   }
 });
 
-test('4: the legend names the warning first and the brake after; «Más opciones» only appears with content', () => {
+test('4: the legend names the warning first and the pause after; the fold outside Orb only appears with content', () => {
   const usage = read('src/ui/views/usage.jsx');
   assert.ok(usage.indexOf("t('usage.legendWarn'") < usage.indexOf("t('usage.legendBrake'"));
-  assert.match(usage, /data\?\.total\?\.turns \|\| data\?\.days\?\.length \|\| local\?\.total\?\.turns \? <MoreOptions/);
+  assert.match(usage, /if \(!data\?\.total\?\.turns\) return null;/);
 });
 
 test('5: «Ver en Tareas» is link-blue and the zone note moved into the field\'s tooltip', () => {

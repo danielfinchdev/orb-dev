@@ -35,14 +35,14 @@ test('Agentes: the sign-in is a dialog with the same calls, and the team block i
   assert.match(agents, /call\('agents\.status'/);
 });
 
-test('Uso: tabs, period, accounts with the brake marks, cost, tokens, days, projects, agent and model, limits', () => {
+test('Uso: tabs, period, accounts with the pause marks, cost, tokens, days, projects, models, limits', () => {
   assert.match(usage, /<AgentsUsageTabs current="usage" \/>/);
   assert.match(usage, /fullPc\(\)/);
-  for (const d of ['7', '30', '90']) assert.ok(usage.includes(`'${d}'`), d);
+  for (const d of ['1', '7', '30', '90']) assert.ok(usage.includes(`'${d}'`), d);
   assert.match(usage, /data-testid="usage-stop"/);
   assert.match(usage, /weeklyStopAt/);
   assert.match(usage, /budget\.stopAt|budget\?\.stopAt/);
-  for (const key of ['usage.byAccount', 'usage.costEstimated', 'usage.byDay', 'usage.byProject', 'usage.byAgentModel', 'usage.atLimit']) assert.ok(usage.includes(`t('${key}'`), key);
+  for (const key of ['usage.byAccount', 'usage.costByDay', 'usage.byProject', 'usage.byModel', 'usage.atLimit', 'usage.topTitle', 'usage.groupBy']) assert.ok(usage.includes(`t('${key}'`), key);
   // the limits are saved the way Ajustes saves them (the master password for a rail value is asked in `save`)
   assert.match(usage, /save\(\{ budget: \{ profile: null, stopAt: Number\(v\) \/ 100 \} \}\)/);
   assert.match(usage, /save\(\{ budget: \{ weeklyStopAt: Number\(v\) \/ 100 \} \}\)/);
@@ -59,7 +59,7 @@ test('every test id of the two pages in HEAD is still there', () => {
     const ids = [...before.matchAll(/data-testid=(?:"([^"]+)"|\{`([^`]+)`\})/g)].map((m) => m[1] ?? m[2].replace(/\$\{[^}]*\}.*$/, ''));
     // gone on purpose: the update badge became a hint, the settings fold and its «Activar» button went into the detail and the
     // «⋯», the long notes became tags, the foot's sign-out lives in each account's «⋯» and the tool rows have their own ids
-    const gone = ['agent-uptodate-', 'agent-settings-', 'agent-enable-', 'agent-hermes-note', 'agent-unverified-', 'agent-noguard-', 'agent-signout-', 'team-dev-'];
+    const gone = ['agent-uptodate-', 'agent-settings-', 'agent-enable-', 'agent-hermes-note', 'agent-unverified-', 'agent-noguard-', 'agent-signout-', 'team-dev-', 'usage-days', 'usage-days-legend', 'usage-days-legend-warn', 'usage-range-90', 'usage-turns'];
     for (const id of new Set(ids)) if (!gone.includes(id) && !gone.some((g) => id.startsWith(g))) assert.ok(both.includes(id), `${file}: ${id}`);
   }
 });
@@ -70,16 +70,14 @@ test('the pages keep the unified look: the accent is a token', () => {
   }
 });
 
-test('9C-a Uso: Today and 90 days in the period, CSV export, cost card, flat model table, closing day table', () => {
+test('9C-a Uso: Today and 90 days in the period, CSV export of what is filtered, cost card, closing details', () => {
   for (const d of ['1', '7', '30', '90']) assert.ok(usage.includes(`'${d}'`), d);
-  assert.match(usage, /usage-range-90/);
-  assert.match(usage, /usage-range-\$\{d\}/);
+  assert.match(usage, /data-testid="usage-period"/);
   assert.match(usage, /data-testid="usage-export-csv"/);
   assert.match(usage, /data-testid="usage-export-icon"/);
-  assert.match(usage, /downloadUsageCsv\(data, data\.models/);
-  assert.match(usage, /text-caption leading-\[1\.45\] font-semibold tabular-nums/, 'the cost figure is small, as in the mock-up');
-  assert.match(usage, /\(data\?\.models \?\? \[\]\)\.map/, 'one row per model');
-  assert.ok(usage.indexOf('<DaysTable') > usage.indexOf('<LocalUsage'), 'the table of days closes the page');
+  assert.match(usage, /toCsv\(cur, /, 'the CSV is what the filters leave');
+  assert.match(usage, /usage\.records/);
+  assert.ok(usage.indexOf('<LocalUsage') > usage.indexOf('data-testid="usage-top"'), 'the use outside Orb closes the page');
   // the stop of the queue is the rail of «Normas»: same call, same password
   assert.match(usage, /changeRail\('freno-uso', \{ enabled \}/);
   assert.match(usage, /data-testid="usage-stop-queue"/);
@@ -97,14 +95,13 @@ test('Agentes y Uso: the tabs have the tab style of the rest of Orb, not an unde
   assert.match(tabs, /<TabsList variant="line"/);
 });
 
-test('10C-b Uso: «Por proyecto» comes from the ledger, the days flow with the page and the cards follow the mock-up', () => {
-  assert.match(usage, /\(data\?\.projects \?\? \[\]\)/, 'the projects of the period (usage.history), not the local files');
-  assert.match(usage, /<Block title=\{t\('usage\.byProject'\)\}>/);
-  assert.doesNotMatch(usage, /max-h-\[30rem\]|overflow-y-auto/, 'no box with its own scroll for the days');
+test('10C-b Uso: the breakdown cards filter, the limit cards follow the mock-up', () => {
+  assert.match(usage, /<BreakdownCard key=\{by\}/);
+  assert.match(usage, /data-testid=\{`usage-by-\$\{by\}`\}/);
+  assert.doesNotMatch(usage, /max-h-\[30rem\]/, 'no box with its own scroll for the days');
   assert.match(usage, /<AgentIcon agent=\{u\.agent\} \/>/, 'the mark of the account card is 12 px');
   assert.doesNotMatch(usage, /<AgentIcon [^>]*size-4/, 'no 16 px marks in the cards and tables');
-  assert.match(usage, /px-3\.5 py-3 text-control" data-testid="usage-account"/);
-  assert.match(usage, /renewText\(t, locale, w\.resetAt\)/, 'the short «renueva 14:30» under each bar');
+  assert.match(usage, /data-testid="usage-account"/);
   assert.match(usage, /data-testid="usage-pace"/); assert.match(usage, /data-testid="usage-stop"/);
   assert.match(usage, /title=\{paceText \|\| undefined\}/, 'the pace sentence stays, as the bar\'s tooltip');
   for (const l of ['es', 'en']) { const s = read('src', 'shared', 'locales', l, 'agents.mjs'); assert.match(s, /'usage\.renewsAt'/); assert.match(s, /'usage\.renewsOn'/); }
