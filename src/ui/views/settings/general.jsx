@@ -484,3 +484,17 @@ function MusicSettings() {
     </div>
   );
 }
+
+// Why Orb never runs the hooks of a project (.claude/settings.json, .cursor/hooks.json): it is not a setting, only the explanation.
+export function ProjectScriptsCard() {
+  const t = useT();
+  return (
+    <Block title={t('settings.scripts.title')} note={t('settings.scripts.note')} data-testid="project-scripts">
+      <Panel>
+        <Setting label={t('settings.scripts.hooks')} hint={t('settings.scripts.hooksHint')}>
+          <Button size="sm" variant="outline" onClick={() => confirm(t('settings.scripts.hooks'), t('settings.scripts.whyBody'), { ok: t('comp.dialogs.ok'), cancel: null, tone: 'primary' })} data-testid="project-scripts-why">{t('settings.scripts.why')}</Button>
+        </Setting>
+      </Panel>
+    </Block>
+  );
+}

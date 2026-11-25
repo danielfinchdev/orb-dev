@@ -9,14 +9,17 @@ import en from '../src/shared/locales/en.mjs';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const agents = read('src/ui/views/agents.jsx');
+const tools = read('src/ui/views/agents-tools.jsx');
 const usage = read('src/ui/views/usage.jsx');
 const tab = read('src/ui/views/settings/usage-tab.jsx');
 
 test('Prepara tu equipo: Flutter, SDK de Android y Java solo se detectan; no llevan botón de instalar', () => {
   assert.match(agents, /call\('installer\.devTools'\)/);
-  const block = agents.slice(agents.indexOf('team.dev?.map'), agents.indexOf('</Setting>', agents.indexOf('team.dev?.map')));
-  assert.match(block, /data-testid=\{`team-dev-\$\{d\.id\}`\}/);
-  assert.doesNotMatch(block, /team\.install|<Button/, 'Orb installs none of them');
+  // they come from team.dev as rows without an installer: «Cómo instalarlo» opens their official page and starts nothing
+  assert.match(tools, /\(team\.dev \?\? \[\]\)\.map/);
+  assert.match(tools, /installable: false/);
+  assert.match(tools, /data-testid=\{`team-howto-\$\{x\.id\}`\}/);
+  assert.match(tools, /x\.installable\s*\? <Button[\s\S]*?team\.install\(\[x\.id\]\)/, 'only an installer item has the install button');
   for (const id of ['flutter', 'androidSdk', 'java']) for (const l of [es, en]) assert.ok(l[`agents.team.tool.${id}`], id);
 });
 
@@ -36,9 +39,9 @@ test('Cerrar sesión: en el «⋯» de la cuenta, con el nombre escrito; las dem
 });
 
 test('Versión nueva: «Versión X · hay Y», «Actualizar a Y» con confirmación y el comando donde no hay instalador', () => {
-  assert.match(agents, /t\(upd\.available === true \? 'agents\.versionUpdate' : 'agents\.versionCurrent'/);
-  // an unknown installed version is not «up to date»; the repair stays in the card's «⋯»; Claude's installer promises no version
-  assert.match(agents, /if \(upd && upd\.available === false && !busy\)/);
+  assert.match(agents, /upd\.available === true \? t\('agents\.newVersion', \{ latest: upd\.latest \}\) : t\('agents\.upToDate'\)/);
+  // «Actualizar» only when a newer version is known; the repair stays in the detail's «⋯»; Claude's installer promises no version
+  assert.match(agents, /if \(a\.installed && !upd\?\.available && !busy\) return null/);
   assert.match(agents, /agent-reinstall-/);
   assert.match(agents, /agents\.updateConfirmBodyRun/);
   assert.match(agents, /<IconButton label=\{t\('agents\.tipUpdatesTitle'\)\} onClick=\{searchUpdates\}/);

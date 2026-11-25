@@ -11,7 +11,8 @@ const read = (...p) => fs.readFileSync(path.join(ROOT, ...p), 'utf8');
 const agents = read('src', 'ui', 'views', 'agents.jsx');
 const usage = read('src', 'ui', 'views', 'usage.jsx');
 const tabs = read('src', 'ui', 'components', 'agents-tabs.jsx');
-const both = `${agents}\n${usage}\n${tabs}`;
+const tools = read('src', 'ui', 'views', 'agents-tools.jsx');
+const both = [agents, tools, usage, tabs].join(' ');
 
 test('Agentes: header with the guide, the check and a menu; tabs; sections of the mock-up', () => {
   assert.match(agents, /<PageHeader title=\{t\('agents\.title'\)\}/);
@@ -19,8 +20,9 @@ test('Agentes: header with the guide, the check and a menu; tabs; sections of th
   assert.match(agents, /<AgentsUsageTabs current="agents" \/>/);
   assert.match(tabs, /TabsList variant="line"/);
   assert.match(tabs, /go\(view === 'usage' \? \{ view: 'usage' \} : 'agents'\)/);
-  for (const key of ['agents.team.title', 'agents.nativeTitle', 'agents.moreTitle']) assert.ok(agents.includes(`t('${key}')`), key);
-  assert.match(agents, /className="grid items-start gap-4 min-\[900px\]:grid-cols-2/, 'two independent columns');
+  assert.ok(tools.includes("t('agents.tools.title')"), 'Herramientas');
+  for (const key of ['agents.mineTitle', 'agents.addTitle']) assert.ok(agents.includes(`t('${key}')`), key);
+  assert.match(agents, /min-\[1000px\]:grid-cols-3/, 'the gallery of fichas');
 });
 
 test('Agentes: the sign-in is a dialog with the same calls, and the team block installs through installer.*', () => {
@@ -55,7 +57,10 @@ test('every test id of the two pages in HEAD is still there', () => {
     try { before = execFileSync('git', ['show', `HEAD:${file}`], { cwd: ROOT, encoding: 'utf8', maxBuffer: 1 << 24 }); } catch { continue; }
     // ids that are only computed in the old file (the ones written as a template) are matched by their literal prefix
     const ids = [...before.matchAll(/data-testid=(?:"([^"]+)"|\{`([^`]+)`\})/g)].map((m) => m[1] ?? m[2].replace(/\$\{[^}]*\}.*$/, ''));
-    for (const id of new Set(ids)) assert.ok(both.includes(id), `${file}: ${id}`);
+    // gone on purpose: the update badge became a hint, the settings fold and its «Activar» button went into the detail and the
+    // «⋯», the long notes became tags, the foot's sign-out lives in each account's «⋯» and the tool rows have their own ids
+    const gone = ['agent-uptodate-', 'agent-settings-', 'agent-enable-', 'agent-hermes-note', 'agent-unverified-', 'agent-noguard-', 'agent-signout-', 'team-dev-'];
+    for (const id of new Set(ids)) if (!gone.includes(id) && !gone.some((g) => id.startsWith(g))) assert.ok(both.includes(id), `${file}: ${id}`);
   }
 });
 
@@ -84,12 +89,12 @@ test('9C-a Uso and engine: «Hoy» is one day of the same history, the team chec
   assert.match(read('src', 'engine', 'api', 'index.mjs'), /oneOf\(days, \[1, 7, 30, 90\]/);
   assert.match(read('src', 'engine', 'api', 'history.mjs'), /oneOf\(days, \[1, 7, 30, 90\]/);
   assert.match(read('src', 'engine', 'host', 'installer.mjs'), /version: versions\[i\.id\] \?\? null/);
-  assert.match(agents, /i\.version\?\.match/);
-  assert.match(agents, /<Panel className="mt-0">/, 'no extra 12 px between the note and the table');
+  assert.match(tools, /i\.version\?\.match/);
 });
 
-test('9C-a Agentes y Uso: the tabs are underlined links', () => {
-  assert.equal((tabs.match(/className="underline"/g) ?? []).length, 2);
+test('Agentes y Uso: the tabs have the tab style of the rest of Orb, not an underlined link', () => {
+  assert.doesNotMatch(tabs, /underline/);
+  assert.match(tabs, /<TabsList variant="line"/);
 });
 
 test('10C-b Uso: «Por proyecto» comes from the ledger, the days flow with the page and the cards follow the mock-up', () => {
@@ -105,6 +110,7 @@ test('10C-b Uso: «Por proyecto» comes from the ledger, the days flow with the 
   for (const l of ['es', 'en']) { const s = read('src', 'shared', 'locales', l, 'agents.mjs'); assert.match(s, /'usage\.renewsAt'/); assert.match(s, /'usage\.renewsOn'/); }
 });
 
-test('10C-b Agentes: every agent that goes by ACP carries the ACP pill', () => {
-  assert.match(agents, /a\.kind === 'acp' \|\| !NATIVE\.includes\(a\.id\)/);
+test('Agentes: no ACP jargon on the page', () => {
+  assert.doesNotMatch(agents, /<Badge variant="info">ACP<\/Badge>/);
+  assert.doesNotMatch(agents, /agents\.notFound|agents\.missing/);
 });

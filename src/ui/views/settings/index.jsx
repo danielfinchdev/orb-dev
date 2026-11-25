@@ -14,7 +14,7 @@ import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
 import { Block, MoreOptions } from './rows.jsx';
 import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
-import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ZoomFineCard, ExpertCard, ExpertPanelsCard } from './general.jsx';
+import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, ProjectScriptsCard, InterfaceCard, ZoomFineCard, ExpertCard, ExpertPanelsCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard, LiveWindowCard } from './devices.jsx';
 import { McpExtCard } from './mcp-ext.jsx';
 import { UsageAccounts, BrakesCard, BrakeRails } from './usage-tab.jsx';
@@ -51,7 +51,7 @@ const SECTIONS = [
     cards: () => <MagicLinkPanel grouped phoneAccess={(more) => <MobileCard more={more} />} /> },
   { id: 'agentes', icon: Bot, cards: (c) => <AgentsTabs c={c} /> },
   // What the agents may do without asking, the protected paths and how long a question waits.
-  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ApprovalWaitCard c={c} /><ProtectedCard c={c} /></> },
+  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ApprovalWaitCard c={c} /><ProtectedCard c={c} /><ProjectScriptsCard /></> },
   // every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
   { id: 'datos', icon: Database, cards: () => <DataCards /> },
