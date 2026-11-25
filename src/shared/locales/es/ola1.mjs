@@ -71,8 +71,6 @@ export default {
   'about.license': 'Licencia',
   'about.music': 'Música',
   'about.musicAdaptive': 'La de fondo y la de los minijuegos las crea Orb al momento, sin archivos de audio',
-  // Textos que apuntaban a las secciones de antes
-  'help.faq.10.a': 'El tema Profesional no muestra el robot ni animaciones. Cámbialo en Ajustes › General, donde también se activa o desactiva el robot flotante.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link
   'nav.thisDevice': 'Este dispositivo'
 };

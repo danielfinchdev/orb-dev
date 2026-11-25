@@ -71,8 +71,6 @@ export default {
   'about.license': 'Licence',
   'about.music': 'Music',
   'about.musicAdaptive': 'The background music and the minigames’ are made by Orb on the spot, with no audio files',
-  // Texts that pointed to the old sections
-  'help.faq.10.a': 'The Professional theme hides the robot and animations. Change it in Settings › General, where the floating robot is also turned on or off.',
   // Pie de la barra lateral en un navegador enlazado: el engranaje abre este dispositivo y Magic Link
   'nav.thisDevice': 'This device'
 };
