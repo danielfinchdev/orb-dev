@@ -70,11 +70,11 @@ test('Actividad: la regla de «técnico» solo oculta líneas informativas del r
 test('Actividad: el interruptor está apagado por defecto y copiar toma todas las líneas cargadas', () => {
   const a = read('src/ui/views/activity.jsx');
   assert.match(a, /useState\(false\);\s*const \[page/);
-  assert.match(a, /visibleLines\(page\.items, technical\)/);
+  assert.match(a, /visibleLines\(page\.items, showTechnical\)/);
   // copiar y el informe no pasan por el ocultado
   assert.match(a, /const copy = \(\) => navigator\.clipboard\.writeText\(page\.items\.map/);
   assert.match(a, /data-testid="activity-technical"/);
-  assert.match(a, /counts\.levels\.warn \+ counts\.levels\.error/);
+  assert.match(a, /totals\.levels\.warn \+ totals\.levels\.error/);
   assert.doesNotMatch(a, /<DateField [^>]*data-testid="activity-from"[\s\S]*<DateField [^>]*data-testid="activity-to"[\s\S]*activity-search/);
 });
 
@@ -103,7 +103,7 @@ test('Bitácoras: los aciertos en las otras bitácoras salen con su número y si
 });
 
 test('resaltado: parte el texto sin mayúsculas ni acentos y busca texto plano, no patrones', async () => {
-  const { splitMatches } = await import('../src/ui/lib/highlight.js');
+  const { splitMatches } = await import('../src/ui/lib/mark-matches.js');
   const hits = (t, q) => splitMatches(t, q).filter((p) => p.hit).map((p) => p.text);
   assert.deepEqual(hits('El Carrito y el carro', 'CARR'), ['Carr', 'carr']);
   assert.deepEqual(hits('Corazón y corazon', 'corazon'), ['Corazón', 'corazon']);
@@ -118,10 +118,33 @@ test('resaltado: parte el texto sin mayúsculas ni acentos y busca texto plano, 
   const parts = splitMatches('Ñandú ñandú', 'nandu');
   assert.equal(parts.map((p) => p.text).join(''), 'Ñandú ñandú');
   assert.equal(parts.filter((p) => p.hit).length, 2);
-  // la vista marca solo nodos de texto: nada de innerHTML y se saltan enlaces y código
+  // la vista marca solo nodos de texto, con la misma normalización que el filtro y el recuento
   const l = read('src/ui/views/logs.jsx');
   assert.match(l, /highlightIn\(ref\.current, query\)/);
-  const h = read('src/ui/lib/highlight.js');
+  assert.match(l, /<MarkedBody key=\{query\}/);
+  assert.match(l, /folded\[i\]\.includes\(needle\)/);
+  const h = read('src/ui/lib/mark-matches.js');
   assert.doesNotMatch(h, /innerHTML/);
-  assert.match(h, /'A', 'CODE', 'PRE'/);
+});
+
+test('el resaltador de sintaxis (highlight.js) conserva sus exportaciones', async () => {
+  const h = await import('../src/ui/lib/highlight.js');
+  for (const k of ['LANGUAGES', 'ALIASES', 'rehypePlugins', 'languageFor', 'highlightLines', 'highlightLine']) assert.ok(k in h, k);
+  assert.equal(typeof h.languageFor, 'function');
+  assert.ok(!('splitMatches' in h) && !('highlightIn' in h));
+});
+
+test('el recuento de otras bitácoras ignora mayúsculas y acentos, igual que el filtro', async () => {
+  const { foldedEntries, countFolded } = await import('../src/ui/lib/logbook.js');
+  const byLog = { a: foldedEntries('### x\nCorazón\n### y\nnada'), b: foldedEntries('### z\ncorazon') };
+  assert.deepEqual(countFolded(byLog, 'CORAZÓN'), { a: 1, b: 1 });
+  assert.deepEqual(countFolded(byLog, ''), {});
+});
+
+test('Actividad: con texto buscado no se ocultan líneas técnicas y una página vacía pide la siguiente', () => {
+  const a = read('src/ui/views/activity.jsx');
+  assert.match(a, /technical \|\| Boolean\(view\.q\.trim\(\)\)/);
+  assert.match(a, /autoFor\.current === page\.next/);
+  // el número de «Problemas» no depende de las fuentes de la pestaña
+  assert.match(a, /\{ \.\.\.filters, sources: \[\], level: 'info' \}/);
 });

@@ -24,7 +24,7 @@ test('Actividad: los totales se piden con la primera página y se leen solo si t
   assert.equal(normalizeActivity({ items: [], next: null }).counts, null);
   assert.equal(normalizeActivity({ items: [], counts: { sources: { orb: 'x' }, levels: {} } }).counts, null);
   // the number of «Problemas» is the engine's total of warnings and errors, never a count of the lines loaded
-  assert.match(activity, /counts\.levels\.warn \+ counts\.levels\.error/);
+  assert.match(activity, /totals\.levels\.warn \+ totals\.levels\.error/);
   assert.match(activity, /data-testid="activity-problems"/);
 });
 

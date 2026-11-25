@@ -51,7 +51,7 @@ test('Actividad: four quick tabs, text chips and no invented totals', () => {
   assert.doesNotMatch(a, /<Check\b|<Segmented/);
   // a chip carries a number only when the engine sent its totals (counts); never one computed in the window
   assert.doesNotMatch(a, /\.length\}<\/span>|filter\([^)]*\)\.length/);
-  assert.match(a, /counts\.levels\.warn/);
+  assert.match(a, /totals.levels.warn/);
 });
 
 test('Normas: no switch or edit icon in the rows; pausing and resuming a rail stay in «⋯» on the same path', () => {

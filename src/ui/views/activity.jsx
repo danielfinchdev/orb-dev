@@ -75,11 +75,31 @@ export function ActivityView({ tabs }) {
     call('activity.list', buildQuery(filters, page.next)).then((r) => { if (gen.current === mine) { const n = normalizeActivity(r); setPage((p) => ({ ...p, next: n.next, items: appendPage(p.items, n.items) })); } }).catch(quiet).finally(() => setLoading(false));
   }, [filters, page.next]);
   const { paged, counts } = page;
-  // the technical lines wait behind the switch; «Copiar» and the report take every line anyway
-  const items = useMemo(() => (paged ? visibleLines(page.items, technical) : page.items), [page.items, paged, technical]);
-  // «Problemas» counts what the engine found (warnings and errors), not only the lines loaded; the engine counts under the
-  // tab's own sources and a log longer than it reads in one go shows a «+»
-  const problems = counts ? counts.levels.warn + counts.levels.error : null;
+  // the technical lines wait behind the switch, unless a text is searched (it may be what is looked for); «Copiar» and the
+  // report take every line anyway
+  const showTechnical = technical || Boolean(view.q.trim());
+  const items = useMemo(() => (paged ? visibleLines(page.items, showTechnical) : page.items), [page.items, paged, showTechnical]);
+  // a page that the technical lines emptied does not stop the list: the next one is read on its own
+  const autoFor = useRef(null);
+  useEffect(() => {
+    // each cursor is tried once, so a failing read does not loop
+    if (!paged || !page.next || loading || !page.items.length || items.length || autoFor.current === page.next) return;
+    autoFor.current = page.next;
+    more();
+  }, [paged, page.next, page.items.length, items.length, loading, more]);
+  // «Problemas» is the engine's total of warnings and errors, not only the lines loaded. The tabs «Todo» and «Problemas» read
+  // it from the list's own totals (they ask for every source); «Tú» and «Agentes» ask once more without their sources.
+  const [allCounts, setAllCounts] = useState(null);
+  const ownTotals = view.tab === 'todo' || view.tab === 'problemas';
+  useEffect(() => {
+    if (!page.paged || ownTotals) return undefined;
+    const h = setTimeout(() => {
+      call('activity.list', { ...buildQuery({ ...filters, sources: [], level: 'info' }, null, { counts: true }), limit: 1 }).then((r) => setAllCounts(normalizeActivity(r).counts)).catch(quiet);
+    }, 300);
+    return () => clearTimeout(h);
+  }, [page.paged, ownTotals, filters, version, tick]);
+  const totals = ownTotals ? counts : allCounts;
+  const problems = totals ? totals.levels.warn + totals.levels.error : null;
   const copy = () => navigator.clipboard.writeText(page.items.map((r) => (r.legacy ? `${r.legacy.at}\t${r.legacy.actor}\t${r.legacy.kind}\t${r.legacy.task_id ? `#${r.legacy.task_id} ` : ''}${r.legacy.detail}` : `${r.at ?? ''}\t${r.source}\t${r.level}\t${r.project ?? ''}\t${r.text}`)).join('\n')).then(() => notifyOk(t('activity.copied')));
   const projectOptions = useMemo(() => [{ value: ALL, label: t('logbooks.allProjects'), icon: <Layers className="size-4" /> }, ...(projects ?? []).map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} /> }))], [projects, t]);
   const rangeOptions = useMemo(() => RANGES.map((r) => ({ value: r, label: t(`logbooks.range.${r}`) })), [t]);
@@ -98,7 +118,7 @@ export function ActivityView({ tabs }) {
               <button key={k} type="button" aria-pressed={view.tab === k} onClick={() => set({ tab: k })} data-testid={`activity-tab-${k}`}
                 className={cn(CHIP, view.tab === k ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>
                 {tabLabel[k]}
-                {k === 'problemas' && problems ? <Badge variant="destructive" data-testid="activity-problems">{problems.toLocaleString(locale)}{counts?.partial ? '+' : ''}</Badge> : null}
+                {k === 'problemas' && problems ? <Badge variant="destructive" data-testid="activity-problems">{problems.toLocaleString(locale)}{totals?.partial ? '+' : ''}</Badge> : null}
               </button>
             ))}
           </div>
