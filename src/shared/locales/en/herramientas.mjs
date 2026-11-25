@@ -179,11 +179,9 @@ export default {
   'prbar.watchOn': 'CI watch turned on.',
   'prbar.watchOff': 'CI watch turned off.',
   'agents.commit.title': 'Commit messages',
-  'agents.commit.desc': 'How Orb writes the message of "Commit…". It never carries AI signatures.',
   'agents.commit.conventional': 'Conventional Commits (recommended)',
   'agents.commit.repo': 'The repository\'s own conventions',
   'agents.commit.custom': 'My instructions',
   'agents.commit.instructions': 'Instructions',
   'agents.commit.ph': 'For example: one line, start with the module name.',
-  'agents.commit.save': 'Save'
 };

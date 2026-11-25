@@ -9,12 +9,11 @@ import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify, notifyOk } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
-import { MasterCard } from '@/views/master.jsx';
 import { newRecoveryCode } from '@/views/recovery.jsx';
 import { askNewSecret } from '@/components/new-secret.jsx';
 import { TrashCard } from './settings/trash.jsx';
 import { WorktreesCard } from './settings/worktrees.jsx';
-import { Block, Panel, Setting, MoreOptions } from './settings/rows.jsx';
+import { Block, Panel, Setting } from './settings/rows.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
 import { quiet } from '@/lib/quiet.js';
@@ -198,7 +197,8 @@ function CoreCard() {
   );
 }
 
-export function DataCards() { return <><MasterCard /><KeyCard /><LegacyCard /><BackupsCard /><CoreCard /><MoreOptions testid="more-options-datos"><TrashCard /><WorktreesCard /></MoreOptions></>; }
+// The master password is in Permisos y seguridad; here, the copies, the key of this PC and what Orb keeps of its own.
+export function DataCards() { return <><BackupsCard /><KeyCard /><LegacyCard /><TrashCard /><WorktreesCard /><CoreCard /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

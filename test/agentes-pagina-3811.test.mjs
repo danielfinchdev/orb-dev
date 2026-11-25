@@ -34,7 +34,7 @@ test('an installed agent is a collapsed row with logo, account and plan, what is
 test('the agents that are not installed are fichas with one button and the rest in the «⋯»', () => {
   assert.match(agents, /function AgentFicha/);
   assert.match(agents, /agents\?\.filter\(\(x\) => !x\.installed\)/);
-  const ficha = agents.slice(agents.indexOf('function AgentFicha'), agents.indexOf('function CommitStyleCard'));
+  const ficha = agents.slice(agents.indexOf('function AgentFicha'), agents.indexOf('export function AgentsView'));
   assert.match(ficha, /agent-find-\$\{a\.id\}/);
   assert.match(ficha, /askAgentKey\(a, name, t\)/);
   assert.match(ficha, /t\('agents\.howInstall'\)/);
@@ -78,11 +78,11 @@ test('«Herramientas» folds into one line and opens by itself when something is
   for (const id of ['git', 'node', 'claude', 'codex', 'cursor', 'gh', 'tailscale', 'java', 'androidSdk', 'flutter']) for (const l of [es, en]) assert.ok(l[`agents.tool.${id}`], id);
 });
 
-test('«Más opciones» left the page: hooks explanation in Ajustes › Permisos, commit style kept', () => {
+test('«Más opciones» left the page: hooks explanation in Ajustes › Permisos, commit style now in Ajustes › General › Git', () => {
   assert.doesNotMatch(agents, /MoreOptions|projectSettings/);
-  assert.match(agents, /<CommitStyleCard \/>/);
+  assert.doesNotMatch(agents, /CommitStyleCard/);
   assert.match(settings, /export function ProjectScriptsCard/);
-  assert.match(read('src/ui/views/settings/index.jsx'), /<ProtectedCard c=\{c\} \/><ProjectScriptsCard \/>/);
+  assert.match(read('src/ui/views/settings/index.jsx'), /<ProtectedCard c=\{c\} \/><MasterCard \/><ProjectScriptsCard \/>/);
   for (const l of [es, en]) assert.ok(l['settings.scripts.title'] && l['settings.scripts.whyBody']);
 });
 

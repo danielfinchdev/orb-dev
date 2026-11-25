@@ -62,14 +62,15 @@ test('6: «Restaurar» is never greyed out; with no code it warns under the fiel
   for (const l of ['es', 'en']) assert.match(locale(l, 'ws5.mjs'), /'data\.core\.codeNeeded'/);
 });
 
-test('7: the God mode panels and the live window button sit under «Más opciones» of Avanzado; the note says where protected items went', () => {
+test('7: the expert mode panels and the live window button sit in their own blocks of Avanzado; the note says where protected items went', () => {
   const index = read('src/ui/views/settings/index.jsx');
-  assert.match(index, /<MoreOptions testid="more-options-avanzado">\{fullPc\(\) \? <ExpertPanelsCard c=\{c\} \/> : null\}<LiveWindowCard c=\{c\} \/><McpExtCard \/>/);
+  assert.doesNotMatch(index, /more-options-avanzado|ExpertPanelsCard|LiveWindowCard/);
+  assert.match(index, /<AndroidCard \/>\{bridge\.mobile \? null : <McpExtCard \/>\}/);
   const general = read('src/ui/views/settings/general.jsx');
-  const expert = general.slice(general.indexOf('export function ExpertCard'), general.indexOf('export function ExpertPanelsCard'));
-  assert.doesNotMatch(expert, /PANELS|Checkbox/);
-  assert.match(general.slice(general.indexOf('export function ExpertPanelsCard'), general.indexOf('function MusicSettings')), /PANELS/);
-  assert.doesNotMatch(read('src/ui/views/settings/devices.jsx').slice(0, read('src/ui/views/settings/devices.jsx').indexOf('export function LiveWindowCard')).split('export function BrowserCard')[1], /showBrowser/);
+  const expert = general.slice(general.indexOf('export function ExpertCard'), general.indexOf('function MusicSettings'));
+  assert.match(expert, /PANELS/); assert.match(expert, /Checkbox/);
+  const devices = read('src/ui/views/settings/devices.jsx');
+  assert.match(devices.slice(devices.indexOf('export function BrowserCard'), devices.indexOf('export function PhoneView')), /showBrowser/);
   assert.doesNotMatch(locale('es', 'settings.mjs'), /expertOpenHint': '[^']*ya no está aquí/);
   assert.doesNotMatch(locale('en', 'settings.mjs'), /expertOpenHint': '[^']*no longer here/);
 });

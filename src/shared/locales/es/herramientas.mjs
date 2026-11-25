@@ -179,11 +179,9 @@ export default {
   'prbar.watchOn': 'Vigilancia de la CI activada.',
   'prbar.watchOff': 'Vigilancia de la CI apagada.',
   'agents.commit.title': 'Mensajes de commit',
-  'agents.commit.desc': 'Cómo escribe Orb el mensaje de «Hacer commit…». Nunca lleva firmas de IA.',
   'agents.commit.conventional': 'Conventional Commits (recomendado)',
   'agents.commit.repo': 'Las convenciones del repositorio',
   'agents.commit.custom': 'Mis instrucciones',
   'agents.commit.instructions': 'Instrucciones',
   'agents.commit.ph': 'Por ejemplo: en español, una línea, empieza por el módulo.',
-  'agents.commit.save': 'Guardar'
 };

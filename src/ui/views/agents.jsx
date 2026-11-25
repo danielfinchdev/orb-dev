@@ -13,7 +13,7 @@ import { AgentLogo } from '@/components/agent-icon.jsx';
 import { ToolsBlock, TEAM_AGENTS } from './agents-tools.jsx';
 import { Button } from '@/components/ui/button.jsx';
 import { IconButton, MoreButton, Note, ListCard, ListRow } from '@/components/ui/primitives.jsx';
-import { Badge, Field, Input, Spinner, Textarea } from '@/components/ui/basic.jsx';
+import { Badge, Field, Input, Spinner } from '@/components/ui/basic.jsx';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent, BubbleTip, Checkbox, Select, DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuCheckboxItem, Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/overlay.jsx';
 import { cn, baseName } from '@/lib/utils.js';
 import { useStore, call, act, bridge, setState, getState } from '@/lib/store.js';
@@ -21,7 +21,7 @@ import { LOGIN, OFF_AGENTS } from '@/lib/labels.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { t, useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
-import { Block, Panel, Setting, Fld, Stack, CardFoot } from './settings/rows.jsx';
+import { Block, Setting, Fld } from './settings/rows.jsx';
 
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com',
@@ -609,26 +609,6 @@ function AgentFicha({ a, reload, team }) {
   );
 }
 
-// How «Hacer commit…» writes its message (engine/commit-message.mjs): the style the user picks here; never an AI signature.
-function CommitStyleCard() {
-  const t = useT();
-  const cfg = useStore((s) => s.app.config.git) ?? {};
-  const [style, setStyle] = useState(cfg.commitStyle ?? 'conventional');
-  const [text, setText] = useState(cfg.commitInstructions ?? '');
-  const options = ['conventional', 'repo', 'custom'].map((v) => ({ value: v, label: t(`agents.commit.${v}`) }));
-  return (
-    <Block title={t('agents.commit.title')} note={t('agents.commit.desc')} data-testid="commit-style">
-      <Panel>
-        <Stack>
-          <Select value={style} onValueChange={setStyle} options={options} className="max-w-sm" title={t('agents.commit.title')} />
-          {style === 'custom' ? <Field label={t('agents.commit.instructions')}><Textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} maxLength={2000} placeholder={t('agents.commit.ph')} /></Field> : null}
-        </Stack>
-        <CardFoot><Button size="sm" onClick={async () => { const c = await act(call('config.save', { patch: { git: { commitStyle: style, commitInstructions: text } } }), t('agents.saved')); if (c) setState({ app: { ...getState().app, config: c } }); }} data-testid="commit-style-save">{t('agents.commit.save')}</Button></CardFoot>
-      </Panel>
-    </Block>
-  );
-}
-
 export function AgentsView() {
   const t = useT();
   const version = useStore((s) => s.version);
@@ -723,8 +703,6 @@ export function AgentsView() {
               </div>
             </Block>
           ) : null}
-          {/* «Mensajes de commit» is Orb's own, not drawn by the mock-up for this page: it moves to Ajustes › General › Git */}
-          <CommitStyleCard />
         </div>
       </PageBody>
     </>

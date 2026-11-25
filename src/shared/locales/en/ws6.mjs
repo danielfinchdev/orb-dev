@@ -1,7 +1,7 @@
 // Ajustes › Datos (backups and the recovery code) and the Magic Link guide for using Orb outside home.
 export default {
   'settings.section.datos': 'Data',
-  'settings.sectionDesc.datos': 'Master password, backups, the core folder and Orb 3.7 data.',
+  'settings.sectionDesc.datos': 'Backups, this PC’s key and Orb data.',
   'datos.backupsTitle': 'Backups',
   'trash.title': 'Chat trash',
   'trash.desc': 'Deleted chats are kept for 7 days and can be recovered.',

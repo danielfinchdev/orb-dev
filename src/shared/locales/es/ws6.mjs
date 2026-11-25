@@ -1,7 +1,7 @@
 // Ajustes › Datos (backups and the recovery code) and the Magic Link guide for using Orb outside home.
 export default {
   'settings.section.datos': 'Datos',
-  'settings.sectionDesc.datos': 'Contraseña maestra, copias de seguridad, carpeta core y datos de Orb 3.7.',
+  'settings.sectionDesc.datos': 'Copias, clave de este PC y datos de Orb.',
   // Ajustes › Datos
   'datos.backupsTitle': 'Copias de seguridad',
   'trash.title': 'Papelera de chats',

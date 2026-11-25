@@ -1,5 +1,5 @@
-// Ajustes: the assistant, appearance, chat, tasks, interface, God mode, the folder, «Cosas que nadie toca» and the daily test.
-import { useEffect, useState, useSyncExternalStore } from 'react';
+// Ajustes: the assistant, appearance (theme, letter, size, chats, sound, music), terminal, git, chat, tasks, permissions, expert mode, the folder and the daily test.
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { LayoutDashboard, Gem, Bot, Waves, Candy, Terminal, FlaskConical, FolderOpen, Plus, SquareTerminal, ZoomIn, ZoomOut, X, RotateCcw } from 'lucide-react';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, APPEARANCE_DEFAULTS, plainSkin } from '../../../shared/appearance.mjs';
 import { PANELS, savePanels, panelOn } from '../expert.jsx';
@@ -19,19 +19,20 @@ import { DEFAULT_PROTECTED } from '../../../shared/layout.mjs';
 import { available as musicAvailable, musicPrefs, musicState, subscribe as onMusic, toggleMusic, setMusicVolume, setMusicTheme, setMusicReactive, setMusicIntensity } from '@/lib/music.js';
 import { ADAPTIVE_THEMES } from '../../../shared/music.mjs';
 import { SkinPreview } from '@/components/skin-preview.jsx';
-import { save, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, CardFoot, Hint } from './rows.jsx';
+import { save, markSaved, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
 
 export function AssistantCard({ c }) {
   const t = useT();
   const [v, setV] = useState({ assistantName: c.assistantName, userName: c.userName, language: c.language });
+  // The names save when the field is left (not on every key); an unchanged one saves nothing.
+  const keep = (key) => { const val = v[key].trim(); if (val !== (c[key] ?? '')) save({ [key]: val }); };
   return (
     <Block title={t('settings.assistant')} note={t('settings.assistantDesc')}>
       <Panel>
-        <Setting label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input className="w-[200px]" value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} maxLength={40} aria-label={t('settings.assistantName')} /></Setting>
-        <Setting label={t('settings.userName')} hint={t('settings.userNameHint')}><Input className="w-[200px]" value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} maxLength={40} aria-label={t('settings.userName')} /></Setting>
+        <Setting label={t('settings.assistantName')} hint={t('settings.assistantNameHint')}><Input className="w-[200px]" value={v.assistantName} onChange={(e) => setV({ ...v, assistantName: e.target.value })} onBlur={() => keep('assistantName')} maxLength={40} aria-label={t('settings.assistantName')} data-testid="assistant-name" /></Setting>
+        <Setting label={t('settings.userName')} hint={t('settings.userNameHint')}><Input className="w-[200px]" value={v.userName} onChange={(e) => setV({ ...v, userName: e.target.value })} onBlur={() => keep('userName')} maxLength={40} aria-label={t('settings.userName')} data-testid="user-name" /></Setting>
         <Setting label={t('settings.language')} hint={t('settings.languageHint')}><Select caret="solid" value={v.language} onValueChange={(language) => { setV({ ...v, language }); save({ language }); }} title={t('settings.language')} options={Object.entries(LANGUAGES).map(([value, label]) => ({ value, label: label.replace(/\s*\(.*\)$/, '') }))} /></Setting>
-        <CardFoot><Button size="sm" onClick={() => save({ assistantName: v.assistantName.trim(), userName: v.userName.trim(), language: v.language })}>{t('settings.save')}</Button></CardFoot>
       </Panel>
     </Block>
   );
@@ -42,88 +43,151 @@ const SKIN_ICON = { predeterminado: LayoutDashboard, cristal: Gem, orb: Bot, vap
 // The sample of each palette's accent (the mock-up's swatches).
 const PALETTE_SWATCH = { grafito: 'oklch(0.6 0.18 40)', oceano: 'oklch(0.6 0.17 252)', bosque: 'oklch(0.6 0.13 155)', uva: 'oklch(0.6 0.18 300)', rubi: 'oklch(0.6 0.19 15)', arena: 'oklch(0.62 0.12 65)' };
 
-// Appearance: light / dark, the visual theme, fonts, colours of code; the reply line; and the robot (floating, sounds,
-// animations) with the music. Everything is saved as soon as it changes. Only the Orb theme shows the robot; the plain
-// themes have no sounds nor motion.
-export function AppearanceCard({ c }) {
-  const t = useT();
+// Appearance, in the blocks of the mock-up: theme, letter, size, chats, sound and music. Everything is saved as soon as it
+// changes. Only the Orb theme shows the robot; the plain themes have no sounds nor motion.
+function useUi(c) {
   const ui = { ...APPEARANCE_DEFAULTS, ...c.ui };
-  const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
   const set = (patch, ok = null) => save({ ui: patch }, ok);
-  const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
+  return [ui, set];
+}
+
+export function ThemeCard({ c }) {
+  const t = useT();
+  const [ui, set] = useUi(c);
   const darkOnly = fullPc() && darkOnlySkin(ui.skin);
   const lightOnly = fullPc() && lightOnlySkin(ui.skin);
   const locked = darkOnly || lightOnly;
   const mode = ui.theme ?? 'sistema';
   return (
-    <>
-      <Block title={t('appearance.title')} note={t('appearance.desc')}>
-        <Panel>
-          <Setting label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : lightOnly ? t('comp.theme.lightOnly') : t('settings.themeHint')}>
-            <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="radiogroup" aria-label={t('settings.theme')}>
-              {['sistema', 'claro', 'oscuro'].map((theme) => (
-                <button key={theme} type="button" role="radio" aria-checked={mode === theme} disabled={locked} onClick={() => set({ theme })}
-                  className={cn('focus-visible:outline-ring inline-flex h-(--ctl-sm) items-center rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap outline-none focus-visible:outline-2', locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', mode === theme ? 'bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.08)]' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>
+    <Block title={t('settings.themeTitle')} note={t('settings.themeNote')} data-testid="theme-card">
+      <Panel>
+        <Setting label={t('settings.theme')} hint={darkOnly ? t('comp.theme.darkOnly') : lightOnly ? t('comp.theme.lightOnly') : t('settings.themeHint')}>
+          <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="radiogroup" aria-label={t('settings.theme')}>
+            {['sistema', 'claro', 'oscuro'].map((theme) => (
+              <button key={theme} type="button" role="radio" aria-checked={mode === theme} disabled={locked} onClick={() => set({ theme })}
+                className={cn('focus-visible:outline-ring inline-flex h-(--ctl-sm) items-center rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap outline-none focus-visible:outline-2', locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer', mode === theme ? 'bg-card text-foreground shadow-[0_1px_2px_rgb(0_0_0/0.08)]' : 'text-muted-foreground hover:text-foreground')}>{t(`settings.theme.${theme}`)}</button>
+            ))}
+          </div>
+        </Setting>
+        {fullPc() ? (
+          <>
+            <Stack className="border-border border-t pb-0"><div className="flex flex-col gap-0.5"><span className="text-control font-medium">{t('appearance.skin')}</span><Hint>{t('appearance.skinHint')}</Hint></div></Stack>
+            <div className="grid grid-cols-3 gap-2 px-3.5 py-3 max-[900px]:grid-cols-2" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
+              {SKINS.map((skin) => (
+                <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
+                  className={cn('focus-visible:outline-ring flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-card border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
+                  <span className="block w-full" data-testid={`skin-preview-${skin}`}><SkinPreview skin={skin} palette={ui.palette} /></span>
+                  {(() => { const Icon = SKIN_ICON[skin]; return <Icon className="size-4" aria-hidden="true" />; })()}
+                  <span className="text-control leading-[1.45] font-medium">{t(`appearance.skin.${skin}`)}</span>
+                  <span className="text-muted-foreground text-caption leading-[1.45]">{t(`appearance.skinDesc.${skin}`)}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
+        {fullPc() && plainSkin(ui.skin) ? (
+          <Setting label={t('appearance.palette')} hint={t('appearance.paletteHint')} data-testid="palette-settings">
+            <div className="flex gap-1.5" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
+              {PALETTES.map((id) => (
+                <button key={id} type="button" role="radio" aria-checked={ui.palette === id} aria-label={t(`appearance.palette.${id}`)} title={t(`appearance.palette.${id}`)} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
+                  className={cn('focus-visible:outline-ring grid size-8 cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-2', ui.palette === id ? 'border-foreground border-2' : 'border-border')}>
+                  <i className="pal-dot block size-5 rounded-full" data-palette={id} style={{ width: 20, height: 20, background: PALETTE_SWATCH[id] }} aria-hidden="true" />
+                </button>
               ))}
             </div>
           </Setting>
-          {fullPc() ? (
-            <>
-              <Stack className="border-border border-t pb-0"><div className="flex flex-col gap-0.5"><span className="text-control font-medium">{t('appearance.skin')}</span><Hint>{t('appearance.skinHint')}</Hint></div></Stack>
-              <div className="grid grid-cols-3 gap-2 px-3.5 py-3 max-[900px]:grid-cols-2" role="radiogroup" aria-label={t('appearance.skin')} data-testid="skin-picker">
-                {SKINS.map((skin) => (
-                  <button key={skin} type="button" role="radio" aria-checked={ui.skin === skin} onClick={() => set({ skin })} data-testid={`skin-${skin}`}
-                    className={cn('focus-visible:outline-ring flex min-w-0 cursor-pointer flex-col items-start gap-1 rounded-card border p-2.5 text-left outline-none focus-visible:outline-2', ui.skin === skin ? 'border-primary-text bg-card shadow-[0_0_0_1px_var(--primary-text)]' : 'border-border bg-card hover:bg-accent')}>
-                    <span className="block w-full" data-testid={`skin-preview-${skin}`}><SkinPreview skin={skin} palette={ui.palette} /></span>
-                    {(() => { const Icon = SKIN_ICON[skin]; return <Icon className="size-4" aria-hidden="true" />; })()}
-                    <span className="text-control leading-[1.45] font-medium">{t(`appearance.skin.${skin}`)}</span>
-                    <span className="text-muted-foreground text-caption leading-[1.45]">{t(`appearance.skinDesc.${skin}`)}</span>
-                  </button>
-                ))}
-              </div>
-            </>
-          ) : null}
-          {fullPc() && plainSkin(ui.skin) ? (
-            <Setting label={t('appearance.palette')} hint={t('appearance.paletteHint')} data-testid="palette-settings">
-              <div className="flex gap-1.5" role="radiogroup" aria-label={t('appearance.palette')} data-testid="palette-picker">
-                {PALETTES.map((id) => (
-                  <button key={id} type="button" role="radio" aria-checked={ui.palette === id} aria-label={t(`appearance.palette.${id}`)} title={t(`appearance.palette.${id}`)} onClick={() => set({ palette: id })} data-testid={`palette-${id}`}
-                    className={cn('focus-visible:outline-ring grid size-8 cursor-pointer place-items-center rounded-full border outline-none focus-visible:outline-2', ui.palette === id ? 'border-foreground border-2' : 'border-border')}>
-                    <i className="pal-dot block size-5 rounded-full" data-palette={id} style={{ width: 20, height: 20, background: PALETTE_SWATCH[id] }} aria-hidden="true" />
-                  </button>
-                ))}
-              </div>
-            </Setting>
-          ) : null}
-          <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select caret="solid" value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONTS, 'appearance.font')} /></Setting>
-          <Setting label={t('appearance.codeFont')} hint={t('appearance.codeFontHint')}><Select caret="solid" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} title={t('appearance.codeFont')} options={opts(CODE_FONTS, 'appearance.codeFont')} /></Setting>
-          <Setting label={t('appearance.codeTheme')} hint={t('appearance.codeThemeHint')}><Select caret="solid" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} title={t('appearance.codeTheme')} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Setting>
-          <Stack className="border-border border-t">
-            <span className="text-control font-medium">{t('appearance.codeSample')}</span>
-            <pre className="bg-secondary border-border rounded-ctl m-0 overflow-x-auto border px-3 py-2.5 font-mono text-caption" aria-label={t('appearance.codeSample')}><code>{`const robot = await orbe.saluda('Dani');
+        ) : null}
+      </Panel>
+    </Block>
+  );
+}
+
+// The letter of the interface and of the code, with a preview that follows the choice (html[data-font] is applied as it saves).
+export function FontCard({ c }) {
+  const t = useT();
+  const [ui, set] = useUi(c);
+  const opts = (list, prefix) => list.map((value) => ({ value, label: t(`${prefix}.${value}`) }));
+  return (
+    <Block title={t('settings.fontTitle')} note={t('settings.fontNote')} data-testid="font-card">
+      <Panel>
+        <Setting label={t('appearance.font')} hint={t('appearance.fontHint')}><Select caret="solid" value={ui.font} onValueChange={(font) => set({ font })} title={t('appearance.font')} options={opts(FONTS, 'appearance.font')} data-testid="font-select" /></Setting>
+        <Setting label={t('appearance.codeFont')} hint={t('appearance.codeFontHint')}><Select caret="solid" value={ui.codeFont} onValueChange={(codeFont) => set({ codeFont })} title={t('appearance.codeFont')} options={opts(CODE_FONTS, 'appearance.codeFont')} data-testid="code-font-select" /></Setting>
+        <Setting label={t('appearance.codeTheme')} hint={t('appearance.codeThemeHint')}><Select caret="solid" value={ui.codeTheme} onValueChange={(codeTheme) => set({ codeTheme })} title={t('appearance.codeTheme')} options={opts(CODE_THEMES, 'appearance.codeTheme')} /></Setting>
+        <Stack className="border-border border-t">
+          <span className="text-control font-medium">{t('appearance.codeSample')}</span>
+          <p className="m-0 text-control" data-testid="font-preview-text">{t('settings.fontPreview')}</p>
+          <pre className="bg-secondary border-border rounded-ctl m-0 overflow-x-auto border px-3 py-2.5 font-mono text-caption" aria-label={t('appearance.codeSample')}><code>{`const robot = await orbe.saluda('Dani');
 if (robot.listo) console.log('Tarea hecha');`}</code></pre>
-          </Stack>
-        </Panel>
-      </Block>
-      <Block title={t('appearance.repliesTitle')}>
-        <Panel>
-          <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
-        </Panel>
-      </Block>
-      <Block title={t('appearance.robotTitle')} note={t('appearance.noRobot')}>
-        <Panel>
-          <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
-          <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
-          <Setting label={t('settings.volume')} hint={t('settings.volumeHint')}>
-            <Range min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} disabled={ui.sounds === false} className="w-[120px]! cursor-pointer"
-              onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
-          </Setting>
-          <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
-          {musicAvailable() ? <MusicSettings /> : null}
-        </Panel>
-        {musicAvailable() ? <MusicMore /> : null}
-      </Block>
-    </>
+        </Stack>
+      </Panel>
+    </Block>
+  );
+}
+
+// Zoom of the whole interface: the sizes of the list and the buttons − and + (steps of 10 %). Not on a phone: the browser has its own.
+export function SizeCard() {
+  const t = useT();
+  const [zoom, setZoom] = useState(null);
+  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
+  if (!bridge.zoom) return null;
+  const SIZES = sizes();
+  const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;
+  const change = async (value) => { const z = await act(bridge.zoom(Number(value))); if (z) { setZoom(z); markSaved(); } };
+  return (
+    <Block title={t('settings.sizeTitle')} note={t('settings.sizeNote')} data-testid="size-card">
+      <Panel>
+        <Setting label={t('settings.sizeLabel')} hint={<WithKeys plain text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />} data-testid="zoom-fine">
+          <Select caret="solid" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
+          <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} data-testid="zoom-out" onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
+          <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} data-testid="zoom-in" onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
+          <span className="text-muted-foreground min-w-9 text-caption tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
+        </Setting>
+      </Panel>
+    </Block>
+  );
+}
+
+// How the chats are shown: the tabs and the cost line under each reply.
+export function ChatsLookCard({ c }) {
+  const t = useT();
+  const [ui, set] = useUi(c);
+  return (
+    <Block title={t('settings.chatsTitle')} note={t('settings.chatsNote')} data-testid="chats-look-card">
+      <Panel>
+        <Row label={t('tabs.setting')} hint={t('tabs.settingHint')}><Switch checked={c.ui?.tabs !== false} onCheckedChange={(tabs) => save({ ui: { tabs } })} data-testid="tabs-switch" /></Row>
+        <Row label={t('appearance.usageLine')} hint={t('appearance.usageLineHint')}><Switch checked={ui.usageLine !== false} onCheckedChange={(usageLine) => set({ usageLine })} data-testid="usage-line-switch" /></Row>
+      </Panel>
+    </Block>
+  );
+}
+
+export function SoundCard({ c }) {
+  const t = useT();
+  const [ui, set] = useUi(c);
+  const [volume, setVolume] = useState(c.ui?.volume ?? 0.5);
+  return (
+    <Block title={t('settings.soundTitle')} note={t('appearance.noRobot')} data-testid="sound-card">
+      <Panel>
+        <Row label={t('settings.companion')} hint={t('settings.companionHint')}><Switch checked={ui.companion !== false} onCheckedChange={(companion) => set({ companion }, companion ? t('settings.companionOn') : t('settings.companionOff'))} /></Row>
+        <Row label={t('settings.motion')} hint={t('settings.motionHint')}><Switch checked={ui.motion !== 'minima'} onCheckedChange={(on) => set({ motion: on ? 'completa' : 'minima' }, on ? t('settings.motionOn') : t('settings.motionOff'))} /></Row>
+        <Row label={t('settings.sounds')} hint={t('settings.soundsHint')}><Switch checked={ui.sounds !== false} onCheckedChange={(sounds) => set({ sounds }, sounds ? t('settings.soundsOn') : t('settings.soundsOff')).then(() => sounds && play('wake'))} /></Row>
+        <Setting label={t('settings.volume')} hint={t('settings.volumeHint')}>
+          <Range min={0.1} max={1} step={0.1} value={volume} aria-label={t('settings.volume')} disabled={ui.sounds === false} className="w-[120px]! cursor-pointer"
+            onChange={(e) => setVolume(Number(e.target.value))} onPointerUp={() => set({ volume }).then(() => play('boop'))} onKeyUp={() => set({ volume })} />
+        </Setting>
+      </Panel>
+    </Block>
+  );
+}
+
+export function MusicCard() {
+  const t = useT();
+  if (!musicAvailable()) return null;
+  return (
+    <Block title={t('settings.musicTitle')} note={t('settings.musicNote')} data-testid="music-card">
+      <Panel><MusicSettings /></Panel>
+      <MusicMore />
+    </Block>
   );
 }
 
@@ -160,13 +224,13 @@ export function ChatCard({ c }) {
   const o = c.orchestrator;
   const agent = o.agent || 'claude';
   const [v, setV] = useState({ maxTurns: o.maxTurns, account: o.account || agent });
+  const keepTurns = () => { if (v.maxTurns && v.maxTurns !== o.maxTurns) save({ orchestrator: { maxTurns: v.maxTurns } }); };
   const accounts = (c.accounts ?? []).filter((a) => a.agent === agent);
   return (
     <Block title={t('settings.chatCard')} note={t('settings.chatCardDesc')}>
       <Panel>
-        <Setting label={t('settings.maxTurns')} hint={t('settings.maxTurnsHint')}><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} className="w-[72px]" aria-label={t('settings.maxTurns')} /></Setting>
-        {accounts.length > 1 ? <Setting label={t('settings.brainAccount')} hint={t('settings.brainAccountHint')}><Select caret="solid" value={v.account} onValueChange={(account) => setV({ ...v, account })} title={t('settings.brainAccount')} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Setting> : null}
-        <CardFoot><Button size="sm" onClick={() => save({ orchestrator: v })}>{t('settings.save')}</Button></CardFoot>
+        <Setting label={t('settings.maxTurns')} hint={t('settings.maxTurnsHint')}><Input type="number" min={2} max={200} value={v.maxTurns} onChange={(e) => setV({ ...v, maxTurns: num(e.target.value) })} onBlur={keepTurns} className="w-[72px]" aria-label={t('settings.maxTurns')} data-testid="max-turns" /></Setting>
+        {accounts.length > 1 ? <Setting label={t('settings.brainAccount')} hint={t('settings.brainAccountHint')}><Select caret="solid" value={v.account} onValueChange={(account) => { setV({ ...v, account }); save({ orchestrator: { account } }); }} title={t('settings.brainAccount')} options={accounts.map((a) => ({ value: a.id, label: a.label }))} /></Setting> : null}
       </Panel>
     </Block>
   );
@@ -199,9 +263,8 @@ export function ApprovalWaitCard({ c }) {
     <Block title={t('settings.approvalWaitTitle')} note={t('settings.approvalWaitNote')}>
       <Panel>
         <Setting label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}>
-          <Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} className="w-[72px]" aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-control">{t('settings.minutes')}</span>
+          <Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} onBlur={() => { const next = Math.min(240, Math.max(0, minutes)); setMinutes(next); if (next !== saved) save({ approvalWaitMinutes: next }); }} className="w-[72px]" aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-control">{t('settings.minutes')}</span>
         </Setting>
-        <CardFoot><Button size="sm" onClick={() => save({ approvalWaitMinutes: Math.min(240, Math.max(0, minutes)) })} data-testid="approval-wait-save">{t('settings.save')}</Button></CardFoot>
       </Panel>
     </Block>
   );
@@ -215,6 +278,8 @@ export function TasksCard({ c }) {
     resumeAfterRestart: c.continuity?.resumeAfterRestart !== false, resumeAtReset: c.continuity?.resumeAtReset !== false,
     delegation: c.delegation?.enabled !== false, trusted: c.delegation?.trusted !== false, maxPerTask: c.delegation?.maxPerTask ?? 4,
     oneAtATime: c.oneAtATime === true, parallelChats: c.orchestrator?.parallel ?? 3 });
+  // What is stored now: a field saves when it is left, and only if it differs from this.
+  const base = useRef(v);
   const cap = (a, k, val) => setV({ ...v, caps: { ...v.caps, [a]: { ...v.caps[a], [k]: num(val) } } });
   // one slider from maximum saving to maximum use sets every limit at once (and how careful the assistant is with
   // the quota); the limits themselves stay in «Opciones avanzadas» for whoever wants to tune them by hand.
@@ -225,17 +290,20 @@ export function TasksCard({ c }) {
     const caps = Object.fromEntries(agents.map((a) => [a, { maxTasks: p.maxTasks, maxHeavy: p.maxHeavy }]));
     const before = { profile, v };
     setProfile(level);
-    setV({ ...v, maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, stopAt: Math.round(p.stopAt * 100), caps, high: p.high, maxPerTask: p.maxPerTask, trusted: p.trusted, review: p.review });
+    const next = { ...v, maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, stopAt: Math.round(p.stopAt * 100), caps, high: p.high, maxPerTask: p.maxPerTask, trusted: p.trusted, review: p.review };
+    setV(next); base.current = next;
     // cancelling the password puts the slider and the fields back
-    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } }).then((r) => { if (!r) { setProfile(before.profile); setV(before.v); } });
+    save({ maxParallel: p.maxParallel, perAgent: p.perAgent, timeoutMinutes: p.timeoutMinutes, review: { auto: p.review }, policy: { highNeedsApproval: p.high }, budget: { profile: level, stopAt: p.stopAt, agents: caps }, delegation: { maxPerTask: p.maxPerTask, trusted: p.trusted } }).then((r) => { if (!r) { setProfile(before.profile); setV(before.v); base.current = before.v; } });
   };
   const level = profile ?? null;
   const saveAdvanced = () => {
+    base.current = v;
     const was = profile; setProfile(null);
     save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); });
   };
+  const keepCaps = () => { const now = v.caps; if (JSON.stringify(now) !== JSON.stringify(base.current.caps)) saveAdvanced(); };
   const numField = (key, label, hint, extra = {}) => (
-    <Setting label={label} hint={hint}><Input type="number" className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: num(e.target.value) })} aria-label={label} {...extra} /></Setting>
+    <Setting label={label} hint={hint}><Input type="number" className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: num(e.target.value) })} onBlur={() => { if (v[key] !== base.current[key]) saveAdvanced(); }} aria-label={label} {...extra} /></Setting>
   );
   return (
     <>
@@ -275,17 +343,15 @@ export function TasksCard({ c }) {
               {numField('maxPerTask', t('settings.maxPerTask'), t('settings.maxPerTaskHint'), { min: 0, max: 20 })}
               {/* how many conversations the assistant answers at the same time (the others wait their turn). */}
               {numField('parallelChats', t('settings.parallelChats'), t('settings.parallelChatsHint'), { min: 1, max: 6, 'data-testid': 'parallel-chats' })}
-              <CardFoot><Button size="sm" onClick={saveAdvanced} data-testid="spend-save">{t('settings.save')}</Button></CardFoot>
             </Panel>
             <Block title={t('settings.capsTitle')} note={t('settings.capsNote')}>
               <Panel>
                 {agents.map((a) => (
                   <Setting key={a} label={AGENT[a] ?? a} hint={`${t('settings.colTasks')} · ${t('settings.colHeavy')}`}>
-                    <Input type="number" min={1} className="w-[72px]" value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} aria-label={`${AGENT[a] ?? a}, ${t('settings.colTasks')}`} />
-                    <Input type="number" min={0} className="w-[72px]" value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} aria-label={`${AGENT[a] ?? a}, ${t('settings.colHeavy')}`} />
+                    <Input type="number" min={1} className="w-[72px]" value={v.caps[a].maxTasks} onChange={(e) => cap(a, 'maxTasks', e.target.value)} onBlur={keepCaps} aria-label={`${AGENT[a] ?? a}, ${t('settings.colTasks')}`} />
+                    <Input type="number" min={0} className="w-[72px]" value={v.caps[a].maxHeavy} onChange={(e) => cap(a, 'maxHeavy', e.target.value)} onBlur={keepCaps} aria-label={`${AGENT[a] ?? a}, ${t('settings.colHeavy')}`} />
                   </Setting>
                 ))}
-                <CardFoot><Button size="sm" onClick={saveAdvanced}>{t('settings.save')}</Button></CardFoot>
               </Panel>
             </Block>
             {/* the guide of models: the mock-up does not draw it, so it lives here with the other settings it does not draw */}
@@ -324,6 +390,8 @@ export function TestCard() {
 export function FolderCard({ c, home }) {
   const t = useT();
   const [roots, setRoots] = useState((c.projectRoots ?? []).join('\n'));
+  // One path per line, saved when the field is left and only if the list changed.
+  const keepRoots = () => { const list = roots.split(/\r?\n/).map((x) => x.trim()).filter(Boolean); if (JSON.stringify(list) !== JSON.stringify(c.projectRoots ?? [])) save({ projectRoots: list }); };
   return (
     <Block title={t('settings.folder')} note={t('settings.folderDesc')}>
       <Panel>
@@ -331,8 +399,7 @@ export function FolderCard({ c, home }) {
           <Button size="sm" variant="outline" onClick={() => act(bridge.openPath(home))}><FolderOpen />{t('settings.open')}</Button>
           <Button size="sm" variant="outline" onClick={async () => { const f = await bridge.pickFolder(t('settings.pickOtherHome')); if (f && await confirm(t('settings.switchTitle'), t('settings.switchBody', { path: f }), { ok: t('settings.switchOk'), danger: true })) act(bridge.switchHome(f)); }}>{t('settings.useOther')}</Button>
         </Setting>
-        <Fld label={t('settings.roots')} hint={t('settings.rootsHint')}><Textarea className="h-[72px] resize-y" rows={3} value={roots} onChange={(e) => setRoots(e.target.value)} /></Fld>
-        <CardFoot><Button size="sm" onClick={() => save({ projectRoots: roots.split(/\r?\n/).map((x) => x.trim()).filter(Boolean) })}>{t('settings.save')}</Button></CardFoot>
+        <Fld label={t('settings.roots')} hint={t('settings.rootsHint')}><Textarea className="h-[72px] resize-y" rows={3} value={roots} onChange={(e) => setRoots(e.target.value)} onBlur={keepRoots} data-testid="project-roots" /></Fld>
       </Panel>
     </Block>
   );
@@ -385,43 +452,18 @@ export function ProtectedCard({ c }) {
   );
 }
 
-// Zoom in steps of 10 %: the mock-up draws only the size list, so the buttons live in «Más opciones».
-export function ZoomFineCard() {
+// The terminal that Ctrl J opens (src/engine/host/terminal.mjs), and «Abrir terminal» now.
+export function TerminalCard({ c }) {
   const t = useT();
-  const [zoom, setZoom] = useState(null);
-  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
-  if (!bridge.zoom) return null;
-  const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
-  return (
-    <Panel>
-      <Setting label={t('settings.zoomFine')} hint={t('settings.zoomFineHint')} data-testid="zoom-fine">
-          <BubbleTip title={t('settings.zoomOut')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomOut')} onClick={() => change(zoom - 0.1)}><ZoomOut /></Button></BubbleTip>
-          <BubbleTip title={t('settings.zoomIn')}><Button size="icon-sm" variant="outline" aria-label={t('settings.zoomIn')} onClick={() => change(zoom + 0.1)}><ZoomIn /></Button></BubbleTip>
-          <span className="text-muted-foreground min-w-9 text-caption tabular-nums">{zoom ? `${Math.round(zoom * 100)} %` : ''}</span>
-      </Setting>
-    </Panel>
-  );
-}
-
-export function InterfaceCard({ c }) {
-  const t = useT();
-  const [zoom, setZoom] = useState(null);
   // on Linux, its usual terminals (src/engine/host/terminal.mjs LINUX_TERMINALS) instead of Windows' ones.
   const linux = window.orb?.platform === 'linux';
   const terminals = linux ? { auto: t('settings.term.auto'), warp: 'Warp', 'x-terminal-emulator': t('settings.term.system'), 'gnome-terminal': 'GNOME Terminal', konsole: 'Konsole', 'xfce4-terminal': 'Xfce Terminal', kitty: 'kitty', alacritty: 'Alacritty', xterm: 'XTerm' }
     : window.orb?.platform && window.orb.platform !== 'win32' ? { auto: t('settings.term.auto'), warp: 'Warp' }
       : { auto: t('settings.term.auto'), warp: 'Warp', wt: 'Windows Terminal', powershell: 'PowerShell', cmd: t('settings.term.cmd') };
-  useEffect(() => { bridge.zoom?.().then(setZoom).catch(quiet); return bridge.on('ui:zoom', (p) => setZoom(p.zoom)); }, []);
-  if (!bridge.zoom) return null; // phone: the browser has its own zoom
-  const SIZES = sizes();
-  const preset = SIZES.find((o) => Math.abs(Number(o.value) - zoom) < 0.01)?.value;
-  const change = async (value) => setZoom(await act(bridge.zoom(Number(value))));
+  if (!bridge.zoom) return null; // phone: there is no terminal to open
   return (
-    <Block title={t('settings.interface')} note={<WithKeys text={t('settings.interfaceDesc')} keys={{ shortcut: ['Ctrl', 'J'] }} />}>
+    <Block title={t('settings.terminalTitle')} note={t('settings.terminalNote')} data-testid="terminal-card">
       <Panel>
-        <Setting label={t('settings.sizeLabel')} hint={<WithKeys plain text={t('settings.sizeHint')} keys={{ zoomIn: ['Ctrl', '+'], zoomOut: ['Ctrl', '-'], reset: ['Ctrl', '0'] }} />}>
-          <Select caret="solid" value={preset} placeholder={zoom ? t('settings.custom', { pct: Math.round(zoom * 100) }) : '…'} onValueChange={change} title={t('settings.sizeLabel')} options={SIZES} />
-        </Setting>
         <Setting label={t('settings.terminal')} hint={t('settings.terminalHint')}>
           <Select caret="solid" className="min-w-0" value={c.ui?.terminal ?? 'auto'} onValueChange={(terminal) => save({ ui: { terminal } })} title={t('settings.terminal')} options={Object.entries(terminals).map(([value, label]) => ({ value, label }))} />
           <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
@@ -432,28 +474,43 @@ export function InterfaceCard({ c }) {
   );
 }
 
-// Expert mode: an IDE-like view (PC only) with the panels the user picks.
-export function ExpertCard({ c }) {
+// How «Hacer commit…» writes its message (src/engine/commit-message.mjs): the style the person picks; never an AI signature.
+// The style saves when it changes; the own instructions when the field is left.
+export function GitCard({ c }) {
   const t = useT();
-  const on = c.expert?.enabled === true;
+  const cfg = c.git ?? {};
+  const style = cfg.commitStyle ?? 'conventional';
+  const [text, setText] = useState(cfg.commitInstructions ?? '');
+  const options = ['conventional', 'repo', 'custom'].map((v) => ({ value: v, label: t(`agents.commit.${v}`) }));
+  const keepText = () => { if (text !== (cfg.commitInstructions ?? '')) save({ git: { commitInstructions: text } }); };
   return (
-    <Block title={t('settings.expert')} note={t('settings.expertDesc')}>
+    <Block title={t('settings.gitTitle')} note={t('settings.gitNote')} data-testid="commit-style">
       <Panel>
-        <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
-        <Setting label={t('settings.expertOpen')} hint={t('settings.expertOpenHint')}><Button size="sm" variant="outline" disabled={!on} onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></Setting>
+        <Setting label={t('agents.commit.title')} hint={t('settings.commitHint')}>
+          <Select caret="solid" value={style} onValueChange={(commitStyle) => save({ git: { commitStyle } })} options={options} title={t('agents.commit.title')} data-testid="commit-style-select" />
+        </Setting>
+        {style === 'custom' ? (
+          <Fld label={t('agents.commit.instructions')} hint={t('settings.commitInstructionsHint')}>
+            <Textarea value={text} onChange={(e) => setText(e.target.value)} onBlur={keepText} rows={3} maxLength={2000} placeholder={t('agents.commit.ph')} data-testid="commit-instructions" />
+          </Fld>
+        ) : null}
       </Panel>
     </Block>
   );
 }
 
-// Which panels the God mode shows: Orb's own choice, not drawn by the mock-up, so it sits under «Más opciones».
-export function ExpertPanelsCard({ c }) {
+// Expert mode: an IDE-like view (PC only) with the panels the user picks.
+export function ExpertCard({ c }) {
   const t = useT();
   const on = c.expert?.enabled === true; const panels = c.expert?.panels ?? {};
   return (
-    <Block title={t('settings.expertPanels')} data-testid="expert-panels">
+    <Block title={t('settings.expert')} note={t('settings.expertDesc')}>
       <Panel>
-        <Stack>
+        <Row label={t('settings.expertOn')} hint={t('settings.expertOnHint')}><Switch checked={on} onCheckedChange={(enabled) => save({ expert: { enabled } }, enabled ? t('settings.expertEnabled') : t('settings.expertDisabled'))} data-testid="expert-switch" /></Row>
+        <Setting label={t('settings.expertOpen')} hint={t('settings.expertOpenHint')}><Button size="sm" variant="outline" disabled={!on} onClick={() => go('expert')}><SquareTerminal />{t('settings.expertOpen')}</Button></Setting>
+        {/* which panels it shows (Orb's own choice) */}
+        <Stack className="border-border border-t" data-testid="expert-panels">
+          <span className="text-control font-medium">{t('settings.expertPanels')}</span>
           <div className="grid gap-2 sm:grid-cols-2">
             {Object.entries(PANELS).map(([id, label]) => <label key={id} className={cn('-mx-1 flex items-center gap-2 rounded-md px-1 py-1 text-control', on ? 'hover:bg-accent/40 cursor-pointer' : 'text-muted-foreground cursor-not-allowed')}><Checkbox disabled={!on} checked={panelOn(panels, id)} onCheckedChange={(v) => savePanels({ ...panels, [id]: v === true })} />{label}</label>)}
           </div>
@@ -475,7 +532,7 @@ function MusicSettings() {
   const keepVolume = () => setMusicVolume(v, { save: true });
   return (
     <div className="contents" data-testid="music-settings">
-      <Row label={t('appearance.music')} hint={t('appearance.musicHint')} className="border-t"><Switch checked={playing} onCheckedChange={() => toggleMusic()} aria-label={t('appearance.music')} data-testid="music-on" /></Row>
+      <Row label={t('appearance.music')} hint={t('appearance.musicHint')}><Switch checked={playing} onCheckedChange={() => toggleMusic()} aria-label={t('appearance.music')} data-testid="music-on" /></Row>
       {/* the mock-up's rows first (on, volume); what it does not draw, after them */}
       <Setting label={t('appearance.musicVolume')} hint={t('appearance.musicVolumeHint')}>
         <Range min={0} max={1} step={0.05} value={v} aria-label={t('appearance.musicVolume')} className="w-[120px]! cursor-pointer" data-testid="music-volume"

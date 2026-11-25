@@ -45,9 +45,9 @@ test('6: the agent row opens into its detail; the technical actions live in the 
   for (const id of ['agent-toggle-', 'agent-scan-', 'agent-open-', 'agent-path-', 'agent-check-', 'agent-reinstall-']) assert.ok(menu.includes('data-testid={`' + id + '${a.id}`}'), id);
   assert.ok(agents.includes('data-testid={`agent-add-account-${a.id}`}'));
   assert.ok(!agents.includes('<CardFoot className="flex-wrap gap-2">'), 'no card inside a card');
-  // «Más opciones» is gone from the page; the commit style stays on it until it moves to Ajustes › General › Git
+  // «Más opciones» is gone from the page, and the commit style lives in Ajustes › General › Git
   assert.ok(!agents.includes('<MoreOptions'));
-  assert.ok(agents.includes('<CommitStyleCard />'));
+  assert.ok(!agents.includes('CommitStyleCard'));
 });
 
 test('7: one active account says so, as the mock-up does', () => {
