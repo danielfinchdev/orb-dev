@@ -260,7 +260,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
 
     // Git is needed for undo with history, isolated copies and GitHub: the Agents screen warns when it is missing.
     'installer.check': async () => (await inst()).check(),
-    'installer.start': async ({ ids }) => { if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList')); return (await inst()).start(ids, emit); },
+    // Installing or updating happens only from this PC's window (permissions.mjs: 'pc') and only for ids of the fixed catalog
+    // (tool-catalog.mjs). Each step is written to Activity; a tool that is already there is never installed again.
+    'installer.start': async ({ ids, update }) => {
+      if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList'));
+      const installer = await inst();
+      const have = update ? null : new Set((await installer.check()).filter((i) => i.installed).map((i) => i.id));
+      const onEvent = ({ label, state, detail }) => board.event(null, 'usuario', state === 'instalando' ? 'tools.install_start' : state === 'hecho' ? 'tools.install_done' : 'tools.install_error', `${label}${state === 'error' && detail ? `: ${String(detail).slice(0, 160)}` : ''}`);
+      try { return installer.start(ids, emit, { update: update === true, have, onEvent }); } catch (error) { fail(error.message); }
+    },
+    // What winget says is newer for the catalog's tools: asked only when the block opens or «Comprobar» is pressed, kept 30 min.
+    'installer.updates': async ({ force }) => (await inst()).checkUpgrades({ force: force === true }),
+    // Tools a project's files ask for and this PC lacks (the project is looked up by name; no path comes from the window).
+    'installer.suggest': async ({ project: name }) => { const p = project(name); return p.path ? (await inst()).suggest(p.path) : []; },
     'installer.progress': async () => (await inst()).progress(),
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 

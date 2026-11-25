@@ -9,18 +9,18 @@ import { ctx, tr } from '../../platform/context.mjs';
 import { spawn } from 'node:child_process';
 import { ADAPTERS, quickRun } from '../../agents/index.mjs';
 import { IS_WIN, cleanEnv, inPath, killTree } from '../../platform/proc.mjs';
-
-const winget = (id) => `winget install --id ${id} -e --source winget --accept-package-agreements --accept-source-agreements --silent --disable-interactivity`;
+import { checkDevTools, toolVersion } from '../../platform/dev-tools.mjs';
+import { EXTRA_ITEMS, PROBES, WINGET_IDS, wingetInstall, wingetUpgrade, pnpmShims, playwrightInstalled, vswhere, hasAndroidStudio, parseUpgrades, suggestionsFor } from './tool-catalog.mjs';
 
 // id → what it is, how to check it and the official way to install it.
 const ITEMS = [
-  { id: 'git', label: 'Git', why: 'deshacer tareas con historial, ramas y GitHub', install: winget('Git.Git'), needsWinget: true },
-  { id: 'node', label: 'Node.js', why: 'lo necesita Codex para instalarse', install: winget('OpenJS.NodeJS.LTS'), needsWinget: true, exe: 'node.exe' },
+  { id: 'git', label: 'Git', why: 'deshacer tareas con historial, ramas y GitHub', install: wingetInstall('git'), wingetKey: 'git', needsWinget: true },
+  { id: 'node', label: 'Node.js', why: 'lo necesita Codex para instalarse', install: wingetInstall('node'), wingetKey: 'node', needsWinget: true, exe: 'node.exe' },
   { id: 'claude', label: 'Claude Code', why: 'agente del asistente', install: "irm https://claude.ai/install.ps1 | iex" },
   { id: 'codex', label: 'Codex', why: 'agente de OpenAI', install: 'npm install -g @openai/codex', after: ['node'] },
   { id: 'cursor', label: 'Cursor CLI', why: 'agente de Cursor', install: "irm 'https://cursor.com/install?win32=true' | iex" },
-  { id: 'gh', label: 'GitHub CLI', why: 'publicar y crear pull requests con tu cuenta', install: winget('GitHub.cli'), needsWinget: true },
-  { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: winget('Tailscale.Tailscale'), needsWinget: true, optional: true },
+  { id: 'gh', label: 'GitHub CLI', why: 'publicar y crear pull requests con tu cuenta', install: wingetInstall('gh'), wingetKey: 'gh', needsWinget: true },
+  { id: 'tailscale', label: 'Tailscale', why: 'usar el asistente desde el móvil de forma privada', install: wingetInstall('tailscale'), wingetKey: 'tailscale', needsWinget: true, optional: true, group: 'mobile' },
   // more agents (ACP). Optional: each one with its own account (Google, GitHub…), signed in with its own program.
   { id: 'gemini', label: 'Gemini CLI', why: 'agente de Google: contexto enorme, investigar y revisar', install: 'npm install -g @google/gemini-cli', after: ['node'], optional: true },
   { id: 'copilot', label: 'GitHub Copilot CLI', why: 'agente de GitHub, con tu suscripción de Copilot', install: 'npm install -g @github/copilot', after: ['node'], optional: true },
@@ -30,10 +30,62 @@ const ITEMS = [
   { id: 'hermes', label: 'Hermes Agent', why: 'agente autónomo con memoria y muchos proveedores', optional: true,
     install: String.raw`$env:Path = "$env:USERPROFILE\.local\bin;$env:Path"; if (-not (Get-Command uv -ErrorAction SilentlyContinue)) { irm https://astral.sh/uv/install.ps1 | iex; $env:Path = "$env:USERPROFILE\.local\bin;$env:Path" }; uv tool install 'hermes-agent[acp]'` }
 ];
+// The tools of the page's other groups (tool-catalog.mjs): optional, never part of the first run, installed with winget or one
+// fixed command. `extra` marks them; an installed one is never installed again.
+for (const x of EXTRA_ITEMS) ITEMS.push({ ...x, install: x.wingetKey ? wingetInstall(x.wingetKey) : x.install, needsWinget: Boolean(x.wingetKey), optional: true, extra: true });
 const AGENT_ITEMS = ['claude', 'codex', 'cursor', 'gemini', 'copilot', 'opencode', 'qwen', 'hermes', 'grok', 'devin', 'droid', 'omp', 'pi', 'antigravity'];
 
 async function versionOf(cmd, args = ['--version']) { const r = await quickRun(cmd, args, { timeoutMs: 8000 }); return r.ok ? r.out.split(/\r?\n/)[0].slice(0, 60) : null; }
 const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Tailscale', 'tailscale.exe') : 'tailscale');
+
+// One tool of the catalog: its program answers (by name, then in the folders its installer uses) or its marker is there.
+async function probeExtra(id) {
+  if (id === 'pnpm') return { installed: pnpmShims().some((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } }) || inPath('pnpm').length > 0, version: null };
+  if (id === 'playwright') return { installed: playwrightInstalled(), version: null };
+  if (id === 'buildTools') {
+    const r = IS_WIN ? await quickRun(vswhere(), ['-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-latest', '-property', 'installationVersion'], { timeoutMs: 8000 }) : { ok: false, out: '' };
+    return { installed: r.ok && Boolean(r.out.trim()), version: r.ok ? r.out.split(/\r?\n/)[0].trim() || null : null };
+  }
+  if (id === 'java' || id === 'androidSdk') {
+    const d = checkDevTools().find((x) => x.id === id);
+    const version = d?.path ? toolVersion(id, d.path) : null;
+    return { installed: Boolean(d?.path) || (id === 'androidSdk' && hasAndroidStudio()), version };
+  }
+  const probe = PROBES[id]; if (!probe) return { installed: false, version: null };
+  const name = IS_WIN ? `${probe.exe}.exe` : probe.exe;
+  let version = await versionOf(name, probe.args);
+  if (!version && IS_WIN) for (const dir of probe.dirs()) { version = await versionOf(path.join(dir, name), probe.args); if (version) break; }
+  return { installed: Boolean(version), version };
+}
+
+// What `winget upgrade` found, kept so opening the block again does not ask the internet again.
+let upgrades = null; // { at, found: { toolId: { current, latest } } }
+const UPGRADE_TTL = 30 * 60_000;
+export function cachedUpgrades() { return upgrades?.found ?? null; }
+// Only here (opening «Herramientas» or «Comprobar») does Orb ask winget for newer versions; it installs nothing.
+export async function checkUpgrades({ force = false, run = quickRun } = {}) {
+  if (!IS_WIN) return { at: null, found: {}, available: false };
+  if (!force && upgrades && Date.now() - upgrades.at < UPGRADE_TTL) return { at: upgrades.at, found: upgrades.found, available: true };
+  const r = await run('winget', ['upgrade', '--source', 'winget', '--accept-source-agreements', '--disable-interactivity'], { timeoutMs: 60_000 });
+  if (!r.out) return { at: upgrades?.at ?? null, found: upgrades?.found ?? {}, available: false };
+  upgrades = { at: Date.now(), found: parseUpgrades(r.out) };
+  return { at: upgrades.at, found: upgrades.found, available: true };
+}
+export const forgetUpgrades = () => { upgrades = null; };
+
+// Tools a project's files ask for that are not installed yet: [{ tool, file, label, installable }]. `dir` comes from the
+// project the engine already knows (never from the window's text).
+export async function suggest(dir) {
+  const wanted = suggestionsFor(dir);
+  const out = [];
+  for (const w of wanted) {
+    const item = ITEMS.find((i) => i.id === w.tool);
+    if (!item) { out.push({ tool: w.tool, file: w.file, label: w.tool === 'flutter' ? 'Flutter' : w.tool, installable: false }); continue; }
+    if ((await probeExtra(item.id)).installed) continue;
+    out.push({ tool: item.id, file: w.file, label: item.label, installable: true });
+  }
+  return out;
+}
 
 export async function check() {
   const out = {};
@@ -46,7 +98,10 @@ export async function check() {
   out.node = await present('node');
   out.gh = await present('gh');
   out.tailscale = Boolean(await versionOf(tailscaleExe(), ['version']));
-  return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id], version: versions[i.id] ?? null }));
+  await Promise.all(EXTRA_ITEMS.map(async (x) => { const r = await probeExtra(x.id); out[x.id] = r.installed; versions[x.id] = r.version; }));
+  const found = upgrades?.found ?? {};
+  return ITEMS.map((i) => ({ id: i.id, label: i.label, why: tr(`msg.installer.why.${i.id}`), optional: Boolean(i.optional), installed: out[i.id], version: versions[i.id] ?? null,
+    ...(i.group ? { group: i.group } : {}), ...(i.extra ? { extra: true } : {}), ...(i.wingetKey ? { canUpdate: true } : {}), ...(out[i.id] && found[i.id] ? { update: found[i.id] } : {}) }));
 }
 
 // The PowerShell script for the chosen items, in a safe order (Node before Codex). Only fixed text from ITEMS goes in.
@@ -58,8 +113,9 @@ export function plan(ids) {
   return chosen;
 }
 
-export function buildScript(ids, logFile) {
-  const chosen = plan(ids);
+// update: true builds `winget upgrade` for the winget tools among the ids (and nothing else); otherwise the install commands.
+export function buildScript(ids, logFile, { update = false } = {}) {
+  const chosen = update ? ITEMS.filter((i) => i.wingetKey && ids.includes(i.id)) : plan(ids);
   // PowerShell takes the typographic quotes ‘ ’ ‚ ‛ as quotes too: all are doubled (a folder may be called «Ana’s»).
   const q = (s) => `'${String(s).replace(/['\u2018\u2019\u201A\u201B]/g, (c) => c + c)}'`;
   const lines = [
@@ -78,9 +134,10 @@ export function buildScript(ids, logFile) {
     `Write-Host ${q(tr('msg.installer.intro'))} -ForegroundColor Yellow`
   ];
   for (const item of chosen) {
+    const command = update ? wingetUpgrade(item.wingetKey) : item.install;
     const install = item.needsWinget
-      ? `if (-not $hasWinget) { throw ${q(tr('msg.installer.noWinget'))} }; ${item.install}`
-      : item.install;
+      ? `if (-not $hasWinget) { throw ${q(tr('msg.installer.noWinget'))} }; ${command}`
+      : command;
     const body = item.ifMissing && item.exe
       ? `if (Get-Command ${q(item.exe)} -ErrorAction SilentlyContinue) { Write-Host ('   ' + ${q(tr('msg.installer.present'))}) } else { ${install} }`
       : install;
@@ -94,17 +151,22 @@ let current = null; // { logFile, ids, startedAt, closed }
 let timer = null;
 const MAX_MS = 45 * 60_000;
 
-export function start(ids, emit) {
+// spawnFn: how the hidden PowerShell is started (the tests give one that installs nothing).
+// have: ids already installed (a tool of the catalog that is there is never installed again); onEvent({ id, label, state,
+// update, detail }) tells each step's start, end and failure (the engine writes them to Activity).
+export function start(ids, emit, { update = false, have = null, onEvent = null, spawnFn = spawn } = {}) {
   if (!IS_WIN) throw new Error(tr('msg.installer.windowsOnly'));
   if (current && !progress().finished && Date.now() - current.startedAt < MAX_MS) throw new Error(tr('msg.installer.alreadyRunning'));
-  const valid = plan(ids.filter((id) => ITEMS.some((i) => i.id === id))).map((i) => i.id);
+  const known = ids.filter((id) => ITEMS.some((i) => i.id === id && (!update || i.wingetKey)));
+  const wanted = update || !have ? known : known.filter((id) => { const i = ITEMS.find((x) => x.id === id); return !(i.extra || i.wingetKey) || !have.has(id); });
+  const valid = (update ? ITEMS.filter((i) => wanted.includes(i.id)) : plan(wanted)).map((i) => i.id);
   if (!valid.length) throw new Error(tr('msg.installer.chooseOne'));
   const dir = path.join(ctx.paths.runs, 'instalacion');
   fs.mkdirSync(dir, { recursive: true });
   const stamp = Date.now();
   const logFile = path.join(dir, `progreso-${stamp}.log`);
   fs.writeFileSync(logFile, '');
-  const encoded = Buffer.from(buildScript(valid, logFile), 'utf16le').toString('base64');
+  const encoded = Buffer.from(buildScript(valid, logFile, { update }), 'utf16le').toString('base64');
   const run = { logFile, ids: valid, startedAt: stamp, closed: false };
   current = run;
   const powershell = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'); // full path: nothing in PATH can stand in
@@ -112,14 +174,30 @@ export function start(ids, emit) {
   // Windows 11 PCs a detached PowerShell closes at once without running anything). The app shows the progress.
   const output = fs.createWriteStream(logFile.replace(/\.log$/, '-salida.txt'));
   // stderr only repeats the same text as PowerShell's CLIXML; failures are already in the progress log (ERROR lines).
-  const child = spawn(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: cleanEnv() });
+  const child = spawnFn(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'], env: cleanEnv() });
   child.stdout.pipe(output, { end: false });
   child.on('error', (error) => { output.write(`${error.message}\n`); run.closed = true; });
   child.on('exit', () => { run.closed = true; output.end(); }); // finished or stopped
   // Progress for the window: the script appends INICIO / OK / ERROR lines and FIN.
   clearInterval(timer);
+  const told = new Map();
+  const tell = (s) => {
+    if (!onEvent) return;
+    for (const step of s.steps) {
+      const before = told.get(step.id) ?? 'pendiente';
+      if (step.state === before || step.state === 'pendiente') continue;
+      const send = (state) => { try { onEvent({ id: step.id, label: step.label, state, update, detail: step.detail }); } catch { /* the log never stops an install */ } };
+      if (before === 'pendiente' && step.state !== 'instalando') send('instalando');
+      send(step.state);
+      if (update && step.state === 'hecho' && upgrades) delete upgrades.found[step.id]; // no longer newer
+      told.set(step.id, step.state);
+    }
+    // closed before a step ended (the window or the process went away): its start has no end, so it is written as failed
+    if (s.finished) for (const step of s.steps) if (told.get(step.id) === 'instalando') { try { onEvent({ id: step.id, label: step.label, state: 'error', update, detail: tr('install.interrupted') }); } catch { /* idem */ } told.set(step.id, 'error'); }
+  };
   timer = setInterval(() => {
     const s = progress();
+    tell(s);
     emit('installer:progress', s);
     if (s.finished || Date.now() - stamp > MAX_MS) { clearInterval(timer); timer = null; }
   }, 1500);

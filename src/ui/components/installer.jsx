@@ -17,7 +17,8 @@ export function useInstaller() {
   const [chosen, setChosen] = useState({});
   const [progress, setProgress] = useState(null);
   const load = async () => {
-    const r = await call('installer.check').catch(() => []);
+    // the tools of the Agents page's other groups are not part of the first run
+    const r = (await call('installer.check').catch(() => [])).filter((i) => !i.extra);
     setItems(r);
     setChosen(Object.fromEntries(r.map((i) => [i.id, !i.installed && !i.optional])));
   };
