@@ -68,14 +68,17 @@ test('f: an agent is turned on or off from the «⋯» of its card, with the sam
   for (const l of ['es', 'en']) assert.match(locale(l, 'agents'), /'agents\.turnOff'/);
 });
 
-test('g: Uso shows «Al llegar al límite» in view (the mock-up draws it) and keeps the local usage and «Tokens por día: tabla» under «Más opciones»', () => {
+test('g: Uso shows «Al llegar al límite» in view and keeps the local usage under «Uso fuera de Orb» and the table of days folded', () => {
   const usage = src('views', 'usage.jsx');
-  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
-  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
-  for (const piece of ['<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
-  assert.ok(!more.includes('<Limits cfg='), 'the limits are not folded');
-  assert.ok(usage.indexOf('<Limits cfg=') > usage.indexOf('byAgentModel') && usage.indexOf('<Limits cfg=') < start, 'the limits follow «Por agente y modelo»');
+  // the limits stay in the limits view (not folded), after the accounts block
+  assert.ok(usage.includes('<Limits cfg='), 'the limits are drawn');
+  assert.ok(usage.indexOf('<Limits cfg=') > usage.indexOf("t('usage.byAccount')"), 'the limits follow «Por cuenta»');
+  assert.ok(!usage.includes('<MoreOptions testid="usage-more-options">'), 'no «Más opciones» fold holds the limits any more');
   for (const id of ['usage-switch-account', 'usage-warn-at', 'usage-stop-queue', 'usage-brake-5h', 'usage-brake-week']) assert.ok(usage.includes(`data-testid="${id}"`), id);
-  assert.match(usage, /<details className="text-faint-foreground text-caption" data-testid="usage-table">/);
-  assert.ok(usage.indexOf('<DaysTable days=') > usage.indexOf('<LocalUsage'));
+  // the local usage is the «Uso fuera de Orb» fold at the end of the page
+  const local = usage.slice(usage.indexOf('function LocalUsage'), usage.indexOf('function LocalUsage') + 900);
+  assert.match(local, /data-testid="usage-local-toggle">\{t\('usage\.outside'\)\}/);
+  assert.ok(usage.indexOf('<LocalUsage data=') > usage.indexOf('data-testid="usage-top"'), 'the local usage closes the page, after the top list');
+  assert.match(usage, /<details className="text-muted-foreground text-caption" data-testid="usage-table">/);
+  assert.ok(usage.indexOf('data-testid="usage-table"') < usage.indexOf('<LocalUsage data='));
 });

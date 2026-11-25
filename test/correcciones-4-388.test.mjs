@@ -70,7 +70,6 @@ test('9: the date fields show the period on view while nothing is chosen, in the
   const field = read('src/ui/components/date-field.jsx');
   assert.match(field, /text \|\| implied \|\| placeholder \|\| label/);
   const a = read('src/ui/views/activity.jsx');
-  assert.match(a, /fallback=\{firstDay \? toIso\(firstDay\) : undefined\}/);
-  assert.match(a, /fallback=\{toIso\(new Date\(\)\)\}/);
+  assert.match(a, /fallback=\{today\}/);
   assert.match(a, /buildQuery\(filters, page\.next\)/);
 });

@@ -1,3 +1,4 @@
+import { foldText } from './mark-matches.js';
 // Pure helpers of the Logs tab.
 
 // The log file names the engine lists → the three groups of the list. «general» is alone; a deleted project's log
@@ -92,14 +93,22 @@ export function authorAgent(author) {
   return 'other';
 }
 
-// The logs whose text mentions the needle: { name → hits }. Logs with no hit are left out. Plain text, never markup.
-export function countHits(bodies, q) {
-  const needle = String(q ?? '').trim().toLowerCase();
+// A log cut into its entries and folded once (no case, no accents): the form the searches compare against.
+export const foldedEntries = (body) => String(body ?? '').split(/^(?=### )/m).filter((p) => p.startsWith('### ')).map(foldText);
+
+// The logs whose entries mention the needle: { name → hits }, from the folded entries of each. Logs with no hit are left out.
+export function countFolded(byLog, q) {
+  const needle = foldText(String(q ?? '').trim());
   const out = {};
   if (!needle) return out;
-  for (const [name, body] of Object.entries(bodies ?? {})) {
-    const hits = String(body ?? '').split(/^(?=### )/m).filter((p) => p.startsWith('### ') && p.toLowerCase().includes(needle)).length;
+  for (const [name, entries] of Object.entries(byLog ?? {})) {
+    const hits = entries.filter((e) => e.includes(needle)).length;
     if (hits) out[name] = hits;
   }
   return out;
+}
+
+// The same from whole bodies. Plain text, never markup.
+export function countHits(bodies, q) {
+  return countFolded(Object.fromEntries(Object.entries(bodies ?? {}).map(([name, body]) => [name, foldedEntries(body)])), q);
 }
