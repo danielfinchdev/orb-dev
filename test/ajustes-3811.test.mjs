@@ -126,3 +126,22 @@ test('letras nuevas: Inter, Geist e IBM Plex Sans para la interfaz e IBM Plex Mo
   assert.ok(faces.every((f) => f.includes('font-display: swap')));
   for (const sel of ['html[data-font="inter"]', 'html[data-font="geist"]', 'html[data-font="ibm-plex-sans"]', 'html[data-code-font="ibm-plex-mono"]']) assert.ok(fontsCss.includes(sel), sel);
 });
+
+test('un cambio cancelado (contraseña) o fallido devuelve los campos y no se reenvía; lo escrito se guarda al cerrar', () => {
+  assert.match(general, /if \(r\) \{ base\.current = sent; return; \}/);
+  assert.doesNotMatch(general, /const saveAdvanced = \(\) => \{\s*base\.current = v;/);
+  assert.match(general, /setV\(\(cur\) => \(\{ \.\.\.cur, maxParallel: b\.maxParallel/);
+  assert.match(general, /save\(\{ approvalWaitMinutes: next \}\)\.then\(\(r\) => \{ if \(!r\) setMinutes\(saved\); \}\)/);
+  // closing Ajustes (Esc, the cross) leaves the focused field first, so its onBlur saves
+  assert.match(index, /document\.activeElement\?\.blur\?\.\(\); closeSettings\(\)/);
+});
+
+test('los textos no mandan a pestañas que ya no tienen eso', () => {
+  assert.match(es['msg.master.exists'], /Permisos y seguridad/);
+  assert.match(es['hello.changedBody'], /Permisos y seguridad/);
+  assert.match(es['help.faq.17.a'], /Permisos y seguridad/);
+  assert.match(en['msg.master.exists'], /Permissions and security/);
+  assert.match(es['settings.sectionDesc.extensiones'], /empieza desactivado/);
+  assert.match(en['settings.sectionDesc.extensiones'], /starts turned off/);
+  for (const [k, v] of [...Object.entries(es), ...Object.entries(en)]) assert.doesNotMatch(String(v), /Agentes y uso|Agents and usage|Ajustes (›|→) Magic Link|Settings (›|→) Magic Link/, k);
+});

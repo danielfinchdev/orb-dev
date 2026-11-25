@@ -43,7 +43,7 @@ test('3: the model guide moved under the one «Más opciones» of the tasks tab'
 
 test('4: the Extensions section is titled «Extensiones» (its note names Skills and MCP) and the pending block only shows with something pending', () => {
   assert.match(read('src/ui/views/settings/index.jsx'), /<Block title=\{t\(`settings\.section\.\$\{section\.id\}`\)\}/);
-  assert.match(locale('es', 'ola1.mjs'), /'settings\.sectionDesc\.extensiones': 'Skills y servidores MCP que usan tus agentes\.'/);
+  assert.match(locale('es', 'ola1.mjs'), /'settings\.sectionDesc\.extensiones': 'Skills y servidores MCP que usan tus agentes\. Lo importado empieza desactivado\.'/);
   assert.match(read('src/ui/views/extensions.jsx'), /data\.pending\.length \? <PendingCard/);
 });
 

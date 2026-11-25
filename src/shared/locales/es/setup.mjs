@@ -25,6 +25,6 @@ export default {
   'setup.step.equipo': 'Prepara tu equipo',
   'setup.kick': 'Paso {n}',
   'setup.themeTitle': 'Elige tu tema',
-  'setup.themeDesc': 'Cambia los colores y el estilo de toda la aplicación. Lo puedes cambiar después en Ajustes › General › Apariencia.',
+  'setup.themeDesc': 'Cambia los colores y el estilo de toda la aplicación. Lo puedes cambiar después en Ajustes › Apariencia.',
   'setup.themeLabel': 'Tema'
 };

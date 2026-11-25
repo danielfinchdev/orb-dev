@@ -56,7 +56,7 @@ export default {
   'settings.sectionDesc.magiclink': 'Your phone and access from other networks.',
   'settings.sectionDesc.agentes': 'How your agents work and how much they use.',
   'settings.sectionDesc.avanzado': 'Agent tools, expert mode and Android.',
-  'settings.sectionDesc.extensiones': 'Skills and MCP servers your agents use.',
+  'settings.sectionDesc.extensiones': 'Skills and MCP servers your agents use. What is imported starts turned off.',
   'settings.sectionDesc.permisos': 'What agents can do and how you protect Orb.',
   'settings.sectionDesc.acerca': 'Version, feedback and other apps.',
   'settings.group.apariencia': 'Appearance',

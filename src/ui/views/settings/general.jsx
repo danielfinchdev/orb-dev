@@ -263,7 +263,7 @@ export function ApprovalWaitCard({ c }) {
     <Block title={t('settings.approvalWaitTitle')} note={t('settings.approvalWaitNote')}>
       <Panel>
         <Setting label={t('settings.approvalWait')} hint={t('settings.approvalWaitHint')}>
-          <Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} onBlur={() => { const next = Math.min(240, Math.max(0, minutes)); setMinutes(next); if (next !== saved) save({ approvalWaitMinutes: next }); }} className="w-[72px]" aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-control">{t('settings.minutes')}</span>
+          <Input type="number" min={0} max={240} value={minutes} onChange={(e) => setMinutes(num(e.target.value))} onBlur={() => { const next = Math.min(240, Math.max(0, minutes)); setMinutes(next); if (next !== saved) save({ approvalWaitMinutes: next }).then((r) => { if (!r) setMinutes(saved); }); }} className="w-[72px]" aria-label={`${t('settings.approvalWait')} (${t('settings.minutes')})`} data-testid="approval-wait" /><span className="text-muted-foreground text-control">{t('settings.minutes')}</span>
         </Setting>
       </Panel>
     </Block>
@@ -297,9 +297,14 @@ export function TasksCard({ c }) {
   };
   const level = profile ?? null;
   const saveAdvanced = () => {
-    base.current = v;
-    const was = profile; setProfile(null);
-    save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => { if (!r) setProfile(was); });
+    const sent = v; const was = profile; setProfile(null);
+    save({ autoRun: v.autoRun, maxParallel: v.maxParallel, perAgent: v.perAgent, timeoutMinutes: v.timeoutMinutes, review: { auto: v.review }, policy: { highNeedsApproval: v.high }, budget: { profile: null, windowHours: v.windowHours, agents: v.caps }, delegation: { maxPerTask: v.maxPerTask }, orchestrator: { parallel: Math.min(6, Math.max(1, v.parallelChats || 3)) } }).then((r) => {
+      // only a saved value counts as stored; a cancelled password or a failure puts the fields back, so no later change resends it
+      if (r) { base.current = sent; return; }
+      setProfile(was);
+      const b = base.current;
+      setV((cur) => ({ ...cur, maxParallel: b.maxParallel, perAgent: b.perAgent, timeoutMinutes: b.timeoutMinutes, windowHours: b.windowHours, maxPerTask: b.maxPerTask, parallelChats: b.parallelChats, caps: b.caps }));
+    });
   };
   const keepCaps = () => { const now = v.caps; if (JSON.stringify(now) !== JSON.stringify(base.current.caps)) saveAdvanced(); };
   const numField = (key, label, hint, extra = {}) => (

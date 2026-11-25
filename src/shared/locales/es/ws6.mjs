@@ -84,7 +84,7 @@ export default {
   'datos.codeNoticeOpen': 'Crear código',
   'link.outTitle': 'Usar fuera de casa',
   'link.out1': 'Instala Tailscale en este PC y en el móvil, con la misma cuenta.',
-  'link.out2': 'En Ajustes › Magic Link, activa Tailscale.',
+  'link.out2': 'En Ajustes › Dispositivos, activa Tailscale.',
   'link.out3': 'Enlaza el móvil con el QR.',
   'link.outGet': 'Descargar Tailscale',
   'link.outPcOn': 'El PC tiene que estar encendido.',

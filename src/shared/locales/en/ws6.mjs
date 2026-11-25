@@ -82,7 +82,7 @@ export default {
   'datos.codeNoticeOpen': 'Create code',
   'link.outTitle': 'Use away from home',
   'link.out1': 'Install Tailscale on this PC and on the phone, with the same account.',
-  'link.out2': 'In Settings › Magic Link, turn on Tailscale.',
+  'link.out2': 'In Settings › Devices, turn on Tailscale.',
   'link.out3': 'Link the phone with the QR code.',
   'link.outGet': 'Download Tailscale',
   'link.outPcOn': 'The PC has to be on.',

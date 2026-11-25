@@ -16,7 +16,7 @@ export default {
   'msg.android.badCode': 'El código debe tener 6 cifras.',
   'msg.android.badSerial': 'Número de serie no válido.',
   'msg.android.noSuchDevice': 'El móvil {serial} no está conectado.',
-  'msg.android.noDevice': 'No hay ningún móvil conectado. Empareja uno en Ajustes › Android.',
+  'msg.android.noDevice': 'No hay ningún móvil conectado. Empareja uno en Ajustes › Avanzado › Android.',
   'msg.android.whichDevice': 'Hay varios móviles conectados ({list}). Indica cuál con serial.',
   'msg.android.badApk': 'Indica la ruta de un archivo .apk.',
   'msg.android.noApk': 'No existe {path}.',

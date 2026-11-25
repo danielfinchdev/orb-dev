@@ -103,7 +103,7 @@ export function SettingsDialog() {
   const section = SECTIONS.find((s) => s.id === wanted && (!s.pcOnly || !bridge.mobile)) ?? SECTIONS[0];
   const c = app.config;
   return (
-    <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
+    <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) { document.activeElement?.blur?.(); closeSettings(); } }}>
       <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="border-border flex h-14 shrink-0 items-center border-b pr-14 pl-[18px]">
           <DialogTitle className="text-title font-semibold">{t('settings.title')}</DialogTitle>
