@@ -23,9 +23,9 @@ test('Actividad: los totales se piden con la primera página y se leen solo si t
   assert.deepEqual(normalizeActivity(good).counts, { sources: good.counts.sources, levels: good.counts.levels, partial: true });
   assert.equal(normalizeActivity({ items: [], next: null }).counts, null);
   assert.equal(normalizeActivity({ items: [], counts: { sources: { orb: 'x' }, levels: {} } }).counts, null);
-  assert.match(activity, /data-testid="activity-count"/);
-  assert.match(activity, /num\(counts\?\.sources\[s\]\)/);
-  assert.match(activity, /num\(counts\?\.levels\[l\]\)/);
+  // the number of «Problemas» is the engine's total of warnings and errors, never a count of the lines loaded
+  assert.match(activity, /counts\.levels\.warn \+ counts\.levels\.error/);
+  assert.match(activity, /data-testid="activity-problems"/);
 });
 
 test('Actividad: «Revisar tarea #N» sale solo de una fila con tarea y abre esa tarea', () => {
@@ -36,9 +36,9 @@ test('Actividad: «Revisar tarea #N» sale solo de una fila con tarea y abre esa
 
 test('Actividad: el pie dice lo que rota de verdad (10 MB en Orb, Usuario y App; Subagentes no)', () => {
   assert.match(es['logbooks.localHint'], /10 MB/);
-  assert.match(es['logbooks.localHint'], /Subagentes no rota/);
+  assert.match(es['logbooks.localHint'], /el de los agentes no rota/);
   assert.match(en['logbooks.localHint'], /10 MB/);
-  assert.match(en['logbooks.localHint'], /Subagents log does not rotate/);
+  assert.match(en['logbooks.localHint'], /log of the agents does not rotate/);
 });
 
 test('el desbloqueo: solo se lee cuánto queda, nunca la ficha', () => {

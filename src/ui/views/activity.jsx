@@ -1,12 +1,12 @@
 // Activity: every event of Orb (who did what and when). A newer engine reads it by pages and filters it by source,
 // level, project, dates and text; an older one answers the plain list of events, and then only the text search stays.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, SquareCheck, ArrowRight } from 'lucide-react';
+import { Copy, Bug, Orbit, Bot, User, Monitor, Activity, ClipboardCopy, FilterX, SquareCheck, ArrowRight, ListFilter, Layers, X, CircleHelp } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
-import { DropdownMenuItem, Select } from '@/components/ui/overlay.jsx';
-import { ListCard, SearchInput } from '@/components/ui/primitives.jsx';
+import { BubbleTip, DropdownMenuItem, Select, Switch } from '@/components/ui/overlay.jsx';
+import { IconButton, ListCard, SearchInput } from '@/components/ui/primitives.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { DateField } from '@/components/date-field.jsx';
 import { toIso } from '@/lib/date-field.js';
@@ -15,22 +15,20 @@ import { AGENT } from '@/lib/labels.js';
 import { cn, fmtTime } from '@/lib/utils.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { activityLabel, activityDetail, activitySentence } from '@/lib/activity.js';
-import { SOURCES, LEVELS, EMPTY_FILTERS, buildQuery, normalizeActivity, appendPage, hasFilters, hasMethod, countsKey } from '@/lib/activity-filters.js';
+import { TABS, RANGES, EMPTY_VIEW, resolveFilters, activeChips, clearChip, visibleLines, buildQuery, normalizeActivity, appendPage, hasMethod, countsKey } from '@/lib/activity-filters.js';
 import { quiet } from '@/lib/quiet.js';
 import { ReportDialog } from './activity-report.jsx';
 import { BitacorasPage } from './bitacoras-page.jsx';
 
 // Radix Select has no empty value for «every project»
 const ALL = '*';
-const SOURCE_ICON = { orb: Orbit, subagentes: Bot, usuario: User, app: Monitor };
+const SOURCE_ICON = { orb: Orbit, subagentes: Bot, usuario: User, app: Orbit };
+// the label of the date chip: a preset by its name, a custom span by its days
+const rangeLabel = (t, v) => (v.range === 'custom' ? [v.from, v.to].filter(Boolean).join(' – ') || t('logbooks.range.custom') : t(`logbooks.range.${v.range}`));
 // the level is told by the word of its badge, never by colour alone
 const LEVEL_BADGE = { info: 'info', warn: 'warning', error: 'destructive' };
 // the hour only: the day is in the tooltip and in the detail
 const hourOf = (at) => (at ? new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
-// The level filter keeps its threshold (info = everything, warn = warnings and errors, error = errors only); the three chips
-// show which levels that threshold lets in, and a chip moves it: the lowest lit one turns off, any other sets it.
-const levelOn = (level, l) => LEVELS.indexOf(l) >= LEVELS.indexOf(level);
-const nextLevel = (level, l) => (l === level ? LEVELS[Math.min(LEVELS.indexOf(level) + 1, LEVELS.length - 1)] : l);
 const CHIP = 'inline-flex h-(--ctl-sm) cursor-pointer items-center gap-1.5 rounded-[calc(var(--r-ctl)-2px)] px-2.5 text-control whitespace-nowrap transition-[color,background-color,box-shadow] duration-150 outline-none focus-visible:outline-2 focus-visible:outline-ring';
 // characters of one event line in the list
 const LINE = 140;
@@ -43,7 +41,8 @@ export function ActivityView({ tabs }) {
   const locale = useLocale();
   const version = useStore((s) => s.version);
   const projects = useStore((s) => s.projects);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [view, setView] = useState(EMPTY_VIEW);
+  const [technical, setTechnical] = useState(false);
   const [page, setPage] = useState({ paged: false, items: [], next: null, counts: null });
   const [loading, setLoading] = useState(false);
   const [canReport, setCanReport] = useState(false);
@@ -53,7 +52,10 @@ export function ActivityView({ tabs }) {
   const [tick, setTick] = useState(0);
   const gen = useRef(0);
   const lastKey = useRef(null);
-  const set = (patch) => setFilters((f) => ({ ...f, ...patch }));
+  const set = (patch) => setView((v) => ({ ...v, ...patch }));
+  const today = toIso(new Date());
+  // the engine query is built from the view; the days of «Hoy / 7 días / 30 días» follow the calendar
+  const filters = useMemo(() => resolveFilters(view), [view, today]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const mine = ++gen.current; // a slow older answer never lands over a newer one
     // typing in the search box keeps the last totals; they are asked again once after a pause
@@ -72,64 +74,89 @@ export function ActivityView({ tabs }) {
     setLoading(true);
     call('activity.list', buildQuery(filters, page.next)).then((r) => { if (gen.current === mine) { const n = normalizeActivity(r); setPage((p) => ({ ...p, next: n.next, items: appendPage(p.items, n.items) })); } }).catch(quiet).finally(() => setLoading(false));
   }, [filters, page.next]);
-  const { items, paged, counts } = page;
-  // what is on view while no dates are chosen: from the oldest event loaded up to today (the query itself has no bounds then)
-  const firstDay = items.reduce((min, r) => { const d = r.at ? new Date(r.at) : null; return d && !Number.isNaN(d.getTime()) && (!min || d < min) ? d : min; }, null);
-  // the totals count what the other filters let through; a log longer than the engine reads in one go shows a «+»
-  const num = (n) => (n == null ? null : <span className="n text-faint-foreground tabular-nums" data-testid="activity-count">{n.toLocaleString(locale)}{counts?.partial ? '+' : ''}</span>);
-  const copy = () => navigator.clipboard.writeText(items.map((r) => (r.legacy ? `${r.legacy.at}\t${r.legacy.actor}\t${r.legacy.kind}\t${r.legacy.task_id ? `#${r.legacy.task_id} ` : ''}${r.legacy.detail}` : `${r.at ?? ''}\t${r.source}\t${r.level}\t${r.project ?? ''}\t${r.text}`)).join('\n')).then(() => notifyOk(t('activity.copied')));
-  const toggleSource = (s) => set({ sources: filters.sources.includes(s) ? filters.sources.filter((x) => x !== s) : [...filters.sources, s] });
-  const projectOptions = useMemo(() => [{ value: ALL, label: t('logbooks.all') }, ...(projects ?? []).map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} /> }))], [projects, t]);
+  const { paged, counts } = page;
+  // the technical lines wait behind the switch; «Copiar» and the report take every line anyway
+  const items = useMemo(() => (paged ? visibleLines(page.items, technical) : page.items), [page.items, paged, technical]);
+  // «Problemas» counts what the engine found (warnings and errors), not only the lines loaded; the engine counts under the
+  // tab's own sources and a log longer than it reads in one go shows a «+»
+  const problems = counts ? counts.levels.warn + counts.levels.error : null;
+  const copy = () => navigator.clipboard.writeText(page.items.map((r) => (r.legacy ? `${r.legacy.at}\t${r.legacy.actor}\t${r.legacy.kind}\t${r.legacy.task_id ? `#${r.legacy.task_id} ` : ''}${r.legacy.detail}` : `${r.at ?? ''}\t${r.source}\t${r.level}\t${r.project ?? ''}\t${r.text}`)).join('\n')).then(() => notifyOk(t('activity.copied')));
+  const projectOptions = useMemo(() => [{ value: ALL, label: t('logbooks.allProjects'), icon: <Layers className="size-4" /> }, ...(projects ?? []).map((p) => ({ value: p.name, label: p.name, icon: <ProjectIcon name={p.name} /> }))], [projects, t]);
+  const rangeOptions = useMemo(() => RANGES.map((r) => ({ value: r, label: t(`logbooks.range.${r}`) })), [t]);
+  const chips = activeChips(view);
+  const chipText = (c) => `${t(`logbooks.chip.${c.key}`)}: ${c.key === 'range' ? rangeLabel(t, view) : c.value}`;
   const summary = (r) => `${t(`logbooks.level.${r.level}`)} · ${String(r.text).slice(0, 80)}`;
-  // a source on show is one with no filter at all (every source) or the ones picked
-  const sourceOn = (s) => (filters.sources.length ? filters.sources.includes(s) : true);
   // «Copiar» is not in the mock-up's bar: it lives in the «⋯» of the page.
   const menuItems = <DropdownMenuItem onSelect={copy} data-testid="activity-copy"><Copy />{t('activity.copy')}</DropdownMenuItem>;
+  const tabLabel = { todo: t('logbooks.tab.todo'), tu: t('logbooks.tab.tu'), agentes: t('logbooks.tab.agentes'), problemas: t('logbooks.tab.problemas') };
   return (
     <BitacorasPage meta={t('nav.logbooksHint')} menuItems={menuItems} onRefresh={() => setTick((n) => n + 1)} tabs={tabs}>
       {paged ? (
         <div className="toolbar flex flex-wrap items-center gap-2" role="group" aria-label={t('logbooks.filters')} data-testid="activity-filters">
-          <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.source')}>
-            {SOURCES.map((s) => (
-              <button key={s} type="button" aria-pressed={sourceOn(s)} onClick={() => toggleSource(s)} data-testid={`activity-source-${s}`}
-                className={cn(CHIP, sourceOn(s) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.source.${s}`)}{num(counts?.sources[s])}</button>
-            ))}
-          </div>
-          <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.level')} data-testid="activity-level">
-            {LEVELS.map((l) => (
-              <button key={l} type="button" aria-pressed={levelOn(filters.level, l)} onClick={() => set({ level: nextLevel(filters.level, l) })} data-testid={`activity-level-${l}`}
-                className={cn(CHIP, levelOn(filters.level, l) ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>{t(`logbooks.level.${l}`)}{num(counts?.levels[l])}</button>
+          <div className="segm bg-secondary inline-flex gap-0.5 rounded-ctl p-0.5" role="group" aria-label={t('logbooks.view')} data-testid="activity-tabs">
+            {TABS.map((k) => (
+              <button key={k} type="button" aria-pressed={view.tab === k} onClick={() => set({ tab: k })} data-testid={`activity-tab-${k}`}
+                className={cn(CHIP, view.tab === k ? 'bg-card text-foreground' : 'text-muted-foreground hover:text-foreground')}>
+                {tabLabel[k]}
+                {k === 'problemas' && problems ? <Badge variant="destructive" data-testid="activity-problems">{problems.toLocaleString(locale)}{counts?.partial ? '+' : ''}</Badge> : null}
+              </button>
             ))}
           </div>
           <span className="flex-1" />
+          <label className="text-muted-foreground inline-flex items-center gap-2 text-control">
+            {t('logbooks.technical')}
+            <Switch checked={technical} onCheckedChange={setTechnical} aria-label={t('logbooks.technical')} data-testid="activity-technical" />
+          </label>
           {canReport ? <Button variant="outline" onClick={() => setReport(true)} data-testid="activity-report-open"><ClipboardCopy />{t('logbooks.report')}</Button> : null}
         </div>
       ) : null}
       <div className="toolbar flex flex-wrap items-center gap-2">
         {paged ? (
           <>
-            <Select value={filters.project || ALL} onValueChange={(project) => set({ project: project === ALL ? '' : project })} options={projectOptions} prefix={t('logbooks.project')} title={t('logbooks.project')} data-testid="activity-project" />
-            <DateField label={t('logbooks.from')} value={filters.from} max={filters.to || undefined} fallback={firstDay ? toIso(firstDay) : undefined} onChange={(from) => set({ from })} data-testid="activity-from" />
-            <span className="text-muted-foreground">–</span>
-            <DateField label={t('logbooks.to')} value={filters.to} min={filters.from || undefined} fallback={toIso(new Date())} onChange={(to) => set({ to })} data-testid="activity-to" />
+            <Select value={view.project || ALL} onValueChange={(project) => set({ project: project === ALL ? '' : project })} options={projectOptions} prefix={t('logbooks.project')} title={t('logbooks.project')} data-testid="activity-project" />
+            <Select value={view.range} onValueChange={(range) => set({ range })} options={rangeOptions} prefix={t('logbooks.date')} title={t('logbooks.date')} data-testid="activity-range" />
           </>
         ) : null}
-        <SearchInput value={filters.q} onChange={(q) => set({ q })} placeholder={t('activity.search')} className="w-70 flex-[0_1_280px]" data-testid="activity-search" />
-        {paged ? <Button variant="ghost" disabled={!hasFilters(filters)} onClick={() => setFilters((f) => ({ ...EMPTY_FILTERS, q: f.q }))} data-testid="activity-clear"><FilterX />{t('logbooks.clear')}</Button> : null}
+        <SearchInput value={view.q} onChange={(q) => set({ q })} placeholder={t('activity.search')} className="min-w-56 flex-1" data-testid="activity-search" />
       </div>
+      {paged && view.range === 'custom' ? (
+        <div className="toolbar flex flex-wrap items-center gap-2" data-testid="activity-custom">
+          <DateField label={t('logbooks.from')} value={view.from} max={view.to || undefined} fallback={today} onChange={(from) => set({ from })} data-testid="activity-from" />
+          <span className="text-muted-foreground">–</span>
+          <DateField label={t('logbooks.to')} value={view.to} min={view.from || undefined} fallback={today} onChange={(to) => set({ to })} data-testid="activity-to" />
+        </div>
+      ) : null}
+      {paged && chips.length ? (
+        <div className="fchips flex flex-wrap items-center gap-2" data-testid="activity-chips">
+          {chips.map((c) => (
+            <span key={c.key} className="fchip bg-secondary text-foreground inline-flex h-(--ctl-sm) items-center gap-1 rounded-full pr-1 pl-3 text-control" data-testid={`activity-chip-${c.key}`}>
+              {chipText(c)}
+              <IconButton small label={t('logbooks.removeFilter', { name: chipText(c) })} onClick={() => setView((v) => clearChip(v, c.key))}><X /></IconButton>
+            </span>
+          ))}
+          <Button variant="ghost" onClick={() => setView(EMPTY_VIEW)} data-testid="activity-clear"><FilterX />{t('logbooks.clear')}</Button>
+        </div>
+      ) : null}
       <ListCard>
-        {paged ? (
+        {paged && items.length ? (
           <div className={cn('arow head text-faint-foreground grid items-center gap-3 px-3.5 py-2 text-micro uppercase max-sm:hidden', COLS)} aria-hidden="true">
             <span>{t('logbooks.colTime')}</span><span>{t('logbooks.colSource')}</span><span>{t('logbooks.colLevel')}</span><span>{t('logbooks.colProject')}</span><span>{t('logbooks.colWhat')}</span>
           </div>
         ) : null}
         {items.length ? items.map((r) => (paged
-          ? <PagedRow key={r.id} r={r} t={t} locale={locale} open={open === r.id} onOpen={() => setOpen((o) => (o === r.id ? null : r.id))} marked={moment?.id === r.id} canMark={canReport} onMark={() => setMoment((m) => (m?.id === r.id ? null : r))} />
-          : <LegacyRow key={r.id} r={r.legacy} t={t} locale={locale} />)) : <Empty icon={Activity} title={t('activity.empty')} />}
+          ? <PagedRow key={r.id} r={r} t={t} locale={locale} technical={technical} open={open === r.id} onOpen={() => setOpen((o) => (o === r.id ? null : r.id))} marked={moment?.id === r.id} canMark={canReport} onMark={() => setMoment((m) => (m?.id === r.id ? null : r))} />
+          : <LegacyRow key={r.id} r={r.legacy} t={t} locale={locale} />))
+          : paged && (chips.length || view.tab !== 'todo') ? (
+            <Empty icon={ListFilter} title={t('logbooks.noMatch')}>
+              <p className="m-0 mb-3">{t('logbooks.noMatchHint')}</p>
+              <Button variant="outline" onClick={() => setView(EMPTY_VIEW)} data-testid="activity-clear-empty"><FilterX />{t('logbooks.clear')}</Button>
+            </Empty>
+          ) : <Empty icon={Activity} title={t('activity.empty')} />}
       </ListCard>
       {paged ? (
         <div className="toolbar flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground m-0 text-caption" title={t('logbooks.localHint')}>{t('logbooks.local')}</span>
+          <span className="text-muted-foreground m-0 text-caption">{t('logbooks.local')}</span>
+          <BubbleTip title={t('logbooks.localHint')}><IconButton small label={t('logbooks.localHelp')} data-testid="activity-local-help"><CircleHelp /></IconButton></BubbleTip>
           <span className="flex-1" />
           {page.next ? <Button variant="outline" onClick={more} disabled={loading} data-testid="activity-more">{loading ? <Spinner /> : null}{t('logbooks.loadMore')}</Button> : null}
         </div>
@@ -156,7 +183,7 @@ function LegacyRow({ r, t, locale }) {
 const what = (r, t, locale, max = 0) => activitySentence(t, r, locale, AGENT, max);
 
 // A line of the paged reader; it opens to show where it came from. Its text is plain text, never markup.
-function PagedRow({ r, t, locale, open, onOpen, marked, canMark, onMark }) {
+function PagedRow({ r, t, locale, technical, open, onOpen, marked, canMark, onMark }) {
   const SrcIcon = SOURCE_ICON[r.source] ?? Monitor;
   // the event's name in words; the engine's own names (a log stream, an unknown kind) say nothing to a person
   const kindLabel = r.kind && activityLabel(t, r.kind) !== r.kind ? activityLabel(t, r.kind) : '';
@@ -178,6 +205,7 @@ function PagedRow({ r, t, locale, open, onOpen, marked, canMark, onMark }) {
             <dt className="text-muted-foreground">{t('logbooks.project')}</dt><dd className="m-0">{r.project ?? t('logbooks.noProject')}</dd>
           </dl>
           <pre className="bg-card border-border rounded-ctl m-0 mb-2.5 border px-2.5 py-2 text-caption whitespace-pre-wrap break-words"><code>{what(r, t, locale)}</code></pre>
+          {technical && r.text && r.text !== what(r, t, locale) ? <pre className="bg-card border-border text-muted-foreground rounded-ctl m-0 mb-2.5 border px-2.5 py-2 font-mono text-caption whitespace-pre-wrap break-words" data-testid="activity-raw"><code>{r.text}</code></pre> : null}
           {(canMark && r.at) || r.task != null ? (
             <div className="flex justify-end gap-1.5">
               {canMark && r.at ? <Button variant="outline" aria-pressed={marked} onClick={onMark} title={marked ? t('logbooks.marked') : t('logbooks.mark')} data-testid="activity-mark">{marked ? <SquareCheck /> : <Bug />}{t(marked ? 'logbooks.marked' : 'logbooks.markShort')}</Button> : null}

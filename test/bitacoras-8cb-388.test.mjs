@@ -42,16 +42,16 @@ test('an entry card draws its parts in an 80 px label grid and keeps the Markdow
   assert.match(en['logbooks.privateAt'], /\{dir\}/);
 });
 
-test('Actividad: text chips for the sources and three level chips over the same threshold, no invented totals', () => {
+test('Actividad: four quick tabs, text chips and no invented totals', () => {
   const a = src('views/activity.jsx');
-  assert.match(a, /aria-pressed=\{sourceOn\(s\)\}/);
-  assert.match(a, /activity-level-\$\{l\}/);
-  assert.match(a, /const nextLevel =/);
+  assert.match(a, /aria-pressed=\{view\.tab === k\}/);
+  assert.match(a, /activity-tab-\$\{k\}/);
+  assert.doesNotMatch(a, /const nextLevel =/);
   assert.match(a, /font-mono/);
   assert.doesNotMatch(a, /<Check\b|<Segmented/);
   // a chip carries a number only when the engine sent its totals (counts); never one computed in the window
   assert.doesNotMatch(a, /\.length\}<\/span>|filter\([^)]*\)\.length/);
-  assert.match(a, /counts\?\.sources\[s\]/);
+  assert.match(a, /counts\.levels\.warn/);
 });
 
 test('Normas: no switch or edit icon in the rows; pausing and resuming a rail stay in «⋯» on the same path', () => {

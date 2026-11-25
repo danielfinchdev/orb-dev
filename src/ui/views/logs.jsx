@@ -1,14 +1,15 @@
 // Bitácoras: Orb's journal (the general log and one per project). Read-only here: only the assistant appends.
-// Nothing is read until the tab opens, and only the log on screen is loaded; the search across all of them reads the
-// others only while something is typed in it.
+// Nothing is read until the tab opens, and only the log on screen is loaded; the one search box looks in this log or in
+// all of them, and the others are read only while something is typed in it.
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Copy, Maximize2, BookOpen, Lock, ChevronRight, Circle } from 'lucide-react';
+import { Copy, Maximize2, BookOpen, Library, Lock, ChevronRight, Circle, CircleHelp, X } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
 import { Markdown } from '@/components/markdown.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Badge, Empty, Spinner } from '@/components/ui/basic.jsx';
-import { DropdownMenuItem, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
-import { ListCard, NavRow, SearchInput } from '@/components/ui/primitives.jsx';
+import { Button } from '@/components/ui/button.jsx';
+import { BubbleTip, DropdownMenuItem, Select, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
+import { IconButton, ListCard, NavRow, SearchInput } from '@/components/ui/primitives.jsx';
 import { useStore, call } from '@/lib/store.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
@@ -58,6 +59,8 @@ function Entry({ e, t, locale }) {
   );
 }
 
+const displayName = (name, t) => (name === 'general' ? t('logs.general') : name.replace(/\s*eliminad[oa]$/i, ''));
+
 export function LogsView({ route, tabs }) {
   const t = useT();
   const locale = useLocale();
@@ -68,19 +71,22 @@ export function LogsView({ route, tabs }) {
   const [whole, setWhole] = useState(false);
   const [body, setText] = useState(null);
   const [q, setQ] = useState('');
-  const [all, setAll] = useState('');
+  const [scope, setScope] = useState('here');
   const [hits, setHits] = useState(null);
   const [tick, setTick] = useState(0);
   const cache = useRef({});
+  const needle = q.trim().toLowerCase();
+  // a search in this log reads it whole: the short reading only has its latest entries
+  const full = whole || needle.length > 0;
   useEffect(() => { call('logs.list').then(setLogs).catch(quiet); }, [version, tick]);
-  useEffect(() => { setText(null); call('logs.read', { project: selected, whole }).then(setText).catch((e) => setText(e.message)); }, [selected, whole, version, tick]);
+  useEffect(() => { setText(null); call('logs.read', { project: selected, whole: full }).then(setText).catch((e) => setText(e.message)); }, [selected, full, version, tick]);
   useEffect(() => { cache.current = {}; }, [tick]);
   // The search across all of them reads each log whole (the short reading only has the latest entries) and one after
   // another, and keeps it until its size changes: a refresh of the app while agents work reads nothing again.
   const sizes = logs.map((l) => `${l.name}:${l.size}`).join('|');
+  const searching = needle.length >= 2;
   useEffect(() => {
-    const needle = all.trim();
-    if (needle.length < 2) { setHits(null); return undefined; }
+    if (!searching) { setHits(null); return undefined; }
     let alive = true;
     const h = setTimeout(async () => {
       for (const l of logs) {
@@ -94,28 +100,33 @@ export function LogsView({ route, tabs }) {
     return () => { alive = false; clearTimeout(h); };
     // `sizes` stands for `logs`: the list is a new array on every refresh, its sizes only change when a log is written
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [all, sizes, tick]);
+  }, [needle, searching, sizes, tick]);
   const groups = useMemo(() => groupLogs(logs), [logs]);
   const partial = body?.startsWith('(');
   const parsed = useMemo(() => (body == null ? null : parseEntries(body)), [body]);
-  const needle = q.trim().toLowerCase();
   const entries = useMemo(() => {
     if (!parsed) return null;
     const list = needle ? parsed.entries.filter((e) => e.raw.toLowerCase().includes(needle)) : parsed.entries;
     return [...list].reverse();
   }, [parsed, needle]);
-  const pick = (name) => { setSelected(name); setWhole(false); setQ(all.trim().length >= 2 ? all.trim() : ''); };
-  const searching = all.trim().length >= 2;
-  const visible = (l) => !searching || hits == null || Boolean(hits[l.name]);
+  const pick = (name) => { setSelected(name); setWhole(false); setScope('here'); };
   const row = (l, title, mark) => (
     <NavRow key={l.name} label={title} active={selected === l.name} onClick={() => pick(l.name)} iconEl={mark}>
-      <span className="nn text-faint-foreground text-caption" title={kb(l.size)}>{searching && hits?.[l.name] ? hits[l.name] : l.entries ?? kb(l.size)}</span>
+      <span className="nn text-faint-foreground text-caption" title={kb(l.size)}>{l.entries ?? kb(l.size)}</span>
     </NavRow>
   );
-  const none = searching && hits != null && !Object.keys(hits).length;
-  const title = selected === 'general' ? t('logs.general') : selected.replace(/\s*eliminad[oa]$/i, '');
-  const count = parsed?.entries.length ?? 0;
+  const title = displayName(selected, t);
+  // the header says how many entries the log has (the list of logs knows), not how many of them are loaded
+  const mine = logs.find((l) => l.name === selected);
+  const loaded = parsed?.entries.length ?? 0;
+  const total = Number.isFinite(mine?.entries) ? mine.entries : loaded;
   const copy = () => navigator.clipboard.writeText(body ?? '').then(() => notifyOk(t('logs.copied')));
+  // the other logs that mention the text, most hits first
+  const others = hits ? logs.filter((l) => l.name !== selected && hits[l.name]).sort((a, b) => hits[b.name] - hits[a.name]) : [];
+  const ranked = hits ? logs.filter((l) => hits[l.name]).sort((a, b) => hits[b.name] - hits[a.name]) : [];
+  const allMode = scope === 'all' && searching;
+  const markOf = (l) => (l.name === 'general' ? <BookOpen className="size-4 shrink-0" /> : /eliminad[oa]$/i.test(l.name) ? <Circle className="size-2.5 shrink-0" /> : <ProjectIcon name={l.name} />);
+  const scopeOptions = useMemo(() => [{ value: 'here', label: t('logbooks.scope.here'), icon: <BookOpen className="size-4" /> }, { value: 'all', label: t('logbooks.scope.all'), icon: <Library className="size-4" /> }], [t]);
   // «Copiar» and «Ver completa» are not in the mock-up's bar: they live in the «⋯» of the page.
   const menuItems = (
     <>
@@ -125,30 +136,62 @@ export function LogsView({ route, tabs }) {
   );
   return (
     <BitacorasPage meta={t('nav.logbooksHint')} menuItems={menuItems} onRefresh={() => setTick((n) => n + 1)} tabs={tabs}>
+      <div className="toolbar flex flex-wrap items-center gap-2" data-testid="log-search-bar">
+        <SearchInput value={q} onChange={setQ} placeholder={t('logbooks.searchEntries')} className="min-w-56 flex-1" data-testid="log-search" />
+        <Select value={scope} onValueChange={setScope} options={scopeOptions} title={t('logbooks.scope')} data-testid="log-scope" />
+      </div>
       <div className="grid items-start gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
         <div className="flex flex-col gap-3 lg:sticky lg:top-0">
-          <SearchInput value={all} onChange={setAll} placeholder={t('logbooks.searchAll')} className="h-(--ctl-sm) w-full" data-testid="log-search-all" />
           <ListCard className="smenu p-1.5" role="navigation" aria-label={t('logbooks.title')}>
-            {none ? <p className="text-muted-foreground px-2.5 py-2 text-caption">{t('logbooks.noHits')}</p> : null}
-            {groups.general && visible(groups.general) ? <><Lbl>{t('logbooks.groupGeneral')}</Lbl>{row(groups.general, t('logs.general'), <BookOpen className="size-4 shrink-0" />)}</> : null}
-            {groups.projects.some(visible) ? <><Lbl>{t('logbooks.groupProjects')}</Lbl>{groups.projects.filter(visible).map((l) => row(l, l.name, <ProjectIcon name={l.name} />))}</> : null}
-            {groups.deleted.some(visible) ? <><Lbl>{t('logbooks.groupDeleted')}</Lbl>{groups.deleted.filter(visible).map((l) => row(l, l.name.replace(/\s*eliminad[oa]$/i, ''), <Circle className="size-2.5 shrink-0" />))}</> : null}
+            {groups.general ? <><Lbl>{t('logbooks.groupGeneral')}</Lbl>{row(groups.general, t('logs.general'), <BookOpen className="size-4 shrink-0" />)}</> : null}
+            {groups.projects.length ? <><Lbl>{t('logbooks.groupProjects')}</Lbl>{groups.projects.map((l) => row(l, l.name, <ProjectIcon name={l.name} />))}</> : null}
+            {groups.deleted.length ? <><Lbl>{t('logbooks.groupDeleted')}</Lbl>{groups.deleted.map((l) => row(l, displayName(l.name, t), <Circle className="size-2.5 shrink-0" />))}</> : null}
           </ListCard>
-          <p className="note text-muted-foreground m-0 flex items-start gap-1.5 px-1 text-caption"><Lock className="mt-0.5 size-3.5 shrink-0" />{dir ? t('logbooks.privateAt', { dir }) : t('logbooks.private')}</p>
+          <p className="note text-muted-foreground m-0 flex items-center gap-1.5 px-1 text-caption">
+            <Lock className="size-3.5 shrink-0" />{t('logbooks.private')}
+            <BubbleTip title={dir ? t('logbooks.privateAt', { dir }) : t('logbooks.private')}><IconButton small label={t('logbooks.where')} data-testid="log-private-help"><CircleHelp /></IconButton></BubbleTip>
+          </p>
         </div>
-        <div className="entries flex min-w-0 flex-col gap-3">
-          <div className="bhead flex min-h-(--ctl) items-center gap-2">
-            {selected === 'general' ? null : <ProjectIcon small name={title} />}
-            <h2 className="m-0 font-(family-name:--title) text-title font-semibold">{title}</h2>
-            <span className="text-muted-foreground text-caption">{t('logbooks.entriesCount', { n: count })}</span>
-            <span className="flex-1" />
-            <Badge variant="secondary" title={t('logbooks.readOnlyHint')}>{t('logbooks.readOnly')}</Badge>
+        {allMode ? (
+          <div className="entries flex min-w-0 flex-col gap-3" data-testid="log-all">
+            <div className="bhead flex min-h-(--ctl) items-center gap-2">
+              <Library className="size-4 shrink-0" />
+              <h2 className="m-0 font-(family-name:--title) text-title font-semibold">{t('logbooks.allTitle')}</h2>
+              {hits ? <span className="text-muted-foreground text-caption" data-testid="log-all-count">{t('logbooks.hitsTitle', { n: Object.values(hits).reduce((a, b) => a + b, 0), q: q.trim() })}</span> : null}
+            </div>
+            {hits == null ? <Spinner /> : ranked.length === 0 ? (
+              <Empty icon={BookOpen} title={t('logbooks.noHits')}>
+                <p className="m-0 mb-3">{t('logbooks.noHitsHint')}</p>
+                <Button variant="outline" onClick={() => setQ('')} data-testid="log-search-clear"><X />{t('logbooks.clearSearch')}</Button>
+              </Empty>
+            ) : (
+              <ListCard>
+                {ranked.map((l) => (
+                  <div key={l.name} className="lrow border-border flex items-center gap-3 border-b px-3.5 py-2.5 last:border-b-0" data-testid="log-all-row">
+                    <span className="inline-flex w-5 justify-center">{markOf(l)}</span>
+                    <div className="min-w-0 flex-1"><b className="font-medium">{displayName(l.name, t)}</b><div className="text-muted-foreground text-caption">{hits[l.name] === 1 ? t('logbooks.hitsOne') : t('logbooks.hitsMany', { n: hits[l.name] })}</div></div>
+                    <Button variant="outline" onClick={() => pick(l.name)} data-testid="log-all-open">{t('logbooks.open')}</Button>
+                  </div>
+                ))}
+              </ListCard>
+            )}
           </div>
-          <p className="bintro text-muted-foreground -mt-1.5 text-control">{t(selected === 'general' ? 'logbooks.introGeneral' : 'logbooks.intro', { name: title })}</p>
-          <SearchInput value={q} onChange={setQ} placeholder={t('logbooks.searchEntries')} className="h-(--ctl-sm) w-full" data-testid="log-search" />
-          <div className="flex flex-col gap-3" data-testid="log-body">
-            {partial && parsed?.pre ? <p className="text-muted-foreground text-caption">{parsed.pre}</p> : null}
-            {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} />)}
+        ) : (
+          <div className="entries flex min-w-0 flex-col gap-3">
+            <div className="bhead flex min-h-(--ctl) items-center gap-2">
+              {selected === 'general' ? null : <ProjectIcon small name={title} />}
+              <h2 className="m-0 font-(family-name:--title) text-title font-semibold">{title}</h2>
+              <span className="text-muted-foreground text-caption" data-testid="log-count">{needle ? t('logbooks.entriesOf', { n: entries?.length ?? 0, total }) : t('logbooks.entriesCount', { n: total })}</span>
+              <span className="flex-1" />
+              <Badge variant="secondary" title={t('logbooks.readOnlyHint')}>{t('logbooks.readOnly')}</Badge>
+            </div>
+            <p className="bintro text-muted-foreground -mt-1.5 text-control">{t(selected === 'general' ? 'logbooks.introGeneral' : 'logbooks.intro', { name: title })}</p>
+            {searching && others.length ? (
+              <div className="also flex flex-wrap items-center gap-2" data-testid="log-also">
+                <span className="text-muted-foreground text-caption">{t('logbooks.alsoIn')}</span>
+                {others.map((l) => <Button key={l.name} variant="secondary" onClick={() => pick(l.name)} data-testid="log-also-open">{displayName(l.name, t)} <span className="text-muted-foreground tabular-nums">{hits[l.name]}</span></Button>)}
+              </div>
+            ) : null}
             {!needle && !partial && parsed?.pre ? (
               <Collapsible className="bg-card border-border rounded-card border" data-testid="log-intro">
                 <CollapsibleTrigger className="group flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left text-control">
@@ -157,8 +200,18 @@ export function LogsView({ route, tabs }) {
                 <CollapsibleContent className="px-3.5 pb-3 text-body"><Markdown>{parsed.pre}</Markdown></CollapsibleContent>
               </Collapsible>
             ) : null}
+            <div className="flex flex-col gap-3" data-testid="log-body">
+              {partial && !needle && parsed?.pre ? <p className="text-muted-foreground text-caption">{parsed.pre}</p> : null}
+              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} />)}
+              {partial && !whole && !needle && entries?.length ? (
+                <div className="viewing text-muted-foreground flex items-center justify-center gap-2 text-control" data-testid="log-viewing">
+                  <span>{t('logbooks.viewing', { n: loaded })}</span><span aria-hidden="true">·</span>
+                  <Button variant="ghost" onClick={() => setWhole(true)} data-testid="log-more">{t('logbooks.viewMore')}</Button>
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </BitacorasPage>
   );

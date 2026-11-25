@@ -26,10 +26,12 @@ test('the three tabs are the line tabs of the content, with an icon each', () =>
 test('Bitácoras: two columns, the search of all of them, the list with sizes and the lock note', () => {
   const l = src('views/logs.jsx');
   assert.match(l, /lg:grid-cols-\[260px_minmax\(0,1fr\)\]/);
-  assert.match(l, /data-testid="log-search-all"/);
+  assert.match(l, /data-testid="log-scope"/);
+  assert.doesNotMatch(l, /log-search-all/);
   assert.match(l, /data-testid="log-search"/);
   assert.match(l, /data-testid="log-body"/);
-  assert.match(l, /<Lock [^>]*\/>\{dir \? t\('logbooks\.privateAt', \{ dir \}\) : t\('logbooks\.private'\)\}/);
+  assert.match(l, /<Lock [^>]*\/>\{t\('logbooks\.private'\)\}/);
+  assert.match(l, /dir \? t\('logbooks\.privateAt', \{ dir \}\) : t\('logbooks\.private'\)/);
   assert.match(l, /kb\(l\.size\)/);
   assert.match(l, /logbooks\.readOnly/);
   // read only: nothing here writes a log
@@ -40,8 +42,8 @@ test('Actividad: every filter is a menu of the app, never the system select', ()
   const a = src('views/activity.jsx');
   assert.match(a, /<Select [\s\S]*?prefix=\{t\('logbooks\.project'\)\}/);
   assert.doesNotMatch(a, /<select\b/);
-  for (const id of ['activity-filters', 'activity-level', 'activity-project', 'activity-from', 'activity-to', 'activity-search', 'activity-more', 'activity-report-open']) assert.ok(a.includes(`"${id}"`), id);
-  assert.ok(a.includes('activity-source-${s}'));
+  for (const id of ['activity-filters', 'activity-tabs', 'activity-project', 'activity-range', 'activity-technical', 'activity-search', 'activity-more', 'activity-report-open']) assert.ok(a.includes(`"${id}"`), id);
+  assert.ok(a.includes('activity-tab-${k}'));
 });
 
 test('Normas: the same test ids as before, the inner tabs and the sections', () => {
