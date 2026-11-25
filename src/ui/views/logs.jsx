@@ -13,6 +13,7 @@ import { IconButton, ListCard, NavRow, SearchInput } from '@/components/ui/primi
 import { useStore, call } from '@/lib/store.js';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
+import { highlightIn } from '@/lib/highlight.js';
 import { groupLogs, parseEntries, authorAgent, countHits } from '@/lib/logbook.js';
 import { BitacorasPage } from './bitacoras-page.jsx';
 
@@ -32,9 +33,12 @@ function stamp(e, t, locale) {
 // A sub-heading of the list of logs (.lbl)
 function Lbl({ children }) { return <div className="lbl text-faint-foreground px-2.5 pt-2.5 pb-1 text-micro uppercase first:pt-1">{children}</div>; }
 
-function Entry({ e, t, locale }) {
+function Entry({ e, t, locale, query }) {
+  const ref = useRef(null);
+  // the match is marked on the drawn text; the cleanup puts the original text back before the next one
+  useEffect(() => highlightIn(ref.current, query), [query, e]);
   return (
-    <article className="entry bg-card border-border rounded-card border px-3.5 py-3" data-testid="log-entry">
+    <article ref={ref} className="entry bg-card border-border rounded-card [&_mark]:bg-primary-soft [&_mark]:text-foreground border px-3.5 py-3 [&_mark]:rounded-sm [&_mark]:px-0.5" data-testid="log-entry">
       <div className="top text-muted-foreground flex items-center gap-2 text-caption">
         <span data-agent={authorAgent(e.author)} aria-hidden="true" className="inline-flex"><Circle className="size-2 fill-current" /></span>
         {e.author ? <b className="text-foreground font-medium">{e.author}</b> : null}
@@ -202,7 +206,7 @@ export function LogsView({ route, tabs }) {
             ) : null}
             <div className="flex flex-col gap-3" data-testid="log-body">
               {partial && !needle && parsed?.pre ? <p className="text-muted-foreground text-caption">{parsed.pre}</p> : null}
-              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} />)}
+              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} query={needle} />)}
               {partial && !whole && !needle && entries?.length ? (
                 <div className="viewing text-muted-foreground flex items-center justify-center gap-2 text-control" data-testid="log-viewing">
                   <span>{t('logbooks.viewing', { n: loaded })}</span><span aria-hidden="true">·</span>

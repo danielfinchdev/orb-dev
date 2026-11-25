@@ -101,3 +101,27 @@ test('Bitácoras: los aciertos en las otras bitácoras salen con su número y si
   const also = Object.keys(hits).filter((n) => n !== 'general');
   assert.deepEqual(also, ['tienda-online']);
 });
+
+test('resaltado: parte el texto sin mayúsculas ni acentos y busca texto plano, no patrones', async () => {
+  const { splitMatches } = await import('../src/ui/lib/highlight.js');
+  const hits = (t, q) => splitMatches(t, q).filter((p) => p.hit).map((p) => p.text);
+  assert.deepEqual(hits('El Carrito y el carro', 'CARR'), ['Carr', 'carr']);
+  assert.deepEqual(hits('Corazón y corazon', 'corazon'), ['Corazón', 'corazon']);
+  assert.deepEqual(hits('buscar canción', 'CANCION'), ['canción']);
+  // caracteres especiales de regex: se buscan tal cual
+  assert.deepEqual(hits('a.b a+b (x) [y] a*b', 'a.b'), ['a.b']);
+  assert.deepEqual(hits('f(x) = [y]+ \d', '(x)'), ['(x)']);
+  assert.deepEqual(hits('1 + 1 * 2', '+ 1 *'), ['+ 1 *']);
+  assert.deepEqual(hits('texto', ''), []);
+  assert.deepEqual(hits('texto', '   '), []);
+  // las partes juntas son el texto original
+  const parts = splitMatches('Ñandú ñandú', 'nandu');
+  assert.equal(parts.map((p) => p.text).join(''), 'Ñandú ñandú');
+  assert.equal(parts.filter((p) => p.hit).length, 2);
+  // la vista marca solo nodos de texto: nada de innerHTML y se saltan enlaces y código
+  const l = read('src/ui/views/logs.jsx');
+  assert.match(l, /highlightIn\(ref\.current, query\)/);
+  const h = read('src/ui/lib/highlight.js');
+  assert.doesNotMatch(h, /innerHTML/);
+  assert.match(h, /'A', 'CODE', 'PRE'/);
+});
