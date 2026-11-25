@@ -248,7 +248,6 @@ function createSim(index, link, proxy) {
     }
     const cur = parseId(id);
     if (!cur) return;
-    if (ev.e === 'chat:state') for (const g of pendingGaps) if (cur.n > g.to && at - g.at < 3000 && g.left > 0) { g.left--; s.gapsExplained++; }
     s.lastId = id;
     if (s.lastBoot && cur.boot !== s.lastBoot) {
       if (!s.resynced) { s.lost++; anomaly('arranque-sin-resync', { label, from: s.lastBoot, to: cur.boot }); }
@@ -259,6 +258,10 @@ function createSim(index, link, proxy) {
       if (cur.n <= s.lastN) { s.dups++; anomaly('duplicado', { label, id }); return; }
       if (cur.n > s.lastN + 1) { const g = { at, from: s.lastN, to: cur.n, left: cur.n - s.lastN - 1, total: cur.n - s.lastN - 1 }; pendingGaps.push(g); s.gaps.push(g); }
     }
+    // The journal keeps only the newest chat:state per chat, so a replay legitimately skips the older ones: one newer
+    // chat:state (this very event included) accounts for any number of ids it replaced. Counting one per event left
+    // the rest of a run of chat:state ids reported as lost.
+    if (ev.e === 'chat:state') for (const g of pendingGaps) if (cur.n >= g.to && at - g.at < 3000 && g.left > 0) { s.gapsExplained += g.left; g.left = 0; }
     s.lastN = cur.n; s.resynced = false;
   }
   const settleGaps = (final = false) => {
