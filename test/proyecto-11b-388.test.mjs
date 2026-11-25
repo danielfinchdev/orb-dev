@@ -17,7 +17,7 @@ test('every new text exists in Spanish and English', () => {
     .map((k) => `projects.prs.${k}`)
     .concat(['sync', 'sync.title', 'sync.pullOne', 'sync.pullOther', 'sync.pushOne', 'sync.pushOther', 'sync.and', 'sync.note', 'sync.ok', 'sync.done', 'sync.upToDate', 'sync.diverged', 'sync.unsaved', 'sync.noRemote', 'sync.noBranch', 'sync.pushFailed', 'sync.pushNote', 'sync.busy', 'log.write', 'log.writeDesc', 'log.writeTitle', 'log.writeBody', 'log.written', 'tasks.moreKinds'].map((k) => `projects.${k}`));
   for (const k of keys) for (const l of [es, en]) assert.ok(l[k], k);
-  assert.match(es['projects.sync.diverged'], /God mode/);
+  assert.match(es['projects.sync.diverged'], /modo experto/);
 });
 
 test('the PR filter has its three states with counters and reads the list of the chosen one', () => {

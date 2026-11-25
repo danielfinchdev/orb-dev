@@ -11,9 +11,9 @@ export default {
   'nav.chats': 'Chats',
   'nav.more': 'Más',
   'nav.darkMode': 'Modo oscuro',
-  'nav.expert': 'God mode',
+  'nav.expert': 'Modo experto',
   'nav.newChat': 'Nuevo chat',
-  'nav.backToChat': 'Volver a la conversación con {name}',
+  'nav.backToChat': 'Volver al chat con {name}',
   'nav.loose': 'Sin proyecto',
   // pie del menú
   'nav.feedback': 'Enviar comentarios',

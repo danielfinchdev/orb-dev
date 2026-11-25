@@ -160,7 +160,7 @@ test('what the user did is told in plain words', () => {
   assert.equal(u('file.create', 'created C:\\work\\blog\\notas.md'), 'Creaste el archivo notas.md');
   assert.equal(u('rules.pause', 'rules.pause r1: Límites'), 'Pausaste la norma «Límites»');
   assert.equal(u('rules.restoreDefaults', 'rules.restoreDefaults'), 'Restauraste las normas de serie');
-  assert.equal(u('trash.restore', 'conversations 12 restored'), 'Recuperaste una conversación de la papelera');
+  assert.equal(u('trash.restore', 'conversations 12 restored'), 'Recuperaste un chat de la papelera');
   for (const [kind, text] of [['git.switch', 'branch a -> b'], ['git.branch', 'created branch x and switched to it'], ['git.undo', 'undid save abc123: arreglar el login'], ['approval.decision', 'session s1 request Bash: approved'], ['rails.set', 'rail r1'], ['rails.restore', 'all rails restored to defaults']]) {
     const out = u(kind, text);
     for (const re of BAD) assert.doesNotMatch(out, re, out);

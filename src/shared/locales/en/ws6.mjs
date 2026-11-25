@@ -97,7 +97,7 @@ export default {
   'layout.logs': 'Logs',
   'layout.adb': 'Android tools (adb)',
   'layout.mcp': 'MCP server',
-  'layout.mcpProject': 'You write it. It keeps working in core; to improve it, Settings › Skills and MCP › «Edit in a project».',
+  'layout.mcpProject': 'You write it. It keeps working in core. To improve it, go to Settings › Extensions › «Edit in a project».',
   'layout.logsNote': 'Recommended: move it to core. If other tools use this path, Orb will tell you the new one.',
   'layout.logsMovedTitle': 'Log moved to core',
   'layout.logsMovedIntro': 'It is here now:',

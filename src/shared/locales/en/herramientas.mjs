@@ -110,7 +110,7 @@ export default {
   'msg.pr.commentFailed': 'The user accepted the comment on pull request #{n}, but it could not be posted: {detail}',
   'htmlpage.untitled': 'Untitled page',
   'htmlpage.internet': 'Allow internet',
-  'htmlpage.internetHint': 'Off by default. Only for this page; changing it reloads the page.',
+  'htmlpage.internetHint': 'Off by default. Only for this page. Changing it reloads the page.',
   'htmlpage.close': 'Close page',
   'htmlpage.frame': 'HTML page: {title}',
   'msg.html.noChat': 'This tool only works from a chat.',

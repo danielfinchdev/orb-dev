@@ -35,10 +35,10 @@ test('Actividad: «Revisar tarea #N» sale solo de una fila con tarea y abre esa
 });
 
 test('Actividad: el pie dice lo que rota de verdad (10 MB en Orb, Usuario y App; Subagentes no)', () => {
-  assert.match(es['logbooks.local'], /10 MB/);
-  assert.match(es['logbooks.local'], /Subagentes no rota/);
-  assert.match(en['logbooks.local'], /10 MB/);
-  assert.match(en['logbooks.local'], /Subagents one does not rotate/);
+  assert.match(es['logbooks.localHint'], /10 MB/);
+  assert.match(es['logbooks.localHint'], /Subagentes no rota/);
+  assert.match(en['logbooks.localHint'], /10 MB/);
+  assert.match(en['logbooks.localHint'], /Subagents log does not rotate/);
 });
 
 test('el desbloqueo: solo se lee cuánto queda, nunca la ficha', () => {

@@ -49,7 +49,7 @@ test('las etiquetas siguen la maqueta y los textos existen en es y en', () => {
   const t = (k, v) => es[k].replace(/\{(\w+)\}/g, (_, n) => v?.[n]);
   assert.equal(extensionLabel(t, { kind: 'mcp', name: 'playwright' }), 'MCP · playwright');
   assert.equal(extensionLabel(t, { kind: 'skill', name: 'revisar-checkout' }), 'Skill · revisar-checkout');
-  assert.equal(es['projects.ext.title'], 'Skills y MCP del proyecto');
+  assert.equal(es['projects.ext.title'], 'Extensiones del proyecto');
   assert.equal(es['projects.ext.none'], 'Este proyecto no tiene skills ni MCP propios.');
   assert.equal(es['projects.ext.remove'], 'Quitar de este proyecto');
   for (const k of Object.keys(es).filter((x) => x.startsWith('projects.ext.') || x === 'ext.scope')) assert.ok(en[k], k);

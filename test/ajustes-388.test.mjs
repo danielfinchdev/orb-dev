@@ -20,7 +20,7 @@ test('the eight sections of the menu, as the mock-up names and orders them', () 
   const index = view('settings', 'index.jsx');
   const ids = [...index.matchAll(/^\s*\{ id: '(\w+)', icon: (\w+)/gm)].map((m) => [m[1], m[2]]);
   assert.deepEqual(ids, [['general', 'Settings'], ['magiclink', 'Smartphone'], ['agentes', 'Bot'], ['permisos', 'ShieldCheck'], ['extensiones', 'Puzzle'], ['datos', 'Database'], ['avanzado', 'SlidersHorizontal'], ['acerca', 'Info']]);
-  assert.deepEqual(['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'].map((id) => es[`settings.section.${id}`]), ['General', 'Dispositivos', 'Agentes y uso', 'Permisos', 'Skills y MCP', 'Datos', 'Avanzado', 'Acerca de']);
+  assert.deepEqual(['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'].map((id) => es[`settings.section.${id}`]), ['General', 'Dispositivos', 'Agentes y uso', 'Permisos', 'Extensiones', 'Datos', 'Avanzado', 'Acerca de']);
   assert.match(index, /data-testid="settings-dialog"/);
   assert.match(index, /h-\[min\(780px,90vh\)\] w-\[min\(1080px,94vw\)\]/, 'the mock-up\'s 1080 × 780 dialog');
   assert.match(index, /w-\[220px\]/, 'the 220 px menu');

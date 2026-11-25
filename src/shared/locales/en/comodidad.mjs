@@ -11,7 +11,7 @@ export default {
   'keys.cmd.findText': 'Search text in the project',
   'finder.filesTitle': 'Find a file in the project',
   'finder.textTitle': 'Search text in the project',
-  'finder.hint': 'Type to search; choose with the arrow keys and Enter puts the result in the chat box.',
+  'finder.hint': 'Type to search. Choose with the arrow keys and Enter puts the result in the chat box.',
   'finder.filesPlaceholder': 'File name in «{project}»…',
   'finder.textPlaceholder': 'Text to look for in «{project}»…',
   'finder.noProject': 'Open a chat of a project, or choose one, to search its files.',

@@ -11,7 +11,7 @@ export default {
   'keys.cmd.findText': 'Buscar texto en el proyecto',
   'finder.filesTitle': 'Buscar un archivo del proyecto',
   'finder.textTitle': 'Buscar texto en el proyecto',
-  'finder.hint': 'Escribe para buscar; con las flechas eliges y con Intro el resultado pasa a la caja del chat.',
+  'finder.hint': 'Escribe para buscar. Con las flechas eliges y con Intro el resultado pasa a la caja del chat.',
   'finder.filesPlaceholder': 'Nombre del archivo en «{project}»…',
   'finder.textPlaceholder': 'Texto que buscar en «{project}»…',
   'finder.noProject': 'Abre un chat de un proyecto, o elige uno, para buscar en sus archivos.',

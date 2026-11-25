@@ -28,7 +28,7 @@ export default {
   'help.tut.chat.l1': 'Con «Orquestador» activado hablas con {name}: planifica el trabajo, escribe las instrucciones para cada agente y las reparte. Puede leer el proyecto, pero no lo modifica.',
   'help.tut.chat.l2': 'Con «Orquestador» desactivado hablas directamente con el agente que elijas (Claude, Codex, Cursor…), que trabaja en la carpeta del proyecto. Pide permiso para lo arriesgado y nunca hace push ni publica.',
   'help.tut.chat.l3': 'Si escribes mientras responde, recibe la corrección en su siguiente paso. «Detener» corta la respuesta al momento.',
-  'help.tut.chat.l4': 'Escribe @ para adjuntar como contexto un extracto de una tarea, una conversación o una bitácora.',
+  'help.tut.chat.l4': 'Escribe @ para adjuntar como contexto un extracto de una tarea, un chat o una bitácora.',
   'help.tut.chat.go': 'Ir al chat',
 
   'help.tut.brain.title': 'Elegir el agente',
@@ -36,12 +36,12 @@ export default {
   'help.tut.brain.l2': 'El razonamiento (bajo, medio o alto) define cuánto piensa {name} en cada respuesta. El alto gasta bastante más uso. El de cada tarea lo elige Orb según su dificultad (Ajustes › Agentes y uso).',
   'help.tut.brain.l3': 'El aviso «Cuidado» aparece cuando la elección puede agotar el uso de la cuenta: razonamiento alto, un modelo de alto consumo o una cuenta por encima del 75 %.',
   'help.tut.brain.l4': 'Con la elección automática activada, Orb asigna a cada tarea el modelo adecuado según su dificultad: rápido para lo sencillo y potente solo cuando hace falta.',
-  'help.tut.brain.l5': 'Cambiar de agente inicia una conversación nueva. Las tareas y las bitácoras se conservan.',
+  'help.tut.brain.l5': 'Cambiar de agente inicia un chat nuevo. Las tareas y las bitácoras se conservan.',
   'help.tut.brain.go': 'Ir al chat',
 
   'help.tut.newchat.title': 'Conversaciones',
   'help.tut.newchat.l1': '«Nuevo chat» abre una conversación propia, con su título y su proyecto. El proyecto, el agente y el razonamiento se eligen en el cuadro de mensaje.',
-  'help.tut.newchat.l2': 'Con «Orquestador» hablas con {name}, que reparte el trabajo en tareas; sin él, hablas directamente con el agente y el modelo que elijas. Puedes tener varias conversaciones a la vez.',
+  'help.tut.newchat.l2': 'Con «Orquestador» hablas con {name}, que reparte el trabajo en tareas. Sin él, hablas directamente con el agente y el modelo que elijas. Puedes tener varios chats a la vez.',
   'help.tut.newchat.l3': 'Todas tus conversaciones están en el menú, en «Conversaciones» y dentro de cada proyecto. Pulsa una para volver a ella.',
   'help.tut.newchat.l4': 'En la conversación de una tarea ves la respuesta en directo, los comandos y los archivos modificados. Intro corrige sobre la marcha; Ctrl+Intro deja el mensaje en cola.',
   'help.tut.newchat.go': 'Nuevo chat',
@@ -56,7 +56,7 @@ export default {
   'help.tut.tasks.go': 'Ir a Tareas',
 
   'help.tut.sidebar.title': 'Proyectos en el menú',
-  'help.tut.sidebar.l1': 'Cada proyecto del menú es una carpeta. Un clic lo selecciona para un nuevo chat; doble clic (o la flecha) muestra sus tareas y conversaciones.',
+  'help.tut.sidebar.l1': 'Cada proyecto del menú es una carpeta. Un clic lo selecciona para un nuevo chat. Doble clic (o la flecha) muestra sus tareas y conversaciones.',
   'help.tut.sidebar.l2': 'Pasa el ratón por una tarea o conversación y pulsa su círculo para moverla a «Completados». Desde ahí se restaura con un clic.',
   'help.tut.sidebar.l3': 'Arriba está la bandeja: «Por aprobar», «En curso» e «Incidencias» (límite de uso, interrumpidas o con error).',
   'help.tut.sidebar.l4': 'Arrastra el borde del menú para cambiar su ancho (doble clic para restablecerlo). El botón junto a Claro / Oscuro lo pliega.',
@@ -76,7 +76,7 @@ export default {
   'help.tut.agents.go': 'Ir a Agentes',
 
   'help.tut.usage.title': 'Contexto y uso',
-  'help.tut.usage.l1': 'El círculo junto al cuadro de mensaje indica cuánto contexto ocupa la conversación. Cuanto más lleno, más consume cada respuesta; al pasar del 60 %, {name} renueva su contexto en esa misma conversación y retoma lo importante de la bitácora y los últimos mensajes.',
+  'help.tut.usage.l1': 'El círculo junto al cuadro de mensaje indica cuánto contexto ocupa la conversación. Cuanto más lleno, más consume cada respuesta. Al pasar del 60 %, {name} renueva su contexto en esa misma conversación y retoma lo importante de la bitácora y los últimos mensajes.',
   'help.tut.usage.l2': 'Púlsalo para ver los tokens de contexto y el uso de tus planes: la sesión de 5 horas, la semana y cuándo se reinician.',
   'help.tut.usage.l3': 'Claude y Codex informan de su uso real. Al llegar al límite configurado (92 % por defecto), las tareas nuevas esperan o pasan a otra cuenta.',
   'help.tut.usage.go': 'Abrir Agentes y uso',
@@ -100,10 +100,10 @@ export default {
   'help.tut.phone.l3': 'Desde el móvil puedes chatear, aprobar y seguir las tareas. Los ajustes, las cuentas, las instalaciones y el acceso a archivos quedan reservados al PC.',
   'help.tut.phone.go': 'Abrir Magic Link',
 
-  'help.tut.expert.title': 'God mode',
+  'help.tut.expert.title': 'Modo experto',
   'help.tut.expert.l1': 'Actívalo en Ajustes › Avanzado (solo en el PC y en ventanas anchas).',
   'help.tut.expert.l2': 'Añade paneles alrededor del chat: archivos, cambios de git, historial, procesos activos, uso de las cuentas, carga del PC y actividad. Tú eliges cuáles ver.',
-  'help.tut.expert.go': 'Abrir God mode',
+  'help.tut.expert.go': 'Abrir el modo experto',
 
   'help.tut.games.title': 'Minijuegos',
   'help.tut.games.l1': 'Mientras los agentes trabajan, el menú ⋯ de la barra del chat abre los minijuegos: Serpiente, Tetris, Ajedrez, Jumper, 2048, Ladrillos, Space Invaders y Pac-Man.',
@@ -111,8 +111,8 @@ export default {
   'help.tut.games.go': 'Abrir los minijuegos',
 
   'help.tut.looks.title': 'Apariencia y temas',
-  'help.tut.looks.l1': 'En Ajustes › General eliges modo claro, oscuro o el del sistema; el tema (Predeterminado o Cristal, cada uno con su paleta; Orb, Vaporwave, Candy o Retro), las fuentes y los colores del código.',
-  'help.tut.looks.l2': 'Las seis paletas (Grafito, Océano, Bosque, Uva, Rubí y Arena) solo se aplican a Predeterminado y Cristal. El robot solo sale con el tema Orb; «Animaciones: mínimas» lo deja quieto.',
+  'help.tut.looks.l1': 'En Ajustes › General eliges modo claro, oscuro o el del sistema, el tema (Predeterminado o Cristal, cada uno con su paleta, u Orb, Vaporwave, Candy o Retro), las fuentes y los colores del código.',
+  'help.tut.looks.l2': 'Las seis paletas (Grafito, Océano, Bosque, Uva, Rubí y Arena) solo se aplican a Predeterminado y Cristal. El robot solo sale con el tema Orb. «Animaciones: mínimas» lo deja quieto.',
   'help.tut.looks.l3': 'El tamaño de la interfaz se ajusta en Ajustes o con Ctrl +, Ctrl − y Ctrl 0.',
   'help.tut.looks.go': 'Abrir Apariencia',
 
@@ -131,7 +131,7 @@ export default {
   'help.key.3.k': 'Ctrl + Intro',
   'help.key.3.v': 'Poner el mensaje en cola hasta que termine el turno actual.',
   'help.key.4.k': '@',
-  'help.key.4.v': 'Adjuntar una tarea, una conversación o una bitácora como contexto.',
+  'help.key.4.v': 'Adjuntar una tarea, un chat o una bitácora como contexto.',
   'help.key.5.k': 'Ctrl + J',
   'help.key.5.v': 'Abrir una terminal en la carpeta del proyecto actual.',
   'help.key.6.k': 'Ctrl + / Ctrl − / Ctrl 0',
@@ -161,7 +161,7 @@ export default {
   'help.faq.9.q': '¿Cómo publico un proyecto en GitHub?',
   'help.faq.9.a': 'Desde Proyectos, con GitHub CLI (gh) y la sesión iniciada: publicar el repositorio, subir ramas, integrar y crear pull requests. Los push de los agentes siempre requieren tu aprobación.',
   'help.faq.10.q': '¿Por qué no veo el robot?',
-  'help.faq.10.a': 'El robot sale con el tema Orb; los demás temas no lo muestran. Cámbialo en Ajustes › General › Apariencia. El robot flotante se activa o desactiva ahí mismo.',
+  'help.faq.10.a': 'El robot sale con el tema Orb. Los demás temas no lo muestran. Cámbialo en Ajustes › General › Apariencia. El robot flotante se activa o desactiva ahí mismo.',
   'help.faq.11.q': '¿Cómo se actualiza Orb?',
   'help.faq.11.a': 'La versión instalada busca actualizaciones al abrirse y cada 4 horas. «Descargar e instalar» descarga la nueva versión y «Reiniciar e instalar» la instala. También puedes buscarlas en Ajustes › General.',
   'help.faq.12.q': 'Una tarea de Cursor falla por «plan sin acceso». ¿Qué hago?',
@@ -175,7 +175,7 @@ export default {
   'help.faq.16.q': '¿Qué es «Iniciar test»?',
   'help.faq.16.a': 'Una prueba de funcionamiento: {name}, con el Orquestador activado, pide a varios modelos una web de prueba y la abre. Aparece en el chat la primera vez que abres Orb cada día y siempre está en Ajustes › Agentes y uso.',
   'help.faq.17.q': '¿Qué hago si olvido la contraseña maestra?',
-  'help.faq.17.a': 'Pulsa «He olvidado la contraseña» en Ajustes › Datos o en la pantalla que te la pide. Con el código de recuperación de tus copias de seguridad pones otra y conservas las claves de tus conectores. Sin él, puedes empezar de cero: se borran esas claves y tendrás que volver a enlazar tus móviles; tus proyectos y conversaciones no se tocan.',
+  'help.faq.17.a': 'Pulsa «He olvidado la contraseña» en Ajustes › Datos o en la pantalla que te la pide. Con el código de recuperación de tus copias de seguridad pones otra y conservas las claves de tus conectores. Sin él, puedes empezar de cero: se borran esas claves y tendrás que volver a enlazar tus móviles. Tus proyectos y conversaciones no se tocan.',
 
   // ---- tutorial guiado (el robot recorre la app)
   'help.tour.aria': 'Tutorial guiado',
@@ -201,7 +201,7 @@ export default {
   'help.tour.bar.title': 'Barra del chat',
   'help.tour.bar.text': 'Arriba, el chat y su proyecto: púlsalo para ver su información (modelo, tareas, exportar…). A la derecha, las notificaciones, pausar las tareas y el menú ⋯ con las demás acciones y los minijuegos.',
   'help.tour.newchat.title': 'Nuevo chat',
-  'help.tour.newchat.text': 'Con «+» empiezas un chat nuevo o un proyecto. Cada chat es una conversación propia, con su título y su proyecto; puedes tener varios a la vez.',
+  'help.tour.newchat.text': 'Con «+» empiezas un chat nuevo o un proyecto. Cada chat es una conversación propia, con su título y su proyecto. Puedes tener varios a la vez.',
   'help.tour.tasks.title': 'Tareas',
   'help.tour.tasks.text': 'Todo el trabajo de los agentes: en curso, por aprobar, completado e incidencias. Puedes deshacer cualquier tarea.',
   'help.tour.schedules.title': 'Programadas',
@@ -217,7 +217,7 @@ export default {
   'help.tour.tutorials.title': 'Tutoriales',
   'help.tour.tutorials.text': 'Guías, preguntas frecuentes, atajos de teclado y la opción de repetir este recorrido.',
   'help.tour.settings.title': 'Ajustes',
-  'help.tour.settings.text': 'General, Dispositivos, Agentes y uso, Permisos, Skills y MCP, Datos, Avanzado y Acerca de.',
+  'help.tour.settings.text': 'General, Dispositivos, Agentes y uso, Permisos, Extensiones, Datos, Avanzado y Acerca de.',
   'help.tour.end.title': 'Todo listo',
   'help.tour.end.text': 'Elige un proyecto, cuéntame qué necesitas y empezamos.',
   // conversaciones, menú lateral, buscador y globito

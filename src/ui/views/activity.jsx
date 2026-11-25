@@ -129,7 +129,7 @@ export function ActivityView({ tabs }) {
       </ListCard>
       {paged ? (
         <div className="toolbar flex flex-wrap items-center gap-2">
-          <span className="text-muted-foreground m-0 text-caption">{t('logbooks.local')}</span>
+          <span className="text-muted-foreground m-0 text-caption" title={t('logbooks.localHint')}>{t('logbooks.local')}</span>
           <span className="flex-1" />
           {page.next ? <Button variant="outline" onClick={more} disabled={loading} data-testid="activity-more">{loading ? <Spinner /> : null}{t('logbooks.loadMore')}</Button> : null}
         </div>

@@ -11,7 +11,7 @@ export default {
   'wb.saving': 'Saving…',
   'wb.attachments': 'Attachments',
   'wb.attach': 'Attach files',
-  'wb.attachHint': 'Photos, videos and documents. You can also drag them here; to place an image on the drawing, drop it on the canvas.',
+  'wb.attachHint': 'Photos, videos and documents. You can also drag them here. To place an image on the drawing, drop it on the canvas.',
   'wb.attachPcOnly': 'Files are attached from the PC.',
   'wb.attached': 'Attached: {n}',
   'wb.notePh': 'Note for {assistant}: what this file is for',
