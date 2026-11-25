@@ -13,10 +13,10 @@ const tools = read('src/ui/views/agents-tools.jsx');
 const usage = read('src/ui/views/usage.jsx');
 const tab = read('src/ui/views/settings/usage-tab.jsx');
 
-test('Prepara tu equipo: Flutter, SDK de Android y Java solo se detectan; no llevan botón de instalar', () => {
+test('Prepara tu equipo: solo Flutter se detecta sin instalador; Java y Android Studio se instalan con winget', () => {
   assert.match(agents, /call\('installer\.devTools'\)/);
   // they come from team.dev as rows without an installer: «Cómo instalarlo» opens their official page and starts nothing
-  assert.match(tools, /\(team\.dev \?\? \[\]\)\.map/);
+  assert.match(tools, /\(team\.dev \?\? \[\]\)\.filter\(\(d\) => !team\.items\.some\(\(i\) => i\.id === d\.id\)\)\.map/);
   assert.match(tools, /installable: false/);
   assert.match(tools, /data-testid=\{`team-howto-\$\{x\.id\}`\}/);
   assert.match(tools, /x\.installable\s*\? <Button[\s\S]*?team\.install\(\[x\.id\]\)/, 'only an installer item has the install button');

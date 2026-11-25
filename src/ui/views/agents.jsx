@@ -639,6 +639,7 @@ export function AgentsView() {
   const [checkedAt, setCheckedAt] = useState(null);
   const [progress, setProgress] = useState(null);
   const [dev, setDev] = useState(null);
+  const [upgrades, setUpgrades] = useState(null);
   const [today, setToday] = useState(null);
   useEffect(() => { call('system.check').then(setSystem).catch(quiet); }, []);
   const load = (refresh = false) => { call('agents.status', { refresh }).then(setAgents).catch(() => setAgents([])); };
@@ -659,8 +660,10 @@ export function AgentsView() {
     });
   }, [windows]); // eslint-disable-line react-hooks/exhaustive-deps
   const team = {
-    available: windows, items, dev, checkedAt, progress, running: Boolean(progress?.running), reload: loadTeam,
-    install: async (ids) => { const p = await act(call('installer.start', { ids })); if (p) setProgress(p); }
+    available: windows, items, dev, upgrades, checkedAt, progress, running: Boolean(progress?.running), reload: loadTeam,
+    // winget's newer versions: asked when the block opens or «Comprobar» is pressed, never on opening the page
+    checkUpgrades: (force) => call('installer.updates', { force }).then((r) => r?.available && setUpgrades(r.found ?? {})).catch(quiet),
+    install: async (ids, opts) => { const p = await act(call('installer.start', opts?.update ? { ids, update: true } : { ids })); if (p) setProgress(p); }
   };
   const mine = agents?.filter((x) => x.installed) ?? [];
   const available = agents?.filter((x) => !x.installed) ?? [];
