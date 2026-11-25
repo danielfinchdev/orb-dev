@@ -70,8 +70,8 @@ test('7: the God mode panels and the live window button sit under «Más opcione
   assert.doesNotMatch(expert, /PANELS|Checkbox/);
   assert.match(general.slice(general.indexOf('export function ExpertPanelsCard'), general.indexOf('function MusicSettings')), /PANELS/);
   assert.doesNotMatch(read('src/ui/views/settings/devices.jsx').slice(0, read('src/ui/views/settings/devices.jsx').indexOf('export function LiveWindowCard')).split('export function BrowserCard')[1], /showBrowser/);
-  assert.match(locale('es', 'settings.mjs'), /expertOpenHint': '[^']*«Elementos protegidos» ya no está aquí: pasó a Permisos\.'/);
-  assert.match(locale('en', 'settings.mjs'), /expertOpenHint': '[^']*no longer here: it moved to Permissions\.'/);
+  assert.doesNotMatch(locale('es', 'settings.mjs'), /expertOpenHint': '[^']*ya no está aquí/);
+  assert.doesNotMatch(locale('en', 'settings.mjs'), /expertOpenHint': '[^']*no longer here/);
 });
 
 test('8: «Enviar comentarios» in Ajustes has its note on the left and the main «Enviar» button', () => {
