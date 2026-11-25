@@ -1,15 +1,38 @@
 ## Download
 
-### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.10/Orb-3.8.10-instalador.exe)
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.11/Orb-3.8.11-instalador.exe)
 
-`Orb-3.8.10-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+`Orb-3.8.11-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
 It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
 installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.10/Orb-3.8.10-android.apk)
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.11/Orb-3.8.11-android.apk)
 
-`Orb-3.8.10-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+`Orb-3.8.11-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
 the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+## What's new in 3.8.11
+
+### Added
+
+- **Rewritten interface texts.** Every label, message and help text follows one style guide, so wording is consistent
+  across the app.
+- **Settings in ten tabs.** Changes are saved as soon as you leave a field, with a "Saved" mark. The Appearance tab
+  adds four new typefaces.
+- **A redesigned Agents page.** Your agents are listed in collapsible cards with their tools folded away, and a gallery
+  lets you add more.
+- **One-click developer tools.** Install common programming tools from a fixed list through winget, and check for
+  updates when you ask.
+- **A fuller Usage tab.** Filters, a line chart, a limits view, a table of what spent the most and CSV export.
+- **One search in the Journal**, and quick filters in Activity (All, You, Agents, Problems).
+
+### Changed
+
+- "God mode" is now "Expert mode", "Logs" is now "Journal" and "rails" are now "Protections".
+
+### Fixed
+
+- The endurance test no longer loses or duplicates events during long runs.
 
 ## What's new in 3.8.10
 

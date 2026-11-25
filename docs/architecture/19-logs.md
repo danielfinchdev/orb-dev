@@ -22,3 +22,7 @@ Part of [How Orb works](../ARCHITECTURE.md).
   `test/actividad-etiquetas-388.test.mjs` fails when a new kind of event is written by the engine without a label in
   both languages, so a new event must bring its words. `activity.list` can also return the totals of each source and level
   for the filters in force.
+
+**One search and quick filters (3.8.11).** The Journal has a single search with "In this one / In all" scopes;
+`src/ui/lib/mark-matches.js` highlights hits in the text without touching React's nodes. Activity has the All / You /
+Agents / Problems tabs and one row of filters, built by `src/ui/lib/activity-filters.js` (the counts come from the engine).
