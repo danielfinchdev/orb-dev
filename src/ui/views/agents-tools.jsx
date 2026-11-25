@@ -41,7 +41,7 @@ export function ToolsBlock({ team, agents, renderUpdate }) {
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30_000); return () => clearInterval(id); }, []);
   // Newer versions are asked only once the user opens the block (the engine keeps the answer for a while).
   const askedUpgrades = userOpen === true;
-  useEffect(() => { if (askedUpgrades && team.available) team.checkUpgrades?.(false); }, [askedUpgrades]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (askedUpgrades && team.available) { team.reload(true); team.checkUpgrades?.(false); } }, [askedUpgrades]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!team.available) return null;
 
   const agentOf = (id) => agents?.find((x) => x.id === id);
@@ -144,7 +144,7 @@ export function ToolsBlock({ team, agents, renderUpdate }) {
                 <span className="text-faint-foreground min-w-0 flex-1 text-caption">{t('agents.tools.foot')}</span>
                 <span className="flex flex-none items-center gap-3">
                   <span className="text-faint-foreground text-caption">{ago < 1 ? t('agents.team.checkedNow') : t('agents.team.checkedAgo', { n: ago })}</span>
-                  <Button size="sm" variant="outline" onClick={() => { team.reload(); team.checkUpgrades?.(true); }} data-testid="team-recheck"><RefreshCw />{t('agents.team.recheck')}</Button>
+                  <Button size="sm" variant="outline" onClick={() => { team.reload(true); team.checkUpgrades?.(true); }} data-testid="team-recheck"><RefreshCw />{t('agents.team.recheck')}</Button>
                 </span>
               </div>
             </CollapsibleContent>

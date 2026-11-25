@@ -626,7 +626,8 @@ export function AgentsView() {
   useEffect(() => load(), []);
   useEffect(() => { call('usage.get').then(setUsage).catch(quiet); call('usage.history', { days: 1 }).then(setToday).catch(quiet); }, [version]);
   const windows = system?.platform === 'win32';
-  const loadTeam = async () => { const [r, d] = await Promise.all([call('installer.check').catch(() => []), call('installer.devTools').catch(() => null)]); setItems(r); setDev(d); setCheckedAt(Date.now()); };
+  // Versions of tools found only by file (user folders) are asked when the user opens the block or checks again.
+  const loadTeam = async (versions = false) => { const [r, d] = await Promise.all([call('installer.check', { versions: versions === true }).catch(() => []), call('installer.devTools').catch(() => null)]); setItems(r); setDev(d); setCheckedAt(Date.now()); };
   useEffect(() => {
     if (!windows) return undefined;
     loadTeam();
