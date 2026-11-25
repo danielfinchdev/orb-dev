@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
-import { WINGET_IDS, wingetId, wingetInstall, wingetUpgrade, EXTRA_ITEMS, parseUpgrades, suggestionsFor } from '../src/engine/host/tool-catalog.mjs';
+import { PLAYWRIGHT_VERSION, WINGET_IDS, wingetId, wingetInstall, wingetUpgrade, EXTRA_ITEMS, parseUpgrades, suggestionsFor } from '../src/engine/host/tool-catalog.mjs';
 import { METHODS, REMOTE_METHODS, allowed, principalOf } from '../src/domain/security/permissions.mjs';
 import es from '../src/shared/locales/es.mjs';
 import en from '../src/shared/locales/en.mjs';
@@ -21,7 +21,7 @@ const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8')
 const EXPECTED = {
   uv: 'astral-sh.uv', rg: 'BurntSushi.ripgrep.MSVC', pwsh: 'Microsoft.PowerShell', jq: 'jqlang.jq', gitLfs: 'GitHub.GitLFS',
   java: 'Microsoft.OpenJDK.21', androidSdk: 'Google.AndroidStudio', rustup: 'Rustlang.Rustup', go: 'GoLang.Go', dotnet: 'Microsoft.DotNet.SDK.8',
-  bun: 'Oven-sh.Bun', docker: 'Docker.DockerDesktop', buildTools: 'Microsoft.VisualStudio.2022.BuildTools'
+  bun: 'Oven-sh.Bun', docker: 'Docker.DockerDesktop', buildTools: 'Microsoft.VisualStudio.2022.BuildTools', pnpm: 'pnpm.pnpm'
 };
 
 test('the winget ids are a fixed list, and a key or id outside it is refused', () => {
@@ -51,11 +51,10 @@ test('the catalog is the only source of install text: ids typed elsewhere in the
   const script = installer.buildScript(['uv', 'rg', 'pnpm', 'x; calc'], 'C:\\t\\log.txt');
   assert.match(script, /winget install --id astral-sh\.uv /);
   assert.match(script, /winget install --id BurntSushi\.ripgrep\.MSVC /);
-  assert.match(script, /corepack enable pnpm --install-directory/);
+  assert.match(script, /winget install --id pnpm\.pnpm /);
+  assert.doesNotMatch(script, /corepack/);
   assert.doesNotMatch(script, /calc/);
-  // pnpm needs Node: its step comes with a check for Node first
-  assert.ok(script.indexOf("Step 'node'") < script.indexOf("Step 'pnpm'"));
-  assert.match(installer.buildScript(['playwright'], 'C:\\t\\log.txt'), /npx --yes playwright install/);
+  assert.match(installer.buildScript(['playwright'], 'C:\\t\\log.txt'), /npx --yes playwright@1\.63\.0 install chromium/);
   assert.match(installer.buildScript(['buildTools'], 'C:\\t\\log.txt'), /--override '--quiet --wait --norestart --add Microsoft\.VisualStudio\.Workload\.VCTools --includeRecommended'/);
 });
 
@@ -159,7 +158,7 @@ test('what is already installed is never installed again, and an update asks for
   const spawnFn = fakeSpawn();
   assert.throws(() => installer.start(['uv', 'git'], () => {}, { spawnFn, have: new Set(['uv', 'git']) }), /elige al menos|choose/i);
   assert.equal(spawnFn.calls.length, 0, 'nothing started');
-  assert.throws(() => installer.start(['pnpm', 'claude'], () => {}, { spawnFn, update: true }), /elige al menos|choose/i);
+  assert.throws(() => installer.start(['playwright', 'claude'], () => {}, { spawnFn, update: true }), /elige al menos|choose/i);
   assert.equal(spawnFn.calls.length, 0);
 });
 
@@ -171,7 +170,7 @@ test('check() lists the new tools with their group and without touching the firs
   assert.equal(uv.group, 'rec'); assert.equal(uv.extra, true); assert.equal(uv.optional, true); assert.equal(uv.canUpdate, true);
   assert.equal(list.find((i) => i.id === 'rustup').group, 'lang');
   assert.equal(list.find((i) => i.id === 'java').group, 'mobile');
-  assert.equal(list.find((i) => i.id === 'pnpm').canUpdate, undefined, 'pnpm has no winget update');
+  assert.equal(list.find((i) => i.id === 'pnpm').canUpdate, true);
   assert.equal(list.find((i) => i.id === 'git').extra, undefined, 'the necessary tools stay as they were');
   assert.match(read('src/ui/components/installer.jsx'), /filter\(\(i\) => !i\.extra\)/);
 });
@@ -185,6 +184,9 @@ test('winget upgrade output is read for the listed tools only', () => {
     'Git                Git.Git                2.43.0    2.50.1      winget'
   ].join('\n');
   assert.deepEqual(parseUpgrades(table), { jq: { current: '1.7.1', latest: '1.8.2' }, git: { current: '2.43.0', latest: '2.50.1' } });
+  // a long Id cut with an ellipsis still names its tool; a short or ambiguous cut does not
+  assert.deepEqual(parseUpgrades('Visual Studio  Microsoft.VisualStudio.2022.BuildT…  17.1  17.2  winget'), { buildTools: { current: '17.1', latest: '17.2' } });
+  assert.deepEqual(parseUpgrades('X  Microsoft.…  1.0  2.0  winget'), {});
   assert.deepEqual(parseUpgrades('No se encontraron actualizaciones'), {});
 });
 
@@ -226,4 +228,24 @@ test('the engine writes the install to Activity with labelled kinds', () => {
   const api = read('src/engine/api/index.mjs');
   assert.match(api, /board\.event\(null, 'usuario', state === 'instalando' \? 'tools\.install_start' : state === 'hecho' \? 'tools\.install_done' : 'tools\.install_error'/);
   for (const k of ['start', 'done', 'error']) for (const l of [es, en]) assert.ok(l[`activity.kind.tools_install_${k}`] && l[`activity.say.tools_install_${k}`] && l[`activity.say.tools_install_${k}.you`], k);
+});
+
+test('the playwright version is pinned to the repo dependency and only chromium is fetched', () => {
+  const pkg = JSON.parse(read('package.json'));
+  const dep = Object.values({ ...pkg.dependencies, ...pkg.devDependencies }).find((v, i, a) => Object.keys({ ...pkg.dependencies, ...pkg.devDependencies })[i] === 'playwright-core');
+  assert.equal(PLAYWRIGHT_VERSION, dep);
+  assert.equal(EXTRA_ITEMS.find((x) => x.id === 'playwright').install, `npx --yes playwright@${PLAYWRIGHT_VERSION} install chromium`);
+});
+
+test('an install that outlives its time limit leaves no step open in Activity', async () => {
+  const spawnFn = fakeSpawn();
+  const events = [];
+  installer.start(['bun'], () => {}, { spawnFn, onEvent: (e) => events.push(e), maxMs: 1000 });
+  fs.appendFileSync(logOf(spawnFn.calls[0]), 'INICIO bun\n');
+  await new Promise((r) => setTimeout(r, 3200));
+  assert.deepEqual(events.map((e) => e.state), ['instalando', 'error']);
+});
+
+test('update is normalised once in the handler', () => {
+  assert.match(read('src/engine/api/index.mjs'), /const upd = update === true;[\s\S]*?const have = upd \? null[\s\S]*?\{ update: upd, have, onEvent \}/);
 });

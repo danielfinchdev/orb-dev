@@ -10,7 +10,7 @@ import { spawn } from 'node:child_process';
 import { ADAPTERS, quickRun } from '../../agents/index.mjs';
 import { IS_WIN, cleanEnv, inPath, killTree } from '../../platform/proc.mjs';
 import { checkDevTools, toolVersion } from '../../platform/dev-tools.mjs';
-import { EXTRA_ITEMS, PROBES, WINGET_IDS, wingetInstall, wingetUpgrade, pnpmShims, playwrightInstalled, vswhere, hasAndroidStudio, parseUpgrades, suggestionsFor } from './tool-catalog.mjs';
+import { EXTRA_ITEMS, PROBES, WINGET_IDS, wingetInstall, wingetUpgrade, playwrightInstalled, vswhere, hasAndroidStudio, parseUpgrades, suggestionsFor } from './tool-catalog.mjs';
 
 // id → what it is, how to check it and the official way to install it.
 const ITEMS = [
@@ -40,7 +40,6 @@ const tailscaleExe = () => (IS_WIN ? path.join(process.env.ProgramFiles ?? 'C:\\
 
 // One tool of the catalog: its program answers (by name, then in the folders its installer uses) or its marker is there.
 async function probeExtra(id) {
-  if (id === 'pnpm') return { installed: pnpmShims().some((f) => { try { return fs.statSync(f).isFile(); } catch { return false; } }) || inPath('pnpm').length > 0, version: null };
   if (id === 'playwright') return { installed: playwrightInstalled(), version: null };
   if (id === 'buildTools') {
     const r = IS_WIN ? await quickRun(vswhere(), ['-products', '*', '-requires', 'Microsoft.VisualStudio.Component.VC.Tools.x86.x64', '-latest', '-property', 'installationVersion'], { timeoutMs: 8000 }) : { ok: false, out: '' };
@@ -154,7 +153,7 @@ const MAX_MS = 45 * 60_000;
 // spawnFn: how the hidden PowerShell is started (the tests give one that installs nothing).
 // have: ids already installed (a tool of the catalog that is there is never installed again); onEvent({ id, label, state,
 // update, detail }) tells each step's start, end and failure (the engine writes them to Activity).
-export function start(ids, emit, { update = false, have = null, onEvent = null, spawnFn = spawn } = {}) {
+export function start(ids, emit, { update = false, have = null, onEvent = null, spawnFn = spawn, maxMs = MAX_MS } = {}) {
   if (!IS_WIN) throw new Error(tr('msg.installer.windowsOnly'));
   if (current && !progress().finished && Date.now() - current.startedAt < MAX_MS) throw new Error(tr('msg.installer.alreadyRunning'));
   const known = ids.filter((id) => ITEMS.some((i) => i.id === id && (!update || i.wingetKey)));
@@ -199,7 +198,8 @@ export function start(ids, emit, { update = false, have = null, onEvent = null, 
     const s = progress();
     tell(s);
     emit('installer:progress', s);
-    if (s.finished || Date.now() - stamp > MAX_MS) { clearInterval(timer); timer = null; }
+    if (!s.finished && Date.now() - stamp > maxMs) tell({ ...s, finished: true }); // a step still open is written as failed
+    if (s.finished || Date.now() - stamp > maxMs) { clearInterval(timer); timer = null; }
   }, 1500);
   return progress();
 }

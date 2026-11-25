@@ -265,9 +265,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'installer.start': async ({ ids, update }) => {
       if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList'));
       const installer = await inst();
-      const have = update ? null : new Set((await installer.check()).filter((i) => i.installed).map((i) => i.id));
+      const upd = update === true;
+      const have = upd ? null : new Set((await installer.check()).filter((i) => i.installed).map((i) => i.id));
       const onEvent = ({ label, state, detail }) => board.event(null, 'usuario', state === 'instalando' ? 'tools.install_start' : state === 'hecho' ? 'tools.install_done' : 'tools.install_error', `${label}${state === 'error' && detail ? `: ${String(detail).slice(0, 160)}` : ''}`);
-      try { return installer.start(ids, emit, { update: update === true, have, onEvent }); } catch (error) { fail(error.message); }
+      try { return installer.start(ids, emit, { update: upd, have, onEvent }); } catch (error) { fail(error.message); }
     },
     // What winget says is newer for the catalog's tools: asked only when the block opens or «Comprobar» is pressed, kept 30 min.
     'installer.updates': async ({ force }) => (await inst()).checkUpgrades({ force: force === true }),

@@ -1,7 +1,8 @@
 // The programs Orb can install for the user beyond the agents, and everything that decides what may be installed.
 // Nothing here comes from the user, an agent or a project file: the winget ids below are the whole list, and the install
 // text for each one is built from this table only (a key that is not in it throws). winget checks the installer's hash on
-// its own, and nothing here switches that check off.
+// its own, and nothing here switches that check off. The one step that does not go through winget (Playwright's browser,
+// npm) is a fixed command with a pinned version, so it does not follow «latest».
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -11,7 +12,7 @@ export const WINGET_IDS = Object.freeze({
   uv: 'astral-sh.uv', rg: 'BurntSushi.ripgrep.MSVC', pwsh: 'Microsoft.PowerShell', jq: 'jqlang.jq', gitLfs: 'GitHub.GitLFS',
   java: 'Microsoft.OpenJDK.21', androidSdk: 'Google.AndroidStudio',
   rustup: 'Rustlang.Rustup', go: 'GoLang.Go', dotnet: 'Microsoft.DotNet.SDK.8', bun: 'Oven-sh.Bun', docker: 'Docker.DockerDesktop',
-  buildTools: 'Microsoft.VisualStudio.2022.BuildTools'
+  buildTools: 'Microsoft.VisualStudio.2022.BuildTools', pnpm: 'pnpm.pnpm'
 });
 const ID_SHAPE = /^[A-Za-z0-9][A-Za-z0-9.-]*$/;
 const COMMON = '-e --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity';
@@ -30,14 +31,15 @@ export function wingetInstall(key) {
 export function wingetUpgrade(key) { return `winget upgrade --id ${wingetId(key)} ${COMMON} --silent`; }
 
 // The tools added in this group of the page. `group` places them; `after: ['node']` makes the plan add Node when it is missing.
-// pnpm goes to npm's own global folder (on PATH since Node's installer): corepack's default folder needs administrator rights.
+// Playwright is pinned to the version this repo's own dependency (playwright-core) uses; only Chromium is fetched.
+export const PLAYWRIGHT_VERSION = '1.63.0';
 export const EXTRA_ITEMS = [
   { id: 'uv', label: 'Python + uv', group: 'rec', wingetKey: 'uv' },
   { id: 'rg', label: 'ripgrep', group: 'rec', wingetKey: 'rg' },
   { id: 'pwsh', label: 'PowerShell 7', group: 'rec', wingetKey: 'pwsh' },
   { id: 'jq', label: 'jq', group: 'rec', wingetKey: 'jq' },
   { id: 'gitLfs', label: 'Git LFS', group: 'rec', wingetKey: 'gitLfs' },
-  { id: 'pnpm', label: 'pnpm', group: 'rec', install: 'corepack enable pnpm --install-directory "$env:APPDATA\\npm"', after: ['node'] },
+  { id: 'pnpm', label: 'pnpm', group: 'rec', wingetKey: 'pnpm' },
   { id: 'java', label: 'Java (OpenJDK)', group: 'mobile', wingetKey: 'java' },
   { id: 'androidSdk', label: 'Android Studio', group: 'mobile', wingetKey: 'androidSdk' },
   { id: 'rustup', label: 'Rust', group: 'lang', wingetKey: 'rustup' },
@@ -46,7 +48,7 @@ export const EXTRA_ITEMS = [
   { id: 'bun', label: 'Bun', group: 'lang', wingetKey: 'bun' },
   { id: 'docker', label: 'Docker Desktop', group: 'lang', wingetKey: 'docker' },
   { id: 'buildTools', label: 'Build Tools C++', group: 'lang', wingetKey: 'buildTools' },
-  { id: 'playwright', label: 'Playwright', group: 'lang', install: 'npx --yes playwright install', after: ['node'] }
+  { id: 'playwright', label: 'Playwright', group: 'lang', install: `npx --yes playwright@${PLAYWRIGHT_VERSION} install chromium`, after: ['node'] }
 ];
 
 // How to see that one is there: the program that answers, and the places its installer leaves it when the PATH of this
@@ -60,6 +62,7 @@ export const PROBES = {
   rg: { exe: 'rg', args: ['--version'], dirs: () => [links()] },
   pwsh: { exe: 'pwsh', args: ['--version'], dirs: () => [path.join(pf(), 'PowerShell', '7')] },
   jq: { exe: 'jq', args: ['--version'], dirs: () => [links()] },
+  pnpm: { exe: 'pnpm', args: ['--version'], dirs: () => [path.join(env('LOCALAPPDATA'), 'pnpm'), links()] },
   gitLfs: { exe: 'git', args: ['lfs', 'version'], dirs: () => [path.join(pf(), 'Git', 'cmd')] },
   rustup: { exe: 'rustup', args: ['--version'], dirs: () => [path.join(home(), '.cargo', 'bin')] },
   go: { exe: 'go', args: ['version'], dirs: () => [path.join(pf(), 'Go', 'bin')] },
@@ -67,8 +70,6 @@ export const PROBES = {
   bun: { exe: 'bun', args: ['--version'], dirs: () => [path.join(home(), '.bun', 'bin'), links()] },
   docker: { exe: 'docker', args: ['--version'], dirs: () => [path.join(pf(), 'Docker', 'Docker', 'resources', 'bin')] }
 };
-// pnpm is a .cmd shim (it cannot be run without a shell): it counts as there when the shim file exists.
-export const pnpmShims = () => [path.join(env('APPDATA'), 'npm'), path.join(env('LOCALAPPDATA'), 'pnpm'), path.join(home(), '.local', 'bin')].filter((d) => d && d !== 'npm').flatMap((d) => [path.join(d, 'pnpm.cmd'), path.join(d, 'pnpm.exe')]);
 const isDir = (d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } };
 export const playwrightInstalled = () => { const d = path.join(env('LOCALAPPDATA'), 'ms-playwright'); try { return isDir(d) && fs.readdirSync(d).some((n) => /^chromium/i.test(n)); } catch { return false; } };
 export const vswhere = () => path.join(env('ProgramFiles(x86)') || 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
@@ -92,14 +93,24 @@ export function suggestionsFor(dir) {
 
 // `winget upgrade` as a table → { toolId: { current, latest } } for the tools of the list only (anything else in it is ignored).
 export function parseUpgrades(text) {
-  const byId = new Map(Object.entries(WINGET_IDS).map(([k, v]) => [v.toLowerCase(), k]));
+  const ids = Object.entries(WINGET_IDS).map(([k, v]) => [v.toLowerCase(), k]);
+  // winget cuts a long Id with an ellipsis in a narrow table: a cut id names the tool only when one id starts with it
+  const toolOf = (col) => {
+    const c = col.toLowerCase();
+    const exact = ids.find(([id]) => id === c);
+    if (exact) return exact[1];
+    const cut = c.replace(/(…|\.{3})$/, '');
+    if (cut === c || cut.length < 6) return null;
+    const hit = ids.filter(([id]) => id.startsWith(cut));
+    return hit.length === 1 ? hit[0][1] : null;
+  };
   const out = {};
   for (const line of String(text ?? '').split(/\r?\n/)) {
     const cols = line.trim().split(/\s{2,}/);
-    const i = cols.findIndex((c) => byId.has(c.toLowerCase()));
+    const i = cols.findIndex((c) => toolOf(c));
     if (i < 0) continue;
     const current = cols[i + 1]; const latest = cols[i + 2];
-    if (current && latest && /\d/.test(latest)) out[byId.get(cols[i].toLowerCase())] = { current: current.replace(/^[<>]\s*/, ''), latest };
+    if (current && latest && /\d/.test(latest)) out[toolOf(cols[i])] = { current: current.replace(/^[<>]\s*/, ''), latest };
   }
   return out;
 }
