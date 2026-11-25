@@ -378,7 +378,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       const label = new Map((ctx.config.accounts ?? []).map((a) => [a.id, a.label]));
       const names = new Map();
       const records = out.records.map((r) => {
-        const k = r.model ? `${r.agent} ${r.account} ${r.model}` : null;
+        const k = r.model ? `${r.agent}\0${r.account}\0${r.model}` : null;
         if (k && !names.has(k)) names.set(k, modelLabelOf(r.agent, r.account || r.agent, r.model));
         return { ...r, modelLabel: k ? names.get(k) : '', accountLabel: r.account ? (label.get(r.account) ?? '') : '' };
       });
