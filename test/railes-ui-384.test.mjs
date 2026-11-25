@@ -34,5 +34,7 @@ test('Settings puts the controls back when the password is cancelled; protected 
   assert.doesNotMatch(g, /unlockCore\('protected'\)/);
   assert.match(g, /save\(\{ oneAtATime \}\)\.then\(\(r\) => \{ if \(!r\)/);
   assert.match(g, /setProfile\(before\.profile\); setV\(before\.v\)/);
-  assert.match(g, /if \(!r\) setProfile\(was\)/);
+  // advanced fields: a saved value becomes the stored one; a cancelled password or a failure goes back to what was stored
+  assert.match(g, /if \(r\) \{ base\.current = sent; return; \}\s*setProfile\(was\);/);
+  assert.match(g, /const b = base\.current;\s*setV\(\(cur\) => \(\{ \.\.\.cur, maxParallel: b\.maxParallel/);
 });
