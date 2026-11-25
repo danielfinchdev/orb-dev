@@ -207,3 +207,10 @@ fallback of every family) to `excalidraw/fonts` in the build, and `orb-excalidra
 address that Excalidraw always appends to the places it tries for each font. The toolbar is Orb's own
 (`src/ui/components/wb-controls.jsx`), and a project's whiteboard keeps one general note, beside the drawing, that reaches
 the assistant inside `PIZARRA.md` as the user's own words.
+
+## Settings in tabs and typefaces (3.8.11)
+
+Settings has ten tabs (`SECTIONS` in `src/ui/views/settings/index.jsx`; one file per tab beside it). Fields save when
+they lose focus, a cancelled value goes back to the saved one, and "Saved" confirms it. Deep links use aliases for the old
+section names. The Appearance tab offers four more typefaces (Inter, Geist, IBM Plex Sans and Mono) in `src/ui/fonts/`
+as woff2 files (OFL licences beside them), loaded by `src/ui/fonts.css` outside the JavaScript bundle.

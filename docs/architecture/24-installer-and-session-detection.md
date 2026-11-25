@@ -40,3 +40,9 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - `src/engine/host/installer.mjs`: `ITEMS`, `check()` and the PowerShell script.
 - Each adapter's `detect()` and `loginState()` (for example, the Codex session is in `~/.codex/auth.json`).
 - `src/domain/usage/accounts.mjs`: several accounts per agent; each one has its login folder and its usage.
+
+**Developer tools from a fixed list (3.8.11).** `src/engine/host/tool-catalog.mjs` is the only source of what Orb can
+install: a fixed list of winget ids (plus fixed commands for the few that winget does not cover, e.g. Playwright pinned to
+a version). Nothing the user or an agent types reaches a shell. `installer.updates` (looks for newer versions, only when
+asked, cached for 30 minutes) and `installer.suggest` (tools that fit the open project) are accepted only from `'pc'`.
+Installs and failures are written to Activity.
