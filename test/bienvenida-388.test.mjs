@@ -56,7 +56,7 @@ test('2: the strength line is built from what was typed, does not repeat the lev
 test('3: the words promise nothing false (no «al abrir Orb», the code is not the only way in)', () => {
   assert.match(es, /'master\.createIntro': [^\n]*Te la pedimos cuando Orb se bloquea y antes de acciones delicadas, como enlazar un móvil, restaurar una copia o abrir la carpeta core\./);
   assert.doesNotMatch(es, /'master\.createIntro'[^\n]*al abrir Orb/);
-  assert.match(es, /'master\.warnGive': 'Si la olvidas, podrás poner otra con el código de recuperación; sin él, habrá que borrar los secretos y empezar de cero\. Te lo damos al crearla: guárdalo fuera de este PC\.'/);
+  assert.match(es, /'master\.warnGive': 'Si la olvidas, podrás poner otra con el código de recuperación. Sin él, habrá que borrar los secretos y empezar de cero\. Te lo damos al crearla: guárdalo fuera de este PC\.'/);
   assert.match(es, /'master\.ackCode': 'Entiendo que, si la olvido, necesitaré el código de recuperación para no perder los secretos'/);
   assert.doesNotMatch(es, /solo podrás entrar con el código|solo podré entrar con el código|única forma de entrar/);
   assert.match(es, /'master\.warnHave': [^\n]*que creaste para tus copias[^\n]*Si no lo encuentras, crea otro en Ajustes › Datos\./);

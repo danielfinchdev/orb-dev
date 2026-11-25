@@ -27,7 +27,7 @@ export default {
   'help.tut.chat.l1': 'With “Orchestrator” on you talk to {name}: it plans the work, writes the instructions for each agent and hands them out. It can read the project but doesn’t change it.',
   'help.tut.chat.l2': 'With “Orchestrator” off you talk directly to the agent you choose (Claude, Codex, Cursor…), which works in the project folder. It asks before anything risky and never pushes or publishes.',
   'help.tut.chat.l3': 'If you type while it’s answering, it picks up the correction at its next step. "Stop" ends the answer immediately.',
-  'help.tut.chat.l4': 'Type @ to attach an excerpt of a task, conversation or log as context.',
+  'help.tut.chat.l4': 'Type @ to attach an excerpt of a task, conversation or journal as context.',
   'help.tut.chat.go': 'Go to chat',
 
   'help.tut.brain.title': 'Choosing the agent',
@@ -35,12 +35,12 @@ export default {
   'help.tut.brain.l2': 'Reasoning (low, medium or high) sets how much {name} thinks in each answer. High uses much more usage. Each task’s reasoning is chosen by Orb from how hard it is (Settings › Agents and usage).',
   'help.tut.brain.l3': 'A "Careful" notice appears when your choice could drain your quota: high reasoning, a heavy model or an account above 75 %.',
   'help.tut.brain.l4': 'With automatic model choice on, Orb picks the right model for each task based on its difficulty: fast for simple work, powerful only when needed.',
-  'help.tut.brain.l5': 'Switching agents starts a new conversation. Tasks and logs are kept.',
+  'help.tut.brain.l5': 'Switching agents starts a new conversation. Tasks and journals are kept.',
   'help.tut.brain.go': 'Go to chat',
 
   'help.tut.newchat.title': 'Conversations',
   'help.tut.newchat.l1': '“New chat” opens a conversation of its own, with its title and project. Choose the project, agent and reasoning in the message box.',
-  'help.tut.newchat.l2': 'With “Orchestrator” you talk to {name}, who splits the work into tasks; without it, you talk directly to the agent and model you choose. You can have several conversations at once.',
+  'help.tut.newchat.l2': 'With “Orchestrator” you talk to {name}, who splits the work into tasks. Without it, you talk directly to the agent and model you choose. You can have several conversations at once.',
   'help.tut.newchat.l3': 'All your conversations are in the menu, under “Conversations” and inside each project. Click one to go back to it.',
   'help.tut.newchat.l4': 'In a task’s conversation you see the answer, commands and changed files live. Enter corrects it on the fly; Ctrl+Enter queues the message.',
   'help.tut.newchat.go': 'New chat',
@@ -55,7 +55,7 @@ export default {
   'help.tut.tasks.go': 'Go to Tasks',
 
   'help.tut.sidebar.title': 'Projects in the menu',
-  'help.tut.sidebar.l1': 'Each project in the menu is a folder. Click to select it for a new chat; double-click (or use the arrow) to show its tasks and conversations.',
+  'help.tut.sidebar.l1': 'Each project in the menu is a folder. Click to select it for a new chat. Double-click (or use the arrow) to show its tasks and conversations.',
   'help.tut.sidebar.l2': 'Hover over a task or conversation and click its circle to move it to "Completed". One click restores it.',
   'help.tut.sidebar.l3': 'The inbox at the top shows "To approve", "In progress" and "Issues" (out of quota, interrupted or failed).',
   'help.tut.sidebar.l4': 'Drag the menu’s edge to resize it (double-click to reset). The button next to Light / Dark collapses it.',
@@ -75,7 +75,7 @@ export default {
   'help.tut.agents.go': 'Go to Agents',
 
   'help.tut.usage.title': 'Context and quota',
-  'help.tut.usage.l1': 'The ring next to the message box shows how much context the conversation uses. The fuller it is, the more each answer costs; past 60 %, {name} renews its context in the same conversation and picks up what matters from the log and the last messages.',
+  'help.tut.usage.l1': 'The ring next to the message box shows how much context the conversation uses. The fuller it is, the more each answer costs. Past 60 %, {name} renews its context in the same conversation and picks up what matters from the log and the last messages.',
   'help.tut.usage.l2': 'Click it to see the context tokens and your plans’ usage: the 5-hour session, the week and when they reset.',
   'help.tut.usage.l3': 'Claude and Codex report their real usage. At the configured limit (92 % by default), new tasks wait or move to another account.',
   'help.tut.usage.go': 'Open Agents and usage',
@@ -86,11 +86,11 @@ export default {
   'help.tut.schedules.l3': 'Schedules proposed by {name} need your approval once.',
   'help.tut.schedules.go': 'Go to Scheduled',
 
-  'help.tut.logs.title': 'Logs and Activity',
-  'help.tut.logs.l1': 'Logs are {name}’s memory: one general log and one per project, in the bitacora folder. Entries are only appended and secrets are hidden.',
+  'help.tut.logs.title': 'Journal and Activity',
+  'help.tut.logs.l1': 'Journals are {name}’s memory: one general journal and one per project, in the bitacora folder. Entries are only appended and secrets are hidden.',
   'help.tut.logs.l2': '{name} and the scheduler update them when each task closes, so every new conversation knows what was done before.',
   'help.tut.logs.l3': 'Activity records every action on the board (who, what and when), with search.',
-  'help.tut.logs.go': 'Go to Logs',
+  'help.tut.logs.go': 'Go to Journal',
 
 
   'help.tut.phone.title': 'Magic Link',
@@ -99,10 +99,10 @@ export default {
   'help.tut.phone.l3': 'From your phone you can chat, approve and follow tasks. Settings, accounts, installs and file access stay on the PC.',
   'help.tut.phone.go': 'Open Magic Link',
 
-  'help.tut.expert.title': 'God mode',
+  'help.tut.expert.title': 'Expert mode',
   'help.tut.expert.l1': 'Turn it on in Settings › Advanced (PC only, in wide windows).',
   'help.tut.expert.l2': 'Adds panels around the chat: files, git changes, history, running processes, account usage, PC load and activity. You choose which to show.',
-  'help.tut.expert.go': 'Open God mode',
+  'help.tut.expert.go': 'Open expert mode',
 
   'help.tut.games.title': 'Mini-games',
   'help.tut.games.l1': 'While the agents work, the ⋯ menu in the chat bar opens the mini-games: Snake, Tetris, Chess, Jumper, 2048, Bricks, Space Invaders and Pac-Man.',
@@ -110,7 +110,7 @@ export default {
   'help.tut.games.go': 'Open mini-games',
 
   'help.tut.looks.title': 'Appearance and themes',
-  'help.tut.looks.l1': 'In Settings › General, choose light, dark or system mode; the theme (Default or Glass, each with its palette; Orb, Vaporwave, Candy or Retro); fonts and code colours.',
+  'help.tut.looks.l1': 'In Settings › General, choose light, dark or system mode. The theme (Default or Glass, each with its palette; Orb, Vaporwave, Candy or Retro). Fonts and code colours.',
   'help.tut.looks.l2': 'The six palettes (Graphite, Ocean, Forest, Grape, Ruby and Sand) only apply to Default and Glass. The robot only shows with the Orb theme; "Animations: minimal" keeps it still.',
   'help.tut.looks.l3': 'Adjust the interface size in Settings or with Ctrl +, Ctrl − and Ctrl 0.',
   'help.tut.looks.go': 'Open Appearance',
@@ -120,7 +120,7 @@ export default {
   'help.tut.privacy.l2': 'Sign-in is handled by each agent’s official program: Orb never sees your passwords. Connector keys are stored encrypted with your master password and the agents never see them.',
   'help.tut.privacy.l3': 'Risky actions (push, publishing, download and run, deleting folders, system changes) are confirmed with Allow / Always allow / Deny. Agents never publish on their own.',
   'help.tut.privacy.l4': 'Agents can’t access Orb’s internal data (core). Each one identifies itself with its own signature, so it can’t impersonate another or close someone else’s task.',
-  'help.tut.privacy.l5': 'Whatever the agents return is treated as data, never as instructions. Logs hide secrets.',
+  'help.tut.privacy.l5': 'Whatever the agents return is treated as data, never as instructions. Journals hide secrets.',
 
   // ---- shortcuts (help.key.<n>.k = keys, .v = what it does)
   'help.key.1.k': 'Enter',
@@ -130,7 +130,7 @@ export default {
   'help.key.3.k': 'Ctrl + Enter',
   'help.key.3.v': 'Queue the message until the current turn ends.',
   'help.key.4.k': '@',
-  'help.key.4.v': 'Attach a task, conversation or log as context.',
+  'help.key.4.v': 'Attach a task, conversation or journal as context.',
   'help.key.5.k': 'Ctrl + J',
   'help.key.5.v': 'Open a terminal in the current project’s folder.',
   'help.key.6.k': 'Ctrl + / Ctrl − / Ctrl 0',
@@ -160,7 +160,7 @@ export default {
   'help.faq.9.q': 'How do I publish a project on GitHub?',
   'help.faq.9.a': 'From Projects, with GitHub CLI (gh) signed in: publish the repository, push branches, merge and create pull requests. Agents’ pushes always need your approval.',
   'help.faq.10.q': 'Why can’t I see the robot?',
-  'help.faq.10.a': 'The robot shows with the Orb theme; the other themes don’t show it. Change it in Settings › General › Appearance. The floating robot is turned on or off right there.',
+  'help.faq.10.a': 'The robot shows with the Orb theme. The other themes don’t show it. Change it in Settings › General › Appearance. The floating robot is turned on or off right there.',
   'help.faq.11.q': 'How does Orb update?',
   'help.faq.11.a': 'The installed version checks for updates when it opens and every 4 hours. "Download and install" downloads the new version and "Restart and install" installs it. You can also check in Settings › General.',
   'help.faq.12.q': 'A Cursor task fails with "plan without access". What should I do?',
@@ -174,7 +174,7 @@ export default {
   'help.faq.16.q': 'What is "Start test"?',
   'help.faq.16.a': 'A health check: {name}, with Orchestrator on, asks several models for a test web page and opens it. It shows in the chat the first time you open Orb each day and is always in Settings › Agents and usage.',
   'help.faq.17.q': 'What if I forget the master password?',
-  'help.faq.17.a': 'Press “I forgot the password” in Settings › Data or on the screen that asks for it. With your backups’ recovery code you set another one and keep your connector keys. Without it, you can start from scratch: those keys are deleted and you will have to link your phones again; your projects and conversations are not touched.',
+  'help.faq.17.a': 'Press “I forgot the password” in Settings › Data or on the screen that asks for it. With your backups’ recovery code you set another one and keep your connector keys. Without it, you can start from scratch: those keys are deleted and you will have to link your phones again. Your projects and conversations are not touched.',
 
   // ---- guided tour (the robot walks through the app)
   'help.tour.aria': 'Guided tour',
@@ -200,7 +200,7 @@ export default {
   'help.tour.bar.title': 'Chat bar',
   'help.tour.bar.text': 'At the top, the chat and its project: click it to see its info (model, tasks, export…). On the right, notifications, pausing tasks and the ⋯ menu with the other actions and the mini-games.',
   'help.tour.newchat.title': 'New chat',
-  'help.tour.newchat.text': 'With «+» you start a new chat or a project. Each chat is a conversation of its own, with its title and project; you can have several at once.',
+  'help.tour.newchat.text': 'With «+» you start a new chat or a project. Each chat is a conversation of its own, with its title and project. You can have several at once.',
   'help.tour.tasks.title': 'Tasks',
   'help.tour.tasks.text': 'All the agents’ work: in progress, to approve, completed and issues. You can undo any task.',
   'help.tour.schedules.title': 'Scheduled',
@@ -209,14 +209,14 @@ export default {
   'help.tour.board.text': 'Sketch, write and attach references for each project. I read it when planning the work.',
   'help.tour.agents.title': 'Agents',
   'help.tour.agents.text': 'Installed agents, their sessions and accounts. With several accounts, work is shared among those with quota.',
-  'help.tour.logs.title': 'Logs',
-  'help.tour.logs.text': 'My memory: the logs (a general one and one per project) and the activity, who did what and when.',
+  'help.tour.logs.title': 'Journal',
+  'help.tour.logs.text': 'My memory: the journals (a general one and one per project) and the activity, who did what and when.',
   'help.tour.activity.title': 'Activity',
   'help.tour.activity.text': 'Who did what and when, with search.',
   'help.tour.tutorials.title': 'Tutorials',
   'help.tour.tutorials.text': 'Guides, FAQ, keyboard shortcuts and the option to replay this tour.',
   'help.tour.settings.title': 'Settings',
-  'help.tour.settings.text': 'General, Devices, Agents and usage, Permissions, Skills and MCP, Data, Advanced and About.',
+  'help.tour.settings.text': 'General, Devices, Agents and usage, Permissions, Extensions, Data, Advanced and About.',
   'help.tour.end.title': 'You’re all set',
   'help.tour.end.text': 'Pick a project, tell me what you need and let’s get started.',
   // conversaciones, menú lateral, buscador y globito

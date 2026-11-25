@@ -175,7 +175,7 @@ export default {
   'sys.logs.viaDirect': 'conversación directa',
   'sys.logs.directTopic': 'Conversación «{title}»',
   'sys.logs.directFiles': 'archivos cambiados: {list}.',
-  'sys.logs.directRevert': 'desde el historial de git del proyecto (God mode › Cambios) o pidiéndoselo al agente en la misma conversación',
+  'sys.logs.directRevert': 'desde el historial de git del proyecto (Modo experto › Cambios) o pidiéndoselo al agente en la misma conversación',
   'sys.logs.andMore': ' y {n} más',
   // Inicio de Orb
   'sys.engine.notHome': 'no es una carpeta de Orb: {home}',
@@ -244,7 +244,7 @@ export default {
   'sys.agents.tool.other': 'Herramienta',
   'sys.agents.tool.webSearch': 'Búsqueda web',
   'sys.agents.tool.imageGen': 'Crear imagen',
-  'sys.agents.tool.subagent': 'Subagente: {tool}',
+  'sys.agents.tool.subagent': 'Agente de apoyo: {tool}',
   'sys.agents.tool.action': 'acción',
   // Ejecución de tareas
   'sys.scheduler.accountOff': 'la cuenta {account} está desactivada o ya no existe',

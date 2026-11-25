@@ -110,7 +110,7 @@ export default {
   'msg.pr.commentFailed': 'El usuario aceptó el comentario en el pull request #{n}, pero no se pudo publicar: {detail}',
   'htmlpage.untitled': 'Página sin título',
   'htmlpage.internet': 'Permitir internet',
-  'htmlpage.internetHint': 'Apagado de serie. Solo para esta página; al cambiarlo se recarga.',
+  'htmlpage.internetHint': 'Apagado de serie. Solo para esta página. Al cambiarlo se recarga.',
   'htmlpage.close': 'Cerrar página',
   'htmlpage.frame': 'Página HTML: {title}',
   'msg.html.noChat': 'Esta herramienta solo funciona desde un chat.',

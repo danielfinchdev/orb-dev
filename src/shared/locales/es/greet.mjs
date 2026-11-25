@@ -2,7 +2,7 @@
 // el del asistente.
 export default {
   // Según la hora y el día
-  'greet.morning': '¡Buenos días, {user}!',
+  'greet.morning': 'Buenos días, {user}',
   'greet.afternoon': 'Buenas tardes, {user}.',
   'greet.night': 'Buenas noches, {user}.',
   'greet.early': 'Madrugando, ¿eh, {user}?',
@@ -13,7 +13,7 @@ export default {
   'greet.saturday': '¿En sábado, {user}? Eso es dedicación.',
   'greet.sunday': '¿En domingo, {user}? Eso es dedicación.',
   // Al volver
-  'greet.again': '¡Hola de nuevo, {user}!',
+  'greet.again': 'Hola de nuevo, {user}',
   'greet.otherTime': '¿Otra vez por aquí, {user}?',
   'greet.missed': 'Te echaba de menos, {user}.',
   'greet.welcome': 'Qué bien verte de nuevo, {user}.',

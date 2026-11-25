@@ -2,7 +2,7 @@
 // assistant's.
 export default {
   // By the time and the day
-  'greet.morning': 'Good morning, {user}!',
+  'greet.morning': 'Good morning, {user}',
   'greet.afternoon': 'Good afternoon, {user}.',
   'greet.night': 'Good evening, {user}.',
   'greet.early': 'Up early, huh, {user}?',
@@ -13,7 +13,7 @@ export default {
   'greet.saturday': 'On a Saturday, {user}? That’s dedication.',
   'greet.sunday': 'On a Sunday, {user}? That’s dedication.',
   // Coming back
-  'greet.again': 'Hello again, {user}!',
+  'greet.again': 'Hello again, {user}',
   'greet.otherTime': 'Back again, {user}?',
   'greet.missed': 'I missed you, {user}.',
   'greet.welcome': 'Good to see you again, {user}.',
