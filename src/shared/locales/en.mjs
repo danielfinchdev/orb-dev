@@ -45,6 +45,7 @@ import herramientas from './en/herramientas.mjs';
 import f6nuevas from './en/f6-nuevas.mjs';
 import f6bitacoras from './en/f6-bitacoras.mjs';
 import f6normas from './en/f6-normas.mjs';
+import uso from './en/uso.mjs';
 
 export default {
   ...base,
@@ -92,5 +93,6 @@ export default {
   ...herramientas,
   ...f6nuevas,
   ...f6bitacoras,
-  ...f6normas
+  ...f6normas,
+  ...uso
 };

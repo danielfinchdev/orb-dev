@@ -58,14 +58,13 @@ test('Versión nueva: «Versión X · hay Y», «Actualizar a Y» con confirmaci
   assert.match(agents, /onClick=\{searchUpdates\} disabled=\{searching\} data-testid="agents-check-all"/);
 });
 
-test('Uso: barras por agente y día con su leyenda, y los cuatro números de la maqueta', () => {
-  assert.match(usage, /function DaysLegend/);
-  assert.match(usage, /data-testid="usage-days-legend"/);
-  assert.match(usage, /actions=\{<DaysLegend byDay=\{data\.byDay\} order=\{order\} warn=\{warn\} \/>\}/);
-  assert.match(usage, /\[t\('usage\.cache'\), cacheTokens \? tokens\(cacheTokens\) : '—'\]/);
-  assert.match(usage, /t\('usage\.total'\), tokens\(totalTokens\)/);
-  assert.match(usage, /tokens_cache/);
-  assert.match(usage, /data-testid="usage-turns"/, 'the turns, which the mock-up does not draw, stay under «Más opciones»');
+test('Uso: líneas por día con su leyenda de series, y los números de la maqueta', () => {
+  const chart = read('src/ui/components/usage-chart.jsx');
+  assert.match(chart, /data-testid="usage-legend"/);
+  assert.match(chart, /aria-pressed=\{!hidden\[l\.key\]\}/, 'a box per series turns it on and off');
+  assert.match(usage, /\[t\('usage\.cache'\), tot\.tokensCache \? tokens\(tot\.tokensCache\) : '—'\]/);
+  assert.match(usage, /\[t\('usage\.total'\), tokens\(tot\.tokens\), deltaBadge\]/);
+  assert.match(usage, /data-testid="usage-local-toggle"/, 'the turns and hours outside Orb stay in their own fold');
 });
 
 test('Uso: aviso en las barras, leyenda y «Aviso» en la cuenta; el aviso y el cambio de cuenta se ajustan en Uso y en Ajustes', () => {
