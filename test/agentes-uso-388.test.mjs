@@ -58,8 +58,8 @@ test('every test id of the two pages in HEAD is still there', () => {
     // ids that are only computed in the old file (the ones written as a template) are matched by their literal prefix
     const ids = [...before.matchAll(/data-testid=(?:"([^"]+)"|\{`([^`]+)`\})/g)].map((m) => m[1] ?? m[2].replace(/\$\{[^}]*\}.*$/, ''));
     // gone on purpose: the update badge became a hint, the settings fold and its «Activar» button went into the detail and the
-    // «⋯», the long notes became tags, the foot's sign-out lives in each account's «⋯» and the tool rows have their own ids
-    const gone = ['agent-uptodate-', 'agent-settings-', 'agent-enable-', 'agent-hermes-note', 'agent-unverified-', 'agent-noguard-', 'agent-signout-', 'team-dev-', 'usage-days', 'usage-days-legend', 'usage-days-legend-warn', 'usage-range-90', 'usage-turns'];
+    // «⋯», «Mensajes de commit» moved to Ajustes › General › Git, the long notes became tags, the foot's sign-out lives in each account's «⋯» and the tool rows have their own ids
+    const gone = ['agent-uptodate-', 'agent-settings-', 'agent-enable-', 'agent-hermes-note', 'agent-unverified-', 'agent-noguard-', 'agent-signout-', 'team-dev-', 'usage-days', 'usage-days-legend', 'usage-days-legend-warn', 'usage-range-90', 'usage-turns', 'commit-style'];
     for (const id of new Set(ids)) if (!gone.includes(id) && !gone.some((g) => id.startsWith(g))) assert.ok(both.includes(id), `${file}: ${id}`);
   }
 });

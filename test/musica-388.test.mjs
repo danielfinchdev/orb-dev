@@ -261,7 +261,7 @@ test('the player is told how far the music has risen, in hundredths and only whe
 
 test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» and the next theme', () => {
   const settings = settingsSource();
-  assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
+  assert.match(settings, /if \(!musicAvailable\(\)\) return null;[\s\S]*<MusicSettings \/>/);
   for (const id of ['music-on', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
   // There is only one source: nothing to choose it with.
   assert.doesNotMatch(settings, /music-mode|MUSIC_MODES|setMusicMode|musicSource/);

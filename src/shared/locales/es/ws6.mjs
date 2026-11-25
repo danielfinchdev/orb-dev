@@ -1,7 +1,7 @@
 // Ajustes › Datos (backups and the recovery code) and the Magic Link guide for using Orb outside home.
 export default {
   'settings.section.datos': 'Datos',
-  'settings.sectionDesc.datos': 'Contraseña maestra, copias de seguridad, carpeta core y datos de Orb 3.7.',
+  'settings.sectionDesc.datos': 'Copias, clave de este PC y datos de Orb.',
   // Ajustes › Datos
   'datos.backupsTitle': 'Copias de seguridad',
   'trash.title': 'Papelera de chats',
@@ -84,7 +84,7 @@ export default {
   'datos.codeNoticeOpen': 'Crear código',
   'link.outTitle': 'Usar fuera de casa',
   'link.out1': 'Instala Tailscale en este PC y en el móvil, con la misma cuenta.',
-  'link.out2': 'En Ajustes › Magic Link, activa Tailscale.',
+  'link.out2': 'En Ajustes › Dispositivos, activa Tailscale.',
   'link.out3': 'Enlaza el móvil con el QR.',
   'link.outGet': 'Descargar Tailscale',
   'link.outPcOn': 'El PC tiene que estar encendido.',

@@ -32,7 +32,7 @@ test('the music plays only in the Windows app', () => {
   assert.match(read('components', 'sidebar.jsx'), /\{musicAvailable\(\) \? <MusicButtons \/> : null\}/);
   assert.match(read('games', 'games.jsx'), /\{musicAvailable\(\) \? \(\s*<BubbleTip title=\{t\('games\.music'\)\}/);
   const settings = settingsSource();
-  assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
+  assert.match(settings, /if \(!musicAvailable\(\)\) return null;[\s\S]*<MusicSettings \/>/);
   assert.match(settings, /\{musicAvailable\(\) \? <Setting label=\{t\('about\.music'\)\}/, 'its line in «Acerca de»');
 });
 

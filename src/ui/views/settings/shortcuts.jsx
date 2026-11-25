@@ -1,21 +1,15 @@
-// Ajustes › General › Atajos de teclado: the chat tabs switch and the table of shortcuts with a recorder. The table is
+// Ajustes › Atajos de teclado: the table of shortcuts with a recorder. The table is
 // src/shared/keybindings.mjs; what the user changes is saved by the engine in core/keybindings.json.
 import { useEffect, useState } from 'react';
 import { Kbd } from '@/components/ui/basic.jsx';
 import { Button } from '@/components/ui/button.jsx';
-import { Switch } from '@/components/ui/overlay.jsx';
 import { useT } from '@/lib/i18n.js';
 import { notifyOk } from '@/lib/notify.js';
 import { errorText } from '@/lib/utils.js';
 import { useKeys, saveKeys } from '@/lib/keys.js';
 import { COMMANDS, comboFromEvent, conflictOf, normalizeCombo, withBinding, withoutBinding } from '../../../shared/keybindings.mjs';
-import { save, Row, Block, Panel, Stack, CardFoot } from './rows.jsx';
+import { Panel, Stack, CardFoot } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
-
-export function TabsCard({ c }) {
-  const t = useT();
-  return <Panel className="mt-0"><Row label={t('tabs.setting')} hint={t('tabs.settingHint')}><Switch checked={c.ui?.tabs !== false} onCheckedChange={(tabs) => save({ ui: { tabs } })} data-testid="tabs-switch" /></Row></Panel>;
-}
 
 const parts = (combo) => combo.split(/\+(?=.)/);
 function Keys({ combo, t }) {
@@ -60,8 +54,9 @@ export function ShortcutsCard() {
 
   const bad = problems.filter((p) => p.index >= 0 || p.reason === 'json').length;
   return (
-    <Block title={t('keys.title')} note={t('keys.hint')} data-testid="shortcuts-card">
-      <Panel>
+    // The section's own heading already says what it is: only the table here.
+    <div data-testid="shortcuts-card">
+      <Panel className="mt-0">
         {bad ? <Stack><p className="text-warning-ink text-control" role="status">{t('keys.problems', { n: bad })}</p></Stack> : null}
         <ul aria-label={t('keys.title')}>
           {COMMANDS.map((cmd) => {
@@ -88,6 +83,6 @@ export function ShortcutsCard() {
         </ul>
         {rules.length ? <CardFoot className="justify-start"><Button size="sm" variant="outline" onClick={() => { setMsg(null); saveKeys([]).catch(quiet); }}>{t('keys.resetAll')}</Button></CardFoot> : null}
       </Panel>
-    </Block>
+    </div>
   );
 }

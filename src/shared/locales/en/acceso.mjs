@@ -16,7 +16,7 @@ export default {
   'msg.android.badCode': 'The code must have 6 digits.',
   'msg.android.badSerial': 'Invalid serial number.',
   'msg.android.noSuchDevice': 'Phone {serial} isn’t connected.',
-  'msg.android.noDevice': 'No phone connected. Pair one in Settings › Android.',
+  'msg.android.noDevice': 'No phone connected. Pair one in Settings › Advanced › Android.',
   'msg.android.whichDevice': 'Several phones are connected ({list}). Choose one with serial.',
   'msg.android.badApk': 'Give the path of an .apk file.',
   'msg.android.noApk': '{path} doesn’t exist.',

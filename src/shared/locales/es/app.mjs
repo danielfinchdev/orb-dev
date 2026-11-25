@@ -1,7 +1,7 @@
 // app.*
 export default {
   'app.linkTitle': "Enlazar con tu Orb",
-  'app.linkBody': 'En tu Orb, abre Ajustes › Magic Link, pulsa «Mostrar código QR» y escanéalo. Después escribe la contraseña maestra del PC.',
+  'app.linkBody': 'En tu Orb, abre Ajustes › Dispositivos, pulsa «Mostrar código QR» y escanéalo. Después escribe la contraseña maestra del PC.',
   'app.linkScan': "Escanear el código QR",
   'app.linkManual': "Enlazar sin cámara",
   'app.linkPaste': "Enlace de tu Orb",
@@ -35,7 +35,7 @@ export default {
   'app.engineRestarted': 'Orb se ha reiniciado tras un error. Las tareas en curso se han marcado como fallidas. Puedes reintentarlas.',
   'app.pairTitle': 'Vincula este dispositivo',
   'app.pairBody1': 'En el PC, abre ',
-  'app.pairBodyPath': 'Ajustes → Magic Link',
+  'app.pairBodyPath': 'Ajustes → Dispositivos',
   'app.pairBody2': ', pulsa «Mostrar el código QR» y escanéalo con este móvil. Te pedirá la contraseña maestra del PC.',
   'app.pairPrivate': 'Funciona en tu wifi o a través de Tailscale. La conexión con tu PC está cifrada.',
   'app.badAnswer': "No se pudo verificar la conexión con tu PC. Vuelve a vincular este móvil.",

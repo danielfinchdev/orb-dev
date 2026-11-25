@@ -24,9 +24,9 @@ test('d: Ajustes gathers what the mock-up lacks under one «Más opciones» piec
   assert.match(rows, /export function MoreOptions\(\{ fold = false/);
   for (const l of ['es', 'en']) assert.match(locale(l, 'settings'), /'settings\.moreOptions'/);
   assert.match(locale('es', 'settings'), /'settings\.moreOptions': 'Más opciones'/);
-  // General: chat tabs and shortcuts, not folded, after Actualizaciones
+  // General has no «Más opciones» any more: the chat tabs went to Apariencia and the shortcuts to their own section
   const index = src('views', 'settings', 'index.jsx');
-  assert.match(index, /<MoreOptions testid="more-options-general"><ZoomFineCard \/><TabsCard c=\{c\} \/><ShortcutsCard \/><\/MoreOptions>/);
+  assert.doesNotMatch(index, /more-options-general/);
   // Robot y sonidos: «Música que reacciona» and «Intensidad»
   const general = src('views', 'settings', 'general.jsx');
   const more = general.slice(general.indexOf('function MusicMore'), general.indexOf('function MusicSettings'));
@@ -38,7 +38,7 @@ test('d: Ajustes gathers what the mock-up lacks under one «Más opciones» piec
   for (const id of ['music-reactive', 'music-intensity']) assert.ok(!main.includes(`data-testid="${id}"`), `${id} left the main rows`);
   // Datos: the trash and the worktree copies, not folded; backups and the core folder stay (the mock-up draws them)
   const data = src('views', 'data.jsx');
-  assert.match(data, /<CoreCard \/><MoreOptions testid="more-options-datos"><TrashCard \/><WorktreesCard \/><\/MoreOptions>/);
+  assert.match(data, /<TrashCard \/><WorktreesCard \/><CoreCard \/>/);
   // Agentes y uso: «Opciones avanzadas» became «Más opciones», folded, same trigger testid
   assert.match(general, /<MoreOptions fold open=\{advanced\} onOpenChange=\{setAdvanced\} testid="spend-more" triggerTestid="spend-advanced">/);
   assert.ok(!/'settings\.advanced'/.test(locale('es', 'settings')));

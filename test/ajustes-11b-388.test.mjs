@@ -58,7 +58,7 @@ test('freno semanal: mismo camino que «Uso» y «Normas»', () => {
   assert.match(usage, /confirmResumeRail\(stopRail\) : confirmPauseRail\(stopRail\)/);
   assert.match(usage, /changeRail\('freno-uso', \{ enabled \}/);
   assert.match(tab, /id === 'freno-uso'/); assert.match(tab, /'freno-semanal'/);
-  for (const id of ['brake-stop', 'brake-week', 'brakes-save', 'usage-stop-queue', 'usage-stop-week', 'usage-brakes', 'usage-accounts', 'usage-accounts-all']) assert.ok(tab.includes(`"${id}"`) || tab.includes(`'${id}'`), id);
+  for (const id of ['brake-stop', 'brake-week', 'usage-stop-queue', 'usage-stop-week', 'usage-brakes', 'usage-accounts', 'usage-accounts-all']) assert.ok(tab.includes(`"${id}"`) || tab.includes(`'${id}'`), id);
 });
 
 test('el límite de uso sale de «Opciones avanzadas» de Tareas: la maqueta lo pone en «Aviso y frenos»', () => {
@@ -91,7 +91,7 @@ test('revisión: freno solo lectura en el móvil, rangos, carrera del QR, códig
   assert.doesNotMatch(general, /v\.stopAt/);
   // 3: empty or out-of-range values are not saved
   assert.match(tab, /stop: \[50, 100\], week: \[50, 100\]/);
-  assert.match(tab, /disabled=\{!allValid\}/);
+  assert.match(tab, /onBlur=\{apply\}/);
   assert.match(tab, /if \(!allValid\) return undefined;/);
   assert.ok(es['settings.brakeInvalid'] && en['settings.brakeInvalid']);
   // 4: request counter against the race with the lock

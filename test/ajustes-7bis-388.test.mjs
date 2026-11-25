@@ -38,10 +38,10 @@ test('pantalla de bloqueo: un interruptor que guarda los mismos dos valores', ()
   assert.doesNotMatch(dev, /PREVIEWS/);
 });
 
-test('avanzado: navegador, God mode y Android en el orden de la maqueta; el conector MCP de Orb en «Más opciones»', () => {
+test('avanzado: navegador, modo experto, Android y agentes de fuera en el orden de la maqueta', () => {
   const adv = index.slice(index.indexOf("{ id: 'avanzado'"), index.indexOf("{ id: 'acerca'"));
   assert.ok(adv.indexOf('<BrowserCard') < adv.indexOf('<ExpertCard') && adv.indexOf('<ExpertCard') < adv.indexOf('<AndroidCard'));
-  assert.match(adv, /<MoreOptions testid="more-options-avanzado">.*<McpExtCard \/><\/MoreOptions>/);
+  assert.ok(adv.indexOf('<AndroidCard') < adv.indexOf('<McpExtCard'));
 });
 
 test('acerca de: comentarios, Orb, apoyo y más aplicaciones, como la maqueta', () => {
@@ -51,16 +51,15 @@ test('acerca de: comentarios, Orb, apoyo y más aplicaciones, como la maqueta', 
   assert.ok(order.every((i) => i > 0));
 });
 
-test('general: los botones de zoom van a «Más opciones» y siguen llamando a bridge.zoom', () => {
-  assert.match(index, /<MoreOptions testid="more-options-general"><ZoomFineCard \/>/);
-  const fine = general.slice(general.indexOf('export function ZoomFineCard'), general.indexOf('export function InterfaceCard'));
-  assert.match(fine, /bridge\.zoom\(Number\(value\)\)/); assert.match(fine, /settings\.zoomOut/); assert.match(fine, /settings\.zoomIn/);
-  const iface = general.slice(general.indexOf('export function InterfaceCard'), general.indexOf('// Expert mode'));
-  assert.doesNotMatch(iface, /settings\.zoomOut|settings\.zoomIn/);
+test('apariencia: los botones de zoom van con el tamaño y siguen llamando a bridge.zoom', () => {
+  const size = general.slice(general.indexOf('export function SizeCard'), general.indexOf('export function ChatsLookCard'));
+  assert.match(size, /bridge\.zoom\(Number\(value\)\)/); assert.match(size, /settings\.zoomOut/); assert.match(size, /settings\.zoomIn/);
+  const term = general.slice(general.indexOf('export function TerminalCard'), general.indexOf('export function GitCard'));
+  assert.doesNotMatch(term, /settings\.zoomOut|settings\.zoomIn/);
 });
 
 test('textos nuevos en español y en inglés', () => {
-  for (const k of ['settings.mobileWayHint', 'settings.zoomFine', 'settings.zoomFineHint', 'settings.moreOptions']) for (const l of [es, en]) assert.ok(l[k], k);
+  for (const k of ['settings.mobileWayHint', 'settings.zoomOut', 'settings.zoomIn', 'settings.moreOptions']) for (const l of [es, en]) assert.ok(l[k], k);
 });
 
 const ext = read('src/ui/views/extensions.jsx');

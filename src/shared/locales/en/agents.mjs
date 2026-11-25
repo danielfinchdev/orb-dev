@@ -44,7 +44,7 @@ export default {
   'agents.howInstall': 'How to install',
   'agents.check': 'Check',
   'agents.defaultModel': 'Default model',
-  'agents.defaultModelHint': 'Used in its direct chats. Tasks use it only if you turn off “Orb chooses each task’s model” (Settings › Agents and usage).',
+  'agents.defaultModelHint': 'Used in its direct chats. Tasks use it only if you turn off “Orb chooses each task’s model” (Settings › Agents and accounts).',
   'agents.defaultOfAgent': 'The agent’s default',
   'agents.strengths': 'Strengths',
   'agents.strengthsHint': 'The assistant considers them when assigning work.',

@@ -64,14 +64,14 @@ test('26: every menu separator is a border of the same colour, never a box that 
   assert.ok(!src('components', 'autonomy-switch.jsx').includes('h-px'));
 });
 
-test('27: Ajustes › General has a single «Más opciones»', () => {
+test('27: Ajustes › General has no «Más opciones» of its own, and the music has none inside', () => {
   const general = src('views', 'settings', 'general.jsx');
   const from = general.indexOf('function MusicMore');
   const music = general.slice(from, general.indexOf('</>', from));
   assert.ok(!music.includes('<MoreOptions'));
   const index = src('views', 'settings', 'index.jsx');
-  const generalSection = index.slice(index.indexOf("id: 'general'"), index.indexOf("id: 'magiclink'"));
-  assert.equal(generalSection.split('<MoreOptions').length - 1, 1);
+  const generalSection = index.slice(index.indexOf("id: 'general'"), index.indexOf("id: 'apariencia'"));
+  assert.equal(generalSection.split('<MoreOptions').length - 1, 0);
 });
 
 test('28: the Worktree tip does not repeat the word its title already says', () => {

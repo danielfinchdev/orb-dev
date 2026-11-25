@@ -8,8 +8,8 @@ const index = read('src/ui/views/settings/index.jsx');
 const general = read('src/ui/views/settings/general.jsx');
 const ids = [...index.slice(index.indexOf('const SECTIONS')).matchAll(/\{ id: '(\w+)', icon:/g)].map((m) => m[1]);
 
-test('settings has eight sections in order', () => {
-  assert.deepEqual(ids, ['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca']);
+test('settings has ten sections in order', () => {
+  assert.deepEqual(ids, ['general', 'apariencia', 'agentes', 'permisos', 'magiclink', 'extensiones', 'atajos', 'datos', 'avanzado', 'acerca']);
 });
 
 test('permisos holds the three permission cards and the others no longer do', () => {
