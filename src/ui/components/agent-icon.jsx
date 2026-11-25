@@ -37,6 +37,14 @@ export function AgentIcon({ agent, className }) {
   return <svg viewBox="0 0 24 24" className={cls} data-agent={tone} fill="currentColor" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></svg>;
 }
 
+// The mark of an agent on the Agents page: its logo, or the first letter of its name in its brand colour (never the generic
+// robot head, which stays for an agent that comes from the config without a mark).
+export function AgentLogo({ agent, label, className }) {
+  if (MARK[agent]) return <AgentIcon agent={agent} className={className} />;
+  const letter = String(label ?? agent ?? '?').trim().charAt(0).toUpperCase() || '?';
+  return <span data-agent={agent} aria-hidden="true" className={cn('inline-grid shrink-0 place-items-center rounded-md border border-current text-[11px] leading-none font-semibold', className)}>{letter}</span>;
+}
+
 // Marks for the tools the installer sets up (git, node, gh, tailscale; the agents use AgentIcon).
 const TOOL = { git: 'git', node: 'node', gh: 'github', tailscale: 'tailscale' };
 export function ToolIcon({ tool, className }) {

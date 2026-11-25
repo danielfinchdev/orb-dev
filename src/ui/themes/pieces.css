@@ -36,6 +36,12 @@
 [data-agent="gemini"] { color: #4285f4; }
 [data-agent="qwen"] { color: #615ced; }
 [data-agent="hermes"] { color: #b8892e; }
+[data-agent="grok"] { color: var(--foreground); }
+[data-agent="devin"] { color: #2a7de1; }
+[data-agent="droid"] { color: #d9622b; }
+[data-agent="omp"] { color: #7c5cd6; }
+[data-agent="pi"] { color: #d6477a; }
+[data-agent="antigravity"] { color: #3b82f6; }
 [data-agent="orb"] { color: var(--info); }
 [data-agent="other"] { color: var(--muted-foreground); }
 [data-tool="git"] { color: #f05032; }

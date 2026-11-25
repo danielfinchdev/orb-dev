@@ -43,17 +43,15 @@ test('5: an account row says its state as Activa / En pausa / Sin sesión, with 
   for (const l of ['es', 'en']) for (const k of ['accountActive', 'accountPaused', 'accountNoLogin']) assert.match(locale(l), new RegExp(`'agents\\.${k}'`));
 });
 
-test('6: the card foot keeps the mock-up buttons; the technical ones moved to the card «⋯» and «Más opciones»', () => {
-  const menu = agents.slice(agents.indexOf('data-testid={`agent-more-${a.id}`}'), agents.indexOf('{!cfg.enabled && OFF_AGENTS'));
-  for (const id of ['agent-toggle-', 'agent-settings-', 'agent-scan-', 'agent-open-', 'agent-check-']) assert.ok(menu.includes('data-testid={`' + id + '${a.id}`}'), id);
-  const foot = agents.slice(agents.indexOf('<CardFoot className="flex-wrap gap-2">'), agents.indexOf('</CardFoot>', agents.indexOf('<CardFoot className="flex-wrap gap-2">')));
-  for (const id of ['agent-add-account-', 'agent-signout-']) assert.ok(foot.includes('data-testid={`' + id + '${a.id}`}'), id);
-  for (const gone of ['agent-scan-', 'agent-open-', 'agents.check']) assert.ok(!foot.includes(gone), `${gone} left the foot`);
-  assert.ok(!agents.includes('<CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t(\'agents.modelsSettings\')}'));
-  // a turned-off agent keeps «Activar» in view
-  assert.match(agents, /data-testid=\{`agent-enable-\$\{a\.id\}`\}/);
-  const tail = agents.slice(agents.indexOf('<MoreOptions testid="agents-more-options">'));
-  assert.ok(tail.includes('agents.projectSettingsTitle') && tail.includes('<CommitStyleCard />'));
+test('6: the agent row opens into its detail; the technical actions live in the detail «⋯»', () => {
+  const from = agents.indexOf('data-testid={`agent-more-${a.id}`}');
+  const menu = agents.slice(from, agents.indexOf('</DropdownMenuContent>', from));
+  for (const id of ['agent-toggle-', 'agent-scan-', 'agent-open-', 'agent-path-', 'agent-check-', 'agent-reinstall-']) assert.ok(menu.includes('data-testid={`' + id + '${a.id}`}'), id);
+  assert.ok(agents.includes('data-testid={`agent-add-account-${a.id}`}'));
+  assert.ok(!agents.includes('<CardFoot className="flex-wrap gap-2">'), 'no card inside a card');
+  // «Más opciones» is gone from the page; the commit style stays on it until it moves to Ajustes › General › Git
+  assert.ok(!agents.includes('<MoreOptions'));
+  assert.ok(agents.includes('<CommitStyleCard />'));
 });
 
 test('7: one active account says so, as the mock-up does', () => {

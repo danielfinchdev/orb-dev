@@ -60,10 +60,11 @@ test('e: Bitácoras «Copiar» (and «Ver completa») are items of the page «�
 test('f: an agent is turned on or off from the «⋯» of its card, with the same call', () => {
   const agents = src('views', 'agents.jsx');
   assert.match(agents, /<MoreButton small data-testid=\{`agent-more-\$\{a\.id\}`\} \/>/);
-  assert.match(agents, /<DropdownMenuItem onSelect=\{\(\) => save\(a\.id, \{ enabled: !cfg\.enabled \}\)\} data-testid=\{`agent-toggle-\$\{a\.id\}`\}>/);
+  assert.match(agents, /<DropdownMenuItem onSelect=\{turnOn\} data-testid=\{`agent-toggle-\$\{a\.id\}`\}>/);
+  assert.match(agents, /save\(a\.id, \{ enabled: !cfg\.enabled \}\)/);
   assert.ok(!/<Switch checked=\{cfg\.enabled\}/.test(agents));
-  // the state stays in the card's badge
-  assert.match(agents, /!cfg\.enabled \? <Badge variant="secondary">\{t\('agents\.disabled'\)\}<\/Badge>/);
+  // the state shows in the row's dot and its line
+  assert.match(agents, /!cfg\.enabled \? t\('agents\.disabled'\)/);
   for (const l of ['es', 'en']) assert.match(locale(l, 'agents'), /'agents\.turnOff'/);
 });
 
