@@ -103,6 +103,7 @@ export default {
   'logbooks.scope.all': 'En todas',
   'logbooks.scopeLabel': 'Buscar',
   'logbooks.alsoIn': 'También en:',
+  'logbooks.searchOthers': 'Buscar en las demás bitácoras',
   'logbooks.entriesOf': '{n} de {total} entradas',
   'logbooks.viewing': 'Viendo las {n} más recientes',
   'logbooks.viewMore': 'Ver más',

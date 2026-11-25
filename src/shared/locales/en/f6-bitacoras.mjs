@@ -100,6 +100,7 @@ export default {
   'logbooks.scope.all': 'In all',
   'logbooks.scopeLabel': 'Search',
   'logbooks.alsoIn': 'Also in:',
+  'logbooks.searchOthers': 'Search the other logs',
   'logbooks.entriesOf': '{n} of {total} entries',
   'logbooks.viewing': 'Showing the {n} most recent',
   'logbooks.viewMore': 'Show more',
