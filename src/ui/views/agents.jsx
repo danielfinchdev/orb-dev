@@ -636,6 +636,10 @@ export function AgentsView() {
       if (!p.finished) return;
       for (const id of enableAfterInstall) if (p.steps.find((x) => x.id === id)?.state === 'hecho') save(id, { enabled: true });
       enableAfterInstall.clear();
+      // what just finished is no longer upgradable: drop it now and ask winget again so «Actualizar» does not stay on the row
+      const finished = new Set(p.steps.filter((x) => x.state === 'hecho').map((x) => x.id));
+      setUpgrades((u) => (u ? Object.fromEntries(Object.entries(u).filter(([id]) => !finished.has(id))) : u));
+      call('installer.updates', { force: true }).then((r) => r?.available && setUpgrades(r.found ?? {})).catch(quiet);
       loadTeam(); load(true);
     });
   }, [windows]); // eslint-disable-line react-hooks/exhaustive-deps
