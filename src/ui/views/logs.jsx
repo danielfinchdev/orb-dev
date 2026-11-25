@@ -37,7 +37,7 @@ function Entry({ e, t, locale, query }) {
   return (
     <article className="entry bg-card border-border rounded-card [&_mark]:bg-primary-soft [&_mark]:text-foreground border px-3.5 py-3 [&_mark]:rounded-sm [&_mark]:px-0.5" data-testid="log-entry">
       {/* the key holds the query: a new one draws the entry again, so React never reconciles text nodes the marks replaced */}
-      <MarkedBody key={query} query={query}>
+      <MarkedBody key={`${query}|${e.id}`} query={query}>
         <div className="top text-muted-foreground flex items-center gap-2 text-caption">
           <span data-agent={authorAgent(e.author)} aria-hidden="true" className="inline-flex"><Circle className="size-2 fill-current" /></span>
           {e.author ? <b className="text-foreground font-medium">{e.author}</b> : null}
@@ -89,6 +89,8 @@ export function LogsView({ route, tabs }) {
   const [dq, setDq] = useState('');
   const [scope, setScope] = useState('here');
   const [hits, setHits] = useState(null);
+  // «Search the others» was pressed: in «this log» scope the other logs are read only on demand (they can weigh over 1 MB)
+  const [othersAsked, setOthersAsked] = useState(false);
   const [tick, setTick] = useState(0);
   const cache = useRef({});
   // the filter, the marks and the other logs wait for a pause in the typing
@@ -110,7 +112,10 @@ export function LogsView({ route, tabs }) {
   // The search across all of them reads each log whole (the short reading only has the latest entries) and one after
   // another, and keeps it until its size changes: a refresh of the app while agents work reads nothing again.
   const sizes = logs.map((l) => `${l.name}:${l.size}`).join('|');
-  const searching = shown.length >= 2;
+  const searching = shown.length >= 2 && (scope === 'all' || othersAsked);
+  const typing = shown.length >= 2;
+  // a new search asks again: the answer to the previous text is not the one for this
+  useEffect(() => { setOthersAsked(false); }, [needle]);
   useEffect(() => {
     setHits(null);
     if (!searching) return undefined;
@@ -218,6 +223,7 @@ export function LogsView({ route, tabs }) {
               <Badge variant="secondary" title={t('logbooks.readOnlyHint')}>{t('logbooks.readOnly')}</Badge>
             </div>
             <p className="bintro text-muted-foreground -mt-1.5 text-control">{t(selected === 'general' ? 'logbooks.introGeneral' : 'logbooks.intro', { name: title })}</p>
+            {typing && !searching ? <p className="m-0 text-caption"><Button variant="link" onClick={() => setOthersAsked(true)} data-testid="log-search-others">{t('logbooks.searchOthers')}</Button></p> : null}
             {searching && hits == null ? <p className="text-muted-foreground m-0 flex items-center gap-2 text-caption" data-testid="log-also-loading"><Spinner />{t('logbooks.searching')}</p> : null}
             {searching && others.length ? (
               <div className="also flex flex-wrap items-center gap-2" data-testid="log-also">
@@ -235,7 +241,7 @@ export function LogsView({ route, tabs }) {
             ) : null}
             <div className="flex flex-col gap-3" data-testid="log-body">
               {partial && !needle && parsed?.pre ? <p className="text-muted-foreground text-caption">{parsed.pre}</p> : null}
-              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.n} e={e} t={t} locale={locale} query={shown} />)}
+              {entries == null ? <Spinner /> : entries.length === 0 ? <Empty icon={BookOpen} title={t(needle ? 'logbooks.noEntries' : 'logbooks.noEntriesYet')} /> : entries.map((e) => <Entry key={e.id} e={e} t={t} locale={locale} query={shown} />)}
               {partial && !whole && !needle && entries?.length ? (
                 <div className="viewing text-muted-foreground flex items-center justify-center gap-2 text-control" data-testid="log-viewing">
                   <span>{t('logbooks.viewing', { n: loaded })}</span><span aria-hidden="true">·</span>

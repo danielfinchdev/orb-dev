@@ -121,7 +121,7 @@ test('resaltado: parte el texto sin mayúsculas ni acentos y busca texto plano, 
   // la vista marca solo nodos de texto, con la misma normalización que el filtro y el recuento
   const l = read('src/ui/views/logs.jsx');
   assert.match(l, /highlightIn\(ref\.current, query\)/);
-  assert.match(l, /<MarkedBody key=\{query\}/);
+  assert.match(l, /<MarkedBody key=\{`\$\{query\}\|\$\{e\.id\}`\}/);
   assert.match(l, /folded\[i\]\.includes\(needle\)/);
   const h = read('src/ui/lib/mark-matches.js');
   assert.doesNotMatch(h, /innerHTML/);
