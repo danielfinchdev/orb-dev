@@ -13,6 +13,8 @@ import { bridge } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 
+// The agents whose button updates them (Claude Code and Codex, installed by Orb); a newer Cursor only gets the command to run.
+const AGENT_UPDATE = ['claude', 'codex'];
 // What the installer sets up besides the agents of the first block (they are installed from their own ficha).
 export const TEAM_AGENTS = ['gemini', 'copilot', 'opencode', 'qwen', 'hermes'];
 
@@ -44,7 +46,7 @@ export function ToolsBlock({ team, agents, renderUpdate }) {
     ...team.items.filter((i) => !TEAM_AGENTS.includes(i.id)).map((i) => {
       const a = agentOf(i.id);
       const upd = a?.installed && a.update?.available ? a.update : null;
-      return { id: i.id, label: i.label, why: WHY.has(i.id) ? t(`agents.tool.${i.id}`) : i.why, installed: i.installed, optional: i.optional, version: i.version?.match(/\d+(?:\.\d+)+/)?.[0] ?? a?.version ?? null, group: GROUP_OF[i.id] ?? (i.optional ? 'rec' : 'need'), upd, agent: a, installable: true };
+      return { id: i.id, label: i.label, why: WHY.has(i.id) ? t(`agents.tool.${i.id}`) : i.why, installed: i.installed, optional: i.optional, version: i.version?.match(/\d+(?:\.\d+)+/)?.[0] ?? a?.version ?? null, group: GROUP_OF[i.id] ?? (i.optional ? 'rec' : 'need'), upd, agent: a, canUpdate: AGENT_UPDATE.includes(i.id), installable: true };
     }),
     // Flutter, the Android SDK and Java: Orb finds them and tells; it installs none of them yet.
     ...(team.dev ?? []).map((d) => ({ id: d.id, label: t(`agents.team.tool.${d.id}`), why: t(`agents.tool.${d.id}`), installed: d.installed, optional: true, version: d.version ?? null, group: GROUP_OF[d.id] ?? 'rec', url: d.url, installable: false }))
@@ -76,7 +78,9 @@ export function ToolsBlock({ team, agents, renderUpdate }) {
         <div className="flex flex-none items-center gap-2">
           {ok ? <>
             {x.version ? <span className="text-muted-foreground text-control tabular-nums">{x.upd?.latest ? `${x.version} → ${x.upd.latest}` : x.version}</span> : null}
-            {x.upd && x.agent && renderUpdate ? renderUpdate(x.agent) : <Badge variant="success">{t('comp.installer.installed')}</Badge>}
+            {x.upd && x.agent && x.canUpdate && renderUpdate ? renderUpdate(x.agent)
+              : x.upd ? <span className="flex items-center gap-2"><Badge variant="success">{t('comp.installer.installed')}</Badge>{x.upd.command ? <span className="text-muted-foreground max-w-[260px] truncate text-caption" title={x.upd.command} data-testid={`team-update-cmd-${x.id}`}>{t('agents.howUpdate', { cmd: x.upd.command })}</span> : null}</span>
+                : <Badge variant="success">{t('comp.installer.installed')}</Badge>}
           </> : <>
             {step?.state === 'error' ? <BubbleTip title={t('comp.installer.failed')} text={step.detail}><Badge variant="destructive" tabIndex={0}>{t('comp.installer.failed')}</Badge></BubbleTip>
               : lacking ? <Badge variant="destructive">{t('agents.tools.lacks')}</Badge> : null}

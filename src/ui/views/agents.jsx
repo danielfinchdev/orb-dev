@@ -1,13 +1,12 @@
 // Agents: which CLIs are installed, their login, models and how much of each subscription window is used.
 // The detail of the usage lives in the «Uso» tab next to this one (views/usage.jsx).
-import { useEffect, useState } from 'react';
-import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, Plus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, ListChecks, LogOut, Pencil, Check } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { RefreshCw, LogIn, ChevronRight, ChevronDown, ExternalLink, Plus, Trash2, FolderOpen, ScanSearch, Copy, Download, SquareTerminal, BookOpen, KeyRound, Search, LogOut, Pencil, Check } from 'lucide-react';
 import { notifyError, notifyInfo, notifyOk, notifyWarn } from '@/lib/notify.js';
 import { useCatalog, AccountTag } from '@/components/brain-picker.jsx';
 import { ACCOUNT_COLORS, TAG_RE, defaultTag } from '../../shared/account-marks.mjs';
 import { ModelGuide } from '@/components/model-guide.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
-import { InstallProgress } from '@/components/installer.jsx';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { AgentsUsageTabs } from '@/components/agents-tabs.jsx';
 import { AgentLogo } from '@/components/agent-icon.jsx';
@@ -27,9 +26,9 @@ import { Block, Panel, Setting, Fld, Stack, CardFoot } from './settings/rows.jsx
 const INSTALL = { claude: 'https://docs.claude.com/en/docs/claude-code/setup', codex: 'https://developers.openai.com/codex/cli', cursor: 'https://cursor.com/cli',
   gemini: 'https://github.com/google-gemini/gemini-cli', opencode: 'https://opencode.ai', qwen: 'https://github.com/QwenLM/qwen-code', copilot: 'https://github.com/github/copilot-cli', hermes: 'https://hermes-agent.nousresearch.com',
   grok: 'https://x.ai/cli', devin: 'https://cli.devin.ai', droid: 'https://factory.ai', omp: 'https://github.com/can1357/oh-my-pi', pi: 'https://pi.dev', antigravity: 'https://antigravity.google' };
-// How each agent is connected (all of them live).
-const KIND = { sdk: 'agents.kind.sdk', 'app-server': 'agents.kind.appServer', 'cli-stream': 'agents.kind.cliStream', acp: 'agents.kind.acp' };
-const NATIVE = ['claude', 'codex', 'cursor'];
+// Agents that start turned off and were asked for from their ficha: turned on only when their install finishes well.
+const enableAfterInstall = new Set();
+
 async function save(agent, patch) {
   const config = await act(call('config.save', { patch: { agents: { [agent]: patch } } }), t('agents.saved'));
   if (config) setState({ app: { ...getState().app, config } });
@@ -124,16 +123,12 @@ const reinstall = async (t, a) => {
   if (!(await confirm(t('agents.reinstallTitle', { label: a.label }), t('agents.reinstallBody', { label: a.label }), { ok: t('agents.reinstall'), tone: 'primary' }))) return;
   await act(call('agents.install', { agent: a.id }));
 };
-function InstallButton({ a, reload }) {
+function InstallButton({ a }) {
   const t = useT();
   const [st, setSt] = useState(null);
   useEffect(() => { call('agents.installState', { agent: a.id }).then((s) => { if (s?.state === 'instalando') setSt(s); }).catch(quiet); }, [a.id]);
-  useEffect(() => bridge.on('agents:install', (p) => {
-    if (p.agent !== a.id) return;
-    setSt(p);
-    if (p.state === 'hecho') { notifyOk(p.version ? t('agents.installDone', { label: a.label, version: p.version }) : t('agents.installDoneNoVersion', { label: a.label })); reload(); }
-    if (p.state === 'error') notifyError(p.message);
-  }), [a.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The notice and the reload of a finished install belong to the page (AgentsView): one listener, however many buttons.
+  useEffect(() => bridge.on('agents:install', (p) => { if (p.agent === a.id) setSt(p); }), [a.id]);
   if (!INSTALLABLE.includes(a.id)) return null;
   const busy = st?.state === 'instalando';
   const upd = a.installed ? a.update : null;
@@ -459,6 +454,15 @@ async function acceptWarnings(a, ok, title = 'agents.installOf') {
   return confirm(t(title, { label: a.label }), w.map((x) => t(x.note)).join(' '), { ok, tone: 'primary' });
 }
 
+// The limit windows an account reports (5 hours, week), as {kind, label, pct, resetAt}; the plain «real» reading when there are none.
+const FIVE = /five_hour|^300min$|^5h$/;
+const WEEK = /^seven_day$|^10080min$/;
+function limitsOf(u) {
+  const ws = (u?.windows ?? []).filter((w) => w.utilization != null);
+  if (ws.length) return ws.map((w) => ({ key: String(w.window), kind: WEEK.test(String(w.window)) ? 'week' : FIVE.test(String(w.window)) ? 'five' : 'other', pct: Math.round(w.utilization * 100), resetAt: w.resetAt ?? null, hours: u.windowHours ?? 5 }));
+  return u?.real ? [{ key: 'real', kind: !u.real.window || FIVE.test(String(u.real.window)) ? 'five' : 'other', pct: Math.round(u.real.utilization * 100), resetAt: u.real.resetAt ?? null, hours: u.windowHours ?? 5 }] : [];
+}
+
 // «Tus agentes»: one compact row per installed agent (logo, name, account and plan, what is left of its limit, a status dot);
 // its detail opens under it: accounts, version, models, spend.
 function AgentRow({ a, reload, usage, team, today }) {
@@ -482,8 +486,11 @@ function AgentRow({ a, reload, usage, team, today }) {
   // The account in use: the first one that is on and signed in.
   const active = a.accounts.find((acc) => acc.enabled !== false && acc.login === 'si') ?? firstLogin;
   const plan = active ? planOf(active) : null;
-  const shownUsage = usage.find((x) => x.account === active?.id && x.real) ?? usage.find((x) => x.agent === a.id && x.real);
-  const left = shownUsage ? Math.max(0, 100 - Math.round(shownUsage.real.utilization * 100)) : null;
+  const shownUsage = usage.find((x) => x.account === active?.id && (x.real || x.windows?.length)) ?? usage.find((x) => x.agent === a.id && (x.real || x.windows?.length));
+  const limits = limitsOf(shownUsage);
+  // the row's bar is the tightest limit, the one that stops the agent first
+  const left = limits.length ? Math.max(0, 100 - Math.max(...limits.map((l) => l.pct))) : null;
+  const locale = useLocale();
   const status = !cfg.enabled ? 'off' : a.login === 'no' ? 'login' : 'ok';
   const upd = a.update;
   const own = a.version?.match(/\d+(?:\.\d+)+/)?.[0];
@@ -491,10 +498,11 @@ function AgentRow({ a, reload, usage, team, today }) {
   const turnOn = async () => { if (!cfg.enabled && !(await acceptWarnings(a, t('agents.enable'), 'agents.enableOf'))) return; save(a.id, { enabled: !cfg.enabled }); };
   return (
     <Collapsible open={open} onOpenChange={setOpen} data-testid={`agent-card-${a.id}`} className="border-border not-first:border-t">
-      <CollapsibleTrigger className="hover:bg-accent/40 focus-visible:outline-ring flex w-full cursor-pointer items-center gap-3 px-3.5 py-3 text-left outline-none focus-visible:outline-2" data-testid={`agent-row-${a.id}`}>
+      <div className="flex items-center gap-2 pr-3.5">
+      <CollapsibleTrigger className="hover:bg-accent/40 focus-visible:outline-ring flex min-w-0 flex-1 cursor-pointer items-center gap-3 py-3 pl-3.5 text-left outline-none focus-visible:outline-2" data-testid={`agent-row-${a.id}`}>
         <span className="bg-secondary grid size-8 flex-none place-items-center rounded-ctl"><AgentLogo agent={a.id} label={a.label} className="size-4" /></span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <b className="flex items-center gap-1.5 font-(family-name:--title) text-card-title font-semibold"><span className="truncate">{a.label}</span><AgentTag a={a} /></b>
+          <b className="flex items-center gap-1.5 font-(family-name:--title) text-card-title font-semibold"><span className="truncate">{a.label}</span></b>
           <span className="text-muted-foreground truncate text-caption" data-testid={`agent-meta-${a.id}`}>{!cfg.enabled ? t('agents.disabled') : [active?.label, plan].filter(Boolean).join(' · ') || (a.login === 'no' ? t('agents.accountNoLogin') : t('agents.installed'))}</span>
         </span>
         {left != null ? (
@@ -503,10 +511,17 @@ function AgentRow({ a, reload, usage, team, today }) {
             <span className="bg-muted block h-1.5 w-[64px] overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={left} aria-label={t('agents.pctLeft', { pct: left })}><span className={cn('block h-full rounded-full', left <= 10 ? 'bg-warning' : 'bg-primary-text')} style={{ width: `${Math.min(100, Math.max(left > 0 ? 3 : 0, left))}%` }} /></span>
           </span>
         ) : null}
-        <BubbleTip title={t(`agents.dot.${status}`)}><span className={cn('size-2 flex-none rounded-full', status === 'ok' ? 'bg-success' : status === 'login' ? 'bg-warning' : 'bg-muted-foreground/40')} role="img" aria-label={t(`agents.dot.${status}`)} data-testid={`agent-dot-${a.id}`} data-status={status} /></BubbleTip>
         <ChevronDown className={cn('text-muted-foreground size-4 flex-none transition-transform', open && 'rotate-180')} />
       </CollapsibleTrigger>
+        <AgentTag a={a} />
+        <BubbleTip title={t(`agents.dot.${status}`)}><span className={cn('size-2 flex-none rounded-full', status === 'ok' ? 'bg-success' : status === 'login' ? 'bg-warning' : 'bg-muted-foreground/40')} role="img" aria-label={t(`agents.dot.${status}`)} data-testid={`agent-dot-${a.id}`} data-status={status} /></BubbleTip>
+      </div>
       <CollapsibleContent className="border-border @container border-t" data-testid={`agent-detail-${a.id}`}>
+        {!cfg.enabled ? (
+          <Setting label={t('agents.disabled')} hint={warningsOf(a).length ? t(`agents.tag.${warningsOf(a)[0].id}`) : ''} data-testid={`agent-off-${a.id}`}>
+            <Button size="sm" onClick={turnOn} data-testid={`agent-enable-${a.id}`}>{t('agents.enable')}</Button>
+          </Setting>
+        ) : null}
         {a.accounts.map((acc) => <AccountRow key={acc.id} acc={acc} plan={planOf(acc)} reload={reload} agentOn={!!cfg.enabled} usage={usage.find((u) => u.account === acc.id) ?? null} multi={a.accounts.length > 1} />)}
         {a.multi ? (
           <Setting label={t('agents.addAnother')} hint={a.accounts.filter((acc) => acc.enabled !== false).length === 1 ? t('agents.oneAccount') : ''} data-testid={`agent-one-account-${a.id}`}>
@@ -518,10 +533,18 @@ function AgentRow({ a, reload, usage, team, today }) {
             {a.login === 'no' && firstLogin ? <Button size="sm" onClick={() => signIn(firstLogin, firstLogin.label)}><LogIn />{t('agents.login')}</Button> : null}
           </Setting>
         )}
+        {a.accounts.length < 2 ? limits.map((l) => (
+          <Setting key={l.key} label={l.kind === 'week' ? t('usage.winWeek') : l.kind === 'five' ? t('usage.win5', { h: l.hours }) : t('agents.windowUse')} hint={l.resetAt ? t('agents.renews', { when: whenOf(l.resetAt, locale) }) : ''} data-testid={`agent-limit-${a.id}-${l.kind}`}>
+            <span className="flex items-center gap-2.5">
+              <span className="text-muted-foreground text-caption tabular-nums">{t('agents.pctLeft', { pct: Math.max(0, 100 - l.pct) })}</span>
+              <span className="bg-muted block h-1.5 w-[140px] overflow-hidden rounded-full" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={l.pct}><span className={cn('block h-full rounded-full', l.pct >= 90 ? 'bg-warning' : 'bg-primary-text')} style={{ width: `${Math.min(100, Math.max(l.pct > 0 ? 3 : 0, l.pct))}%` }} /></span>
+            </span>
+          </Setting>
+        )) : null}
         <Setting label={own ? t('agents.versionOf', { version: own }) : t('agents.version')} hint={versionHint} data-testid={`agent-version-${a.id}`}>
           {/* a new version of an agent Orb cannot update by itself, or on a PC where its installer is not at hand: the command, no button */}
           {upd?.available && !INSTALLABLE.includes(a.id) && !installViaTeam && upd.command ? <span className="text-muted-foreground text-caption" data-testid={`agent-update-cmd-${a.id}`}>{t('agents.updateManual', { latest: upd.latest, cmd: upd.command })}</span> : null}
-          <InstallButton a={a} reload={reload} />
+          <InstallButton a={a} />
           {upd?.available && installViaTeam ? <Button size="sm" disabled={team.running} onClick={async () => { if (await confirm(t('agents.updateConfirmTitle', { label: a.label }), updateBody(t, a, upd), { ok: t('agents.update'), tone: 'primary' })) team.install([a.id]); }} data-testid={`agent-update-${a.id}`}><Download />{t('agents.update')}</Button> : null}
           <DropdownMenu modal={false}>
             <BubbleTip title={t('nav.more')}><DropdownMenuTrigger asChild><MoreButton small data-testid={`agent-more-${a.id}`} /></DropdownMenuTrigger></BubbleTip>
@@ -558,8 +581,9 @@ function AgentFicha({ a, reload, team }) {
   const installViaTeam = team.available && TEAM_AGENTS.includes(a.id);
   const direct = INSTALLABLE.includes(a.id);
   const pickPath = async () => { const f = await bridge.pickProgram?.(t('sys.dialog.pickProgram')); if (f) save(a.id, { path: f }).then(reload); };
-  // Accepted once here, so the agent starts turned on when it turns up.
-  const ready = async (ok) => { if (!(await acceptWarnings(a, ok))) return false; if (OFF_AGENTS.includes(a.id)) await save(a.id, { enabled: true }); return true; };
+  // The warning is accepted once here. An agent Orb installs is turned on when its install ends well (AgentsView); one the user
+  // installs by hand is turned on later from its «⋯», with the same confirmation.
+  const ready = async (ok) => acceptWarnings(a, ok);
   return (
     <div className="bg-card border-border flex min-w-0 flex-col gap-3 rounded-card border p-3.5" data-testid={`agent-ficha-${a.id}`}>
       <div className="flex items-start gap-3">
@@ -577,8 +601,8 @@ function AgentFicha({ a, reload, team }) {
         </DropdownMenu>
       </div>
       <div className="flex justify-end">
-        {direct ? <InstallButton a={a} reload={reload} />
-          : installViaTeam ? <Button size="sm" disabled={team.running} onClick={async () => { if (await ready(t('agents.install'))) team.install([a.id]); }} data-testid={`agent-install-${a.id}`}><Download />{t('agents.install')}</Button>
+        {direct ? <InstallButton a={a} />
+          : installViaTeam ? <Button size="sm" disabled={team.running} onClick={async () => { if (await ready(t('agents.install'))) { if (OFF_AGENTS.includes(a.id)) enableAfterInstall.add(a.id); team.install([a.id]); } }} data-testid={`agent-install-${a.id}`}><Download />{t('agents.install')}</Button>
             : <Button size="sm" variant="outline" onClick={async () => { if (await ready(t('agents.howInstall'))) bridge.openExternal(INSTALL[a.id]); }} data-testid={`agent-howto-${a.id}`}><ExternalLink />{t('agents.howInstall')}</Button>}
       </div>
     </div>
@@ -626,7 +650,13 @@ export function AgentsView() {
     if (!windows) return undefined;
     loadTeam();
     call('installer.progress').then((p) => p.steps.length && setProgress(p)).catch(quiet);
-    return bridge.on('installer:progress', (p) => { setProgress(p); if (p.finished) { loadTeam(); load(true); } });
+    return bridge.on('installer:progress', (p) => {
+      setProgress(p);
+      if (!p.finished) return;
+      for (const id of enableAfterInstall) if (p.steps.find((x) => x.id === id)?.state === 'hecho') save(id, { enabled: true });
+      enableAfterInstall.clear();
+      loadTeam(); load(true);
+    });
   }, [windows]); // eslint-disable-line react-hooks/exhaustive-deps
   const team = {
     available: windows, items, dev, checkedAt, progress, running: Boolean(progress?.running), reload: loadTeam,
@@ -653,6 +683,13 @@ export function AgentsView() {
   };
   const guide = () => form(t('guide.open'), { wide: true, body: () => <ModelGuide auto={getState().app?.config?.budget?.autoModel !== false} />, ok: t('comp.dialogs.ok') });
   const reload = () => load(true);
+  const agentsRef = useRef(agents);
+  agentsRef.current = agents;
+  useEffect(() => bridge.on('agents:install', (p) => {
+    const label = agentsRef.current?.find((x) => x.id === p.agent)?.label ?? p.agent;
+    if (p.state === 'hecho') { notifyOk(p.version ? t('agents.installDone', { label, version: p.version }) : t('agents.installDoneNoVersion', { label })); reload(); }
+    if (p.state === 'error') notifyError(p.message);
+  }), []); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
       <PageHeader title={t('agents.title')} meta={meta}>
@@ -667,7 +704,7 @@ export function AgentsView() {
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
           <AgentsUsageTabs current="agents" />
           <LoginDialog reload={reload} windows={windows} />
-          <ToolsBlock team={team} agents={agents} renderUpdate={(a) => <InstallButton a={a} reload={reload} />} />
+          <ToolsBlock team={team} agents={agents} renderUpdate={(a) => <InstallButton a={a} />} />
           {system && !windows && !system.git ? (
             <Note tone="warning" className="items-center">
               <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><div className="text-body font-medium">{t('agents.noGit')}</div><div className="text-muted-foreground text-caption">{t('agents.noGitDesc')}</div></div>

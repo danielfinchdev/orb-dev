@@ -1,10 +1,6 @@
 // agents.*
 export default {
   'agents.saved': 'Saved',
-  'agents.kind.sdk': 'Live (Agent SDK)',
-  'agents.kind.appServer': 'Live (app-server)',
-  'agents.kind.cliStream': 'Live (streaming CLI)',
-  'agents.kind.acp': 'Live (ACP)',
   'agents.addAccountTitle': 'Add {label} account',
   'agents.addAccountDesc': 'Give it a name. Sign-in then opens so you can use the other subscription without signing out of the current one.',
   'agents.accountName': 'Account name',
@@ -294,5 +290,7 @@ export default {
   'settings.scripts.hooks': 'Project hooks',
   'settings.scripts.hooksHint': 'Always off, for safety.',
   'settings.scripts.why': 'Why?',
-  'settings.scripts.whyBody': 'For safety, Orb does not run the automatic scripts (hooks) of your projects: not the ones in .claude/settings.json nor in .cursor/hooks.json. It does not follow their permission rules either: Orb decides. If the project’s Claude settings run programs or change the environment, they are not loaded (its CLAUDE.md is). Orb asks you before an agent changes those files.'
+  'settings.scripts.whyBody': 'For safety, Orb does not run the automatic scripts (hooks) of your projects: not the ones in .claude/settings.json nor in .cursor/hooks.json. It does not follow their permission rules either: Orb decides. If the project’s Claude settings run programs or change the environment, they are not loaded (its CLAUDE.md is). Orb asks you before an agent changes those files.',
+  'agents.howUpdate': 'How to update: {cmd}',
+  'agents.windowUse': 'Usage window'
 };

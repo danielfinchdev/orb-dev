@@ -1,10 +1,6 @@
 // agents.*
 export default {
   'agents.saved': 'Guardado',
-  'agents.kind.sdk': 'En directo (Agent SDK)',
-  'agents.kind.appServer': 'En directo (app-server)',
-  'agents.kind.cliStream': 'En directo (CLI en streaming)',
-  'agents.kind.acp': 'En directo (ACP)',
   'agents.addAccountTitle': 'Añadir cuenta de {label}',
   'agents.addAccountDesc': 'Ponle un nombre. Después se abrirá el inicio de sesión para que entres con la otra suscripción sin cerrar la actual.',
   'agents.accountName': 'Nombre de la cuenta',
@@ -294,5 +290,7 @@ export default {
   'settings.scripts.hooks': 'Hooks de los proyectos',
   'settings.scripts.hooksHint': 'Por seguridad, siempre desactivados.',
   'settings.scripts.why': '¿Por qué?',
-  'settings.scripts.whyBody': 'Por seguridad, Orb no ejecuta los scripts automáticos de tus proyectos (hooks): los de .claude/settings.json ni los de .cursor/hooks.json. Tampoco sigue sus reglas de permisos: decide Orb. Si los ajustes de Claude del proyecto ejecutan programas o cambian el entorno, no se cargan (su CLAUDE.md sí). Antes de que un agente cambie esos archivos, Orb te pide permiso.'
+  'settings.scripts.whyBody': 'Por seguridad, Orb no ejecuta los scripts automáticos de tus proyectos (hooks): los de .claude/settings.json ni los de .cursor/hooks.json. Tampoco sigue sus reglas de permisos: decide Orb. Si los ajustes de Claude del proyecto ejecutan programas o cambian el entorno, no se cargan (su CLAUDE.md sí). Antes de que un agente cambie esos archivos, Orb te pide permiso.',
+  'agents.howUpdate': 'Cómo actualizar: {cmd}',
+  'agents.windowUse': 'Ventana de uso'
 };

@@ -48,7 +48,11 @@ test('warnings are a short tag with a tooltip, and the whole text is a confirmat
   assert.match(agents, /id: 'beta', note: 'agents\.unverifiedNote'/);
   assert.match(agents, /<BubbleTip title=\{t\(`agents\.tag\.\$\{w\.id\}`\)\} text=\{t\(`agents\.tagTip\.\$\{w\.id\}`\)\}>/);
   assert.match(agents, /acceptWarnings\(a, t\('agents\.enable'\), 'agents\.enableOf'\)/);
-  assert.match(agents, /const ready = async \(ok\) => \{ if \(!\(await acceptWarnings\(a, ok\)\)\) return false;/);
+  assert.match(agents, /const ready = async \(ok\) => acceptWarnings\(a, ok\)/);
+  // an agent Orb installs is turned on only when its install ends well
+  assert.match(agents, /enableAfterInstall\.add\(a\.id\)/);
+  assert.match(agents, /\.state === 'hecho'\) save\(id, \{ enabled: true \}\)/);
+  assert.match(agents, /data-testid=\{`agent-enable-\$\{a\.id\}`\}/, 'a visible «Activar» in the detail of a turned-off agent');
   for (const k of ['beta', 'noGuard', 'askLess']) for (const l of [es, en]) assert.ok(l[`agents.tag.${k}`] && l[`agents.tagTip.${k}`], k);
   assert.doesNotMatch(agents, /agent-noguard-|agent-unverified-|agent-hermes-note/, 'the paragraphs are not on the cards any more');
 });
@@ -80,4 +84,19 @@ test('«Más opciones» left the page: hooks explanation in Ajustes › Permisos
   assert.match(settings, /export function ProjectScriptsCard/);
   assert.match(read('src/ui/views/settings/index.jsx'), /<ProtectedCard c=\{c\} \/><ProjectScriptsCard \/>/);
   for (const l of [es, en]) assert.ok(l['settings.scripts.title'] && l['settings.scripts.whyBody']);
+});
+
+test('the row keeps no interactive element inside its button, and the limits show with one account', () => {
+  const row = agents.slice(agents.indexOf('<CollapsibleTrigger className="hover:bg-accent/40'), agents.indexOf('</CollapsibleTrigger>', agents.indexOf('function AgentRow')));
+  assert.doesNotMatch(row, /<BubbleTip|<AgentTag|agent-dot-/, 'tag and dot are siblings of the button');
+  assert.match(agents, /\{a\.accounts\.length < 2 \? limits\.map\(/);
+  assert.match(agents, /Math\.max\(\.\.\.limits\.map\(\(l\) => l\.pct\)\)/, 'the row bar is the tightest limit');
+  assert.match(agents, /agent-limit-\$\{a\.id\}-\$\{l\.kind\}/);
+});
+
+test('an update of an agent Orb cannot install shows the command, not a button; one listener per install event', () => {
+  assert.match(tools, /const AGENT_UPDATE = \['claude', 'codex'\]/);
+  assert.match(tools, /agents\.howUpdate/);
+  assert.equal((agents.match(/bridge\.on\('agents:install'/g) ?? []).length, 2, 'the button follows its state, the page notifies');
+  assert.doesNotMatch(agents, /agents\.kind|const NATIVE/);
 });
