@@ -2,7 +2,7 @@
 // over records from before accounts, projects and titles were recorded.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { windowOf, daysNeeded, eachDay, shiftDay, filterRecords, seriesOf, breakdownOf, topItems, totals, toCsv, smoothPath, niceMax, slotOf } from '../src/ui/lib/usage-data.js';
+import { windowOf, daysNeeded, eachDay, shiftDay, filterRecords, seriesOf, breakdownOf, topItems, totals, toCsv, smoothPath, niceMax, slotOf, csvCell, prevLoaded } from '../src/ui/lib/usage-data.js';
 
 const rec = (o) => ({ day: '2026-11-25', account: 'a1', agent: 'claude', model: 'sonnet', modelLabel: 'Sonnet', project: 'tienda', kind: 'chat', id: 1, title: 'Carrito', turns: 1, tokensIn: 100, tokensOut: 50, tokensCache: 10, usd: 1, ...o });
 const R = [
@@ -75,4 +75,16 @@ test('curve and axis: smooth and never under zero; colours follow the entity', (
   assert.equal(slotOf('agent', 'codex', []), 2);
   assert.equal(slotOf('model', 'b', ['a', 'b', 'c']), 2);
   assert.equal(slotOf('model', 'b', ['c', 'b', 'a']), 2);
+});
+
+test('CSV cells that look like formulas are quoted as text', () => {
+  assert.equal(csvCell('=HYPERLINK("x")'), '"\'=HYPERLINK(""x"")"');
+  assert.equal(csvCell('-1'), "'-1"); assert.equal(csvCell('@x'), "'@x"); assert.equal(csvCell('+5'), "'+5");
+  assert.equal(csvCell('normal'), 'normal');
+});
+
+test('the comparison needs the whole previous period loaded', () => {
+  assert.equal(prevLoaded('2026-11-01', '2026-11-20', 7), true);
+  assert.equal(prevLoaded('2026-11-15', '2026-11-20', 7), false);
+  assert.equal(prevLoaded(undefined, '2026-11-20', 7), false);
 });

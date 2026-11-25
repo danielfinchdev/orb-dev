@@ -103,7 +103,10 @@ export function topItems(records, metric) {
 }
 
 const CR = String.fromCharCode(13); const LF = String.fromCharCode(10); const BOM = String.fromCharCode(0xfeff);
-export const csvCell = (v) => { const x = String(v ?? ''); return /[",;]/.test(x) || x.includes(CR) || x.includes(LF) ? `"${x.replaceAll('"', '""')}"` : x; };
+// A cell that starts like a formula gets a quote in front, so a spreadsheet shows it as text instead of running it.
+export const csvCell = (v) => { let x = String(v ?? ''); if ('=+-@'.includes(x[0] ?? ' ') || x[0] === String.fromCharCode(9) || x[0] === CR) x = `'${x}`; return /[",;]/.test(x) || x.includes(CR) || x.includes(LF) ? `"${x.replaceAll('"', '""')}"` : x; };
+// The comparison only means something when the whole period before is among the loaded days.
+export const prevLoaded = (loadedFrom, from, span) => Boolean(loadedFrom) && shiftDay(from, span) >= loadedFrom;
 // What is filtered, one line per record, with a BOM so a spreadsheet opens the accents right.
 export function toCsv(records, names) {
   const head = ['day', 'type', 'name', 'project', 'agent', 'account', 'model', 'tokens_in', 'tokens_out', 'tokens_cache', 'cost_usd'];

@@ -18,7 +18,7 @@ import { useStore, call, act, go, fullPc } from '@/lib/store.js';
 import { changeRail } from '@/lib/rules-actions.js';
 import { confirmPauseRail, confirmResumeRail } from '@/views/rules-dialogs.jsx';
 import { paceOf, windowMs } from '@/lib/usage-pace.js';
-import { BY, breakdownOf, daysBetween, daysNeeded, eachDay, filterRecords, menuValue, seriesOf, shiftDay, slotOf, topItems, toCsv, totals, windowOf } from '@/lib/usage-data.js';
+import { BY, breakdownOf, daysBetween, daysNeeded, eachDay, filterRecords, menuValue, prevLoaded, seriesOf, shiftDay, slotOf, topItems, toCsv, totals, windowOf } from '@/lib/usage-data.js';
 import { AGENT } from '@/lib/labels.js';
 import { AccountMark } from '@/components/brain-picker.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
@@ -336,7 +336,7 @@ export function UsageView() {
   const tot = useMemo(() => totals(cur), [cur]);
   const ptot = useMemo(() => totals(prev), [prev]);
   const pick = (x) => (current === 'tokens' ? x.tokens : x.usd);
-  const delta = pick(ptot) > 0 ? Math.round(((pick(tot) - pick(ptot)) / pick(ptot)) * 100) : null;
+  const delta = prevLoaded(data?.from, active.from, span) && pick(ptot) > 0 ? Math.round(((pick(tot) - pick(ptot)) / pick(ptot)) * 100) : null;
   const loading = data && data.need !== need;
 
   // names as the page says them: «Cuenta principal» and «Sin proyecto» are the old rows without that data
@@ -487,6 +487,7 @@ export function UsageView() {
                     <UsageChart days={days} lines={lines} hidden={hidden} onToggle={(k) => setHidden((h) => ({ ...h, [k]: !h[k] }))} fmt={fmt} fmtAxis={fmtAxis}
                       dayLabel={(d) => dayName(d, true)} dayShort={(d) => dayName(d, false)} sel={sel} onSel={(r) => { setSel(r); setShown(8); }} itemsByDay={series.items} ariaLabel={t('usage.chartLabel')}
                       labels={{ noUse: t('usage.noUse'), noUseDay: t('usage.noUseDay'), total: t('usage.total'), series: t('usage.series'), items: (n) => (n === 1 ? t('usage.itemsOne') : t('usage.itemsN', { n })) }} />
+                    {warn > 0 ? <span className="text-faint-foreground inline-flex items-center gap-1.5 text-[12px]" data-testid="usage-days-legend-warn"><TriangleAlert className="size-3.5" />{t('usage.legendWarn', { pct: Math.round(warn * 100) })}</span> : null}
                     <p className="text-faint-foreground m-0 text-[12px]" data-testid="usage-hint">{sel ? t('usage.hintSel', { range: sel[0] === sel[1] ? dayName(sel[0], true) : t('usage.fRange', { from: dayName(sel[0]), to: dayName(sel[1]) }) }) : t('usage.hint')}</p>
                   </div>
                   <details className="text-muted-foreground text-caption" data-testid="usage-table">
