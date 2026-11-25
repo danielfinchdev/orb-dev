@@ -37,7 +37,7 @@ export default {
   'chat.seeDetails': 'Ver detalles',
   'chat.seeResult': 'Ver lo que hizo',
   'chat.freeMode': 'Chat directo',
-  'chat.freeModeBody': 'Sin «Orquestador», los chats nuevos son directamente con el agente que elijas abajo: trabaja en la carpeta del proyecto y tú repartes el trabajo. Puedes tener tantas a la vez como quieras.',
+  'chat.freeModeBody': 'Sin «Orquestador», los chats nuevos son directos con el agente que elijas abajo: trabaja en la carpeta del proyecto y tú repartes el trabajo. Puedes tener tantos a la vez como quieras.',
   'chat.freeModeOk': 'Hablar directamente',
   'chat.orchestrator': 'Orquestador',
   'chat.resumed': 'Tareas reanudadas',

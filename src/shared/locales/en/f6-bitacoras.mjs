@@ -10,7 +10,7 @@ export default {
   'logbooks.groupProjects': 'Projects',
   'logbooks.groupDeleted': 'Deleted',
   'logbooks.private': 'Private, only on your PC.',
-  'logbooks.privateAt': 'Private, only on your PC: {dir}.',
+  'logbooks.privateAt': 'Private, only on your PC, in {dir}',
   'logbooks.part.request': 'Request',
   'logbooks.part.done': 'Done',
   'logbooks.part.revert': 'How to revert',

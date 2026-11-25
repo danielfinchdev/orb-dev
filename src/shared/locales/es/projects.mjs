@@ -117,7 +117,7 @@ export default {
   'projects.openInShort': 'Abrir en',
   'projects.newChat': 'Nuevo chat aquí',
   'projects.terminated': 'Terminados',
-  'projects.terminatedHint': 'Plegada por defecto. Siguen en disco y en la bitácora. Reabrirlos los devuelve a la lista.',
+  'projects.terminatedHint': 'Sección plegada por defecto. Los proyectos siguen en disco y en la bitácora. Reabrirlos los devuelve a la lista.',
   'projects.m.changesOne': '{n} cambio sin guardar',
   'projects.m.changesOther': '{n} cambios sin guardar',
   'projects.m.aheadOne': '{n} commit por subir',

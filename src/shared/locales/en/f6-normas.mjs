@@ -9,7 +9,7 @@ export default {
   'rules.lockedPill': 'Your rules · locked',
   'rules.lockedHint': 'Only you can change them, from here. Agents can\'t see them.',
   'rules.fixedTitle': 'Fixed protections',
-  'rules.fixedHint': 'Fixed protections. They can\'t be turned off.',
+  'rules.fixedHint': 'They can\'t be turned off.',
   'rules.textTitle': 'Text rules',
   'rules.textMetaOrb': '{n} rules for Orb',
   'rules.textMetaAgents': '{n} rules for your agents',

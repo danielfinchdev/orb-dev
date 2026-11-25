@@ -37,7 +37,7 @@ export default {
   'chat.seeDetails': 'See details',
   'chat.seeResult': 'See what it did',
   'chat.freeMode': 'Direct chat',
-  'chat.freeModeBody': 'Without «Orchestrator», new chats are directly with the agent you choose below: it works in the project folder and you hand out the work. You can have as many at once as you like.',
+  'chat.freeModeBody': 'Without «Orchestrator», new chats go straight to the agent you choose below: it works in the project folder and you hand out the work. You can have as many at once as you like.',
   'chat.freeModeOk': 'Talk directly',
   'chat.orchestrator': 'Orchestrator',
   'chat.resumed': 'Tasks resumed',

@@ -11,7 +11,7 @@ export default {
   'logbooks.groupProjects': 'Proyectos',
   'logbooks.groupDeleted': 'Eliminados',
   'logbooks.private': 'Privadas, solo en tu PC.',
-  'logbooks.privateAt': 'Privadas, solo en tu PC: {dir}.',
+  'logbooks.privateAt': 'Privadas, solo en tu PC, en {dir}',
   'logbooks.part.request': 'Pedido',
   'logbooks.part.done': 'Hecho',
   'logbooks.part.revert': 'Cómo revertir',

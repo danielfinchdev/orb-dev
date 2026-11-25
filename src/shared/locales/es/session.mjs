@@ -134,7 +134,7 @@ export default {
   'usage.localTruncated': 'Algún archivo era muy grande y solo se leyó el principio.',
   'usage.days0': 'Lun', 'usage.days1': 'Mar', 'usage.days2': 'Mié', 'usage.days3': 'Jue', 'usage.days4': 'Vie', 'usage.days5': 'Sáb', 'usage.days6': 'Dom',
   'history.title': 'Historial de Claude Code y Codex',
-  'history.intro': 'Los chats que esos agentes guardaron en este PC. Son de solo lectura: Orb no las cambia ni las copia.',
+  'history.intro': 'Los chats que esos agentes guardaron en este PC. Son de solo lectura: Orb no los cambia ni los copia.',
   'history.all': 'Todos',
   'history.search': 'Buscar por título o proyecto',
   'history.empty': 'No hay chats guardados.',
