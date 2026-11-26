@@ -34,8 +34,9 @@ export const choose = (title, description, options, { testid, cancel = true, noC
 // Dialogs are 440 px wide, the mock-up's small size; `wide` is for the ones that hold a long text or a diff.
 // body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
 // okDisabled(values): the accept button stays off while it is true (a help for the eye: onOk still checks); okDanger draws it red.
+// cancel: the label of the dismiss button (null: «Cancelar»).
 // lockBusy: while onOk works (a delete that must not be walked away from) Cancel, ✕ and Escape do nothing.
-export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false, noClose = false, lockBusy = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide, okDisabled, okDanger, noClose: noClose || lockBusy, lockBusy });
+export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false, noClose = false, lockBusy = false, cancel = null }) => open({ kind: 'form', title, description, initial, body, ok, cancel, onOk, wide, okDisabled, okDanger, noClose: noClose || lockBusy, lockBusy });
 const working = new Set(); // ids of the forms with lockBusy whose onOk is running
 
 // the project «New chat» starts in: resolves { project } (null: no project), or null when closed.
@@ -60,7 +61,7 @@ function FormDialog({ d }) {
     <form onSubmit={submit} className="flex max-h-[inherit] min-h-0 flex-col">
       <DialogHeader className="flex-none"><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
       <DialogBody className="grid gap-4 p-[18px]">{d.body(values, set)}<FieldError>{error}</FieldError></DialogBody>
-      <DialogFooter className="flex-none"><Button type="button" variant="outline" disabled={busy && d.lockBusy} onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" variant={d.okDanger ? 'destructive' : undefined} disabled={busy || Boolean(d.okDisabled?.(values))} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
+      <DialogFooter className="flex-none"><Button type="button" variant="outline" disabled={busy && d.lockBusy} onClick={() => close(d.id, null)}>{d.cancel ?? t('comp.dialogs.cancel')}</Button><Button type="submit" variant={d.okDanger ? 'destructive' : undefined} disabled={busy || Boolean(d.okDisabled?.(values))} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );
 }
