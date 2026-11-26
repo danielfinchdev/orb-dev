@@ -7,13 +7,14 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, Input } from '@/components/ui/basic.jsx';
 import { ListCard } from '@/components/ui/primitives.jsx';
 import { form, confirm } from '@/components/dialogs.jsx';
-import { call, bridge } from '@/lib/store.js';
+import { call, bridge, getState } from '@/lib/store.js';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { useT, t as tNow, useLocale } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
 import { BOXES, SHORTCUTS, normalizeKeep } from '../../shared/uninstall-boxes.mjs';
+import { SURVEY_MAX, surveyIssue, surveyUrl } from '../../shared/uninstall-survey.mjs';
 import { Block, Panel, Setting } from './settings/rows.jsx';
 
 export const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
@@ -154,6 +155,38 @@ async function askWord() {
   });
 }
 
+// The optional note before the uninstaller. Nothing is sent by Orb: when the user wrote something, the prefilled GitHub issue opens in
+// the browser (the safe external-link opener) and the user submits it there. A failure to open it never stops the uninstall.
+async function askSurvey() {
+  const t = tNow;
+  const asked = await form(t('uninstall.survey.title'), {
+    initial: { text: '' }, ok: t('uninstall.survey.next'), cancel: t('uninstall.survey.skip'),
+    body: (v, set) => (
+      <>
+        <p className="text-muted-foreground m-0 text-control leading-[1.45]">{t('uninstall.survey.body')}</p>
+        <Input autoComplete="off" maxLength={SURVEY_MAX} aria-label={t('uninstall.survey.label')} value={v.text} onChange={(e) => set({ text: e.target.value })} data-testid="uninstall-survey" />
+        <span className="text-faint-foreground text-caption">{t('uninstall.survey.count', { n: [...v.text].length, max: SURVEY_MAX })}</span>
+      </>
+    )
+  });
+  const version = getState().app?.version;
+  const issue = asked ? surveyIssue(asked.text, version) : null;
+  if (!issue) return;
+  const send = await form(t('uninstall.survey.confirmTitle'), {
+    initial: {}, ok: t('uninstall.survey.open'), cancel: t('uninstall.survey.no'),
+    body: () => (
+      <>
+        <p className="text-muted-foreground m-0 text-control leading-[1.45]">{t('uninstall.survey.confirmBody')}</p>
+        <ListCard data-testid="uninstall-survey-preview"><Row title={issue.title} meta={[issue.note, issue.version ? `Orb ${issue.version}` : null]} /></ListCard>
+        <p className="m-0 text-control"><b>{t('uninstall.survey.public')}</b></p>
+      </>
+    )
+  });
+  if (!send) return;
+  const url = surveyUrl(asked.text, version);
+  try { await Promise.race([bridge.openExternal(url), new Promise((r) => setTimeout(r, 3000))]); } catch (error) { quiet(error); }
+}
+
 // What a run that stopped says: what went, what failed and what is left, and that the uninstaller was not opened.
 const label = (x) => x.name ?? x.path ?? x.box;
 async function showFailure(report) {
@@ -189,7 +222,7 @@ export async function runUninstall(mode) {
       const plan = v.forever.length ? await call('uninstall.plan', { ...picked.input, forever: v.forever, unlock: u }) : picked.plan;
       let typed = null;
       if (mode === 'uninstall' && BOXES.every((b) => !plan.keep[b])) { typed = await askWord(); if (!typed) return false; }
-      // The uninstall survey (design 2, «¿Por qué desinstalas?») goes here: after the confirmation, before anything is deleted or launched.
+      if (mode === 'uninstall') await askSurvey();
       const run = await call('uninstall.run', { ...picked.input, forever: v.forever, planId: plan.id, typed, unlock: await unlockCore('uninstall') });
       if (run.ok && !picked.input.keep.games) clearGames();
       return run;
