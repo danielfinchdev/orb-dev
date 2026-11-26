@@ -33,6 +33,8 @@ const PALETTE_SWATCH = { grafito: 'oklch(0.6 0.18 40)', oceano: 'oklch(0.6 0.17 
 
 export function Setup({ onDone, resume = null }) {
   const t = useT();
+  // after a reset or «Empezar de cero» the folder is already there (and its projects): the welcome only asks the names
+  const fresh = resume?.fresh === true;
   const [name, setName] = useState(resume?.name || PRODUCT.assistant);
   const [user, setUser] = useState('');
   // C:\Orb already chosen (app:info › defaultBase); «Cambiar ubicación…» picks another place.
@@ -47,15 +49,18 @@ export function Setup({ onDone, resume = null }) {
   const shown = name.trim() || PRODUCT.assistant;
   const sep = base?.includes('\\') ? '\\' : '/';
   // The same rule the app uses (homeFor): always <base>/Orb, whatever the assistant is called, unless the base already is it.
-  const target = base ? (/^orb$/i.test(base.split(/[\\/]/).filter(Boolean).pop() ?? '') ? base : `${base}${base.endsWith(sep) ? '' : sep}${PRODUCT.folder}`) : null;
+  const target = fresh ? resume.home : base ? (/^orb$/i.test(base.split(/[\\/]/).filter(Boolean).pop() ?? '') ? base : `${base}${base.endsWith(sep) ? '' : sep}${PRODUCT.folder}`) : null;
   const create = async (e) => {
     e.preventDefault();
     setBusy(true); setMood('thinking');
     try {
       const language = hereLanguage();
-      await bridge.setup({ base, assistantName: shown, userName: user.trim(), language });
-      // The engine runs in the new folder now: it gets this PC's language and time zone.
-      await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch((e) => notifyError(e));
+      if (fresh) await call('config.save', { patch: { assistantName: shown, userName: user.trim(), language, tz: hereTz(), setupPending: true } }).catch((e) => notifyError(e));
+      else {
+        await bridge.setup({ base, assistantName: shown, userName: user.trim(), language });
+        // The engine runs in the new folder now: it gets this PC's language and time zone.
+        await call('config.save', { patch: { language, tz: hereTz(), setupPending: true } }).catch((e) => notifyError(e));
+      }
       setMood('happy');
       const lp = await call('app.layoutPlan').catch(() => null);
       setBusy(false);
@@ -92,11 +97,11 @@ export function Setup({ onDone, resume = null }) {
           <div className="bg-card border-border rounded-ctl flex items-center gap-2 border px-3 py-2.5 text-control">
             <Folder className="size-4 flex-none" aria-hidden="true" />
             <code className="min-w-0 flex-1 font-mono break-all" data-testid="setup-target">{target ?? t('setup.example', { name: PRODUCT.folder })}</code>
-            <Button type="button" variant="outline" data-testid="setup-folder" onClick={async () => { const f = await bridge.pickFolder(t('setup.whereFolder')); if (f) setBase(f); }}>{base ? t('setup.changeLocation') : t('setup.pickLocation')}</Button>
+            {fresh ? null : <Button type="button" variant="outline" data-testid="setup-folder" onClick={async () => { const f = await bridge.pickFolder(t('setup.whereFolder')); if (f) setBase(f); }}>{base ? t('setup.changeLocation') : t('setup.pickLocation')}</Button>}
           </div>
           <WizardText>{t('setup.folderNote')}</WizardText>
         </div>
-        <WizardFoot><Button type="submit" disabled={!base || busy} data-testid="setup-create">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('setup.create')}</Button></WizardFoot>
+        <WizardFoot><Button type="submit" disabled={(!fresh && !base) || busy} data-testid="setup-create">{busy ? <Spinner className="border-primary-foreground/40 border-t-primary-foreground" /> : null}{t('setup.create')}</Button></WizardFoot>
       </WizardCard>
     </WizardPage>
   );

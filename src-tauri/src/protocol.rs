@@ -178,6 +178,10 @@ pub enum HostRequest {
   OpenTerminal { dir: PathBuf, choice: String },
   OpenEditor { which: String, dir: PathBuf, file: Option<PathBuf>, line: Option<u32> },
   RunAction { command: String, dir: PathBuf, choice: String },
+  /// «Desinstalar» / «Restablecer»: a project folder Orb made, to the Recycle Bin (uninstall.rs checks it again).
+  TrashFolder { path: PathBuf, token: String },
+  /// Whether the program's own uninstaller is beside Orb.exe.
+  UninstallCheck,
 }
 
 const LOOPBACK: [&str; 3] = ["localhost", "127.0.0.1", "[::1]"];
@@ -268,6 +272,14 @@ pub fn check_host(method: &str, params: &Value, is_dir: impl Fn(&Path) -> bool) 
       Ok(HostRequest::OpenUrl(u.to_string()))
     }
     "host.openPath" => Ok(HostRequest::OpenPath(folder("path", "solo carpetas")?)),
+    "host.trashFolder" => {
+      let token = text("token");
+      if !crate::uninstall::valid_code(&token) {
+        return Err("marca no válida".into());
+      }
+      Ok(HostRequest::TrashFolder { path: folder("path", "solo carpetas")?, token })
+    }
+    "host.uninstallCheck" => Ok(HostRequest::UninstallCheck),
     "host.screenshot" => Ok(HostRequest::Screenshot(screenshot_path(&text("path"), &is_dir)?)),
     "host.openTerminal" => Ok(HostRequest::OpenTerminal { dir: folder("dir", "carpeta no válida")?, choice: choice(params) }),
     "host.openEditor" => {
@@ -405,6 +417,13 @@ mod tests {
     }
     assert_eq!(ok("host.openPath", json!({"path": dir})), Ok(HostRequest::OpenPath(dir.clone())));
     assert!(ok("host.openPath", json!({"path": "relativa"})).is_err());
+    // the Recycle Bin for a created folder: an existing local folder and a token of 32 hex characters
+    let token = "0123456789abcdef0123456789abcdef";
+    assert_eq!(ok("host.trashFolder", json!({"path": dir, "token": token})), Ok(HostRequest::TrashFolder { path: dir.clone(), token: token.into() }));
+    assert!(ok("host.trashFolder", json!({"path": dir})).is_err(), "no token");
+    assert!(ok("host.trashFolder", json!({"path": dir, "token": "../.."})).is_err());
+    assert!(ok("host.trashFolder", json!({"path": "C:\\otra", "token": token})).is_err(), "not an existing folder");
+    assert_eq!(ok("host.uninstallCheck", json!({})), Ok(HostRequest::UninstallCheck));
     assert!(ok("host.openPath", json!({"path": "C:\\otra\\archivo.exe"})).is_err());
     // Network and device paths are refused before anything looks at them.
     let anything = |_: &Path| true;

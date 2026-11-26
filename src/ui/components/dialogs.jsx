@@ -22,7 +22,7 @@ function open(dialog) {
   promise.finally(() => opened.delete(key));
   return promise;
 }
-function close(id, value) { setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
+function close(id, value) { if (value === null && working.has(id)) return; setState((s) => { const d = (s.dialogs ?? []).find((x) => x.id === id); d?.resolve(value); return { dialogs: (s.dialogs ?? []).filter((x) => x.id !== id) }; }); }
 
 // tone: 'primary' draws the accept button as the main (neutral) one even when danger keeps the focus on Cancel.
 export const confirm = (title, description, { ok = t('comp.dialogs.ok'), cancel = t('comp.dialogs.cancel'), danger = false, warn = false, tone = null, noClose = false } = {}) => open({ kind: 'confirm', title, description, ok, cancel, danger, warn, tone, noClose });
@@ -34,7 +34,9 @@ export const choose = (title, description, options, { testid, cancel = true, noC
 // Dialogs are 440 px wide, the mock-up's small size; `wide` is for the ones that hold a long text or a diff.
 // body: (values, set) => JSX; onOk(values) may throw (shown under the fields, the dialog stays open) or return the result.
 // okDisabled(values): the accept button stays off while it is true (a help for the eye: onOk still checks); okDanger draws it red.
-export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false, noClose = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide, okDisabled, okDanger, noClose });
+// lockBusy: while onOk works (a delete that must not be walked away from) Cancel, ✕ and Escape do nothing.
+export const form = (title, { description, initial = {}, body, ok = t('comp.dialogs.ok'), onOk, wide = false, okDisabled = null, okDanger = false, noClose = false, lockBusy = false }) => open({ kind: 'form', title, description, initial, body, ok, onOk, wide, okDisabled, okDanger, noClose: noClose || lockBusy, lockBusy });
+const working = new Set(); // ids of the forms with lockBusy whose onOk is running
 
 // the project «New chat» starts in: resolves { project } (null: no project), or null when closed.
 export const pickProject = () => open({ kind: 'pick', title: t('nav.newChat') });
@@ -49,15 +51,16 @@ function FormDialog({ d }) {
     e?.preventDefault();
     setError(null);
     setBusy(true);
-    try { const r = d.onOk ? await d.onOk(values) : values; if (r !== false) close(d.id, r ?? true); }
+    if (d.lockBusy) working.add(d.id);
+    try { const r = d.onOk ? await d.onOk(values) : values; working.delete(d.id); if (r !== false) close(d.id, r ?? true); }
     catch (err) { setError(errorText(err)); }
-    finally { setBusy(false); }
+    finally { working.delete(d.id); setBusy(false); }
   };
   return (
     <form onSubmit={submit} className="flex max-h-[inherit] min-h-0 flex-col">
       <DialogHeader className="flex-none"><DialogTitle>{d.title}</DialogTitle>{d.description ? <DialogDescription>{d.description}</DialogDescription> : null}</DialogHeader>
       <DialogBody className="grid gap-4 p-[18px]">{d.body(values, set)}<FieldError>{error}</FieldError></DialogBody>
-      <DialogFooter className="flex-none"><Button type="button" variant="outline" onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" variant={d.okDanger ? 'destructive' : undefined} disabled={busy || Boolean(d.okDisabled?.(values))} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
+      <DialogFooter className="flex-none"><Button type="button" variant="outline" disabled={busy && d.lockBusy} onClick={() => close(d.id, null)}>{t('comp.dialogs.cancel')}</Button><Button type="submit" variant={d.okDanger ? 'destructive' : undefined} disabled={busy || Boolean(d.okDisabled?.(values))} aria-busy={busy}>{busy ? <LoaderCircle className="animate-spin" /> : null}{d.ok}</Button></DialogFooter>
     </form>
   );
 }

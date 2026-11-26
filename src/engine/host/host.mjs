@@ -16,7 +16,7 @@ import { EDITOR_IDS } from './editors.mjs';
 const BROWSER_METHODS = Object.freeze(['host.browser.open', 'host.browser.cdp', 'host.browser.close', 'host.pip.show', 'host.pip.hide', 'host.pip.state', 'host.pip.frame']);
 // Orb's and git's own folders are never opened by the app (also checked in src-tauri/src/protocol.rs › relative_file)
 const RESERVED = new Set(['.git', '.orb', '.orb-adjuntos']);
-export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.screenshot', ...BROWSER_METHODS]);
+export const HOST_METHODS = Object.freeze(['host.openUrl', 'host.openPath', 'host.openTerminal', 'host.openEditor', 'host.runAction', 'host.screenshot', 'host.trashFolder', 'host.uninstallCheck', ...BROWSER_METHODS]);
 let send = null; let next = 0; const pending = new Map();
 // the ports of this engine's own servers (the phone's access, dev-control). The agents' browser never
 // opens them on this PC's loopback (Rust refuses them: browser_rules.rs › url_allowed).
@@ -67,6 +67,10 @@ export function checkHostRequest(method, params, { isDir } = {}) {
     return { url: u.toString() };
   }
   if (method === 'host.openPath') return { path: folder(p.path) };
+  // «Desinstalar» / «Restablecer»: a project folder to the Recycle Bin, with the token its .orb-creada file must hold; the app
+  // checks both marks and the place of the folder again (src-tauri/src/delete.rs). Whether the program's own uninstaller is there.
+  if (method === 'host.trashFolder') { if (!/^[0-9a-f]{32}$/.test(String(p.token ?? ''))) throw new Error('marca no válida'); return { path: folder(p.path), token: p.token }; }
+  if (method === 'host.uninstallCheck') return {};
   if (method === 'host.screenshot') {
     const d = path.dirname(String(p.path ?? ''));
     if (!localPath(p.path) || !/^\d{1,16}-[0-9a-f]{8}\.jpg$/.test(path.basename(p.path)) || path.basename(d) !== 'capturas-movil' || (isDir && !isDir(d))) throw new Error('ruta de captura no válida');

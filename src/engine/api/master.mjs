@@ -11,7 +11,7 @@ import { machineKeys } from '../../platform/keys.mjs';
 import { Master, MasterError, IN_VAULT, mirrorTo, restoreMissing, checkPassword, MIN_LENGTH, UNLOCK_MS } from '../../domain/security/master.mjs';
 import { sealConnectors, connectorSecrets, refOf, secretId, ENV_NAME, bindMissing } from '../../domain/security/connector-secrets.mjs';
 import { agentKeyState, saveAgentKey } from '../../domain/security/agent-keys.mjs';
-import { needsUnlock, needsPassword, freshPurpose, FRESH_PURPOSES, HELLO_PURPOSES, HELLO_ENABLE_PURPOSE, RULE_TARGET_METHODS, RAILS_PURPOSE, mobileMayApprove, APPROVE_REGISTER_PURPOSE, REBUILD_PURPOSE } from '../../domain/security/permissions.mjs';
+import { needsUnlock, UNLOCK_IF_MASTER, needsPassword, freshPurpose, FRESH_PURPOSES, HELLO_PURPOSES, HELLO_ENABLE_PURPOSE, RULE_TARGET_METHODS, RAILS_PURPOSE, mobileMayApprove, APPROVE_REGISTER_PURPOSE, REBUILD_PURPOSE } from '../../domain/security/permissions.mjs';
 import { approveSummary, approvePurpose, SUMMARY_MAX } from '../../domain/security/approve.mjs';
 import crypto from 'node:crypto';
 
@@ -116,6 +116,8 @@ export function checkUnlock(method, params, { defer = false } = {}) {
   const none = { unlocked: false, settle: () => {} };
   if (!needsUnlock(method, params, ctx.config)) return defer ? none : false;
   const m = ctx.master;
+  // a reset or an uninstall of a vault with no password (or one that cannot be opened) has nothing to unlock
+  if (UNLOCK_IF_MASTER.has(method) && !m?.hasPassword()) return defer ? none : false;
   if (!m?.hasPassword()) throw userError(m?.state().lost ? 'msg.master.lost' : 'msg.master.createFirst', {}, { reason: 'unlock' });
   // a token for one action (FRESH_UNLOCK) opens it once: it is used up here.
   // pausing or deleting a rule asks every time only when it is a shipped one: its file says so (de_serie), and a shipped id

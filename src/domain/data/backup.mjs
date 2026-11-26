@@ -119,7 +119,7 @@ export function orbIdOf(home) {
 
 // This workspace's id without making one (a core that lost its data folder has none): from core, or else from the note
 // kept beside the backups (ultima.json).
-function knownOrbId(home) {
+export function knownOrbId(home) {
   try { const x = JSON.parse(fs.readFileSync(identityFile(home), 'utf8')); if (/^[0-9a-f]{32}$/.test(x.orbId)) return x.orbId; } catch { /* below */ }
   const last = readLast(home);
   return /^[0-9a-f]{32}$/.test(last.orbId ?? '') ? last.orbId : null;

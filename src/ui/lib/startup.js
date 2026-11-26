@@ -7,7 +7,8 @@
 //              and app.coreState (null), so the screen with «Reintentar» and «Buscar actualización» is reached
 //   unlock     the master password, typed (data: master.state): the PC cannot open the keys alone, or Orb is locked
 //   setup      the welcome was closed before its end (config.setupPending): it goes on where it stopped
-//              (data: { step: 'carpetas' | 'maestra' | 'equipo', plan, name })
+//              (data: { step: 'datos' | 'carpetas' | 'maestra' | 'equipo', plan, name, fresh? }); after a reset or «Empezar de cero»
+//              (app.state › welcomeFresh) it starts from its first step, with the folder already there
 //   master     the master password, made for the first time on an Orb that was already there (data: master.state)
 //   layout     folders of an earlier Orb at the top of the workspace (data: app.layoutPlan)
 //   app        Orb
@@ -22,7 +23,10 @@ export async function startupPhase(call, { mobile = false } = {}) {
   if (ms?.exists && (ms.locked || ms.lost || ms.screenLocked)) return { phase: 'unlock', data: ms };
   const plan = await call('app.layoutPlan');
   const state = await call('app.state');
-  if (state?.config?.setupPending === true) return { phase: 'setup', data: { step: plan?.pending ? 'carpetas' : !ms?.exists ? 'maestra' : 'equipo', plan, name: state.config.assistantName ?? null } };
+  if (state?.config?.setupPending === true) {
+    if (state.welcomeFresh === true) return { phase: 'setup', data: { step: 'datos', fresh: true, plan, name: state.config.assistantName ?? null, home: state.home ?? null } };
+    return { phase: 'setup', data: { step: plan?.pending ? 'carpetas' : !ms?.exists ? 'maestra' : 'equipo', plan, name: state.config.assistantName ?? null } };
+  }
   if (!ms?.exists) return { phase: 'master', data: ms };
   if (plan?.pending) return { phase: 'layout', data: plan };
   return { phase: 'app' };

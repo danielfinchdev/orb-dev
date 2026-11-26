@@ -79,6 +79,7 @@ const SettingsDialog = deferred(loadSettings, 'SettingsDialog');
 const GamesDialog = deferred(() => import('@/games/games.jsx'), 'GamesDialog');
 const Tour = deferred(() => import('@/components/tour.jsx'), 'Tour');
 // The start's own screens: only on a first run, a missing core or folders to review.
+const PreviousQuestion = lazy(() => import('@/views/uninstall.jsx').then((m) => ({ default: m.PreviousQuestion })));
 const Setup = lazy(() => import('@/views/setup.jsx').then((m) => ({ default: m.Setup })));
 const CoreMissing = lazy(() => import('@/views/core-missing.jsx').then((m) => ({ default: m.CoreMissing })));
 const LayoutReview = lazy(() => import('@/views/layout.jsx').then((m) => ({ default: m.LayoutReview })));
@@ -294,6 +295,8 @@ function AppRoot() {
       let info;
       try { info = await bridge.info(); } catch (e) { setError(String(e?.message ?? e)); return alive && setPhase('error'); }
       setState({ info });
+      // a workspace of an earlier install is on this PC: the question comes before the welcome (nothing is adopted in silence)
+      if (info.needsSetup && info.previous) return alive && setPhase('previous');
       if (info.needsSetup) return alive && setPhase('setup');
       if (info.needsPairing) return alive && setPhase('pair');
       // this app is older than what the Orb asks for (protocol of the link): update first.
@@ -422,6 +425,8 @@ function AppRoot() {
     if (phase !== 'app' || !ready) return;
     try { if (!performance.getEntriesByName('orb:ready').length) requestAnimationFrame(() => performance.mark('orb:ready')); } catch { /* no performance API */ }
   }, [phase, ready]);
+  // whichever the answer, the app now has a workspace: the start goes on as for any start (the welcome included, after «Empezar de cero»)
+  if (phase === 'previous') return <>{strip}<Suspense fallback={null}><PreviousQuestion previous={getState().info?.previous} onAnswered={() => window.location.reload()} /></Suspense></>;
   if (phase === 'setup') return <>{strip}<Suspense fallback={null}><Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></Suspense></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   // a browser opened from the QR: the master password before linking.
