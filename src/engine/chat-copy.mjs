@@ -188,6 +188,8 @@ export class ChatCopy {
   }
   // The plan as the window shows it (without the internals).
   async preview(id) {
+    // the list is open: the window has taken the ready switch, so the queue is not freed behind its back
+    clearTimeout(this.readyTimers.get(String(id))); this.readyTimers.delete(String(id));
     const p = await this.plan(id);
     if (!p.ok) return p;
     const { snap, head, repo, zero, ...shown } = p;

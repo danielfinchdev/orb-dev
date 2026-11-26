@@ -193,6 +193,19 @@ test('7: a ready move waits for the window (shown by copy.state) and, if nobody 
   assert.equal(copy.state(s.id).ready, null); copy.readyMs = 5 * 60_000;
 });
 
+test('H: opening the list stops the five-minute timer, so the queue is not freed behind an open dialog', async () => {
+  const p = mkProject(); const s = await mkChat(p);
+  await turn(p, s.id, 'write a.txt=two');
+  board.settingJson(`chatcopy_next:${s.id}`, { toCopy: true });
+  copy.readyMs = 150; await copy.afterTurn(s.id);
+  assert.equal(copy.readyTimers.has(s.id), true);
+  await copy.preview(s.id);
+  assert.equal(copy.readyTimers.has(s.id), false);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.ok(copy.readyFor(s.id), 'still ready: the window has it open');
+  copy.cancelWait(s.id); copy.readyMs = 5 * 60_000;
+});
+
 test('E: «wait» with no turn running opens the list now, and a restart drops what waited', async () => {
   const p = mkProject(); const s = await mkChat(p);
   const before = events.length;
