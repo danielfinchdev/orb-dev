@@ -15,7 +15,8 @@ import { ROOT_LOG_MAX, now, same, checkProjectPath } from './board-common.mjs';
 export class BoardProjects {
   // ---- projects
   // Agents (MCP) can only create projects; moving one to another folder is a user action (fromUser).
-  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false } = {}) {
+  // mark: the token of a folder Orb has just made (created-marks.mjs); a folder that changes place loses its mark.
+  addProject({ name, path: folder, notes = '' }, actor, { fromUser = false, mark = null } = {}) {
     name = oneLine(name, 60);
     if (!name || !folder) throw new Error(tr('sys.board.nameAndPath'));
     const existing = this.project(name);
@@ -24,8 +25,9 @@ export class BoardProjects {
     // One folder, one project: the same folder under another name is the project that already exists.
     const twin = !existing && this.projects().find((p) => same(p.path, checked));
     if (twin) return twin;
-    this.run(`INSERT INTO projects (name, path, notes, created_at) VALUES (?, ?, ?, ?)
-              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes`, name, checked, String(notes ?? '').slice(0, 2000), now());
+    this.run(`INSERT INTO projects (name, path, notes, created_at, created_by_orb) VALUES (?, ?, ?, ?, ?)
+              ON CONFLICT(name) DO UPDATE SET path = excluded.path, notes = excluded.notes,
+                created_by_orb = CASE WHEN lower(projects.path) = lower(excluded.path) THEN COALESCE(excluded.created_by_orb, projects.created_by_orb) ELSE excluded.created_by_orb END`, name, checked, String(notes ?? '').slice(0, 2000), now(), mark);
     this.ensureProjectLog(name);
     try { this.mergeRootLog(name, checked); } catch { /* the folder's log stays where it is: merged on a later add */ }
     // a folder added (by hand, or by an agent) is listed again even if it was another user's project of 3.7.

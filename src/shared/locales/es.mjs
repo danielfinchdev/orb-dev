@@ -28,6 +28,7 @@ import ws6 from './es/ws6.mjs';
 import ws6android from './es/ws6-android.mjs';
 import phoneEngine from './es/phone-engine.mjs';
 import master from './es/master.mjs';
+import uninstall from './es/uninstall.mjs';
 import cuentasUi from './es/cuentas-ui.mjs';
 import modos from './es/modos.mjs';
 import ola1 from './es/ola1.mjs';
@@ -77,6 +78,7 @@ export default {
   ...ws6android,
   ...phoneEngine,
   ...master,
+  ...uninstall,
   ...cuentasUi,
   ...modos,
   ...ola1,

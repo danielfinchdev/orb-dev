@@ -13,6 +13,8 @@
     "allow-app-delete-project",
     "allow-app-setup",
     "allow-app-switch-home",
+    "allow-app-previous",
+    "allow-app-uninstall",
     "allow-app-zoom",
     "allow-app-zoom-step",
     "allow-window-act",

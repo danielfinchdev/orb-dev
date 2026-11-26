@@ -32,6 +32,7 @@ mod screenshot;
 mod signature;
 mod tools;
 mod trace;
+mod uninstall;
 mod updater;
 mod vault_host;
 mod webview;
@@ -102,7 +103,7 @@ async fn app_info(window: WebviewWindow) -> Result<Value, String> {
   };
   // The workspace goes to C:\Orb unless the user picks another place (the welcome shows it already chosen).
   let base = std::env::var("ORB_DEFAULT_BASE").unwrap_or_else(|_| format!("{}\\", std::env::var("SystemDrive").unwrap_or_else(|_| "C:".into())));
-  Ok(json!({ "version": app.package_info().version.to_string(), "home": home, "needsSetup": home.is_none(), "platform": "win32", "defaultBase": base, "startError": start_error }))
+  Ok(json!({ "version": app.package_info().version.to_string(), "home": home, "needsSetup": home.is_none(), "previous": engine.previous(), "platform": "win32", "defaultBase": base, "startError": start_error }))
 }
 
 /// The window's «Reintentar» after the engine failed to start, and «Empezar con una clave nueva» after the sealed keys
@@ -119,6 +120,21 @@ async fn app_retry_start(window: WebviewWindow, new_secret: Option<bool>) -> Res
 async fn app_setup(window: WebviewWindow, data: Value) -> Result<Value, String> {
   only_main(&window)?;
   engine::get(window.app_handle()).setup(data).await
+}
+
+/// «¿Los recupero o empiezo de cero?» after reinstalling over a workspace that was already there (src/engine/previous.mjs).
+#[tauri::command]
+async fn app_previous(window: WebviewWindow, choice: String) -> Result<Value, String> {
+  only_main(&window)?;
+  engine::get(window.app_handle()).previous_choice(&choice).await
+}
+
+/// The last step of «Desinstalar» (uninstall.rs): Orb ends and the uninstaller beside it starts.
+#[tauri::command]
+async fn app_uninstall(window: WebviewWindow, code: String) -> Result<(), String> {
+  only_main(&window)?;
+  let app = window.app_handle().clone();
+  uninstall::launch(engine::get(&app), app, code).await
 }
 
 #[tauri::command]
@@ -365,6 +381,8 @@ pub fn run() {
       app_retry_start,
       app_setup,
       app_switch_home,
+      app_previous,
+      app_uninstall,
       app_zoom,
       app_zoom_step,
       window_act,

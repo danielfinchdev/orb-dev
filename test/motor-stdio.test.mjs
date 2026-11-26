@@ -172,11 +172,11 @@ test('the engine answers the Tauri app: locate, setup, switchHome, texts; a seal
     return r.result;
   };
   // A fresh PC (run from the code: never an existing real folder).
-  assert.deepEqual(await ask('locate', { userData, packaged: false }), { home: null });
+  assert.deepEqual(await ask('locate', { userData, packaged: false }), { home: null, previous: null });
   const { home } = await ask('setup', { userData, base, assistantName: 'Orb', userName: 'Ana', language: 'en' });
   assert.equal(path.dirname(home), base);
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(userData, 'ubicacion.json'), 'utf8')), { home });
-  assert.deepEqual(await ask('locate', { userData }), { home });
+  assert.deepEqual(await ask('locate', { userData }), { home, previous: null });
   // Texts of the app's own dialogs, in the workspace's language.
   const texts = await ask('texts', { home });
   assert.equal(texts['sys.dialog.closeAnyway'], 'Close anyway');

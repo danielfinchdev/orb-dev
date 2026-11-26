@@ -95,7 +95,7 @@ test('permisos y seguridad: permisos, espera, rutas, contraseña maestra con Win
 });
 
 test('datos: copias, clave, datos 3.7, papelera, copias de chats y carpeta core', () => {
-  assert.match(data, /export function DataCards\(\) \{ return <><BackupsCard \/><KeyCard \/><LegacyCard \/><TrashCard \/><WorktreesCard \/><CoreCard \/><\/>; \}/);
+  assert.match(data, /export function DataCards\(\) \{ return <><BackupsCard \/><KeyCard \/><LegacyCard \/><TrashCard \/><WorktreesCard \/><CoreCard \/><PreviousBlock \/><UninstallBlock \/><\/>; \}/);
 });
 
 test('avanzado: navegador (con la ventana en directo), modo experto (con sus paneles), Android y agentes de fuera', () => {

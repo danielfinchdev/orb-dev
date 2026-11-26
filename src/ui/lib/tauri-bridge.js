@@ -66,6 +66,10 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     desktop: true,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
+    // «¿Los recupero o empiezo de cero?» after reinstalling over a workspace that was already there: 'recover' | 'fresh'.
+    previous: (choice) => invoke('app_previous', { choice: choice === 'fresh' ? 'fresh' : 'recover' }),
+    // The last step of «Desinstalar»: the code the engine gave when the data was gone; Orb ends and its uninstaller starts.
+    uninstall: (code) => invoke('app_uninstall', { code: String(code ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
     pickFolder: (title) => invoke('app_pick_folder', { title: text(title) }),
     pickAttachments: () => invoke('app_pick_attachments'),

@@ -139,6 +139,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // This workspace's keys only (a switch of workspace starts again in the same process).
   let keys = null; ctx.keys = null; ctx.secret = null;
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
+    ctx.userData = userData;
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
     if (!validSecret(secret) && hostSecret === true) keys = await secretFromApp(home, userData, newSecret);
@@ -182,6 +183,8 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // a little before saying it is not there.
   for (let i = 0; !fs.existsSync(home) && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
   if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
+  // A «Desinstalar» / «Restablecer» that was cut: its journal finishes what it can before anything below could bring data back.
+  if (ctx.userData) { try { const r = await (await import('../domain/data/uninstall.mjs')).resumeAndReport(ctx.userData, ctx.keys?.approval ?? null); if (r) log(`desinstalar: diario retomado (${r.ok ? 'terminado' : 'incompleto'})`); } catch (error) { log(`desinstalar: ${error.message}`); } }
   const { migrateWorkspace } = await import('../domain/workspace/core-folder.mjs');
   migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message
   // The first 3.8 builds named this workspace's backups' folder after its whole path: taken over once.
@@ -396,7 +399,9 @@ async function run(board, { home, version, restored, repair }) {
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   // Orb locked: the agents' browser stops recording (host-browser.mjs › lock).
   const onLocked = () => { hostBrowser?.lock().catch?.((error) => log(`navegador del agente: grabación: ${error.message}`)); };
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked, onLocked });
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked, onLocked,
+    // what only this file holds: the agents' browser, the developer's control line and the phone access
+    onQuiesce: async () => { try { hostBrowser?.shutdown(); } catch { /* stopping anyway */ } try { devControl?.stop(); } catch { /* stopping anyway */ } await Promise.resolve(remote?.stop()).catch(() => {}); } });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (the app decides: src-tauri/src/lib.rs; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
@@ -422,6 +427,8 @@ async function run(board, { home, version, restored, repair }) {
   const { syncProjects } = await import('../domain/projects/projects.mjs');
   // a project delete the app left half-way (closed between the check and the end) is finished or undone.
   try { (await import('../domain/projects/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
+  // after «Empezar de cero»: the projects Orb made come back with their mark, before the folders are looked at
+  try { (await import('../domain/data/uninstall.mjs')).importKeptProjects(home, board); } catch (error) { log(`proyectos conservados: ${error.message}`); }
   syncProjects(board);
   // the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
@@ -430,7 +437,8 @@ async function run(board, { home, version, restored, repair }) {
   const limitWatch = createLimitWatch({ board, announce: (fact) => remote?.announce(fact) });
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
-    if (ticking) return; ticking = true;
+    // «Desinstalar» / «Restablecer» is deleting core: the loop must not take that for a core lost (it would restore it).
+    if (ticking || ctx.uninstalling) return; ticking = true;
     try {
       // Folders created or deleted by hand in the assistant's folder show up in the app within a few seconds.
       if (Date.now() - lastSync > 5000) {
@@ -456,6 +464,8 @@ async function run(board, { home, version, restored, repair }) {
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
   // «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
   for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
+  // what a run of «Desinstalar» / «Restablecer» that was cut could not finish (domain/data/uninstall.mjs › resumeAndReport)
+  if (ctx.userData) { try { const r = (await import('../domain/data/uninstall.mjs')).takeReport(ctx.userData); if (r && !r.untrusted && !r.stopped) board.notice(tr('uninstall.cut', { done: r.done, left: r.failed + r.skipped }), 'warning'); } catch (error) { log(`desinstalar: ${error.message}`); } }
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/domain/data/legacy/migrate-38.mjs): said once.
   {
@@ -525,8 +535,15 @@ function shutdown() {
 // (sys.main.*, sys.dialog.* and sys.terminal.*: the terminals and editors it opens) in the language of the settings.
 // Not API methods: the window cannot send them.
 const SHELL_TEXTS = /^sys\.(main|dialog|terminal)\./;
+const locateOptions = (m) => ({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null });
 const APP_MESSAGES = {
-  locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
+  // A workspace left by an earlier install is never adopted in silence: previous says so and the window asks (src/engine/previous.mjs).
+  locate: async (m) => {
+    const where = locateOptions(m);
+    const previous = (await import('./previous.mjs')).previousData(where);
+    return { home: previous ? null : locateHome(where), previous };
+  },
+  previousChoice: async (m) => (await import('./previous.mjs')).answerPrevious({ ...locateOptions(m), language: m.language === 'en' ? 'en' : 'es' }, String(m.choice ?? '')),
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
   // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/browser/host-browser.mjs).

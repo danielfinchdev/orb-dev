@@ -42,6 +42,7 @@ import { linkMethods } from './link.mjs';
 import { accountMethods } from './accounts.mjs';
 import { historyMethods } from './history.mjs';
 import { dataApi } from './data.mjs';
+import { uninstallApi } from './uninstall.mjs';
 import { inboxMethods } from './inbox.mjs';
 import { keysMethods } from './keys.mjs';
 import { mcpExtMethods } from './mcp-ext.mjs';
@@ -81,7 +82,7 @@ const hideUserProfile = (text) => {
 
 const htmlRef = ({ id, session }) => ({ id: str(id, 'página', 64), session: str(session, 'conversación', 200) });
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitRaw, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
+export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitRaw, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {}, onQuiesce = async () => {} }) {
   // A deleted or trashed chat takes the HTML pages it showed with it (htmlPages is declared below; it exists by the first event).
   const emit = (event, payload) => { emitRaw(event, payload); if (event === 'session:removed' && payload?.id != null) htmlPages.dropSession(payload.id); };
   if (sessions.emit === emitRaw) sessions.emit = emit; // sessions.remove() emits through the engine's own emit
@@ -202,6 +203,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const mcpExt = mcpExtMethods({ board, log, version, emit });
   mcpExt.startup();
   const data = dataApi(shared); // backups
+  // «Restablecer» / «Desinstalar»: everything of Orb stops (the agents, the terminals, the servers, the phone access) before core is deleted.
+  const uninstall = uninstallApi({ board, emit, log, remoteRef, backupNow: () => data.run('manual'), quiesce: async () => { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); await Promise.allSettled([android.stopServer(), mcpExt.stop(), onQuiesce()]); await scheduler.drain().catch(() => {}); } });
   let usageAskedAt = 0; // usage.refresh
 
   const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
@@ -216,6 +219,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'app.state': () => ({
       version, home: ctx.home, paths: { core: ctx.paths.core, projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
+      // a reset or «Empezar de cero» left the welcome to do from its first step (the saved folder and the projects stay)
+      welcomeFresh: fs.existsSync(path.join(ctx.paths.core, 'restablecido')),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
       // what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
@@ -262,6 +267,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       const p = patch ?? {};
       const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: unlocked === 'password' || unlocked === 'mobile' || Boolean(ctx.master?.checkToken(unlock)) }) : null;
       const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
+      // the welcome after a reset or a fresh start is over: its mark (the restablecido file in core) goes
+      if (p.setupPending === false) fs.rmSync(path.join(ctx.paths.core, 'restablecido'), { force: true });
       if (p.backup) guardOutside(); // the chosen backups' folder, kept from the agents
       return c;
     },
@@ -461,6 +468,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...keysMethods(shared),
     ...mcpExt.methods,
     ...data.methods,
+    ...uninstall.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
     ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); htmlPages.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),

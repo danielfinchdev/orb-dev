@@ -283,6 +283,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'autonomy', 'TEXT'], ['tasks', 'user_asked', 'TEXT'],
   // the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
+  // the token that proves Orb made the folder (its twin is the .orb-creada file: src/domain/projects/created-marks.mjs).
+  ['projects', 'created_by_orb', 'TEXT'],
   // «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).
   ['sessions', 'android', 'INTEGER NOT NULL DEFAULT 0'],
   // when a chat was sent to the trash (null = not in it); nothing moves, the visible lists just skip it (src/engine/api/trash.mjs).

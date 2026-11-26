@@ -36,6 +36,8 @@ fn main() {
     "app_delete_project",
     "app_setup",
     "app_switch_home",
+    "app_previous",
+    "app_uninstall",
     "app_zoom",
     "app_zoom_step",
     "window_act",

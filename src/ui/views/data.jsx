@@ -12,6 +12,7 @@ import { unlockCore } from '@/lib/core-access.js';
 import { newRecoveryCode } from '@/views/recovery.jsx';
 import { askNewSecret } from '@/components/new-secret.jsx';
 import { TrashCard } from './settings/trash.jsx';
+import { PreviousBlock, UninstallBlock } from './uninstall.jsx';
 import { WorktreesCard } from './settings/worktrees.jsx';
 import { Block, Panel, Setting } from './settings/rows.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
@@ -198,7 +199,8 @@ function CoreCard() {
 }
 
 // The master password is in Permisos y seguridad; here, the copies, the key of this PC and what Orb keeps of its own.
-export function DataCards() { return <><BackupsCard /><KeyCard /><LegacyCard /><TrashCard /><WorktreesCard /><CoreCard /></>; }
+// «Datos de antes» and «Restablecer y desinstalar» close the tab.
+export function DataCards() { return <><BackupsCard /><KeyCard /><LegacyCard /><TrashCard /><WorktreesCard /><CoreCard /><PreviousBlock /><UninstallBlock /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.
