@@ -9,7 +9,8 @@ import { ctx, tr } from '../../platform/context.mjs';
 import { hostCall } from '../host/host.mjs';
 import { fail } from './common.mjs';
 import { BOXES, MODES } from '../../shared/uninstall-boxes.mjs';
-import { planUninstall, runPlan, uninstallEnv, closeJournal, MARK_FILE } from '../../domain/data/uninstall.mjs';
+import { BOXES as ALL_BOXES } from '../../shared/uninstall-boxes.mjs';
+import { planUninstall, runPlan, uninstallEnv, closeJournal, confirmResume, MARK_FILE } from '../../domain/data/uninstall.mjs';
 import { asideList, deleteAside } from '../previous.mjs';
 
 // What must be typed to confirm «Borrar todo»; either language's word is taken.
@@ -18,14 +19,14 @@ const LIST_MAX = 400;
 
 // The mark the installer's hooks read (src-tauri/nsis/hooks.nsh): a compact JSON, so they can look for `"encrypted":true`.
 export function markText({ plan, code, now = Date.now() }) {
-  return JSON.stringify({ v: 1, at: new Date(now).toISOString(), mode: plan.mode, encrypted: plan.keyKept === true, games: plan.keep.games === true, code, expires: now + 3_600_000 });
+  return JSON.stringify({ v: 1, at: new Date(now).toISOString(), mode: plan.mode, encrypted: plan.keyKept === true, games: plan.keep.games === true, kept: ALL_BOXES.some((b) => plan.keep[b]) || plan.keptProjects.length > 0, code, expires: now + 3_600_000 });
 }
 
 export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef = { current: null }, backupNow = async () => null, quiesce = async () => {}, leave = null }) {
   // The engine ends so the app starts it again on the new core (exit code 75, as when core is lost).
   const restart = leave ?? (() => setTimeout(() => process.exit(75), 700).unref?.());
   const userData = () => { if (!ctx.userData) fail(tr('uninstall.noApp')); return ctx.userData; };
-  const env = () => uninstallEnv({ home: ctx.home, userData: userData(), config: ctx.config });
+  const env = () => uninstallEnv({ home: ctx.home, userData: userData(), config: ctx.config, signKey: ctx.keys?.approval ?? null });
 
   const parse = (p = {}) => {
     const mode = MODES.includes(p.mode) ? p.mode : fail(tr('msg.api.invalid', { name: 'mode' }));
@@ -73,10 +74,11 @@ export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef
         if (!pl.keep.link) { try { remoteRef.current?.revokeAll(); } catch (error) { log(`desinstalar: móviles: ${error.message}`); } }
         // 3. from here nothing of Orb works: the loop of the engine stops looking at core, the agents and the servers stop
         ctx.uninstalling = true;
+        try {
         await quiesce();
         log(`desinstalar: ${pl.mode}, ${pl.items.length} elementos`);
         const hooks = {
-          trash: (folder, token) => hostCall('host.trashFolder', { path: folder, token }, 600_000),
+          trash: (folder, token, name, forever) => hostCall('host.trashFolder', { path: folder, token, ...(forever ? { forever: true } : {}) }, 600_000),
           project: (name) => board.project(name),
           dropProject: (name) => board.run('DELETE FROM projects WHERE name = ?', name),
           closeDb: () => { try { board.db.close(); } catch { /* closed */ } },
@@ -97,8 +99,18 @@ export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef
         closeJournal(dir);
         restart();
         return { ok: true, mode: 'reset', report: r };
+        } catch (error) {
+          // anything unexpected after the engine stopped working: it ends, to start again (its journal, if any, says where it was)
+          log(`desinstalar: ${error.stack ?? error}`);
+          restart();
+          throw error;
+        }
       } finally { running = false; }
     },
+    // after a stopped run the user said to go on: the journal is let loose and the engine starts again to run it
+    'uninstall.resume': () => { if (!confirmResume(userData(), ctx.keys?.approval ?? null)) fail(tr('uninstall.noJournal')); restart(); return { ok: true }; },
+    // the uninstaller could not be started (the window says so): the engine, closed by the run, starts again
+    'uninstall.restart': () => { restart(); return { ok: true }; },
     'previous.list': () => ({ list: asideList(ctx.home) }),
     'previous.delete': ({ name }) => {
       const r = deleteAside(ctx.home, String(name ?? ''), { projects: board.projects().map((x) => x.path) });

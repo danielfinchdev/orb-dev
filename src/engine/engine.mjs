@@ -184,7 +184,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   for (let i = 0; !fs.existsSync(home) && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
   if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
   // A «Desinstalar» / «Restablecer» that was cut: its journal finishes what it can before anything below could bring data back.
-  if (ctx.userData) { try { const r = await (await import('../domain/data/uninstall.mjs')).resumeAndReport(ctx.userData, home); if (r) log(`desinstalar: diario retomado (${r.ok ? 'terminado' : 'incompleto'})`); } catch (error) { log(`desinstalar: ${error.message}`); } }
+  if (ctx.userData) { try { const r = await (await import('../domain/data/uninstall.mjs')).resumeAndReport(ctx.userData, ctx.keys?.approval ?? null); if (r) log(`desinstalar: diario retomado (${r.ok ? 'terminado' : 'incompleto'})`); } catch (error) { log(`desinstalar: ${error.message}`); } }
   const { migrateWorkspace } = await import('../domain/workspace/core-folder.mjs');
   migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message
   // The first 3.8 builds named this workspace's backups' folder after its whole path: taken over once.
@@ -427,6 +427,8 @@ async function run(board, { home, version, restored, repair }) {
   const { syncProjects } = await import('../domain/projects/projects.mjs');
   // a project delete the app left half-way (closed between the check and the end) is finished or undone.
   try { (await import('../domain/projects/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
+  // after «Empezar de cero»: the projects Orb made come back with their mark, before the folders are looked at
+  try { (await import('../domain/data/uninstall.mjs')).importKeptProjects(home, board); } catch (error) { log(`proyectos conservados: ${error.message}`); }
   syncProjects(board);
   // the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
@@ -463,7 +465,7 @@ async function run(board, { home, version, restored, repair }) {
   // «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
   for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
   // what a run of «Desinstalar» / «Restablecer» that was cut could not finish (domain/data/uninstall.mjs › resumeAndReport)
-  if (ctx.userData) { try { const r = (await import('../domain/data/uninstall.mjs')).takeReport(ctx.userData); if (r) board.notice(tr('uninstall.cut', { done: r.done, left: r.failed + r.skipped }), 'warning'); } catch (error) { log(`desinstalar: ${error.message}`); } }
+  if (ctx.userData) { try { const r = (await import('../domain/data/uninstall.mjs')).takeReport(ctx.userData); if (r) board.notice(tr(r.untrusted ? 'uninstall.untrusted' : r.stopped ? 'uninstall.stopped' : 'uninstall.cut', { done: r.done, left: r.failed + r.skipped }), 'warning'); } catch (error) { log(`desinstalar: ${error.message}`); } }
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/domain/data/legacy/migrate-38.mjs): said once.
   {
@@ -536,10 +538,8 @@ const SHELL_TEXTS = /^sys\.(main|dialog|terminal)\./;
 const locateOptions = (m) => ({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null });
 const APP_MESSAGES = {
   // A workspace left by an earlier install is never adopted in silence: previous says so and the window asks (src/engine/previous.mjs).
-  // A cut «Desinstalar» / «Restablecer» is finished first (its journal), so the question never offers what was being deleted.
   locate: async (m) => {
     const where = locateOptions(m);
-    try { await (await import('../domain/data/uninstall.mjs')).resumeAndReport(where.userData); } catch (error) { console.error(`desinstalar: ${error.message}`); }
     const previous = (await import('./previous.mjs')).previousData(where);
     return { home: previous ? null : locateHome(where), previous };
   },

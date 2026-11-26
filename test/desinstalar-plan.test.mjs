@@ -3,6 +3,7 @@ import './helpers.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import { world, put, tree } from './desinstalar-mundo.mjs';
 import { normalizeKeep, keepsKey, SHORTCUTS, BOXES } from '../src/shared/uninstall-boxes.mjs';
@@ -337,7 +338,13 @@ test('a failure half-way stops, says what went and what did not, and the journal
     assert.ok(j && j.items.some((i) => i.state === 'failed'));
     // the next start: the engine is not running, so the Recycle Bin is not there; the rest is finished and the project is reported
     w.close();
-    const resumed = await U.resumeJournal({ userData: w.userData });
+    // a failure that was reported stops for good: the next start does not run it again by itself
+    const held = await U.resumeJournal({ userData: w.userData, signKey: w.signKey });
+    assert.equal(held.stopped, true); assert.equal(held.ok, false);
+    assert.ok(fs.existsSync(w.p.secrets) && fs.existsSync(path.join(w.p.data, 'clave2.enc')), 'nothing was deleted by the start');
+    assert.equal(U.confirmResume(w.userData, crypto.randomBytes(32)), false, 'only with the PC key');
+    assert.equal(U.confirmResume(w.userData, w.signKey), true, 'the user said to go on');
+    const resumed = await U.resumeJournal({ userData: w.userData, signKey: w.signKey });
     assert.equal(resumed.ok, true, JSON.stringify(resumed));
     assert.equal(resumed.skipped.length, 1, 'the folder that could not go to the Recycle Bin is reported, not deleted');
     const left = [w.mine.path, w.second.path].filter((x) => fs.existsSync(x));

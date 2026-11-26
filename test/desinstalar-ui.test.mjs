@@ -18,7 +18,7 @@ test('every text the window and the engine use exists in Spanish and English, wi
   const used = new Set([...view.matchAll(/'(uninstall\.[A-Za-z.]+)'/g)].map((m) => m[1]));
   for (const b of BOXES) { used.add(`uninstall.box.${b}`); used.add(`uninstall.box.${b}Desc`); }
   for (const k of ['phones', 'dirty', 'folders', 'oldKept']) { used.add(`uninstall.${k}.one`); used.add(`uninstall.${k}.other`); }
-  used.delete('uninstall.plan'); used.delete('uninstall.run'); used.delete('uninstall.phones'); used.delete('uninstall.dirty'); used.delete('uninstall.folders'); used.delete('uninstall.oldKept');
+  used.delete('uninstall.plan'); used.delete('uninstall.run'); used.delete('uninstall.restart'); used.delete('uninstall.phones'); used.delete('uninstall.dirty'); used.delete('uninstall.folders'); used.delete('uninstall.oldKept');
   for (const m of read('src', 'engine', 'api', 'uninstall.mjs').matchAll(/tr\('(uninstall\.[A-Za-z.]+)'/g)) used.add(m[1]);
   for (const m of read('src', 'engine', 'engine.mjs').matchAll(/tr\('(uninstall\.[A-Za-z.]+)'/g)) used.add(m[1]);
   assert.ok(used.size > 60);
@@ -52,6 +52,8 @@ test('the blocks close Ajustes › Datos (the older data above the reset), only 
   assert.match(view, /planId: plan\.id/);
   assert.match(view, /mode === 'uninstall' && BOXES\.every\(\(b\) => !plan\.keep\[b\]\)/);
   assert.match(view, /lockBusy: true/, 'the run cannot be walked away from');
+  assert.ok(view.includes('plan.boxes.key?.items > 0'), 'the PC key is a row of the list');
+  assert.ok(view.includes("call('uninstall.restart')"), 'a uninstaller that cannot start does not leave the engine closed');
   // the place the survey (the next step) goes in is marked
   assert.match(view, /survey/i);
 });

@@ -65,7 +65,8 @@ export async function world({ backups = true, customFolder = false, vault = true
     if (folder) made.push((await K.createBackup({ home, secret, kind: 'manual', version: 'test', folder })).file);
   }
   const config = { ...ctx.config, ...(folder ? { backup: { folder } } : {}) };
-  const env = () => uninstallEnv({ home, userData, config });
+  const signKey = crypto.randomBytes(32); // what signs the journal (this PC's key in the app)
+  const env = () => uninstallEnv({ home, userData, config, signKey });
   const rows = () => board.projects();
-  return { ...t, userData, home, p, board, secret, env, rows, mine, second, oldFolder, outside, folder, made, hk, old, close: () => { try { board.db.close(); } catch { /* closed */ } } };
+  return { ...t, signKey, userData, home, p, board, secret, env, rows, mine, second, oldFolder, outside, folder, made, hk, old, close: () => { try { board.db.close(); } catch { /* closed */ } } };
 }

@@ -8,6 +8,10 @@ export default {
   'uninstall.needWord': 'Type DELETE to confirm.',
   'uninstall.noUninstaller': "Orb's uninstaller was not found. Nothing was deleted.",
   'uninstall.cut': 'A delete of Orb was cut short. {done} things were finished and {left} are left undeleted.',
+  'uninstall.stopped': 'A delete of Orb stopped. {done} things were deleted and {left} are left. Orb will not go on with it unless you confirm.',
+  'uninstall.untrusted': 'Orb found a half-done delete that it cannot check and did not go on with it.',
+  'uninstall.noJournal': 'There is no stopped delete.',
+  'uninstall.keyRow': "This PC's key",
   // the block at the end of Settings › Data
   'uninstall.blockTitle': 'Reset and uninstall',
   'uninstall.blockNote': 'Two delicate actions. They always ask you to confirm.',

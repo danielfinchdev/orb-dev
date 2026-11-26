@@ -94,6 +94,7 @@ function PlanBody({ plan, v, set }) {
     if (!box || !(box.items > 0 || (b === 'link' && box.devices > 0))) continue;
     rows.push(<Row key={b} title={t(`uninstall.box.${b}`)} meta={[b === 'link' && box.devices > 0 ? plural('uninstall.phones', box.devices) : null, box.bytes > 0 ? size(box.bytes) : null]} />);
   }
+  if (plan.boxes.key?.items > 0) rows.push(<Row key="key" title={t('uninstall.keyRow')} meta={[size(plan.boxes.key.bytes)]} />);
   if (plan.dirty.length) {
     const names = [...new Set(plan.dirty.map((d) => d.project).filter(Boolean))].join(', ');
     rows.push(<Row key="dirty" title={plural('uninstall.dirty', plan.dirty.length)} meta={[names, t('uninstall.dirtyNote')]} />);
@@ -198,7 +199,8 @@ export async function runUninstall(mode) {
   if (!done.ok) { await showFailure(done.report); setTimeout(() => window.location.reload(), 1500); return; }
   if (done.mode === 'reset') { notifyOk(tNow('uninstall.resetDone'), { ms: 4000 }); setTimeout(() => window.location.reload(), 1200); return; }
   notifyOk(tNow('uninstall.removing'), { ms: 8000 });
-  try { await bridge.uninstall(done.code); } catch (error) { notifyError(error); }
+  // the uninstaller could not start: the engine, closed by the run, starts again and the window with it
+  try { await bridge.uninstall(done.code); } catch (error) { notifyError(error); await call('uninstall.restart').catch(quiet); setTimeout(() => window.location.reload(), 1500); }
 }
 
 // The block at the end of Datos.

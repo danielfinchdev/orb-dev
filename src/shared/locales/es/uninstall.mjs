@@ -8,6 +8,10 @@ export default {
   'uninstall.needWord': 'Escribe BORRAR para confirmar.',
   'uninstall.noUninstaller': 'No se encuentra el desinstalador de Orb. No se ha borrado nada.',
   'uninstall.cut': 'Un borrado de Orb se cortó. Se terminaron {done} cosas y quedan {left} sin borrar.',
+  'uninstall.stopped': 'Un borrado de Orb se detuvo. Se borraron {done} cosas y quedan {left} sin borrar. Orb no lo seguirá sin que lo confirmes.',
+  'uninstall.untrusted': 'Orb encontró un borrado a medias que no puede comprobar y no lo ha seguido.',
+  'uninstall.noJournal': 'No hay ningún borrado detenido.',
+  'uninstall.keyRow': 'Llave de este PC',
   // the block at the end of Ajustes › Datos
   'uninstall.blockTitle': 'Restablecer y desinstalar',
   'uninstall.blockNote': 'Dos acciones delicadas. Siempre piden confirmación.',

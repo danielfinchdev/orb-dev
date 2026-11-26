@@ -332,6 +332,8 @@
   "terminal.write": "pc",
   "trash.list": "remote",
   "uninstall.plan": "pc",
+  "uninstall.restart": "pc",
+  "uninstall.resume": "pc",
   "uninstall.run": "pc",
   "usage.get": "remote",
   "usage.history": "remote",

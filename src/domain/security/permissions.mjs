@@ -79,7 +79,7 @@ export const METHODS = Object.freeze({
   // backups
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'backup.previousKey': 'pc', 'backup.newKey': 'pc', 'backup.cancelKey': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
   // «Restablecer» and «Desinstalar» (the plan and the run) and the data kept aside by «Empezar de cero» (src/engine/api/uninstall.mjs)
-  'uninstall.plan': 'pc', 'uninstall.run': 'pc', 'previous.list': 'pc', 'previous.delete': 'pc',
+  'uninstall.plan': 'pc', 'uninstall.run': 'pc', 'uninstall.resume': 'pc', 'uninstall.restart': 'pc', 'previous.list': 'pc', 'previous.delete': 'pc',
   // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
   'master.helloState': 'pc', 'master.helloEnable': 'pc', 'master.unlockHello': 'pc', 'master.helloDisable': 'pc',
@@ -142,7 +142,7 @@ export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.v
 // rails: any change to the limits (rails.set, rails.restore, or `rails` inside config.save); ruleSeed: putting the shipped
 // rules back, and pausing or deleting one of them (those two only for a shipped rule: see freshPurpose).
 // Asked for a recent unlock only when the vault has a master password: a reset is also the way out of a vault that cannot be opened.
-export const UNLOCK_IF_MASTER = Object.freeze(new Set(['uninstall.plan', 'uninstall.run', 'previous.delete']));
+export const UNLOCK_IF_MASTER = Object.freeze(new Set(['uninstall.plan', 'uninstall.run', 'uninstall.resume', 'previous.delete']));
 export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'rails.set': 'rails', 'rails.restore': 'rails', 'rules.restoreDefaults': 'ruleSeed', 'backup.newKey': 'newKey' });
 export const RULE_PURPOSE = 'ruleSeed';
 export const RAILS_PURPOSE = 'rails';

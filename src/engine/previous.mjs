@@ -4,10 +4,10 @@
 // vault back), and Ajustes › Datos can delete it later. The PC's key stays: it opens that vault.
 import fs from 'node:fs';
 import path from 'node:path';
-import { paths, homeKey, oldHomeKey } from '../platform/paths.mjs';
+import { paths, homeKey, oldHomeKey, writeJson } from '../platform/paths.mjs';
 import { git } from '../platform/git.mjs';
 import { readLocation, saveLocation, findExistingHome } from './desktop-home.mjs';
-import { MARK_FILE, RESET_MARK, KEY_NAME, uninstallEnv, writeHealthyCore } from '../domain/data/uninstall.mjs';
+import { MARK_FILE, RESET_MARK, KEY_NAME, KEPT_PROJECTS, projectsMadeByOrb, uninstallEnv, writeHealthyCore } from '../domain/data/uninstall.mjs';
 import { lstatOrNull, plainChain, sizeOf, removeTree, isUnder } from '../domain/data/safe-delete.mjs';
 import { orbIdOf } from '../domain/data/backup.mjs';
 
@@ -48,8 +48,10 @@ function move(from, to) {
 export async function startFresh({ userData, home, language = 'es' }) {
   const env = uninstallEnv({ home, userData, config: { language } });
   const p = env.p;
-  if (!plainChain(env.realHome, p.core) && lstatOrNull(p.core)) throw new Error('core is a link');
+  if (!plainChain(env.realHome, path.join(env.realHome, 'core')) && lstatOrNull(p.core)) throw new Error('core is a link');
   fs.mkdirSync(p.core, { recursive: true });
+  // the projects Orb made keep their mark through the fresh start: their rows go to the new core (importKeptProjects)
+  const madeByOrb = projectsMadeByOrb(p.db);
   let aside = path.join(p.core, `anterior-${today()}`);
   for (let i = 2; fs.existsSync(aside); i++) aside = path.join(p.core, `anterior-${today()}-${i}`);
   fs.mkdirSync(aside);
@@ -86,6 +88,7 @@ export async function startFresh({ userData, home, language = 'es' }) {
   }
   // a new healthy core (with its own identity, so no old backup is taken for this workspace's)
   await writeHealthyCore({ ...env, config: { language: before ?? language ?? 'es' } }, { keepSettings: false, resetMark: true });
+  if (madeByOrb.length) writeJson(path.join(p.core, KEPT_PROJECTS), { v: 1, projects: madeByOrb });
   orbIdOf(home);
   saveLocation(userData, home);
   clearMark(userData);

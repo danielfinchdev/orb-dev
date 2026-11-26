@@ -92,7 +92,7 @@ for (const shortcut of ['all', 'projects', 'nothing']) {
     const text = fs.readFileSync(path.join(w.userData, 'desinstalado.json'), 'utf8');
     const mark = JSON.parse(text);
     assert.equal(mark.code, r.code); assert.ok(mark.expires - Date.now() > 3_500_000 && mark.expires - Date.now() <= 3_600_000);
-    assert.equal(mark.encrypted, shortcut === 'all'); assert.ok(text.includes(`"encrypted":${shortcut === 'all'}`));
+    assert.equal(mark.kept, true, 'an old project always stays'); assert.ok(text.includes('"kept":true')); assert.equal(mark.encrypted, shortcut === 'all');
     assert.ok(!fs.existsSync(path.join(w.userData, 'desinstalando.json')), 'the journal is closed');
     // the chosen backups folder is never removed; its file of this Orb goes unless kept
     assert.ok(fs.existsSync(w.folder));
@@ -173,13 +173,35 @@ test('a project the Recycle Bin cannot take stops the run: it says what went, th
     await Promise.race([e.exited, wait(10000)]); gone = true;
   } finally { if (!gone) await e.stop(); }
   assert.ok(fs.existsSync(w.p.config) && fs.existsSync(path.join(w.p.data, 'clave2.enc')), 'nothing of the data was deleted');
-  // the next start finishes what the journal says (the folder that did not go stays), and says so
+  // a reported failure stops for good: the next start does not go on by itself, it says so
+  e = await startEngine(w.home, { secret, userData: w.userData });
+  let again;
+  try {
+    await until(() => e.events.some((x) => x.event === 'notice'), 'aviso');
+    assert.ok(fs.existsSync(path.join(w.userData, 'desinstalando.json')), 'the journal waits');
+    assert.ok(fs.existsSync(path.join(w.p.data, 'clave2.enc')), 'nothing more was deleted');
+    // the user confirms: the engine ends to start again and the next start finishes (the folder that did not go stays)
+    assert.deepEqual(await e.call('uninstall.resume', {}), { ok: true });
+  } finally { again = await Promise.race([e.exited, wait(10000).then(() => null)]); if (again !== 75) await e.stop(); }
   e = await startEngine(w.home, { secret, userData: w.userData });
   try {
     await until(async () => !fs.existsSync(path.join(w.userData, 'desinstalando.json')), 'diario cerrado');
     assert.ok(!fs.existsSync(path.join(w.p.data, 'clave2.enc')));
     assert.ok(fs.existsSync(w.second.path) || fs.existsSync(w.mine.path), 'the folder that could not go to the Recycle Bin is still there');
-    await until(() => e.events.some((x) => x.event === 'notice'), 'aviso');
   } finally { await e.stop(); }
+  w.cleanup();
+});
+
+test('«uninstall.restart» (the uninstaller could not start) makes the engine end to start again; the journal that did not exist is no error', async () => {
+  const w = await world({ backups: false, vault: false }); w.close();
+  const e = await boot(w, hex(), fakeApp(w));
+  let code = null;
+  try {
+    assert.deepEqual(await e.call('uninstall.restart', {}), { ok: true });
+    code = await Promise.race([e.exited, wait(10000).then(() => null)]);
+    assert.equal(code, 75);
+  } finally { if (code !== 75) await e.stop(); }
+  const e2 = await boot(w, hex(), fakeApp(w));
+  try { await assert.rejects(e2.call('uninstall.resume', {}), /./, 'nothing is waiting'); } finally { await e2.stop(); }
   w.cleanup();
 });
