@@ -18,9 +18,13 @@ export const COPY_MOVE_EVENT = 'orb:copy-move';
 export const askMoveToCopy = (id, opts = {}) => window.dispatchEvent(new CustomEvent(COPY_MOVE_EVENT, { detail: { id: String(id), ...opts } }));
 
 // What the header shows for a chat: where it works, whether a join can be undone. Reloaded when the chat changes folder.
+// The last answer per chat is kept so the palette (which has no state of its own) knows whether «Pasar a una copia aparte» applies.
+const lastWhere = new Map();
+export const copyWhere = (id) => lastWhere.get(String(id)) ?? null;
 export function useCopyState(id, version) {
   const [state, setState] = useState({ where: null });
-  const reload = useCallback(() => call('copy.state', { id: String(id) }).then(setState).catch((e) => { quiet(e); setState({ where: null }); }), [id]);
+  const keep = useCallback((s) => { lastWhere.set(String(id), s?.where ?? null); setState(s); }, [id]);
+  const reload = useCallback(() => call('copy.state', { id: String(id) }).then(keep).catch((e) => { quiet(e); keep({ where: null }); }), [id, keep]);
   useEffect(() => { if (fullPc()) reload(); }, [reload, version]);
   return [state, reload];
 }
@@ -38,6 +42,11 @@ export function MoveToCopyDialog({ sessionId, onMoved }) {
     window.addEventListener(COPY_MOVE_EVENT, on);
     const off = bridge.on('copy:ready', (r) => { if (String(r?.id) === String(sessionId)) askMoveToCopy(sessionId, { proceed: r.proceed === true }); });
     return () => { window.removeEventListener(COPY_MOVE_EVENT, on); off(); };
+  }, [sessionId]);
+  // a switch that became ready while another chat was on screen: the list opens when the user comes to this one
+  useEffect(() => {
+    if (!fullPc()) return;
+    call('copy.state', { id: String(sessionId) }).then((st) => { if (st?.ready) askMoveToCopy(sessionId, { proceed: st.ready.proceed === true }); }).catch(quiet);
   }, [sessionId]);
   useEffect(() => {
     if (!open) return undefined;
