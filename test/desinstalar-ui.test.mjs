@@ -54,8 +54,9 @@ test('the blocks close Ajustes › Datos (the older data above the reset), only 
   assert.match(view, /lockBusy: true/, 'the run cannot be walked away from');
   assert.ok(view.includes('plan.boxes.key?.items > 0'), 'the PC key is a row of the list');
   assert.ok(view.includes("call('uninstall.restart')"), 'a uninstaller that cannot start does not leave the engine closed');
-  assert.ok(view.includes('export function StoppedDelete()') && view.includes("call('uninstall.pending')") && view.includes("call('uninstall.discard'") && view.includes("call('uninstall.resume'"), '«Seguir borrando» and «Dejarlo así»');
+  assert.ok(view.includes('export function StoppedDelete({ pending = null })') && view.includes("call('uninstall.pending')") && view.includes("call('uninstall.discard'") && view.includes("call('uninstall.resume'"), '«Seguir borrando» and «Dejarlo así»');
   assert.ok(read('src', 'ui', 'main.jsx').includes('<StoppedDelete />'));
+  assert.ok(read('src', 'ui', 'main.jsx').includes('<StoppedDelete pending={core} />'), 'outside the app too, before the welcome');
   // the place the survey (the next step) goes in is marked
   assert.match(view, /survey/i);
 });
