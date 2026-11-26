@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawnSync } from 'node:child_process';
 import { createHome } from '../src/domain/workspace/home.mjs';
 import { loadConfig, merge } from '../src/platform/config-file.mjs';
 import { writeJson } from '../src/platform/paths.mjs';
@@ -130,6 +131,41 @@ try {
       await page.waitForSelector('text=Revisión semanal');
       await shot('23-programadas');
       await call('schedules.remove', { id: sch.id });
+    }
+  }
+  // ---- 4. 3.8.12 (point 37): a Local chat follows its conversation into a separate copy, asks again, and joins back
+  if (process.env.ORB_REAL_COPY !== '0') {
+    const projDir = path.join(home, 'web', 'prueba-real');
+    const gitIn = (...a) => spawnSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { cwd: projDir, encoding: 'utf8' });
+    if (!fs.existsSync(path.join(projDir, '.git'))) { gitIn('init', '-q', '-b', 'main'); gitIn('add', '-A'); gitIn('commit', '-q', '--allow-empty', '-m', 'base'); }
+    const statuses = await call('agents.status', {});
+    for (const agent of AGENTS.filter((a) => a === 'claude' || a === 'codex')) {
+      try {
+        const t0 = Date.now();
+        const ids = (statuses.find((a) => a.id === agent)?.models ?? []).map((m) => (typeof m === 'string' ? m : m.id ?? m.value));
+        const model = agent === 'claude' ? 'haiku' : ids.find((m) => /mini/i.test(String(m)));
+        const file = 'numeros-' + agent + '.txt';
+        const s = await call('sessions.create', { agent, project: 'prueba-real', ...(model ? { model } : {}), permission: 'editar', title: 'Copia ' + agent });
+        const idle = async (what) => { await page.waitForTimeout(3000); await until(async () => (await call('sessions.list')).find((x) => x.id === s.id)?.status === 'idle', what, 240000); };
+        await call('sessions.send', { id: s.id, text: 'Crea el archivo ' + file + ' con el texto "1 2 3". Responde solo "listo".' });
+        await idle(agent + ' copia turno 1');
+        const cliBefore = (await call('sessions.list')).find((x) => x.id === s.id)?.cli_session ?? null;
+        const plan = await call('copy.preview', { id: s.id });
+        note(agent + ' copia: modelo ' + model + ' · plan ok ' + plan.ok + ' · archivos ' + JSON.stringify((plan.files ?? []).map((f) => f.path)));
+        const out = await call('copy.toCopy', { id: s.id, fingerprint: plan.fingerprint, ack: true, ...(plan.mixedTotal ? { mixed: 'leave' } : {}) });
+        const after = (await call('sessions.list')).find((x) => x.id === s.id);
+        note(agent + ' copia: movido ' + JSON.stringify(out).slice(0, 160) + ' · cwd ' + after?.cwd + ' · cli_session ' + (cliBefore ? 'antes sí' : 'antes no') + ' / ' + (after?.cli_session ? 'después sí' + (after.cli_session === cliBefore ? ' (la misma)' : ' (otra)') : 'después NO'));
+        const had = (await call('sessions.items', { id: s.id })).length;
+        await call('sessions.send', { id: s.id, text: '¿Qué archivo creaste antes? Solo el nombre.' });
+        await page.waitForTimeout(3000); await idle(agent + ' copia turno 2');
+        const items = await call('sessions.items', { id: s.id });
+        const said = items.filter((i) => i.role === 'assistant' && i.kind === 'text').map((i) => String(i.body).slice(0, 100)).at(-1);
+        const notes = items.filter((i) => i.role !== 'assistant' && i.role !== 'user').map((i) => i.kind + ':' + String(i.body).slice(0, 90));
+        const summary = items.some((i) => /resumen/i.test(String(i.body)) && i.role !== 'assistant' && i.role !== 'user') || !after?.cli_session;
+        note(agent + ' copia: responde ' + JSON.stringify(said) + ' · nombra ' + file + ': ' + new RegExp('numeros-' + agent, 'i').test(String(said)) + ' · misma conversación o resumen: ' + (summary ? 'RESUMEN (o sin sesión)' : 'misma conversación') + ' · notas ' + JSON.stringify(notes) + ' · errores ' + JSON.stringify(items.filter((i) => i.role === 'error').map((i) => String(i.body).slice(0, 200))));
+        const merged = await call('copy.merge', { id: s.id });
+        note(agent + ' copia: unir ' + JSON.stringify(merged).slice(0, 200) + ' · ' + file + ' en la carpeta: ' + fs.existsSync(path.join(projDir, file)) + ' · ' + Math.round((Date.now() - t0) / 1000) + ' s');
+      } catch (e) { note(agent + ' copia: FALLO ' + e.message); }
     }
   }
   note(`errores de la página: ${errors.join(' | ') || 'ninguno'}`);
