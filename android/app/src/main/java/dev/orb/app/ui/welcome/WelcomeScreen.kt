@@ -223,7 +223,7 @@ private fun EntryPage(state: WelcomeUiState, a: WelcomeActions) {
         }
         OrbFoot(spacing = 6.dp) {
             OrbButton("Escanear el código QR", a.onScan, kind = OrbButtonKind.Primary, block = true, icon = OrbIcons.ScanLine, big = true)
-            OrbButton("Sin cámara: código corto", a.openSheet, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
+            OrbButton("Usar código corto", a.openSheet, kind = OrbButtonKind.Ghost, block = true, icon = OrbIcons.Keyboard)
             OrbNote("Wi-Fi de casa o Tailscale. Todo va cifrado.", Modifier.fillMaxWidth().padding(top = 4.dp))
         }
     }
@@ -235,7 +235,7 @@ private fun Label(text: String) = Text(text, color = OrbKit.mutedForeground, fon
 @Composable
 private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
     val linkOnly = state.linkOnly
-    OrbSheet(onDismiss = a.closeSheet, title = if (linkOnly) "Pegar el enlace del QR" else "Sin cámara: código corto", showClose = true, dismissible = !state.busy) {
+    OrbSheet(onDismiss = a.closeSheet, title = if (linkOnly) "Pegar el enlace del QR" else "Usar código corto", showClose = true, dismissible = !state.busy) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Label(if (linkOnly) "Enlace" else "Pega el enlace")
@@ -249,7 +249,7 @@ private fun ShortCodeSheet(state: WelcomeUiState, a: WelcomeActions) {
                 OrbNote("o escribe el código y la dirección", Modifier.fillMaxWidth())
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Label("Código")
-                    OrbTextField(state.code, a.setCode, "Código de 6 caracteres", enabled = !state.busy)
+                    OrbTextField(state.code, a.setCode, "Código de 8 caracteres", enabled = !state.busy)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Label("Dirección del PC")
@@ -320,11 +320,11 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
                         ) { Text(g, color = OrbKit.foreground, fontSize = 18.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold, maxLines = 1) }
                     }
                 }
-                OrbNote("Tiene que coincidir con la que ves en el PC.")
+                OrbNote("Debe coincidir con la que ves en el PC.")
             }
             if (pc.passwordFree) {
                 // A one-use code: no password. The PC shows this phone's name to its owner, who confirms it there.
-                OrbNote("Este móvil se enlaza con un código de un solo uso, sin contraseña. Antes de seguir, comprueba que la huella es la que enseña el PC. Cuando sigas, el PC te preguntará si quieres enlazarlo: confírmalo allí.")
+                OrbNote("Enlazas este móvil con un código de un solo uso, sin contraseña. Comprueba que la huella es la del PC. Después, confirma el enlace en el PC.")
             } else Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Label("Contraseña maestra del PC")
                 val shown = if (state.checking) "•".repeat(state.passwordLength) else state.password
@@ -341,7 +341,7 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
                 )
                 val bad = state.passwordError
                 if (bad != null) Text(bad, color = OrbKit.destructive, fontSize = 12.sp, lineHeight = 17.sp)
-                else OrbNote("Se queda en el móvil: solo demuestra que la sabes.")
+                else OrbNote("La contraseña no sale de tu móvil.")
             }
         }
         OrbFoot(spacing = 10.dp) {
@@ -351,7 +351,7 @@ private fun FingerprintPage(state: WelcomeUiState, a: WelcomeActions) {
                 OrbNote(if (pc.passwordFree) "Esperando la confirmación en el PC…" else "Comprobando la contraseña en segundo plano…", Modifier.fillMaxWidth())
             }
             OrbButton(
-                when { state.checking -> if (pc.passwordFree) "Esperando al PC…" else "Comprobando…"; pc.passwordFree -> "Coincide, enlazar"; pc.viaCode -> "Coincide con la del PC"; else -> "Coincide, enlazar" },
+                when { state.checking -> if (pc.passwordFree) "Esperando al PC…" else "Comprobando…"; else -> "Enlazar este móvil" },
                 a.confirm, kind = OrbButtonKind.Primary, block = true, enabled = !state.checking, big = true,
             )
         }

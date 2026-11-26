@@ -78,7 +78,7 @@ class WelcomeScreenTest {
         rule.waitForIdle()
         rule.onNodeWithText("Esa dirección no es privada. Usa el Wi-Fi de casa o Tailscale.").assertIsDisplayed()
         // A page of its own: the welcome text and the short-code way are not drawn under the notice.
-        rule.onNodeWithText("Sin cámara: código corto").assertDoesNotExist()
+        rule.onNodeWithText("Usar código corto").assertDoesNotExist()
         rule.onNodeWithText("Enlaza el móvil con tu Orb").assertDoesNotExist()
         rule.onNodeWithText("Volver").performClick()
         rule.waitForIdle()
@@ -113,7 +113,7 @@ class WelcomeScreenTest {
         show(vm())
         rule.onNodeWithText("Enlaza el móvil con tu Orb").assertIsDisplayed()
         rule.onNodeWithText("Escanear el código QR").assertIsDisplayed()
-        rule.onNodeWithText("Sin cámara: código corto").assertIsDisplayed()
+        rule.onNodeWithText("Usar código corto").assertIsDisplayed()
     }
 
     @Test fun theScanButtonCallsTheScannerOfTheHost() {
@@ -139,7 +139,7 @@ class WelcomeScreenTest {
     @Test fun pasteButtonReadsTheClipboardIntoTheLinkField() {
         val vm = vm()
         show(vm, clipboard = "orb://enlazar?demo")
-        rule.onNodeWithText("Sin cámara: código corto").performClick()
+        rule.onNodeWithText("Usar código corto").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Pegar").performClick()
         rule.waitForIdle()

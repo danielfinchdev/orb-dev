@@ -29,7 +29,7 @@ class ScanScreenTest {
         var pasted = 0
         show(ScanUiState(permission = ScanPermission.Granted), ScanActions(paste = { pasted++ }))
         rule.onNodeWithText("Escanea el QR de tu Orb").assertIsDisplayed()
-        rule.onNodeWithText("Caduca a los 5 minutos y sirve una vez.").assertIsDisplayed()
+        rule.onNodeWithText("Caduca en 5 min y sirve una vez.").assertIsDisplayed()
         rule.onNodeWithText("Pegar el enlace del QR").performClick()
         assertEquals(1, pasted)
     }
@@ -42,7 +42,7 @@ class ScanScreenTest {
     @Test fun theTorchShowsWhenThePhoneHasAFlash() {
         show(ScanUiState(permission = ScanPermission.Granted, hasFlash = true, torch = true))
         rule.onNodeWithContentDescription("Linterna").assertIsDisplayed()
-        rule.onNodeWithText("Linterna encendida. Caduca a los 5 minutos y sirve una vez.").assertIsDisplayed()
+        rule.onNodeWithText("Linterna encendida. Caduca en 5 min y sirve una vez.").assertIsDisplayed()
     }
 
     @Test fun aRefusedPermissionOffersTheButtonThePasteAndTheCodeByHand() {

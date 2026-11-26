@@ -2,7 +2,7 @@
 // about), the keyboard shortcuts and the frequently asked questions, all searchable; and the button that replays the
 // robot's guided tour (components/tour.jsx), also in the header's «⋯». Texts: help.* in the locales.
 import { useState } from 'react';
-import { SearchX, Rocket, MessageSquare, Brain, MessagesSquare, ListChecks, PanelLeft, Bot, Gauge, CalendarClock, NotebookPen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PencilRuler, Keyboard, CircleHelp, ChevronDown, Play, ArrowRight, Route, BookOpen, Info } from 'lucide-react';
+import { SearchX, Rocket, MessageSquare, Brain, MessagesSquare, ListChecks, PanelLeft, Bot, Gauge, CalendarClock, NotebookPen, Smartphone, SquareTerminal, Gamepad2, Palette, ShieldCheck, PencilRuler, Keyboard, CircleHelp, ChevronDown, Play, ArrowRight, Route, BookOpen, Info, Lightbulb, Workflow, PanelTop, GitBranch, Users, Mic, Trash2, TabletSmartphone } from 'lucide-react';
 import { PageHeader, PageBody } from '@/components/page.jsx';
 import { NotificationBell } from '@/components/notification-center.jsx';
 import { Button } from '@/components/ui/button.jsx';
@@ -18,29 +18,37 @@ const TUTORIALS = {
   start: { icon: Rocket, lines: 5, go: () => go('projects') },
   chat: { icon: MessageSquare, lines: 4, go: () => go('chat') },
   brain: { icon: Brain, lines: 5, go: () => go('chat') },
+  reasoning: { icon: Lightbulb, lines: 6, go: () => go('chat') },
+  orchestrator: { icon: Workflow, lines: 6, go: () => go('chat') },
   newchat: { icon: MessagesSquare, lines: 4, go: () => newChat() },
+  tabs: { icon: PanelTop, lines: 5, go: () => openSettings('apariencia'), pc: true },
+  copy: { icon: GitBranch, lines: 9, go: () => go('chat'), pc: true },
   tasks: { icon: ListChecks, lines: 6, go: () => go('tasks') },
-  sidebar: { icon: PanelLeft, lines: 4, go: () => go('projects') },
+  sidebar: { icon: PanelLeft, lines: 7, go: () => go('projects') },
   board: { icon: PencilRuler, lines: 3, go: () => go('board') },
-  agents: { icon: Bot, lines: 4, go: () => go('agents'), pc: true },
-  usage: { icon: Gauge, lines: 3, go: () => openSettings('tareas'), pc: true },
-  schedules: { icon: CalendarClock, lines: 3, go: () => go('schedules') },
-  logs: { icon: NotebookPen, lines: 3, go: () => go('logs') },
-  phone: { icon: Smartphone, lines: 3, go: () => openSettings('movil'), pc: true },
-  expert: { icon: SquareTerminal, lines: 2, go: () => openSettings('experto'), pc: true },
-  games: { icon: Gamepad2, lines: 2, go: () => openGames(), pc: true },
-  looks: { icon: Palette, lines: 3, go: () => openSettings('apariencia'), pc: true },
-  privacy: { icon: ShieldCheck, lines: 5 }
+  agents: { icon: Bot, lines: 6, go: () => go('agents'), pc: true },
+  accounts: { icon: Users, lines: 6, go: () => go('agents'), pc: true },
+  usage: { icon: Gauge, lines: 7, go: () => go({ view: 'usage' }), pc: true },
+  schedules: { icon: CalendarClock, lines: 4, go: () => go('schedules') },
+  logs: { icon: NotebookPen, lines: 6, go: () => go('logs') },
+  phone: { icon: Smartphone, lines: 7, go: () => openSettings('movil'), pc: true },
+  android: { icon: TabletSmartphone, lines: 6, go: () => openSettings('movil'), pc: true },
+  dictation: { icon: Mic, lines: 7, go: () => openSettings('general'), pc: true },
+  expert: { icon: SquareTerminal, lines: 3, go: () => openSettings('experto'), pc: true },
+  games: { icon: Gamepad2, lines: 6, go: () => openGames(), pc: true },
+  looks: { icon: Palette, lines: 4, go: () => openSettings('apariencia'), pc: true },
+  privacy: { icon: ShieldCheck, lines: 6 },
+  reset: { icon: Trash2, lines: 10, go: () => openSettings('datos'), pc: true }
 };
 // The three columns of the accordion, as drawn in the mock-up: one column does not stretch when its neighbour opens.
 const COLUMNS = [
-  ['start', 'newchat', 'board', 'schedules', 'expert', 'privacy'],
-  ['chat', 'tasks', 'agents', 'logs', 'games', 'brain'],
-  ['sidebar', 'usage', 'phone', 'looks']
+  ['start', 'chat', 'newchat', 'sidebar', 'tabs', 'board', 'schedules', 'logs'],
+  ['brain', 'reasoning', 'orchestrator', 'copy', 'tasks', 'usage', 'agents', 'accounts'],
+  ['phone', 'android', 'dictation', 'expert', 'games', 'looks', 'privacy', 'reset']
 ];
-const PC_ONLY = new Set(['agents', 'usage', 'expert', 'games', 'looks']);
-const KEYS = 8; // help.key.1…8
-const FAQS = 17; // help.faq.1…17
+const PC_ONLY = new Set(['tabs', 'copy', 'agents', 'accounts', 'usage', 'android', 'dictation', 'expert', 'games', 'looks', 'reset']);
+const KEYS = 16; // help.key.1…16
+const FAQS = 21; // help.faq.1…21
 const range = (n) => Array.from({ length: n }, (_, i) => i + 1);
 // Search without accents or case: «bitacora» finds «Bitácoras».
 const fold = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -100,7 +108,7 @@ export function TutorialsView() {
   const [q, setQ] = useState('');
   const query = fold(q.trim());
   const hit = (...parts) => !query || parts.some((p) => fold(p).includes(query));
-  // the phone leaves out what it does not have (agents, settings, expert mode, games, themes).
+  // the phone leaves out what only the PC has (agents, accounts, usage, tabs, separate copies, dictation, expert mode, games, themes, reset).
   const visible = (id) => !(bridge.mobile && PC_ONLY.has(id)) && hit(t(`help.tut.${id}.title`, { name }), ...range(TUTORIALS[id].lines).map((n) => t(`help.tut.${id}.l${n}`, { name })));
   const columns = COLUMNS.map((ids) => ids.filter(visible));
   const total = columns.reduce((n, c) => n + c.length, 0);

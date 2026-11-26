@@ -114,7 +114,7 @@ class MenuShellTest {
         show(null, ShellActions({}, {}, {}), backend, pc = "DanLaptop", theme = ThemePrefs(MemoryStore()))
         rule.onNodeWithContentDescription("Menú").performClick()
         rule.waitForIdle()
-        for (t in listOf("Este móvil", "Tutoriales", "Juegos", "Modo oscuro", "Memorias y actividad", "Uso y agentes")) rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
+        for (t in listOf("Este móvil", "Tutoriales", "Juegos", "Modo oscuro", "Bitácoras y actividad", "Uso y agentes")) rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         // What the mockup draws elsewhere is not here.
         for (t in listOf("Notificaciones", "Apariencia", "Prueba de conexión", "Desenlazar este móvil")) rule.onNodeWithText(t).assertDoesNotExist()
     }
@@ -124,7 +124,7 @@ class MenuShellTest {
         show(null, ShellActions({}, {}, {}, onActivity = { went = "activity" }))
         rule.onNodeWithContentDescription("Menú").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("Memorias y actividad").performScrollTo().performClick()
+        rule.onNodeWithText("Bitácoras y actividad").performScrollTo().performClick()
         rule.waitForIdle()
         assertEquals("activity", went)
         // the sheet closed first

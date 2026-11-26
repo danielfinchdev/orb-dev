@@ -17,7 +17,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
-/** What the «Memorias y actividad» screen reads from the PC. Read-only. */
+/** What the «Bitácoras y actividad» screen reads from the PC. Read-only. */
 interface ActivityBackend {
     val connection: StateFlow<ConnectionState>
     fun available(m: ApiMethod): Boolean
