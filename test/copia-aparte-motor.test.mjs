@@ -292,7 +292,7 @@ test('joining: the copy’s work lands in the folder with the chat’s own undo 
   assert.equal(undone.ok, true);
   assert.equal(read(p.dir, 'a.txt'), 'one\n'); assert.ok(!fs.existsSync(path.join(p.dir, 'c.txt'))); assert.equal(read(p.dir, 'u.txt'), 'user edit\n');
   assert.equal(copy.state(s.id).undo, false);
-  assert.equal(g(p.dir, 'branch', '--list', info.branch), '', 'the branch goes with the undo point');
+  assert.ok(g(p.dir, 'branch', '--list', info.branch), 'the branch stays until the undo point would expire');
   // the chat can go to a copy again (a new name, never a reused one)
   await turn(p, s.id, 'write d.txt=four');
   assert.equal((await move(s.id)).ok, true);

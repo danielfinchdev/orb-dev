@@ -13,7 +13,7 @@ import crypto from 'node:crypto';
 import { ctx, tr } from '../platform/context.mjs';
 import { gitAsync, gitBufferAsync, repoRootAsync, isGitRepoAsync, ORB_GIT, REF_PREFIX } from '../platform/git.mjs';
 import { fullSnapshot, undoCheckpointAsync, changedBetweenAsync, integrateIntoAsync, RAW_GIT } from '../domain/tasks/checkpoints.mjs';
-import { turnPairs, forgetPhotos, retirePhotos, restorePhotos, dirtyFiles, startDirtyOf } from '../domain/conversations/turns.mjs';
+import { turnPairs, forgetPhotos, retirePhotos, restorePhotos, photoMarks, dirtyFiles, startDirtyOf } from '../domain/conversations/turns.mjs';
 import { isSecretPath } from '../shared/secrets-scan.mjs';
 import { regenerable } from './chat-worktrees.mjs';
 import { account, accountDir } from '../domain/usage/accounts.mjs';
@@ -83,7 +83,11 @@ export class ChatCopy {
   record(id) { return this.chatTrees.info(id); }
   lastItem(id) { return Number(this.board.one('SELECT MAX(id) AS id FROM session_items WHERE session_id = ?', id)?.id ?? 0); }
   moves(id) { return this.board.settingJson(MOVES(id)) ?? []; }
-  pushMove(id, to) { this.board.settingJson(MOVES(id), [...this.moves(id), { item: this.lastItem(id), to, at: new Date().toISOString() }].slice(-20)); }
+  // The list is capped, keeping the first move and the last ones: what blocks a rewind is the last item, so nothing old unlocks.
+  addMove(id, to, item = this.lastItem(id)) {
+    const all = [...this.moves(id), { item, to, at: new Date().toISOString() }];
+    this.board.settingJson(MOVES(id), all.length > 20 ? [all[0], ...all.slice(-19)] : all);
+  }
   point(id) { return this.board.settingJson(POINT(id)) ?? null; }
 
   // What the chat is now: 'local' (the project's folder), 'copy' (its own copy, usable) or null (not a chat of a git project).
@@ -147,6 +151,8 @@ export class ChatCopy {
       const add = (a, b, into) => jobs.push(() => changedBetweenAsync(repo, a, b).then((l) => files(l).forEach((p) => into.add(p))));
       pairs.turns.forEach((t, i) => {
         add(t.pre, t.post, chat);
+        // another chat or a task wrote in the folder during this turn: its files are not only the chat's
+        if (t.overlap) add(t.pre, t.post, between);
         if (i > 0) add(pairs.turns[i - 1].post, t.pre, between);
       });
       add(pairs.turns.at(-1).post, snap.commit, tail);
@@ -197,6 +203,10 @@ export class ChatCopy {
     }
   }
 
+  setJournal(id, extra) {
+    const info = this.record(id); if (!info?.switching) return;
+    this.board.settingJson(KEY(id), { ...info, switching: { ...info.switching, ...extra } });
+  }
   setPhase(id, phase) {
     const info = this.record(id); if (!info?.switching) return;
     this.board.settingJson(KEY(id), { ...info, switching: { ...info.switching, phase } });
@@ -221,6 +231,10 @@ export class ChatCopy {
       const { repo, head } = plan;
       // the rescue point of the folder: the photo that was just taken, kept under a ref of the chat
       if ((await gitAsync(repo, {}, 'update-ref', this.rescueRef(s.id), plan.snap)).status !== 0) throw new Error(tr('msg.copy.cannotRead'));
+      // An earlier copy of this chat that stayed (detached, or archived) keeps its own record: it is moved aside, never overwritten.
+      const old = this.record(s.id);
+      if (old?.switching) throw userError('msg.copy.pendingUndo');
+      if (old) { this.board.settingJson(`chatwt:${s.id}-old${Date.now()}`, old); this.board.settingJson(KEY(s.id), null); this.board.notice?.(tr('msg.copy.oldKept', { dir: old.path }), 'warning'); }
       const switching = { phase: 'copy', snap: plan.snap, zero: plan.zero, carried, cwd0: s.cwd, cli0: s.cli_session ?? null, ctx0: s.context ?? null, at: new Date().toISOString() };
       journal = true;
       const made = this.chatTrees.create({ id: s.id, project, base: 'HEAD', extra: { switching } });
@@ -240,13 +254,17 @@ export class ChatCopy {
         if (out.skipped.length) throw new Error(tr('msg.copy.notReturned', { list: oneLine(out.skipped.slice(0, 5).join(', '), 200) }));
       }
       this.setPhase(s.id, 'session');
-      await retirePhotos(repo, s.id);
+      // the exact photos retired are written down first: only those come back if this is undone
+      const marks = await photoMarks(repo, s.id);
+      this.setJournal(s.id, { retired: marks });
+      await retirePhotos(repo, s.id, marks);
       const mark = this.lastItem(s.id);
       this.moveSession(s.id, made.cwd, 'copy');
-      this.board.settingJson(MOVES(s.id), [...this.moves(s.id), { item: mark, to: 'copy', at: new Date().toISOString() }].slice(-20));
+      this.addMove(s.id, 'copy', mark);
       const done = this.record(s.id); delete done.switching;
       this.board.settingJson(KEY(s.id), done);
       forgetPhotos(s.id);
+      await this.dropRefs(repo, s.id);
       this.sessions.addItem(s.id, 'system', 'status', tr('msg.copy.moved', { branch: copy.branch, n: carried.length }));
       this.board.changed?.('sessions');
       return { ok: true, branch: copy.branch, path: copy.path, cwd: made.cwd, moved: carried.length, left: [...left].length, stay: plan.stay, staged: plan.staged };
@@ -257,6 +275,10 @@ export class ChatCopy {
   }
 
   rescueRef(id) { return `${REF_PREFIX}/copia/${id}/antes`; }
+  // The rescue photo and the folder photo of a chat are only needed while a move or a resolution is on.
+  async dropRefs(repo, id) {
+    for (const ref of [this.rescueRef(id), `${REF_PREFIX}/copia/${id}/carpeta`, `${REF_PREFIX}/copia/${id}/ahora`]) await gitAsync(repo, {}, 'update-ref', '-d', ref).catch(() => {});
+  }
 
   // Everything back as it was before the switch started (or after the point it was cut at).
   async rollback(id, why = '') {
@@ -265,33 +287,59 @@ export class ChatCopy {
     const project = this.board.project(info.project);
     const repo = info.repo && fs.existsSync(info.repo) ? info.repo : project?.path;
     this.log(`copia aparte ${id}: se deshace (${j.phase})${why ? `: ${why}` : ''}`);
-    // 1. the folder: the files that were carried go back to the photo taken at the start
-    if (repo && (j.phase === 'restoring' || j.phase === 'session') && j.carried?.length && HASH.test(j.snap ?? '')) {
+    // 1. the folder. What Orb left written is the photo before the chat (j.zero) for the carried files, so only a file still
+    // like that goes back to the start photo: one the user edited meanwhile no longer matches and is left alone.
+    let unsafe = [];
+    const needsFolder = repo && (j.phase === 'restoring' || j.phase === 'session') && j.carried?.length && HASH.test(j.snap ?? '') && HASH.test(j.zero ?? '');
+    if (needsFolder) {
       const now = await fullSnapshot(repo, { message: `orb: foto antes de deshacer el paso a una copia aparte ${id}` });
-      if (now?.commit) await undoCheckpointAsync({ kind: 'git', repo, commit: j.snap, raw: true }, { commit: now.commit }, { only: new Set(j.carried), safe: true });
+      if (!now?.commit) unsafe = ['?'];
+      else {
+        await gitAsync(repo, {}, 'update-ref', `${REF_PREFIX}/copia/${id}/ahora`, now.commit);
+        const out = await undoCheckpointAsync({ kind: 'git', repo, commit: j.snap, raw: true }, { commit: j.zero }, { only: new Set(j.carried), safe: true });
+        // a file that is already the start photo's (the step had not reached it) is not a problem
+        for (const rel of out.skipped) if (!(await this.sameAs(repo, j.snap, rel))) unsafe.push(rel);
+      }
     }
-    // 2. the photos before each message
-    if (j.phase === 'session' && repo) await restorePhotos(repo, id).catch(() => {});
+    // 2. the photos before each message: exactly the ones this switch retired
+    if (j.phase === 'session' && repo && j.retired?.length) await restorePhotos(repo, id, j.retired).catch(() => {});
     // 3. the chat: its folder and its conversation with the agent
     const s = this.sessions.get(id);
     if (s && j.cwd0 && (s.cwd !== j.cwd0 || s.cli_session !== j.cli0)) this.sessions.update(id, { cwd: j.cwd0, cli_session: j.cli0, context: j.ctx0 });
     for (const k of [`folder_note:${id}`, `chatresume:${id}`, `handoff_summary:${id}`]) this.board.settingJson(k, null);
-    // 4. the copy and its branch (its content is what was just carried: nothing else is in it yet)
+    // 4. the copy holds the carried work: it is deleted only when the folder got everything back
+    if (unsafe.length) {
+      this.board.settingJson(KEY(id), { ...info, detached: true, switching: { ...j, failed: true } });
+      const text = tr('msg.copy.rollbackKept', { dir: info.path, list: oneLine(unsafe.slice(0, 5).join(', '), 200) });
+      this.log(`copia aparte ${id}: ${text}`);
+      try { this.sessions.addItem(id, 'system', 'status', text); this.board.notice?.(text, 'warning'); } catch { /* the chat went */ }
+      return false;
+    }
     if (fs.existsSync(info.path) || info.branch) {
       const st = await this.chatTrees.status(id);
       const r = await this.chatTrees.release(id, { force: true, branch: 'delete', fingerprint: st.fingerprint, closeLive: false, unverified: true });
       if (!r.removed && !r.none) { this.board.settingJson(KEY(id), { ...this.record(id), switching: undefined, detached: true }); this.log(`copia aparte ${id}: la carpeta de la copia se queda (${r.kept ?? r.error})`); }
       else this.board.settingJson(KEY(id), null);
     } else this.board.settingJson(KEY(id), null);
-    if (repo) await gitAsync(repo, {}, 'update-ref', '-d', this.rescueRef(id));
+    if (repo) await this.dropRefs(repo, id);
     return true;
+  }
+
+  // Whether the file on disk is byte for byte the one of photo `commit`.
+  async sameAs(repo, commit, rel) {
+    const want = (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `${commit}:${rel}`)).stdout.trim();
+    const file = path.join(repo, rel);
+    if (!want) return !fs.existsSync(file);
+    if (!fs.existsSync(file)) return false;
+    return (await gitAsync(repo, {}, ...RAW_GIT, 'hash-object', '--', file)).stdout.trim() === want;
   }
 
   // At start: a switch that was cut short is finished when its last step was done, and undone otherwise.
   async recover() {
     for (const rec of this.chatTrees.all()) {
-      if (!rec.switching) continue;
-      try { await this.rollback(rec.id, 'interrupted'); } catch (error) { this.log(`copia aparte ${rec.id}: ${error.message}`); }
+      if (!rec.switching || rec.switching.failed) continue; // a failed undo waits for the user: it is never tried again alone
+      this.sessions.moving.add(rec.id);
+      try { await this.rollback(rec.id, 'interrupted'); } catch (error) { this.log(`copia aparte ${rec.id}: ${error.message}`); } finally { this.sessions.moving.delete(rec.id); }
     }
   }
 
@@ -333,7 +381,19 @@ export class ChatCopy {
   }
 
   // What is in the copy and not yet in its branch goes into the branch (a commit by Orb, secrets and ignored files left out).
-  async commitPending(info) {
+  async mergeInProgress(info) { return (await gitAsync(info.path, {}, 'rev-parse', '-q', '--verify', 'MERGE_HEAD')).status === 0; }
+  // Conflict markers left in the files a resolution was about.
+  async markersIn(info, files) {
+    if (!files?.length) return [];
+    return (await gitAsync(info.path, {}, '--literal-pathspecs', 'grep', '-l', '-E', '^(<<<<<<<|>>>>>>>) ', '--', ...files)).stdout.split(/\r?\n/).filter(Boolean);
+  }
+  // Never commits a merge that is half done or files that still hold markers: those would go to the user's folder.
+  async commitPending(info, { id = null, allowMerge = false } = {}) {
+    if (!allowMerge) {
+      const files = id ? this.board.settingJson(RESOLVE(id))?.files : null;
+      const left = await this.markersIn(info, files);
+      if ((await this.mergeInProgress(info)) || left.length) throw userError('msg.copy.markersLeft', { list: left.slice(0, 10).join(', ') || '…' });
+    }
     await gitAsync(info.path, {}, 'add', '-A');
     const staged = (await gitAsync(info.path, {}, 'diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean);
     for (const p of staged.filter(isSecretPath)) await gitAsync(info.path, {}, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', p);
@@ -354,7 +414,7 @@ export class ChatCopy {
     try {
       const repo = await this.chatTrees.repoOf(id, info);
       if (!repo) throw userError('msg.chatWt.noCopy');
-      await this.commitPending(info);
+      await this.commitPending(info, { id });
       const tip = (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `refs/heads/${info.branch}`)).stdout.trim();
       if (!tip) throw userError('msg.copy.noBranch');
       const res = this.board.settingJson(RESOLVE(id));
@@ -370,14 +430,18 @@ export class ChatCopy {
         await gitAsync(repo, {}, 'update-ref', before, out.before); await gitAsync(repo, {}, 'update-ref', after, out.after);
         const headNow = (await gitAsync(repo, {}, 'rev-parse', 'HEAD')).stdout.trim();
         point = { before: { kind: 'git', repo, ref: before, commit: out.before }, after: { kind: 'git', repo, commit: out.after }, refs: [before, after], head: headNow, branch: info.branch, at: new Date().toISOString(), changed: out.changed.length };
+        // an earlier join of this chat keeps its refs and branch under its own key until it expires
+        const prev = this.point(id);
+        if (prev?.before) this.board.settingJson(`${POINT(id)}~${Date.now()}`, prev);
         this.board.settingJson(POINT(id), point);
       }
       this.board.settingJson(RESOLVE(id), null);
       // back to the folder: the conversation goes with the chat
       this.moveSession(id, project.path, 'local');
-      this.board.settingJson(MOVES(id), [...this.moves(id), { item: this.lastItem(id), to: 'local', at: new Date().toISOString() }].slice(-20));
+      this.addMove(id, 'local');
       await retirePhotos(repo, id).catch(() => {});
       forgetPhotos(id);
+      await this.dropRefs(repo, id);
       const kept = await this.dropCopy(id, { keepBranch: Boolean(point) });
       this.sessions.addItem(id, 'system', 'status', tr('msg.copy.joined', { n: joined.length }));
       this.board.changed?.('sessions');
@@ -405,7 +469,7 @@ export class ChatCopy {
     const s = this.sessions.get(String(id));
     if (!s || s.kind !== 'chat') throw userError('msg.chatWt.none');
     const cp = this.point(id);
-    if (!cp?.before) throw userError('msg.copy.noPoint');
+    if (!cp?.before || cp.undone) throw userError('msg.copy.noPoint');
     const project = this.board.project(s.project);
     if (!project) throw userError('msg.copy.noProject');
     if (this.working.has(s.id) || this.sessions.isRunning(s.id)) throw userError('msg.copy.busy');
@@ -414,8 +478,8 @@ export class ChatCopy {
     const release = this.hold(project.name);
     try {
       const out = await undoCheckpointAsync(cp.before, cp.after, { safe: true });
-      this.board.settingJson(POINT(id), null);
-      await this.dropPoint(cp);
+      // the undo point is spent, but the branch and its refs stay until the point would have expired: the chat's work is on them
+      this.board.settingJson(POINT(id), { ...cp, undone: true });
       this.sessions.addItem(id, 'system', 'status', tr('msg.copy.joinUndone', { restored: out.restored.length, removed: out.removed.length, skipped: out.skipped.length }));
       return { ok: true, restored: out.restored.length, removed: out.removed.length, skipped: take(out.skipped) };
     } finally { release(); this.working.delete(s.id); this.sessions.moving.delete(s.id); }
@@ -434,7 +498,7 @@ export class ChatCopy {
     for (const row of this.board.all("SELECT key, value FROM settings WHERE key LIKE 'chatcp:%' AND value <> ''")) {
       let cp; try { cp = JSON.parse(row.value); } catch { continue; }
       const id = row.key.slice('chatcp:'.length);
-      if (this.sessions.get(id) && Date.parse(cp.at) >= old) continue;
+      if ((this.sessions.get(id) || id.includes('~')) && Date.parse(cp.at) >= old) continue;
       this.board.settingJson(row.key, null);
       await this.dropPoint(cp).catch(() => {});
     }
@@ -451,10 +515,11 @@ export class ChatCopy {
       if (!r.removed) return { ok: false, kept: r.kept ?? 'locked', error: r.error ?? null };
       this.board.settingJson(KEY(id), null);
       this.moveSession(id, project.path, 'local');
-      this.board.settingJson(MOVES(id), [...this.moves(id), { item: this.lastItem(id), to: 'local', at: new Date().toISOString() }].slice(-20));
+      this.addMove(id, 'local');
       const repo = info.repo && fs.existsSync(info.repo) ? info.repo : project.path;
       await retirePhotos(repo, id).catch(() => {});
       forgetPhotos(id);
+      await this.dropRefs(repo, id);
       this.sessions.addItem(id, 'system', 'status', tr('msg.copy.discarded'));
       this.board.changed?.('sessions');
       return { ok: true };
@@ -473,7 +538,9 @@ export class ChatCopy {
     const release = this.hold(project.name);
     try {
       const repo = await this.chatTrees.repoOf(id, info);
-      await this.commitPending(info);
+      const again = await this.mergeInProgress(info) && this.board.settingJson(RESOLVE(id));
+      if (again) return this.askAgain(id, info, project, again);
+      await this.commitPending(info, { id });
       const folder = await fullSnapshot(repo, { message: `orb: foto de la carpeta para resolver el chat ${id}` });
       if (!folder?.commit) throw userError('msg.copy.cannotRead');
       await gitAsync(repo, {}, 'update-ref', `${REF_PREFIX}/copia/${id}/carpeta`, folder.commit);
@@ -481,11 +548,16 @@ export class ChatCopy {
       const unmerged = (await gitAsync(info.path, {}, 'diff', '--name-only', '--diff-filter=U', '-z')).stdout.split('\0').filter(Boolean);
       this.board.settingJson(RESOLVE(id), { folder: folder.commit, tree: (await gitAsync(repo, {}, 'rev-parse', `${folder.commit}^{tree}`)).stdout.trim(), files: unmerged, at: new Date().toISOString() });
       if (m.status === 0 && !unmerged.length) { await this.finishMerge(info); return { ok: true, clean: true, files: [] }; }
-      const text = tr('msg.copy.resolveAsk', { list: unmerged.slice(0, 30).join(', '), copy: info.path, folder: project.path });
-      this.board.settingJson(PENDING(id), { resolve: true });
-      try { this.sessions.send(id, text, { asked: [] }); } catch (error) { this.board.settingJson(PENDING(id), null); throw error; }
-      return { ok: true, clean: false, files: take(unmerged) };
+      return this.askAgain(id, info, project, { files: unmerged });
     } finally { release(); this.working.delete(s.id); }
+  }
+  // The agent is asked to resolve the markers the merge left in the copy (again, when a try ended with some left).
+  askAgain(id, info, project, res) {
+    const unmerged = res.files ?? [];
+    const text = tr('msg.copy.resolveAsk', { list: unmerged.slice(0, 30).join(', '), copy: info.path, folder: project.path });
+    this.board.settingJson(PENDING(id), { resolve: true });
+    try { this.sessions.send(id, text, { asked: [] }); } catch (error) { this.board.settingJson(PENDING(id), null); throw error; }
+    return { ok: true, clean: false, files: take(unmerged) };
   }
   async finishMerge(info) {
     await gitAsync(info.path, {}, 'add', '-A');
@@ -502,7 +574,7 @@ export class ChatCopy {
     const info = this.record(id); const res = this.board.settingJson(RESOLVE(id));
     if (!info || !res) return null;
     // only the files that were in conflict: another file may hold such a line on purpose
-    const left = res.files?.length ? (await gitAsync(info.path, {}, '--literal-pathspecs', 'grep', '-l', '-E', '^(<<<<<<<|>>>>>>>) ', '--', ...res.files)).stdout.split(/\r?\n/).filter(Boolean) : [];
+    const left = await this.markersIn(info, res.files);
     if (left.length) { this.sessions.addItem(id, 'system', 'status', tr('msg.copy.markersLeft', { list: left.slice(0, 10).join(', ') })); return { ok: false, left }; }
     await this.finishMerge(info);
     const project = this.board.project(info.project);
@@ -517,7 +589,7 @@ export class ChatCopy {
   // ----- a switch asked for during a turn: it happens when the turn ends -----
 
   // proceed: the agent proposed it, so once moved it is told to go on (the window sends that with the confirmation)
-  wait(id, proceed = false) { this.check0(id); this.board.settingJson(PENDING(id), { toCopy: true, proceed: proceed === true }); return { waiting: true }; }
+  wait(id, proceed = false) { this.check0(id); if (this.board.settingJson(PENDING(id))?.resolve) throw userError('msg.copy.busy'); this.board.settingJson(PENDING(id), { toCopy: true, proceed: proceed === true }); return { waiting: true }; }
   check0(id) { const s = this.sessions.get(String(id)); if (!s || s.kind !== 'chat') throw userError('msg.chatWt.none'); if (!s.project) throw userError('msg.chatWt.needsProject'); }
   waitingFor(id) { return Boolean(this.board.settingJson(PENDING(id))?.toCopy); }
   cancelWait(id) { this.board.settingJson(PENDING(id), null); }
@@ -540,7 +612,7 @@ export class ChatCopy {
     const point = this.point(id);
     return {
       where: this.where(id), branch: info && !info.removed && !info.detached ? info.branch : null, path: info && !info.removed && !info.detached ? info.path : null,
-      undo: Boolean(point?.before), waiting: this.waitingFor(id), resolving: Boolean(this.board.settingJson(PENDING(id))?.resolve), conflict: this.board.settingJson(RESOLVE(id))?.files ?? [],
+      undo: Boolean(point?.before) && !point.undone, waiting: this.waitingFor(id), resolving: Boolean(this.board.settingJson(PENDING(id))?.resolve), conflict: this.board.settingJson(RESOLVE(id))?.files ?? [],
     };
   }
 }

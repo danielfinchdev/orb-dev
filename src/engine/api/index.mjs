@@ -86,7 +86,7 @@ const htmlRef = ({ id, session }) => ({ id: str(id, 'página', 64), session: str
 
 export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitRaw, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {}, onQuiesce = async () => {} }) {
   // A deleted or trashed chat takes the HTML pages it showed with it (htmlPages is declared below; it exists by the first event).
-  const emit = (event, payload) => { emitRaw(event, payload); if (event === 'session:removed' && payload?.id != null) htmlPages.dropSession(payload.id); };
+  const emit = (event, payload) => { emitRaw(event, payload); if (event === 'session:removed' && payload?.id != null) { htmlPages.dropSession(payload.id); copyProposals.dropSession(payload.id); } };
   if (sessions.emit === emitRaw) sessions.emit = emit; // sessions.remove() emits through the engine's own emit
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
@@ -479,7 +479,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...uninstall.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); htmlPages.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); copyProposals.wipe(); htmlPages.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
     // the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),

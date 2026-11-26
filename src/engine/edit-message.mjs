@@ -81,6 +81,7 @@ async function inspect(sessions, s, itemId) {
   if (!s.project) { info.rewindWhy = tr('msg.edit.noProject'); return info; }
   if (await otherRunning(sessions, s)) { info.rewindWhy = tr('msg.edit.otherRunning'); return info; }
   if (!(await isGitRepoAsync(s.cwd))) { info.rewindWhy = tr('msg.edit.noGit'); return info; }
+  if ((sessions.board.settingJson(`chatmoves:${s.id}`) ?? []).some((m) => Number(m.item) >= Number(itemId))) { info.rewindWhy = tr('msg.copy.rewindMoved'); return info; }
   if (!(await photoBefore(s.cwd, s.id, itemId))) { info.rewindWhy = (await photoMoved(s.cwd, s.id, itemId)) ? tr('msg.copy.rewindMoved') : tr('msg.edit.noPhoto'); return info; }
   info.canRewind = true;
   return info;
@@ -103,7 +104,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
     // the files go first: if they cannot be put back, nothing else changes
     let rewound = null;
     if (rewind) {
-      try { rewound = await rewindFiles(s.cwd, s.id, mark, { messageAt: Date.parse(userItem(sessions, s, mark)?.at) }); }
+      try { rewound = await rewindFiles(s.cwd, s.id, mark, { messageAt: Date.parse(userItem(sessions, s, mark)?.at), moves: sessions.board.settingJson(`chatmoves:${s.id}`) ?? [] }); }
       catch (error) { fail('msg.edit.rewindFailed', { message: error.message }); }
     }
     // From here the files are already back: whatever fails below, the line that undoes the rewind must exist.

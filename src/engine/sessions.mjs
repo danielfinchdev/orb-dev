@@ -804,6 +804,12 @@ ${body}`; this.board.settingJson(`folder_note:${id}`, null); }
     }
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null, planOnly };
     this.running.set(id, run);
+    // another chat or task writing in the same folder at the same time: the photos of both turns say so (turns.mjs › overlap)
+    for (const [rid, other] of this.running) {
+      if (rid === id) continue;
+      const o = this.get(rid);
+      if (o?.cwd && s.cwd && path.resolve(o.cwd).toLowerCase() === path.resolve(s.cwd).toLowerCase()) { other.overlap = true; run.overlap = true; }
+    }
     // remembered on the live agent: a subagent left in the background after a «/plan» turn keeps its read-only tools
     entry.planOnly = planOnly;
     this.update(id, { status: 'running', settled: false });
@@ -843,7 +849,9 @@ ${body}`; this.board.settingJson(`folder_note:${id}`, null); }
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
-      if (direct) snapshotAfterTurn(s.cwd, id, alive);
+      if (direct) snapshotAfterTurn(s.cwd, id, alive, { overlap: run.overlap === true });
+      // a move to a copy (or a resolution) is waiting for this turn to end: nothing else starts a turn first (read before the hook clears it)
+      const waitingMove = s.kind === 'chat' && Boolean(this.board.settingJson(`chatcopy_next:${id}`));
       try { this.onTurnEnd?.(id, run); } catch (error) { this.log(`fin de turno ${id}: ${error.message}`); }
       if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
       try { recordSpend(this.board, { account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
@@ -852,14 +860,14 @@ ${body}`; this.board.settingJson(`folder_note:${id}`, null); }
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
       catch (error) { this.log(`onFinish ${id}: ${error.stack}`); }
       // «/goal»: the next turn of the goal, or why it stops (modes.mjs). It goes before the queue: a queued message pauses it. A stopped turn or a limit reaches it too, to pause it.
-      if (!onFinish && s.kind === 'chat') { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
+      if (!onFinish && s.kind === 'chat' && !waitingMove) { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
       if (!onFinish && s.kind === 'chat') { try { this.suggest.after(id, { request: text, result, stopped: run.stopped }); } catch (error) { this.log(`sugerencia ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
       if (!run.stopped && !limited && !result.held && !onFinish) {
         // a fixed chat whose account cannot take it now keeps its queue: send() would say why and the message would be lost
         const blocked = s.kind === 'chat' && this.queue(id).length ? this.accountFor(this.get(id) ?? s).problem : null;
         if (blocked) { this.addItem(id, 'system', 'status', accountProblemText(blocked)); this.emit('session:account', { id, problem: blocked }); }
-        const next = blocked ? null : this.takeQueued(id);
+        const next = blocked || waitingMove ? null : this.takeQueued(id);
         if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
       }
     }).catch((error) => {
@@ -912,6 +920,12 @@ ${body}`; this.board.settingJson(`folder_note:${id}`, null); }
     // The chat is marked as working before the identity check (which may wait for the agent): a message arriving meanwhile queues.
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };
     this.running.set(id, run);
+    // another chat or task writing in the same folder at the same time: the photos of both turns say so (turns.mjs › overlap)
+    for (const [rid, other] of this.running) {
+      if (rid === id) continue;
+      const o = this.get(rid);
+      if (o?.cwd && s.cwd && path.resolve(o.cwd).toLowerCase() === path.resolve(s.cwd).toLowerCase()) { other.overlap = true; run.overlap = true; }
+    }
     // «Compactar» starts a process too: it is checked like a message before /compact goes
     let held;
     try { held = await this.identityGate(id, acc, entry); }
