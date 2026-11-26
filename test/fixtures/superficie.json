@@ -94,6 +94,7 @@
   "conversations.trash": "remote",
   "conversations.update": "remote",
   "devtools.check": "pc",
+  "dictation.transcribe": "pc",
   "expert.branches": "pc",
   "expert.createBranch": "pc",
   "expert.createFile": "pc",

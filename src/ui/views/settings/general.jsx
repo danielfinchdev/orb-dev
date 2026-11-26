@@ -494,8 +494,7 @@ export function DictationCard({ c }) {
   const have = (id) => id === 'windows' || Boolean(found?.[id]?.found);
   const plan = found ? resolveDictation(choice, { handy: have('handy'), whisper: have('whisper') }) : null;
   const status = !found ? t('settings.dictationChecking')
-    : plan?.reason === 'missing' ? t('settings.dictationMissingChosen', { engine: name(choice) })
-      : plan?.reason === 'unsupported' ? t('settings.dictationUnsupported', { engine: name(choice) }) : null;
+    : plan?.reason === 'missing' ? t('settings.dictationMissingChosen', { engine: name(choice) }) : null;
   const w = found?.whisper;
   return (
     <Block title={t('settings.dictationTitle')} note={t('settings.dictationNote')} data-testid="dictation-card">

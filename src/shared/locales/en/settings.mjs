@@ -388,7 +388,6 @@ export default {
   'settings.dictationFound': 'Installed',
   'settings.dictationMissing': 'Install {engine} to use it.',
   'settings.dictationMissingChosen': 'You don’t have {engine} installed. Orb dictates with Windows until you install it.',
-  'settings.dictationUnsupported': 'Orb can’t dictate with {engine} yet. It will use Windows dictation.',
   'settings.dictationChecking': 'Looking for installed engines.',
   'settings.dictationRecheck': 'Check again',
   'settings.dictationDetails': 'Show technical details',

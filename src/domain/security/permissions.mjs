@@ -22,7 +22,7 @@ export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
   // this PC's tools, in the engine (src/engine/api/app.mjs)
-  'keys.get': 'pc', 'keys.save': 'pc', 'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.openFileIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc', 'app.dictationEngines': 'pc', 'app.updateFound': 'pc',
+  'keys.get': 'pc', 'keys.save': 'pc', 'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.openFileIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc', 'app.dictationEngines': 'pc', 'dictation.transcribe': 'pc', 'app.updateFound': 'pc',
   'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc', 'installer.updates': 'pc', 'installer.suggest': 'pc', 'installer.devTools': 'pc',
   'activity.list': 'remote', 'activity.report': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'usage.records': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
