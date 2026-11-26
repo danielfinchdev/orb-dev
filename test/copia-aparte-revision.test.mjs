@@ -88,8 +88,14 @@ test('1+2: a carried file the user edits during the move is never overwritten by
   assert.ok(board.all('SELECT body FROM session_items WHERE session_id = ?', s.id).some((i) => i.body.includes('La copia se conserva')));
   await copy.recover(); // a failed undo is not tried again alone
   assert.ok(chatTrees.info(s.id).switching.failed);
-  // 11: a new move does not overwrite that record
-  await assert.rejects(() => move(s.id), /no se pudo deshacer del todo/);
+  // A: a new try is refused BEFORE it writes anything: the rescue photo of the failed one is untouched, and the window says why
+  const rescue = () => g(p.dir, 'rev-parse', `refs/orb/copia/${s.id}/antes`);
+  const before = rescue();
+  const pv = await copy.preview(s.id);
+  assert.equal(pv.ok, false); assert.equal(pv.why, 'pending');
+  await assert.rejects(() => copy.toCopy(s.id, { fingerprint: 'x', ack: true }), /no se pudo deshacer del todo/);
+  assert.equal(rescue(), before);
+  assert.match(copy.state(s.id).blocked, /no se pudo deshacer del todo/);
   assert.ok(chatTrees.info(s.id).switching);
 });
 
@@ -240,4 +246,62 @@ test('12: the rescue photo is deleted when the move goes well', async () => {
   await turn(p, s.id, 'write a.txt=two');
   await move(s.id);
   assert.deepEqual(refs(p.dir, `refs/orb/copia/${s.id}/`), []);
+});
+
+test('B: the earlier copy moved aside is discarded from the list of copies (with its fingerprint) and released when the chat is removed', async () => {
+  const mk = async () => {
+    const p = mkProject(); const s = await mkChat(p);
+    await turn(p, s.id, 'write a.txt=two');
+    await move(s.id);
+    await turn(p, s.id, 'write cache.log=junk write c.txt=three');
+    await copy.merge(s.id); // the ignored file keeps the copy: it stays detached
+    const stayed = chatTrees.info(s.id).path;
+    await turn(p, s.id, 'write d.txt=four');
+    await move(s.id);
+    const old = board.all("SELECT key FROM settings WHERE key LIKE ? AND value <> ''", `chatwt:${s.id}-old%`)[0].key.slice('chatwt:'.length);
+    return { p, s, stayed, old };
+  };
+  const one = await mk();
+  assert.ok((await call('worktrees.list')).some((r) => r.id === one.old), 'it is listed with the others');
+  const st = await call('worktrees.status', { id: one.old });
+  assert.ok(fs.existsSync(one.stayed));
+  const out = await call('worktrees.discard', { id: one.old, force: true, branch: 'delete', fingerprint: st.fingerprint });
+  assert.equal(out.removed, true);
+  assert.ok(!fs.existsSync(one.stayed));
+  const two = await mk();
+  // a copy that still holds work stays (with the chat gone it is listed and can be discarded); a clean one is released with the chat
+  fs.rmSync(path.join(two.stayed, 'cache.log'), { force: true });
+  await copy.discard(two.s.id, { confirm: true }); // the chat is in Local again, so it can be removed
+  await call('sessions.remove', { id: two.s.id });
+  await until(() => !fs.existsSync(two.stayed), 'la copia apartada se libera');
+});
+
+test('C: a task in the repository root counts as overlap for a chat in a subfolder', async () => {
+  const p = mkProject(); fs.mkdirSync(path.join(p.dir, 'sub')); fs.writeFileSync(path.join(p.dir, 'sub', 'keep.txt'), 'keep'); git(p.dir, 'add', '-A'); git(p.dir, ...ident, 'commit', '-q', '-m', 'sub');
+  const sub = path.join(p.dir, 'sub');
+  board.addProject({ name: `${p.name}-sub`, path: sub }, 'usuario', { fromUser: true });
+  const s = await call('sessions.create', { agent: 'claude', project: `${p.name}-sub`, permission: 'editar', title: 'x' });
+  const other = await mkChat(p);
+  await turn({ dir: sub }, s.id, 'write x.txt=1');
+  sessions.running.set(other.id, { agent: 'claude' }); // a task in the root writes at the same time
+  await turn({ dir: sub }, s.id, 'write y.txt=2');
+  sessions.running.delete(other.id);
+  const plan = await copy.preview(s.id);
+  assert.deepEqual(plan.mixed, ['sub/y.txt']);
+});
+
+test('D: when the wait is cancelled or the move fails, the queued messages go on', async () => {
+  const p = mkProject(); const s = await mkChat(p);
+  await turn(p, s.id, 'write a.txt=two');
+  let release; gate = new Promise((r) => { release = r; });
+  await call('sessions.send', { id: s.id, text: 'slow' });
+  await until(() => sessions.running.has(s.id), 'trabaja');
+  copy.wait(s.id);
+  await call('sessions.send', { id: s.id, text: 'write q.txt=queued', mode: 'queue' });
+  gate = null; release();
+  await until(() => events.some((e) => e.event === 'copy:ready' && e.payload.id === s.id), 'lista');
+  await until(() => !sessions.running.has(s.id), 'fin');
+  assert.ok(!sent.some((x) => x.id === s.id && /q.txt/.test(x.text)));
+  copy.cancelWait(s.id); // the user closed the list
+  await until(() => sent.some((x) => x.id === s.id && /q.txt/.test(x.text)), 'la cola sigue');
 });

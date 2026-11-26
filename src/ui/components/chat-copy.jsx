@@ -45,12 +45,13 @@ export function MoveToCopyDialog({ sessionId, onMoved }) {
     call('copy.preview', { id: String(sessionId) }).then((p) => { if (alive) setPlan(p); }).catch((e) => { quiet(e); if (alive) setPlan({ ok: false, message: String(e?.message ?? e) }); });
     return () => { alive = false; };
   }, [open, sessionId]);
-  const close = () => { setOpen(null); setPlan(null); };
+  // closing without moving also frees what waited for the turn (a queued message goes on)
+  const close = () => { setOpen(null); setPlan(null); call('copy.cancelWait', { id: String(sessionId) }).catch(quiet); };
   const go = async () => {
     setBusy(true);
     try {
       const out = await act(call('copy.toCopy', { id: String(sessionId), fingerprint: plan.fingerprint, mixed: plan.mixedTotal ? mixed : undefined, ack: true, proceed: open.proceed }));
-      if (out) { close(); onMoved?.(); }
+      if (out) { setOpen(null); setPlan(null); onMoved?.(); }
     } finally { setBusy(false); }
   };
   const files = shown(plan?.files); const others = shown(plan?.others); const mix = shown(plan?.mixed);
@@ -147,8 +148,8 @@ export function MoveToCopyButton({ s, running }) {
     await act(call('copy.wait', { id: s.id }));
   };
   return (
-    <BubbleTip title={t('copy.menuMove')} text={t('copy.moveTip')} side="top">
-      <Button size="xs" variant="ghost" className="text-faint-foreground px-1.5 font-normal" disabled={state.waiting} onClick={click} data-testid="copy-move-button"><FolderOutput />{running || state.waiting ? t('copy.afterTurn') : t('copy.menuMove')}</Button>
+    <BubbleTip title={t('copy.menuMove')} text={state.blocked ?? t('copy.moveTip')} side="top">
+      <Button size="xs" variant="ghost" className="text-faint-foreground px-1.5 font-normal" disabled={state.waiting || Boolean(state.blocked)} onClick={click} data-testid="copy-move-button"><FolderOutput />{running || state.waiting ? t('copy.afterTurn') : t('copy.menuMove')}</Button>
     </BubbleTip>
   );
 }

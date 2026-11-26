@@ -218,7 +218,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const copyProposals = createCopyProposals({ board, sessions, copy: chatCopy, emit, log });
   sessions.onTurnEnd = (id) => { chatCopy.afterTurn(id, emit).catch((error) => log(`copia aparte ${id}: ${error.message}`)); };
   chatCopy.recover().then(() => chatCopy.prune()).catch((error) => log(`copia aparte: ${error.message}`));
-  sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
+  sessions.onRemoved = (s) => { for (const old of chatTrees.all().filter((r) => r.id.startsWith(`${s.id}-old`))) chatTrees.release(old.id).then((r) => { if (!r.removed) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: old.path }), 'warning'); }).catch(() => {}); return chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {}); };
   // a chat taken out of the trash gets back the worktree that was discarded meanwhile
   const restore = trash.methods['sessions.restore'];
   trash.methods['sessions.restore'] = async (p, ...rest) => { const r = await restore(p, ...rest); try { await chatTrees.ensure(r.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: r.title, error: error.message }), 'warning'); } return r; };

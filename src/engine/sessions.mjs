@@ -134,6 +134,13 @@ function describeItem(item) {
 // asked, asynchronously, before showing the card).
 const mayBeOwnKill = (command) => process.platform === 'win32' && Boolean(pidKills(unwrapShell(command))?.length);
 
+// Two folders of the same repository (one inside the other, or under the same git root): what one writes is in the other's photos.
+function sameRepo(a, b) {
+  const x = path.resolve(a).toLowerCase(); const y = path.resolve(b).toLowerCase();
+  if (x === y || x.startsWith(y + path.sep) || y.startsWith(x + path.sep)) return true;
+  try { const ra = repoRoot(a); return Boolean(ra) && path.resolve(ra).toLowerCase() === path.resolve(repoRoot(b) || '?').toLowerCase(); } catch { return false; }
+}
+
 export class Sessions {
   // emit(event, payload): pushes changes to the window. log(line): engine log.
   constructor(board, { emit = () => {}, log = () => {} } = {}) {
@@ -808,7 +815,7 @@ ${body}`; this.board.settingJson(`folder_note:${id}`, null); }
     for (const [rid, other] of this.running) {
       if (rid === id) continue;
       const o = this.get(rid);
-      if (o?.cwd && s.cwd && path.resolve(o.cwd).toLowerCase() === path.resolve(s.cwd).toLowerCase()) { other.overlap = true; run.overlap = true; }
+      if (o?.cwd && s.cwd && sameRepo(o.cwd, s.cwd)) { other.overlap = true; run.overlap = true; }
     }
     // remembered on the live agent: a subagent left in the background after a «/plan» turn keeps its read-only tools
     entry.planOnly = planOnly;
@@ -924,7 +931,7 @@ ${body}`; this.board.settingJson(`folder_note:${id}`, null); }
     for (const [rid, other] of this.running) {
       if (rid === id) continue;
       const o = this.get(rid);
-      if (o?.cwd && s.cwd && path.resolve(o.cwd).toLowerCase() === path.resolve(s.cwd).toLowerCase()) { other.overlap = true; run.overlap = true; }
+      if (o?.cwd && s.cwd && sameRepo(o.cwd, s.cwd)) { other.overlap = true; run.overlap = true; }
     }
     // «Compactar» starts a process too: it is checked like a message before /compact goes
     let held;
