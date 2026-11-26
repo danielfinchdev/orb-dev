@@ -1,15 +1,48 @@
 ## Download
 
-### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.11/Orb-3.8.11-instalador.exe)
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.12/Orb-3.8.12-instalador.exe)
 
-`Orb-3.8.11-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+`Orb-3.8.12-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
 It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
 installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.11/Orb-3.8.11-android.apk)
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.12/Orb-3.8.12-android.apk)
 
-`Orb-3.8.11-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+`Orb-3.8.12-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
 the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+## What's new in 3.8.12
+
+### Added
+
+- **Uninstall and reset from Settings › Data.** Tick what to keep (chats, settings, journals, phone link, vault,
+  backups, mini-games, projects) or use a shortcut ("Keep everything", "Keep only projects", "Delete everything").
+  Orb shows the reviewed plan with sizes before deleting anything, sends project folders it created to the Recycle Bin
+  and never touches the backup folder you chose. A signed journal lets a cut-short deletion finish or report at the next
+  start, and the installer only purges data when Orb asks for it, never on an update.
+- **Ask before adopting old data.** After a reinstall Orb asks whether to recover your earlier chats and settings or
+  start from scratch; starting from scratch keeps the old data aside instead of deleting it.
+- **Optional uninstall survey.** Say why you leave in one line; it opens a prefilled GitHub issue that you send
+  yourself.
+- **Move a chat to a separate copy in the middle of a conversation, and back.** From the menu, Ctrl+K or the agent's
+  own proposal card. Orb takes a photo of the folder before every turn so it knows which files belong to the chat, shows
+  what it will carry, leaves your own changes where they are, and the agent continues the same conversation. Joining the
+  copy back has its own undo.
+- **Configurable dictation.** Choose Windows voice typing, Handy or a local Whisper for the microphone button; a missing
+  engine falls back to Windows.
+- **Rewritten Android texts and tutorials.** The phone app follows the same style guide as the desktop, and the desktop
+  now has 24 guides covering what was added since 3.8.8.
+- **Folders created by Orb are marked**, so uninstalling only offers to delete those.
+
+### Fixed
+
+- A stopped delete no longer restores what it had already deleted, and it is asked about before the welcome instead of
+  looping.
+- A move to a copy refuses to start while an earlier one is unresolved, and undoing one keeps your edits and the chat's
+  work.
+- Dictation detects engines by file only and skips `cmd` and `bat` shims.
+- The ready timer of a move to a copy stops when the chat list opens.
+- Android calls the journals "Bitácoras", like the desktop.
 
 ## What's new in 3.8.11
 
