@@ -69,7 +69,7 @@ export function checkHostRequest(method, params, { isDir } = {}) {
   if (method === 'host.openPath') return { path: folder(p.path) };
   // «Desinstalar» / «Restablecer»: a project folder to the Recycle Bin, with the token its .orb-creada file must hold; the app
   // checks both marks and the place of the folder again (src-tauri/src/delete.rs). Whether the program's own uninstaller is there.
-  if (method === 'host.trashFolder') { if (!/^[0-9a-f]{32}$/.test(String(p.token ?? ''))) throw new Error('marca no válida'); return { path: folder(p.path), token: p.token }; }
+  if (method === 'host.trashFolder') { if (!/^[0-9a-f]{32}$/.test(String(p.token ?? ''))) throw new Error('marca no válida'); return { path: folder(p.path), token: p.token, ...(p.forever === true ? { forever: true } : {}) }; }
   if (method === 'host.uninstallCheck') return {};
   if (method === 'host.screenshot') {
     const d = path.dirname(String(p.path ?? ''));

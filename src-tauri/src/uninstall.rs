@@ -47,7 +47,7 @@ pub fn mark_allows(text: &str, code: &str, now_ms: u128) -> bool {
 
 /// A project folder Orb made, to the Recycle Bin. Never deleted for good here: what the Recycle Bin cannot take stays, and the
 /// answer says so ({ ok: false, noTrash } or { ok: false, locked }) for the engine to stop and report.
-pub async fn trash_marked(home: PathBuf, folder: String, token: String) -> Result<Value, String> {
+pub async fn trash_marked(home: PathBuf, folder: String, token: String, forever: bool) -> Result<Value, String> {
   put_back(Path::new(&folder));
   let real = checked_folder(&home, &folder).ok_or_else(|| "carpeta no válida".to_string())?;
   if !mark_ok(&real, &token) {
@@ -55,6 +55,14 @@ pub async fn trash_marked(home: PathBuf, folder: String, token: String) -> Resul
   }
   if folder_in_use(&real) != InUse::Free {
     return Ok(json!({ "ok": false, "locked": true }));
+  }
+  if forever {
+    // too big for the Recycle Bin and the user agreed: deleted for good, entry by entry, never following a link
+    let target = real.clone();
+    return match tokio::task::spawn_blocking(move || remove_tree(&target)).await {
+      Ok(Ok(())) if !real.exists() => Ok(json!({ "ok": true })),
+      _ => Ok(json!({ "ok": false, "locked": true })),
+    };
   }
   let target = real.clone();
   let (tx, rx) = tokio::sync::oneshot::channel();
@@ -65,6 +73,28 @@ pub async fn trash_marked(home: PathBuf, folder: String, token: String) -> Resul
     return Ok(json!({ "ok": false, "noTrash": true }));
   }
   Ok(json!({ "ok": true }))
+}
+
+/// A folder and everything in it, without ever entering a link: a symbolic link or a junction is removed as itself.
+pub fn remove_tree(path: &Path) -> std::io::Result<()> {
+  let meta = std::fs::symlink_metadata(path)?;
+  if meta.file_type().is_symlink() {
+    // a junction or a folder link goes with remove_dir, a file link with remove_file
+    return std::fs::remove_dir(path).or_else(|_| std::fs::remove_file(path));
+  }
+  if !meta.is_dir() {
+    let mut perm = meta.permissions();
+    if perm.readonly() {
+      #[allow(clippy::permissions_set_readonly_false)]
+      perm.set_readonly(false);
+      let _ = std::fs::set_permissions(path, perm);
+    }
+    return std::fs::remove_file(path);
+  }
+  for entry in std::fs::read_dir(path)? {
+    remove_tree(&entry?.path())?;
+  }
+  std::fs::remove_dir(path)
 }
 
 /// The window's last step of «Desinstalar»: Orb ends (the engine first, with its agents; the vault goes with this process) and
@@ -129,6 +159,31 @@ mod tests {
     assert!(!mark_ok(&d, TOKEN), "more than a token");
     std::fs::write(d.join(MARK), "x".repeat(500)).unwrap();
     assert!(!mark_ok(&d, TOKEN), "too long");
+    let _ = std::fs::remove_dir_all(&d);
+  }
+
+  #[test]
+  fn deleting_for_good_never_enters_a_link() {
+    let d = temp("tree");
+    let outside = d.join("fuera");
+    std::fs::create_dir_all(&outside).unwrap();
+    std::fs::write(outside.join("mio.txt"), "mio").unwrap();
+    let victim = d.join("proyecto");
+    std::fs::create_dir_all(victim.join("sub")).unwrap();
+    std::fs::write(victim.join("sub").join("a.txt"), "a").unwrap();
+    let ro = victim.join("solo-lectura.txt");
+    std::fs::write(&ro, "x").unwrap();
+    let mut p = std::fs::metadata(&ro).unwrap().permissions();
+    p.set_readonly(true);
+    std::fs::set_permissions(&ro, p).unwrap();
+    #[cfg(windows)]
+    {
+      let ok = std::process::Command::new("cmd").args(["/C", "mklink", "/J"]).arg(victim.join("enlace")).arg(&outside).output().map(|o| o.status.success()).unwrap_or(false);
+      assert!(ok, "a junction could not be made");
+    }
+    remove_tree(&victim).unwrap();
+    assert!(!victim.exists());
+    assert!(outside.join("mio.txt").exists(), "what the link pointed to is intact");
     let _ = std::fs::remove_dir_all(&d);
   }
 

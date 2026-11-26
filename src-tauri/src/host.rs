@@ -37,9 +37,9 @@ pub async fn handle(app: &AppHandle, method: &str, params: &Value) -> Result<Val
       json!(true)
     }
     HostRequest::Screenshot(path) => crate::screenshot::capture(path).await?,
-    HostRequest::TrashFolder { path, token } => {
+    HostRequest::TrashFolder { path, token, forever } => {
       let home = engine.home().ok_or_else(|| "sin carpeta de trabajo".to_string())?;
-      crate::uninstall::trash_marked(home, path.to_string_lossy().to_string(), token).await?
+      crate::uninstall::trash_marked(home, path.to_string_lossy().to_string(), token, forever).await?
     }
     HostRequest::UninstallCheck => json!({ "ready": crate::uninstall::installer_path().is_some() }),
     HostRequest::OpenTerminal { dir, choice } => {
