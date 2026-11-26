@@ -572,7 +572,7 @@ export class ChatCopy {
   async finishMerge(info) {
     await gitAsync(info.path, {}, 'add', '-A');
     // a secret created while resolving never joins the commit (same rule as commitPending)
-    const staged = (await gitAsync(info.path, {}, 'diff', '--cached', '--name-only', '-z')).stdout.split(' ').filter(Boolean);
+    const staged = (await gitAsync(info.path, {}, 'diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean);
     for (const p of staged.filter(isSecretPath)) await gitAsync(info.path, {}, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', p);
     const r = await gitAsync(info.path, {}, ...ORB_GIT, 'commit', '-q', '--no-edit', '-m', 'orb: trae la carpeta a la copia aparte');
     return r.status === 0 || /nothing to commit/i.test(`${r.stdout}${r.stderr}`);
