@@ -10,7 +10,7 @@ import { hostCall } from '../host/host.mjs';
 import { fail } from './common.mjs';
 import { BOXES, MODES } from '../../shared/uninstall-boxes.mjs';
 import { BOXES as ALL_BOXES } from '../../shared/uninstall-boxes.mjs';
-import { planUninstall, runPlan, uninstallEnv, closeJournal, confirmResume, MARK_FILE } from '../../domain/data/uninstall.mjs';
+import { planUninstall, runPlan, uninstallEnv, closeJournal, confirmResume, pendingJournal, MARK_FILE } from '../../domain/data/uninstall.mjs';
 import { asideList, deleteAside } from '../previous.mjs';
 
 // What must be typed to confirm «Borrar todo»; either language's word is taken.
@@ -109,6 +109,16 @@ export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef
     },
     // after a stopped run the user said to go on: the journal is let loose and the engine starts again to run it
     'uninstall.resume': () => { if (!confirmResume(userData(), ctx.keys?.approval ?? null)) fail(tr('uninstall.noJournal')); restart(); return { ok: true }; },
+    // what waits from a run that stopped or cannot be checked: the window offers «Seguir borrando» and «Dejarlo así»
+    'uninstall.pending': () => pendingJournal(userData(), ctx.keys?.approval ?? null),
+    // «Dejarlo así»: the journal is closed and nothing more is deleted (never while a run is going on)
+    'uninstall.discard': () => {
+      if (running || ctx.uninstalling) fail(tr('uninstall.busy'));
+      const now = pendingJournal(userData(), ctx.keys?.approval ?? null);
+      if (now.state !== 'stopped' && now.state !== 'untrusted') fail(tr('uninstall.noJournal'));
+      closeJournal(userData());
+      return { ok: true };
+    },
     // the uninstaller could not be started (the window says so): the engine, closed by the run, starts again
     'uninstall.restart': () => { restart(); return { ok: true }; },
     'previous.list': () => ({ list: asideList(ctx.home) }),

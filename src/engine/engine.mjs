@@ -465,7 +465,7 @@ async function run(board, { home, version, restored, repair }) {
   // «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
   for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
   // what a run of «Desinstalar» / «Restablecer» that was cut could not finish (domain/data/uninstall.mjs › resumeAndReport)
-  if (ctx.userData) { try { const r = (await import('../domain/data/uninstall.mjs')).takeReport(ctx.userData); if (r) board.notice(tr(r.untrusted ? 'uninstall.untrusted' : r.stopped ? 'uninstall.stopped' : 'uninstall.cut', { done: r.done, left: r.failed + r.skipped }), 'warning'); } catch (error) { log(`desinstalar: ${error.message}`); } }
+  if (ctx.userData) { try { const r = (await import('../domain/data/uninstall.mjs')).takeReport(ctx.userData); if (r && !r.untrusted && !r.stopped) board.notice(tr('uninstall.cut', { done: r.done, left: r.failed + r.skipped }), 'warning'); } catch (error) { log(`desinstalar: ${error.message}`); } }
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/domain/data/legacy/migrate-38.mjs): said once.
   {

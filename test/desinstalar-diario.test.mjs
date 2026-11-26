@@ -73,12 +73,12 @@ test('a journal is resumed only if it is signed with this PC key, for a known wo
     fs.writeFileSync(file, JSON.stringify(sign({ ...bare, home: stranger })));
     assert.equal((await attempt()).untrusted, 'home');
     assert.ok(fs.existsSync(path.join(stranger, 'core', 'datos', 'x.txt')));
-    // a backup folder invented by the journal is crossed with the ones this workspace knows
+    // a backup file outside the folders the journal was signed with is refused
     const fake = path.join(w.base, 'inventada'); fs.mkdirSync(fake);
     const made = (await K.createBackup({ home: w.home, secret: w.secret, kind: 'manual', version: 'test' })).file;
     const copy = path.join(fake, path.basename(made)); fs.copyFileSync(made, copy); // a folder ultima.json never heard of
     const item = { id: 'z', stage: 'data', kind: 'backup', box: 'backups', path: copy, bytes: 1, files: 1, orbId: K.knownOrbId(w.home), state: 'pending' };
-    fs.writeFileSync(file, JSON.stringify(sign({ ...bare, backupDirs: [fake], items: [item] })));
+    fs.writeFileSync(file, JSON.stringify(sign({ ...bare, backupDirs: [], items: [item] })));
     const refused = await attempt();
     assert.equal(refused.ok, false); assert.equal(refused.failed[0].code, 'EALLOW'); assert.ok(fs.existsSync(copy));
     // the real one still goes

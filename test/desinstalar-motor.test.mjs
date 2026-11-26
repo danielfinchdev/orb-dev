@@ -97,7 +97,7 @@ for (const shortcut of ['all', 'projects', 'nothing']) {
     // the chosen backups folder is never removed; its file of this Orb goes unless kept
     assert.ok(fs.existsSync(w.folder));
     assert.equal(fs.readdirSync(w.folder).some((n) => n.endsWith('.orbbak')), shortcut === 'all');
-    assert.equal(fs.existsSync(path.join(w.userData, 'ubicacion.json')), shortcut === 'all');
+    assert.equal(fs.existsSync(path.join(w.userData, 'ubicacion.json')), true, 'an old project stays, so does the way to find the workspace');
     assert.equal(fs.existsSync(path.join(w.p.data, 'clave2.enc')), shortcut === 'all', 'the PC key stays only with something encrypted');
     // start again (the app would after a reinstall and «Recuperar»): nothing is brought back
     const before = tree(w.home);
@@ -177,7 +177,7 @@ test('a project the Recycle Bin cannot take stops the run: it says what went, th
   e = await startEngine(w.home, { secret, userData: w.userData });
   let again;
   try {
-    await until(() => e.events.some((x) => x.event === 'notice'), 'aviso');
+    assert.equal((await e.call('uninstall.pending', {})).state, 'stopped', 'the window is told');
     assert.ok(fs.existsSync(path.join(w.userData, 'desinstalando.json')), 'the journal waits');
     assert.ok(fs.existsSync(path.join(w.p.data, 'clave2.enc')), 'nothing more was deleted');
     // the user confirms: the engine ends to start again and the next start finishes (the folder that did not go stays)

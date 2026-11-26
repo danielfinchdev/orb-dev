@@ -203,6 +203,35 @@ export async function runUninstall(mode) {
   try { await bridge.uninstall(done.code); } catch (error) { notifyError(error); await call('uninstall.restart').catch(quiet); setTimeout(() => window.location.reload(), 1500); }
 }
 
+// At the start: a delete that stopped (a reported failure) or that Orb cannot check waits for the user's word. «Seguir borrando»
+// lets the engine run its journal again; «Dejarlo así» closes it and nothing more is deleted. Closing the dialog asks again next time.
+export function StoppedDelete() {
+  useEffect(() => {
+    if (bridge.mobile) return undefined;
+    let alive = true;
+    (async () => {
+      const p = await call('uninstall.pending').catch(() => null);
+      if (!alive || !p || (p.state !== 'stopped' && p.state !== 'untrusted')) return;
+      const stopped = p.state === 'stopped';
+      const answer = await confirm(tNow(stopped ? 'uninstall.stoppedTitle' : 'uninstall.untrustedTitle'),
+        stopped ? tNow('uninstall.stoppedBody', { done: p.done, left: p.left }) : tNow('uninstall.untrustedBody'),
+        { ok: tNow(stopped ? 'uninstall.stoppedKeep' : 'uninstall.stoppedLeave'), cancel: tNow(stopped ? 'uninstall.stoppedLeave' : 'uninstall.untrustedNotNow'), danger: stopped, noClose: true });
+      // true: go on (stopped) or close it (untrusted); false: leave it (stopped) or ask again (untrusted)
+      const doResume = stopped && answer === true;
+      const doClose = (stopped && answer === false) || (!stopped && answer === true);
+      if (!doResume && !doClose) return;
+      const unlock = await unlockCore('uninstall');
+      if (!unlock) return;
+      try {
+        if (doResume) { await call('uninstall.resume', { unlock }); notifyOk(tNow('uninstall.resuming'), { ms: 6000 }); setTimeout(() => window.location.reload(), 2500); }
+        else await call('uninstall.discard', { unlock });
+      } catch (error) { notifyError(error); }
+    })();
+    return () => { alive = false; };
+  }, []);
+  return null;
+}
+
 // The block at the end of Datos.
 export function UninstallBlock() {
   const t = useT();

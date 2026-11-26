@@ -54,6 +54,7 @@ import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { StartNotice, StartDetails, StartPath, StartProgress, startText, startHint } from '@/components/start-card.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
+import { StoppedDelete } from '@/views/uninstall.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
 import { quiet } from '@/lib/quiet.js';
@@ -220,7 +221,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
+      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><StoppedDelete /><AutoNotice /></>}
       <Notices />
       {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /><SelectionToChat /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>

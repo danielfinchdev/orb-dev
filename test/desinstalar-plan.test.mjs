@@ -147,7 +147,8 @@ test('«Borrar todo» run: order, nothing comes back on restart, old projects an
     assert.ok(fs.existsSync(w.folder) && !fs.readdirSync(w.folder).some((n) => n.endsWith('.orbbak')));
     // nothing of the keys is left outside, but another workspace's key is
     assert.deepEqual(fs.readdirSync(path.join(w.userData, 'claves')), ['otro-orb-1234abcd.v2.enc']);
-    assert.ok(!fs.existsSync(path.join(w.userData, 'ubicacion.json')) && fs.existsSync(path.join(w.userData, 'interfaz.json')));
+    assert.ok(fs.existsSync(path.join(w.userData, 'ubicacion.json')), 'old projects stay: the saved location stays with them');
+    assert.ok(fs.existsSync(path.join(w.userData, 'interfaz.json')));
     // a healthy core remains (old projects stay), with no chats, devices or settings of before
     assert.equal(coreHealth(w.home).ok, true);
     assert.ok(!fs.existsSync(w.p.secrets) && !fs.existsSync(path.join(w.p.data, 'clave2.enc')) && !fs.existsSync(w.p.copies));
@@ -193,7 +194,7 @@ test('«Conservar solo los proyectos» and «Conservar todo»: after a restart n
       if (shortcut === 'all') { assert.deepEqual(tree(w.p.core), before); assert.ok(fs.existsSync(path.join(w.userData, 'ubicacion.json'))); }
       else {
         assert.ok(fs.existsSync(w.mine.path) && fs.existsSync(w.second.path), 'the projects stay');
-        assert.ok(!fs.existsSync(path.join(w.userData, 'ubicacion.json')));
+        assert.ok(fs.existsSync(path.join(w.userData, 'ubicacion.json')), 'what stays would be orphaned without it');
       }
       assert.equal(coreHealth(w.home).ok, true);
       const after = tree(w.p.core);

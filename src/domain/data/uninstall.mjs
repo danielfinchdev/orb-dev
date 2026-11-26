@@ -282,8 +282,8 @@ export async function planUninstall({ env, mode = 'uninstall', keep = {}, copyFi
     for (const d of childrenOf(env.p.data)) if (KEY_NAME.test(d)) addPath('key', 'key', path.join(env.p.data, d));
     for (const c of childrenOf(clavesDir(env))) { const f = path.join(clavesDir(env), c); if (classify(env, f) === 'key') addPath('key', 'key', f); }
   }
-  // where the app found the workspace (an uninstall that keeps everything leaves it; it never survives otherwise)
-  if (mode === 'uninstall' && !BOXES.every((b) => k[b])) {
+  // where the app finds the workspace: it goes only when nothing at all stays (no box, no project), or what stays would be orphaned
+  if (mode === 'uninstall' && !BOXES.some((b) => k[b]) && keptProjects.length === 0) {
     const loc = path.join(env.userData, 'ubicacion.json');
     if (lstatOrNull(loc)?.isFile()) add({ stage: 'end', kind: 'path', box: 'settings', path: loc, bytes: lstatOrNull(loc).size, files: 1 });
   }
@@ -293,8 +293,9 @@ export async function planUninstall({ env, mode = 'uninstall', keep = {}, copyFi
   for (const i of items) { const b = boxes[i.box] ?? (boxes[i.box] = { bytes: 0, files: 0, items: 0 }); b.bytes += i.bytes ?? 0; b.files += i.files ?? 0; b.items++; }
   boxes.link.devices = k.link ? 0 : devices;
   const oldProjects = keptProjects.filter((x) => x.why === 'old');
+  const orbId = k.backups ? null : K.knownOrbId(env.home);
   const id = crypto.createHash('sha256').update(JSON.stringify([mode, k, items.map((i) => [i.stage, i.kind, i.path, i.name ?? null]), copyFirst])).digest('hex').slice(0, 24);
-  return { id, mode, keep: k, forced, copyFirst, items, boxes, trash, keptProjects, oldProjects, dirty: k.chats ? [] : dirtyCopies(env, projects), keyKept, wipeDb, coreLinked, skipped, facts: { mcpKeys } };
+  return { id, mode, keep: k, forced, copyFirst, items, boxes, trash, keptProjects, oldProjects, dirty: k.chats ? [] : dirtyCopies(env, projects), keyKept, wipeDb, coreLinked, skipped, orbId, facts: { mcpKeys } };
 }
 
 // ---- the journal: where the run is, outside core (core is part of what goes)
@@ -466,7 +467,7 @@ export async function settleWorkspace(env, plan) {
 // went and what did not, and nothing after it is touched. → { ok, done, failed, pending }.
 export async function runPlan({ env, plan, hooks = {}, resume = null }) {
   if (resume) resume.stopped = false;
-  const journal = resume ?? { v: 1, id: plan.id, mode: plan.mode, home: env.home, userData: env.userData, startedAt: new Date().toISOString(), keep: plan.keep, keptProjects: plan.keptProjects.map((x) => ({ name: x.name, why: x.why })), wipeDb: plan.wipeDb, keyKept: plan.keyKept, backupDirs: env.backupDirs, items: plan.items.map((i) => ({ ...i, state: 'pending' })) };
+  const journal = resume ?? { v: 1, id: plan.id, mode: plan.mode, home: env.home, userData: env.userData, startedAt: new Date().toISOString(), keep: plan.keep, keptProjects: plan.keptProjects.map((x) => ({ name: x.name, why: x.why })), wipeDb: plan.wipeDb, keyKept: plan.keyKept, backupDirs: env.backupDirs, orbId: plan.orbId ?? null, items: plan.items.map((i) => ({ ...i, state: 'pending' })) };
   const save = () => { saveJournal(env, journal); hooks.onStep?.(journal); };
   save();
   const todo = journal.items.filter((i) => i.state !== 'done').sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || (a.kind === 'refs') - (b.kind === 'refs'));
@@ -501,10 +502,10 @@ const report = (journal, ok) => ({
 export const closeJournal = (userData) => { try { fs.rmSync(journalPath(userData), { force: true }); } catch { /* the next start tries again */ } };
 
 // At the start: a journal left by a run that was cut (the process died). Only a journal signed with this PC's key, for a
-// workspace this app knows (the saved location, or a real Orb folder), is run again; its backup folders are crossed with the
-// ones this workspace knows. The deletes that need no app are finished (every item checked again against what Orb owns); a
+// workspace this app knows (the saved location, or a real Orb folder), is run again, with the backup folders it was signed with. The deletes that need no app are finished (every item checked again against what Orb owns); a
 // project still waiting for the Recycle Bin is only reported. A run that stopped on a reported failure (stopped) waits for the
 // user's confirmation (confirmResume). → { resumed, ok, done, failed, pending, skipped, stopped?, untrusted? } or null.
+const onlyEndLeft = (j) => Array.isArray(j.items) && j.items.some((i) => i.stage === 'key') && j.items.every((i) => i.state === 'done' || i.stage === 'end');
 const knownHome = (userData, home) => {
   try { const saved = JSON.parse(fs.readFileSync(path.join(userData, 'ubicacion.json'), 'utf8')).home; if (typeof saved === 'string' && keyOf(saved) === keyOf(home)) return true; } catch { /* no saved location */ }
   return isHome(home);
@@ -513,12 +514,17 @@ export async function resumeJournal({ userData, signKey = null, confirmed = fals
   const journal = readJournal(userData);
   if (!journal) return null;
   const nothing = { done: [], failed: [], pending: [], skipped: [] };
-  if (!journalTrusted(journal, signKey)) return { resumed: false, ok: false, untrusted: 'signature', ...nothing };
+  if (!journalTrusted(journal, signKey)) {
+    // The run died after the PC key went (the signature cannot open any more) with only its last step left (the saved location
+    // and the mark): there is nothing to finish, and reading it only to close the file does no harm.
+    if (onlyEndLeft(journal)) { closeJournal(userData); return { resumed: false, ok: true, closed: true, ...nothing }; }
+    return { resumed: false, ok: false, untrusted: 'signature', ...nothing };
+  }
   const h = journal.home;
   if (typeof h !== 'string' || !path.isAbsolute(h) || !knownHome(userData, h)) return { resumed: false, ok: false, untrusted: 'home', ...nothing };
   const config = (() => { try { return JSON.parse(fs.readFileSync(path.join(h, 'core', 'orb.json'), 'utf8')); } catch { return {}; } })();
-  const known = K.knownBackupDirs(h, config);
-  const dirs = (Array.isArray(journal.backupDirs) ? journal.backupDirs : []).filter((d) => typeof d === 'string' && known.some((k) => keyOf(k) === keyOf(d)));
+  // the folders of copies were written, signed, when the run began: ultima.json and orb.json may be gone by now
+  const dirs = (Array.isArray(journal.backupDirs) ? journal.backupDirs : []).filter((d) => typeof d === 'string' && path.isAbsolute(d));
   const env = uninstallEnv({ home: h, userData, backupDirs: dirs, config, signKey });
   if (journal.stopped === true && !confirmed) return { resumed: false, ok: false, stopped: true, ...report(journal, false) };
   const plan = { mode: journal.mode, keep: journal.keep, keptProjects: journal.keptProjects ?? [], keyKept: journal.keyKept, wipeDb: journal.wipeDb };
@@ -526,6 +532,17 @@ export async function resumeJournal({ userData, signKey = null, confirmed = fals
   const r = await runPlan({ env, plan, resume: journal, hooks: { noHost: true } });
   if (r.ok) closeJournal(userData);
   return { resumed: true, ...r };
+}
+
+// What waits at the start, for the window to offer «Seguir borrando» / «Dejarlo así»: 'stopped' (a reported failure), 'untrusted' (a
+// journal that cannot be checked) or null. done / left count the items.
+export function pendingJournal(userData, signKey) {
+  const j = readJournal(userData);
+  if (!j) return { state: null };
+  const done = j.items.filter((i) => i.state === 'done').length;
+  const left = j.items.length - done;
+  if (!journalTrusted(j, signKey)) return { state: 'untrusted', done, left };
+  return { state: j.stopped === true ? 'stopped' : 'running', done, left };
 }
 
 // «Seguir» after a stopped run: the user confirmed, so the next start runs the journal again. → true when it was signed and stopped.

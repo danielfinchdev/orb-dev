@@ -331,6 +331,8 @@
   "terminal.open": "pc",
   "terminal.write": "pc",
   "trash.list": "remote",
+  "uninstall.discard": "pc",
+  "uninstall.pending": "pc",
   "uninstall.plan": "pc",
   "uninstall.restart": "pc",
   "uninstall.resume": "pc",
