@@ -268,7 +268,7 @@ class NewChatScreenTest {
         val b = FakeNewChatBackend()
         b.connectionState.value = ConnectionState.Offline(null, null)
         sheet(b)
-        rule.onNodeWithText("Sin conexión con el PC. Para empezar un chat hace falta conexión.").assertIsDisplayed()
+        rule.onNodeWithText("Sin conexión con el PC. Necesitas conexión para empezar un chat.").assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsNotEnabled()
     }
 
@@ -287,7 +287,7 @@ class NewChatScreenTest {
         val b = FakeNewChatBackend()
         b.missing += "models.catalog"
         sheet(b)
-        rule.onNodeWithText("Este PC tiene una versión antigua", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Actualiza Orb en el PC", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsEnabled()
     }
 

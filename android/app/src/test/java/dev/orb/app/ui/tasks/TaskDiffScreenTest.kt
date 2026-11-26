@@ -174,7 +174,7 @@ class TaskDiffScreenTest {
     @Test fun acceptGoesToThePcAndOffersToGoBackAndUndoAsksFirst() {
         val b = backend(TaskDiff(true, files, 0))
         show(b)
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar cambios").performClick()
         rule.waitForIdle()
         assertEquals(listOf("accept 4"), b.calls)
         // «Cambios aceptados · Deshacer»
@@ -202,7 +202,7 @@ class TaskDiffScreenTest {
         val b = backend(TaskDiff(true, files, 0), detail(task(4, status = "done"), hasCheckpoint = true, accepted = true))
         show(b)
         rule.onNodeWithText("Aceptada").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").performClick()
         rule.onAllNodesWithText("Deshacer").onLast().performClick()
         rule.waitForIdle()
@@ -215,7 +215,7 @@ class TaskDiffScreenTest {
         val b = backend(TaskDiff(true, files, 0, checkpointId = "run1", runKnown = true), detail(task(4, status = "done"), hasCheckpoint = true, checkpointId = "run2"))
         show(b)
         rule.onNodeWithText("Los cambios de la última ejecución aún no están listos").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
         rule.onNodeWithText("export async function init() {").assertDoesNotExist()
     }
@@ -223,9 +223,9 @@ class TaskDiffScreenTest {
     @Test fun aDiffOfTheSameRunOffersThem() {
         val b = backend(TaskDiff(true, files, 0, checkpointId = "run2", runKnown = true), detail(task(4, status = "done"), hasCheckpoint = true, checkpointId = "run2"))
         show(b)
-        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar cambios").performClick()
         rule.waitForIdle()
         assertEquals(listOf<String?>("run2"), b.acceptCheckpoints)
     }
@@ -233,7 +233,7 @@ class TaskDiffScreenTest {
     @Test fun thePcSayingTheLastRunIsNotDoneYetOffersNoButtons() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "notdone")))
         rule.onNodeWithText("Los cambios de la última ejecución aún no están listos").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
@@ -262,55 +262,55 @@ class TaskDiffScreenTest {
         show(b)
         rule.onNodeWithText("Los cambios de esta tarea se unieron a mano en el PC. Aquí no se pueden ver ni deshacer.").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar cambios").performClick()
         rule.waitForIdle()
         assertEquals(listOf<String?>("run7"), b.acceptCheckpoints)
     }
 
     @Test fun aTaskWithoutFinalPhotoIsToldAndOffersNoButtonAtAll() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "nophotoafter")))
-        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea, así que aquí no hay cambios que enseñar. Deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después: solo se puede hacer desde el PC.").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("El PC no pudo guardar el estado final de esta tarea. Deshacerla devolvería toda su carpeta a como estaba antes, también lo cambiado después, y solo se puede hacer desde el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun anUnfinishedMergeIsToldAndOffersNoButtonAtAll() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "resolveonpc")))
         rule.onNodeWithText("La unión de los cambios de esta tarea quedó sin terminar. Resuélvela en el PC.").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun anOldRestorePointIsToldAndOnlyOffersAccept() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "unknownrun")))
-        rule.onNodeWithText("Este punto de vuelta es anterior a la última actualización de Orb y no se puede comprobar a qué ejecución pertenece. Para deshacerla, hazlo desde el PC.").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Este punto de vuelta es anterior a la última actualización de Orb. Para deshacer la tarea, hazlo desde el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun aGoneRepositoryOffersAcceptButNoUndo() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "gone")))
         rule.onNodeWithText("El repositorio de esta tarea ya no existe en el PC, así que no hay cambios que enseñar.").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun noPhotoOffersAcceptButNoUndo() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "nophoto")))
-        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun noPhotoOfATaskAlreadyUndoneOffersNothing() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "nophoto"), detail(task(4, status = "done", undone = true), hasCheckpoint = true)))
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun aFolderWithoutGitOffersBothAndKeepsItsConfirmation() {
         val b = backend(TaskDiff(false, emptyList(), 0, reason = "nogit"))
         show(b)
-        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertIsDisplayed()
         rule.onNodeWithText("Deshacer").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("¿Deshacer esta tarea?").assertIsDisplayed()
@@ -321,7 +321,7 @@ class TaskDiffScreenTest {
         val b = backend(TaskDiff(true, files, 0))
         show(b)
         b.actionResult = Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.Refused(409, words)))
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar cambios").performClick()
         rule.waitForIdle()
         rule.onNodeWithText(words).assertIsDisplayed()
     }
@@ -335,7 +335,7 @@ class TaskDiffScreenTest {
     @Test fun aReasonThisAppDoesNotKnowKeepsTheGenericSentenceAndNoButtons() {
         show(backend(TaskDiff(false, emptyList(), 0, reason = "somethingnew")))
         rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
@@ -355,14 +355,14 @@ class TaskDiffScreenTest {
         show(backend(TaskDiff(false, emptyList(), 0)))
         rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()
         rule.onNodeWithText("La tarea no cambió archivos, sigue en marcha, se deshizo o el proyecto no usa git.").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 
     @Test fun anUnavailableDiffWithoutReasonOffersNoButtonAndKeepsTheGenericSentence() {
         show(backend(TaskDiff(available = false, files = emptyList(), more = 0, reason = null)))
         rule.onNodeWithText("No hay cambios que mostrar").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertDoesNotExist()
+        rule.onNodeWithText("Aceptar cambios").assertDoesNotExist()
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
     }
 

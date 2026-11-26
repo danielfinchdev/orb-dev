@@ -262,7 +262,7 @@ class ChatShotsTest {
     @Test fun approvalsAccepted() = approvals(
         OrbPaletteChoice.Grafito, "-aceptada",
         setup = { b -> b.onAction = { if (it == "taskaccept 42") b.detailsOnPc[42] = task42.copy(accepted = true, actions = setOf(TaskAction.SeeChanges, TaskAction.UndoHeld)) } },
-        after = { rule.onNodeWithText("Aceptar").performClick() },
+        after = { rule.onNodeWithText("Aceptar cambios").performClick() },
     )
 
     @Test fun approvalsConfirmUndo() = approvals(OrbPaletteChoice.Grafito, "-deshacer", after = { rule.onNodeWithText("Deshacer").performClick() })

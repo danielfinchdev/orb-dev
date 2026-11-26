@@ -106,7 +106,7 @@ class TaskDetailScreenTest {
         val clock = TaskLines.clock(until)!!
         val w = TaskWait("notice", "Límite", emptyList(), account = "Claude", until = until, percent = 94)
         show(backend(detail(task(44, status = "queued", waiting = w))), 44)
-        rule.onNodeWithText("Claude va al 94 % de su límite. Vuelve a las $clock; la cola la lanzará sola.").assertIsDisplayed()
+        rule.onNodeWithText("Claude va al 94 % de su límite. Vuelve a las $clock. La cola la lanzará sola.").assertIsDisplayed()
     }
 
     @Test fun aBusyFolderNamesTheTaskThatWritesThere() {
@@ -161,7 +161,7 @@ class TaskDetailScreenTest {
         rule.onNodeWithText("Retenida · creada hace 12 min por Orbe").assertIsDisplayed()
         rule.onNodeWithText("Orb la paró: ha eliminado 214 archivos en C:/p. Revisa los cambios antes de seguir.").assertIsDisplayed()
         rule.onNodeWithText("Ver cambios").assertIsDisplayed()
-        rule.onNodeWithText("Aceptar").assertIsDisplayed()
+        rule.onNodeWithText("Aceptar cambios").assertIsDisplayed()
         // The card no longer carries «Deshacer»: it is in the «⋮» menu, and asks before touching anything.
         rule.onNodeWithText("Deshacer").assertDoesNotExist()
         menu()
@@ -213,7 +213,7 @@ class TaskDetailScreenTest {
         val d = detail(task(5, status = "blocked", held = TaskHeld("x", null)), hasCheckpoint = true)
         val b = backend(d)
         show(b, 5)
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar cambios").performClick()
         rule.waitForIdle()
         assertEquals(listOf("accept 5"), b.calls)
     }
@@ -381,9 +381,9 @@ class TaskDetailScreenTest {
         rule.onNodeWithText("Seguir").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Seguir con una instrucción").assertIsDisplayed()
-        rule.onNodeWithText("Enviar").assertIsNotEnabled()
+        rule.onNodeWithText("Enviar mensaje").assertIsNotEnabled()
         rule.onNodeWithContentDescription("Añade lo que falta…").performTextInput("Y revisa el pie")
-        rule.onNodeWithText("Enviar").performClick()
+        rule.onNodeWithText("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertEquals(listOf("followup 44 Y revisa el pie"), b.calls)
     }

@@ -10,7 +10,7 @@ object NotesTexts {
     const val YESTERDAY = "Ayer"
     const val EARLIER = "Antes"
 
-    // A PC that keeps its list (3.8.8): an empty list is the truth about the last days.
+    // A PC that keeps its list: an empty list is the truth about the last days.
     const val EMPTY_CLEAR = "Todo al día"
     const val EMPTY_CLEAR_HINT = "No hay avisos nuevos del PC."
 
@@ -25,7 +25,7 @@ object NotesTexts {
     const val DISMISS = "Descartar aviso"
     const val NEWS = "Novedades"
     const val UNREAD = "Sin leer"
-    const val PC_NOT_TOLD = "Marcados aquí, pero el PC no se ha enterado"
+    const val PC_NOT_TOLD = "Marcados aquí. El PC aún no lo sabe."
     const val KIND_APPROVAL = "Permiso"
     const val KIND_TASK = "Tarea"
     const val KIND_MESSAGE = "Mensaje"

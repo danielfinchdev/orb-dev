@@ -62,7 +62,7 @@ class UsageScreenTest {
         show(FakeUsageBackend())
         rule.onNodeWithText("Uso por cuenta").assertIsDisplayed()
         rule.onNodeWithText("Claude Max").assertIsDisplayed()
-        rule.onNodeWithText("Límite de sesión", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Límite de 5 horas", substring = true).assertIsDisplayed()
         rule.onNodeWithText("40 %").assertExists()
         for (t in listOf("Historial de uso", "Guía de modelos", "Agentes en tu PC", "Iniciar sesión, cuentas y planes: en el PC.")) {
             scrollTo(t)
@@ -82,14 +82,14 @@ class UsageScreenTest {
         val b = FakeUsageBackend()
         b.accountList = Result.success(listOf(account("claude", 0.5, resetAt = now + 3 * 3_600_000L)))
         show(b)
-        rule.onNodeWithText("Esta ventana de 5 h · vuelve 15:00").assertIsDisplayed()
+        rule.onNodeWithText("Límite de 5 h · vuelve 15:00").assertIsDisplayed()
     }
 
     @Test fun headerLeavesTheLengthOutWhenThePcDoesNotNameIt() {
         val b = FakeUsageBackend()
         b.accountList = Result.success(listOf(account("claude", 0.5).copy(windows = listOf(UsageWindow("cycle", 0.5, now + 3_600_000L)))))
         show(b)
-        rule.onNodeWithText("Esta ventana · vuelve 13:00").assertIsDisplayed()
+        rule.onNodeWithText("Límite · vuelve 13:00").assertIsDisplayed()
     }
 
     @Test fun headerIsAbsentWithoutAResetTime() {
@@ -107,7 +107,7 @@ class UsageScreenTest {
         )
         show(b)
         rule.onNodeWithText("3 de 8").assertExists()
-        rule.onNodeWithText("Tareas · ventana de 5 h").assertExists()
+        rule.onNodeWithText("Tareas · límite de 5 h").assertExists()
         rule.onNodeWithText("En pausa hasta", substring = true).assertExists()
         rule.onNodeWithText("Los límites aparecerán cuando los agentes respondan.").assertExists()
     }
@@ -125,7 +125,7 @@ class UsageScreenTest {
         )
         show(b)
         scrollTo("Sin instalar")
-        for (t in listOf("Listo", "Sin sesión", "Sesión sin comprobar", "Desactivado", "No instalado")) rule.onAllNodesWithText(t, substring = false).assertCountAtLeast1()
+        for (t in listOf("Listo", "Sin sesión", "Sesión sin comprobar", "Desactivado", "Instalar en el PC")) rule.onAllNodesWithText(t, substring = false).assertCountAtLeast1()
         rule.onAllNodesWithText("Gemini (ACP)").assertCountEquals(0)
     }
 

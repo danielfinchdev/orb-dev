@@ -379,7 +379,7 @@ object ThisPhoneTexts {
 
     /** Says all of it: the link is forgotten, and so are the saved copy and the messages that were not sent yet. */
     fun unlinkBody(pc: String?) =
-        "Se olvida el enlace con ${pc?.takeIf { it.isNotBlank() } ?: "el PC"}: se borran la llave guardada, la copia guardada en el móvil " +
+        "Se quita el enlace con ${pc?.takeIf { it.isNotBlank() } ?: "el PC"}: se borran la llave guardada, la copia guardada en el móvil " +
             "y los mensajes sin enviar, y dejarás de recibir avisos. Para volver a usarlo tendrás que enlazarlo otra vez con el PC."
 
     /** Which notices Android keeps off: the names are the ones of the channels in Android's own settings. */
@@ -460,8 +460,8 @@ object ThisPhoneTexts {
         is ConnectionState.Online -> "Conectado"
         is ConnectionState.Offline -> c.lastSeen?.let { "Sin conexión · última vez ${stamp(it, zone)}" } ?: "Sin conexión"
         ConnectionState.Connecting -> "Conectando…"
-        ConnectionState.UpdateApp -> "Hay que actualizar la app"
-        ConnectionState.UpdatePc -> "Hay que actualizar Orb en el PC"
+        ConnectionState.UpdateApp -> "Actualiza la app"
+        ConnectionState.UpdatePc -> "Actualiza Orb en el PC"
         ConnectionState.Unlinked -> "No enlazado"
         is ConnectionState.Attention -> "El PC necesita atención"
     }

@@ -212,7 +212,7 @@ class WelcomeViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                fail("Error inesperado (${e.javaClass.simpleName}).")
+                fail("Algo ha fallado. Inténtalo de nuevo.")
             }
         }
     }
@@ -231,7 +231,7 @@ class WelcomeViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                return@launch _state.update { it.copy(checking = false, stage = WelcomeStage.Fingerprint, error = "Error inesperado (${e.javaClass.simpleName}).") }
+                return@launch _state.update { it.copy(checking = false, stage = WelcomeStage.Fingerprint, error = "Algo ha fallado. Inténtalo de nuevo.") }
             }
             // The PC has accepted: its code is spent, so nothing below may send the person back to the fingerprint.
             try {

@@ -96,7 +96,7 @@ class TasksScreenTest {
     @Test fun theBoardIsFourSectionsAndTheFinishedOnesAreNotInThem() {
         show(FakeTasksBackend(rows))
         // each name is a chip and a heading
-        for (s in listOf("Por aprobar", "En curso", "En cola", "Incidencias")) rule.onAllNodesWithText(s).assertCountEquals(2)
+        for (s in listOf("Por aprobar", "En curso", "En cola", "Problemas")) rule.onAllNodesWithText(s).assertCountEquals(2)
         val headings = rule.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.Heading)).fetchSemanticsNodes().size
         // the title of the bar plus the four sections
         assertEquals(5, headings)
@@ -196,11 +196,11 @@ class TasksScreenTest {
         show(FakeTasksBackend(rows))
         val chips = rule.onNodeWithContentDescription("Secciones del tablero")
         chips.assertIsDisplayed()
-        for ((name, n) in listOf("En cola" to "3", "Por aprobar" to "2", "En curso" to "1", "Incidencias" to "1")) {
+        for ((name, n) in listOf("En cola" to "3", "Por aprobar" to "2", "En curso" to "1", "Problemas" to "1")) {
             rule.onNode(hasText(name) and hasText(n) and isSelectable()).assertIsDisplayed().assertIsNotSelected()
         }
         // every section is drawn
-        for (s in listOf("Por aprobar", "En curso", "En cola", "Incidencias")) rule.onAllNodesWithText(s).assertCountEquals(2)
+        for (s in listOf("Por aprobar", "En curso", "En cola", "Problemas")) rule.onAllNodesWithText(s).assertCountEquals(2)
     }
 
     @Test fun aChipShowsItsSectionAloneAndTheSameChipShowsThemAllAgain() {
@@ -219,7 +219,7 @@ class TasksScreenTest {
 
     @Test fun aChosenSectionThatIsEmptyStillSaysSoWithItsHeading() {
         show(FakeTasksBackend(rows.filter { it.status != "failed" }))
-        rule.onNode(hasText("Incidencias") and isSelectable()).performClick()
+        rule.onNode(hasText("Problemas") and isSelectable()).performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Todo al día").assertDoesNotExist()
         rule.onNodeWithText("0").assertIsDisplayed()

@@ -19,14 +19,14 @@ object ApproveTexts {
     val ENROLLED_TITLE get() = tr("Listo", "Done")
     val ENROLLED_BODY get() = tr("Este móvil ya puede aprobar acciones delicadas del PC con tu huella o tu cara.", "This phone can now approve sensitive PC actions with your fingerprint or face.")
     val DONE_TITLE get() = tr("Aprobado", "Approved")
-    val DONE_BODY get() = tr("Ya puedes seguir en el PC.", "You can go on at the PC.")
+    val DONE_BODY get() = tr("Ya puedes seguir en el PC.", "You can continue on your PC.")
     val REREGISTER_TITLE get() = tr("Vuelve a permitir las aprobaciones desde el PC", "Allow approvals again from your PC")
     val REREGISTER_BODY get() = tr("Este móvil ya no puede aprobar: cambió su huella o su cara. En el PC, ve a Ajustes › Dispositivos y elige «Permitir que apruebe».", "This phone can no longer approve: its fingerprint or face changed. On the PC, go to Settings › Devices and choose \"Let it approve\".")
 
     val NO_STRONG get() = tr("Este móvil no tiene una huella o una cara de seguridad alta, así que no puede aprobar.", "This phone has no strong fingerprint or face unlock, so it cannot approve.")
     val NOT_RECOGNIZED get() = tr("No se reconoció. Prueba otra vez.", "Not recognized. Try again.")
-    val BLOCKED get() = tr("Demasiados intentos. Espera un momento.", "Too many tries. Wait a moment.")
-    val FAILED get() = tr("No se pudo comprobar. Inténtalo otra vez.", "It could not be checked. Try again.")
+    val BLOCKED get() = tr("Demasiados intentos. Espera un momento.", "Too many attempts. Wait a moment.")
+    val FAILED get() = tr("No se pudo comprobar. Inténtalo otra vez.", "Couldn't check. Try again.")
     val REFUSED get() = tr("El PC no ha aceptado la respuesta. Empieza de nuevo desde el PC.", "The PC did not accept the answer. Start again from the PC.")
 
     fun enrollBody(name: String) = tr("Tu PC pide que «$name» pueda aprobar acciones delicadas con tu huella o tu cara. Si no lo has pedido tú, rechaza.", "Your PC asks that \"$name\" be able to approve sensitive actions with your fingerprint or face. If you did not ask for it, reject.")

@@ -75,7 +75,7 @@ class UsageViewModelTest {
     }
 
     @Test fun windowLabelsReadInWords() {
-        assertEquals("Límite de sesión", UsageTexts.windowLabel("five_hour"))
+        assertEquals("Límite de 5 horas", UsageTexts.windowLabel("five_hour"))
         assertEquals("Semanal · todos los modelos", UsageTexts.windowLabel("seven_day"))
         assertEquals("Semanal · Opus", UsageTexts.windowLabel("seven_day_opus"))
         assertEquals("Límite de 2 días", UsageTexts.windowLabel("2880min"))
@@ -205,15 +205,15 @@ class UsageViewModelTest {
 
     @Test fun windowHeaderNamesTheWindowThatReturnsFirstAndItsLengthOnlyWhenThePcSaysIt() {
         val five = account("a", 0.5, resetAt = hours(15))
-        assertEquals("Esta ventana de 5 h · vuelve 15:00", UsageTexts.windowHeader(listOf(five), 0, utc))
+        assertEquals("Límite de 5 h · vuelve 15:00", UsageTexts.windowHeader(listOf(five), 0, utc))
         // Another account's longer window that returns earlier does not win over the shortest window.
         val week = account("b", 0.1, resetAt = hours(2)).copy(windows = listOf(UsageWindow("seven_day", 0.1, hours(2))))
-        assertEquals("Esta ventana de 5 h · vuelve 15:00", UsageTexts.windowHeader(listOf(week, five), 0, utc))
+        assertEquals("Límite de 5 h · vuelve 15:00", UsageTexts.windowHeader(listOf(week, five), 0, utc))
         // A window whose name says nothing about its length has no «de N h».
         val odd = account("c", 0.1).copy(windows = listOf(UsageWindow("cycle", 0.1, hours(16))))
-        assertEquals("Esta ventana · vuelve 16:00", UsageTexts.windowHeader(listOf(odd), 0, utc))
+        assertEquals("Límite · vuelve 16:00", UsageTexts.windowHeader(listOf(odd), 0, utc))
         // The hour is the phone's: the same instant in Madrid (UTC+1 in November).
-        assertEquals("Esta ventana de 5 h · vuelve 16:00", UsageTexts.windowHeader(listOf(five), 0, java.util.TimeZone.getTimeZone("Europe/Madrid")))
+        assertEquals("Límite de 5 h · vuelve 16:00", UsageTexts.windowHeader(listOf(five), 0, java.util.TimeZone.getTimeZone("Europe/Madrid")))
     }
 
     @Test fun windowHeaderIsMissingWithoutAResetTimeAndShowsTheDayWhenFar() {
@@ -222,7 +222,7 @@ class UsageViewModelTest {
         assertNull(UsageTexts.windowHeader(listOf(account("a", 0.5, resetAt = 10)), 20, utc))
         val far = account("a", 0.5).copy(windows = listOf(UsageWindow("seven_day", 0.5, 3 * 86_400_000L + hours(9))))
         // 1 January 1970 was a Thursday; three days later is a Sunday.
-        assertEquals("Esta ventana de 7 días · vuelve dom 09:00", UsageTexts.windowHeader(listOf(far), 0, utc))
+        assertEquals("Límite de 7 días · vuelve dom 09:00", UsageTexts.windowHeader(listOf(far), 0, utc))
     }
 
     @Test fun amberStartsAt85PercentOfTheFigureTheReaderSees() {

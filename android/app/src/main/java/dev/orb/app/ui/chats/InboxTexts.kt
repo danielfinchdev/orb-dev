@@ -17,7 +17,7 @@ class InboxTexts(val english: Boolean) {
     val needsReview get() = pick("Espera tu aprobación", "Waiting for your approval")
     fun done(n: Int) = pick("Tareas hechas: $n", "Tasks done: $n")
     fun failed(n: Int) = pick("Tareas que fallaron: $n", "Tasks that failed: $n")
-    fun entries(n: Int) = pick("Entradas en la bitácora: $n", "Log entries: $n")
+    fun entries(n: Int) = pick("Entradas en la bitácora: $n", "Journal entries: $n")
     fun approvals(n: Int) = pick("Esperan tu aprobación ahora: $n", "Waiting for your approval now: $n")
     fun held(n: Int) = pick("Retenidas para que las revises ahora: $n", "Held for your review now: $n")
     val usage get() = pick("Uso por proveedor", "Usage by provider")
