@@ -96,6 +96,9 @@ export const METHODS = Object.freeze({
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
   // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
   'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
+  // a chat's own copy in the middle of a conversation, and the agent's proposal for it (src/engine/chat-copy.mjs, host/copy-proposal.mjs)
+  'copy.state': 'pc', 'copy.preview': 'pc', 'copy.toCopy': 'pc', 'copy.wait': 'pc', 'copy.cancelWait': 'pc', 'copy.merge': 'pc', 'copy.undoMerge': 'pc', 'copy.resolve': 'pc', 'copy.discard': 'pc',
+  'copyAsk.pending': 'pc', 'copyAsk.answer': 'pc', 'copyAsk.decline': 'pc',
   // the HTML pages of the chats: only this PC's window may list them, close them or give them internet (src/engine/host/html-pages.mjs)
   // agents outside Orb that create tasks through a loopback MCP server (src/engine/api/mcp-ext.mjs)
   'mcpExt.state': 'pc', 'mcpExt.setEnabled': 'pc', 'mcpExt.createToken': 'pc', 'mcpExt.setProjects': 'pc', 'mcpExt.revoke': 'pc', 'mcpExt.remove': 'pc',

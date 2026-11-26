@@ -55,6 +55,8 @@ import { chatMethods } from './chat.mjs';
 import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
 import { ChatWorktrees } from '../chat-worktrees.mjs';
+import { ChatCopy } from '../chat-copy.mjs';
+import { createCopyProposals } from '../host/copy-proposal.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 import { listRecent } from '../../domain/notes/recent.mjs';
@@ -194,6 +196,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     if (method === 'secret' && session) return secrets.request(asRunning(session), args);
     if (method === 'html' && session) return htmlPages.show(asRunning(session), args);
     if (method === 'pr' && session) return prTools.run(asRunning(session), String(args.tool ?? ''), args.args);
+    if (method === 'copy' && session) return copyProposals.run(asRunning(session), args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
     return android.tool(asRunning(session), String(args.tool ?? ''), args.args);
   };
@@ -210,6 +213,11 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
   // a deleted chat takes its worktree with it only when nothing in it would be lost; otherwise the folder stays and the user is told
   const chatTrees = new ChatWorktrees({ board, sessions, log });
+  // a chat that goes to its own copy in the middle of the conversation, and back (chat-copy.mjs); a switch cut short is settled now
+  const chatCopy = new ChatCopy({ board, sessions, chatTrees, hold: (name) => scheduler?.hold?.(name) ?? (() => {}), held: (name) => Boolean(scheduler?.held?.(name)), log });
+  const copyProposals = createCopyProposals({ board, sessions, copy: chatCopy, emit, log });
+  sessions.onTurnEnd = (id) => { chatCopy.afterTurn(id, emit).catch((error) => log(`copia aparte ${id}: ${error.message}`)); };
+  chatCopy.recover().then(() => chatCopy.prune()).catch((error) => log(`copia aparte: ${error.message}`));
   sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
   // a chat taken out of the trash gets back the worktree that was discarded meanwhile
   const restore = trash.methods['sessions.restore'];
@@ -485,6 +493,25 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // the answer names the request by id, chat, PR number and head commit, so a stale card cannot answer another one
     'prConfirm.answer': (a) => prTools.answer(prRef(a)),
     'prConfirm.decline': (a) => prTools.decline(prRef(a)),
+    // a chat in the middle of the conversation moves to its own copy and back (src/engine/chat-copy.mjs); this PC's window only
+    'copy.state': ({ id }) => chatCopy.state(str(id, 'conversación', 64)),
+    'copy.preview': ({ id }) => chatCopy.preview(str(id, 'conversación', 64)),
+    'copy.toCopy': async ({ id, fingerprint, mixed, ack, proceed }) => {
+      const sid = str(id, 'conversación', 64);
+      const out = await chatCopy.toCopy(sid, { fingerprint: typeof fingerprint === 'string' ? fingerprint.slice(0, 80) : '', mixed: mixed === 'take' || mixed === 'leave' ? mixed : null, ack: ack === true });
+      // the agent proposed it: it goes on now, told where it works
+      if (proceed === true) sessions.send(sid, tr('sys.copy.continue'), { asked: [] });
+      return out;
+    },
+    'copy.wait': ({ id }) => chatCopy.wait(str(id, 'conversación', 64), false),
+    'copy.cancelWait': ({ id }) => { chatCopy.cancelWait(str(id, 'conversación', 64)); return true; },
+    'copy.merge': ({ id }) => chatCopy.merge(str(id, 'conversación', 64)),
+    'copy.undoMerge': ({ id }) => chatCopy.undoMerge(str(id, 'conversación', 64)),
+    'copy.resolve': ({ id }) => chatCopy.resolve(str(id, 'conversación', 64)),
+    'copy.discard': ({ id, confirm }) => chatCopy.discard(str(id, 'conversación', 64), { confirm: confirm === true }),
+    'copyAsk.pending': () => copyProposals.pending(),
+    'copyAsk.answer': ({ id, session }) => copyProposals.answer({ id: int(id, 'petición'), session: str(session, 'conversación', 64) }),
+    'copyAsk.decline': ({ id, session }) => copyProposals.decline({ id: int(id, 'petición'), session: str(session, 'conversación', 64) }),
     // the HTML pages of the chats: listed, closed and given internet only from this PC's window.
     'htmlPages.list': () => htmlPages.list(),
     'htmlPages.setInternet': (a) => { if (typeof a?.internet !== 'boolean') fail('internet: true o false'); return htmlPages.setInternet(htmlRef(a), a.internet); },

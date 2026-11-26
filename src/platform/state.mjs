@@ -46,7 +46,7 @@ export const STATE_KEYS = Object.freeze({
     // a project's
     'actions:': 'project', 'wb_seen:': 'project', 'pr_review:': 'project',
     // a chat's own worktree (src/engine/chat-worktrees.mjs, by session id)
-    'chatwt:': 'session',
+    'chatwt:': 'session', 'chatmoves:': 'session', 'chatcp:': 'session', 'chatres:': 'session', 'chatcopy_next:': 'session', 'folder_note:': 'session', 'chatresume:': 'session',
     // older versions' (deleted when the engine starts or by the 3.8 migration)
     'orchestrator_conv:': 'legacy', 'agent_id:': 'legacy', 'secret:': 'legacy',
   }),
