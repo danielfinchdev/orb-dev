@@ -178,6 +178,7 @@ export default {
   "msg.ctx.assistantNeedsClaude": "la cuenta del asistente tiene que ser del agente que usa",
   "msg.ctx.badAssistantModels": "modelos del asistente no válidos",
   "msg.ctx.badLanguage": "idioma no compatible",
+  "msg.ctx.badDictation": "motor de dictado no compatible",
   "msg.ctx.badModels": "modelos de {id} no válidos",
   "msg.ctx.badReasoning": "razonamiento del asistente no válido",
   "msg.ctx.badTheme": "tema no válido",

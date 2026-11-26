@@ -15,6 +15,7 @@ import path from 'node:path';
 import { guardedCore } from '../desktop-home.mjs';
 import { checkUnlock } from './master.mjs';
 import { sendFeedback, moreApps } from '../host/feedback.mjs';
+import { detectEngines } from '../host/dictation.mjs';
 
 const absolute = localPath;
 
@@ -82,6 +83,8 @@ export function appMethods({ home, version, folders = () => [] }) {
     },
     // Ajustes › Contribuye and Más aplicaciones (src/engine/host/feedback.mjs).
     'app.feedbackSend': (data = {}) => sendFeedback(data, { version, language: language() }),
-    'app.moreApps': () => moreApps(version)
+    'app.moreApps': () => moreApps(version),
+    // Ajustes › dictation: which local speech-to-text engines are installed (read-only, no network).
+    'app.dictationEngines': () => detectEngines()
   };
 }

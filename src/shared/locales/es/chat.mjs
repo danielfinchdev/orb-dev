@@ -1,6 +1,9 @@
 // chat.*
 export default {
   'chat.dictate': "Dictar",
+  'chat.dictateMissing': 'No tienes {engine} instalado. Dictas con Windows; instálalo o cambia el motor en Ajustes.',
+  'chat.dictateUnsupported': 'Orb aún no puede dictar con {engine}. Dictas con Windows.',
+  'chat.dictateHandy': 'Habla con el atajo de Handy y el texto aparecerá aquí.',
   'chat.dictateFailed': 'No se pudo abrir el dictado de Windows. Prueba con Win+H.',
   'chat.suggestion1': 'Crea un proyecto «mi-web» con una página de inicio sencilla',
   'chat.suggestion2': '¿Cómo van las tareas?',

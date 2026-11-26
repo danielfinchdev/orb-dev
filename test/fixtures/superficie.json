@@ -37,6 +37,7 @@
   "android.status": "pc",
   "app.coreRepair": "pc",
   "app.coreState": "pc",
+  "app.dictationEngines": "pc",
   "app.editors": "pc",
   "app.feedbackSend": "pc",
   "app.layoutApply": "pc",

@@ -1,6 +1,9 @@
 // chat.*
 export default {
   'chat.dictate': "Dictate",
+  'chat.dictateMissing': "You don't have {engine} installed. You're dictating with Windows; install it or change the engine in Settings.",
+  'chat.dictateUnsupported': "Orb can't dictate with {engine} yet. You're dictating with Windows.",
+  'chat.dictateHandy': "Speak with Handy's shortcut and the text will appear here.",
   'chat.dictateFailed': "Couldn't open Windows voice typing. Try Win+H.",
   'chat.suggestion1': 'Create a project called “my-site” with a simple home page',
   'chat.suggestion2': 'How are the tasks going?',

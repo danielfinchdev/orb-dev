@@ -5,12 +5,13 @@ import { routeKey, takeDraft } from '@/lib/reload.js';
 import { useDraftValue, useDraftBlocks } from '@/lib/draft.js';
 import { isLongPaste, countLines, MAX_MESSAGE_CHARS } from '../../../shared/chat-compose.mjs';
 import { micMode } from '@/lib/mic.js';
+import { dictationChoice, resolveDictation } from '../../../shared/dictation.mjs';
 import { ArrowUp, Square, AtSign, Mic, ChevronRight, ClipboardPaste, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, getState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { notifyWarn } from '@/lib/notify.js';
+import { notifyInfo, notifyWarn } from '@/lib/notify.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
 // A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
@@ -135,6 +136,15 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
     // Windows writes what is said into the box that has the focus: the message box, with the cursor at the end.
     if (mic === 'windows') {
       const el = ta.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      // The engine chosen in Ajustes; a missing or undriveable one falls back to Windows and the person is told why.
+      const wanted = dictationChoice(getState().app?.config);
+      if (wanted !== 'windows') {
+        const found = await Promise.resolve(bridge.dictationEngines?.()).catch(() => ({}));
+        const plan = resolveDictation(wanted, { handy: Boolean(found?.handy?.found), whisper: Boolean(found?.whisper?.found) });
+        const engine = tNow(`settings.dictation.${wanted}`);
+        if (plan.engine === 'handy') { notifyInfo(tNow('chat.dictateHandy')); return; }
+        if (plan.reason) notifyWarn(tNow(plan.reason === 'missing' ? 'chat.dictateMissing' : 'chat.dictateUnsupported', { engine }));
+      }
       await act(bridge.dictateWindows().catch(() => { throw new Error(t('chat.dictateFailed')); }));
       return;
     }

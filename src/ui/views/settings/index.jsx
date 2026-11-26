@@ -14,7 +14,7 @@ import { ExtensionsPanel } from '../extensions.jsx';
 import { Block, SavedNotice } from './rows.jsx';
 import { ShortcutsCard } from './shortcuts.jsx';
 import { MasterCard } from '../master.jsx';
-import { AssistantCard, ThemeCard, FontCard, SizeCard, ChatsLookCard, SoundCard, MusicCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, ProjectScriptsCard, TerminalCard, GitCard, ExpertCard } from './general.jsx';
+import { AssistantCard, ThemeCard, FontCard, SizeCard, ChatsLookCard, SoundCard, MusicCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, ProjectScriptsCard, TerminalCard, DictationCard, GitCard, ExpertCard } from './general.jsx';
 import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 import { McpExtCard } from './mcp-ext.jsx';
 import { UsageAccounts, BrakesCard, BrakeRails } from './usage-tab.jsx';
@@ -45,7 +45,7 @@ function AgentsTabs({ c }) {
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
   { id: 'general', icon: Settings, groups: ['actualizaciones'],
-    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><TerminalCard c={c} /><GitCard c={c} /><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
+    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><TerminalCard c={c} /><DictationCard c={c} /><GitCard c={c} /><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
   { id: 'apariencia', icon: Palette, cards: (c) => <><ThemeCard c={c} /><FontCard c={c} /><SizeCard /><ChatsLookCard c={c} /><SoundCard c={c} /><MusicCard /></> },
   { id: 'agentes', icon: Bot, cards: (c) => <AgentsTabs c={c} /> },
   // What the agents may do without asking, how long a question waits, the protected paths and the master password (with Windows Hello).

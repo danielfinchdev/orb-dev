@@ -10,6 +10,7 @@ import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, migrateAppearance } from '../shared/appearance.mjs';
 import { ADAPTIVE_THEMES } from '../shared/music.mjs';
 import { REASONING_LEVELS } from '../shared/reasoning-levels.mjs';
+import { DICTATION_ENGINES } from '../shared/dictation.mjs';
 import { ACCOUNT_COLORS, TAG_RE } from '../shared/account-marks.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
@@ -73,6 +74,7 @@ export function validateConfig(c) {
   const int = (v, min, max, name) => { if (!Number.isInteger(v) || v < min || v > max) throw new Error(tr('msg.ctx.numRange', { name, min, max })); };
   int(c.maxParallel, 1, 10, 'maxParallel'); int(c.perAgent, 1, 5, 'perAgent'); int(c.timeoutMinutes, 5, 600, 'timeoutMinutes');
   if (c.budget?.windowHours !== undefined) int(c.budget.windowHours, 1, 24, 'budget.windowHours');
+  if (c.ui?.dictation !== undefined && !DICTATION_ENGINES.includes(c.ui.dictation)) throw new Error(tr('msg.ctx.badDictation'));
   if (c.ui?.lockMinutes !== undefined) int(c.ui.lockMinutes, 1, 240, 'ui.lockMinutes');
   if (!String(c.assistantName ?? '').trim()) throw new Error(tr('msg.ctx.needName'));
   if (!['es', 'en'].includes(c.language)) throw new Error(tr('msg.ctx.badLanguage'));
