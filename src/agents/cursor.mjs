@@ -41,10 +41,15 @@ export function detect(cfg = {}) {
   return found ? { cmd: found, pre: [] } : null;
 }
 
-// The CLI keeps its login in ~/.cursor (cli-config.json); the file is a good sign, not a proof.
+// The CLI writes ~/.cursor/cli-config.json on its first run, logged in or not; only the account it records there
+// (authInfo) says someone logged in. Without it the state stays unknown: the token itself lives outside that file.
 export function loginState() {
   const dir = path.join(userHome(), '.cursor');
-  if (firstFile([path.join(dir, 'cli-config.json')])) return 'si';
+  const file = firstFile([path.join(dir, 'cli-config.json')]);
+  if (file) {
+    try { if (JSON.parse(fs.readFileSync(file, 'utf8'))?.authInfo) return 'si'; } catch { /* unreadable: unknown */ }
+    return 'desconocido';
+  }
   return fs.existsSync(dir) ? 'desconocido' : 'no';
 }
 export const loginCommand = (exe) => ({ cmd: exe.cmd, args: [...exe.pre, 'login'] });
