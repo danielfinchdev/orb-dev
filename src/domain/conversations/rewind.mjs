@@ -5,7 +5,8 @@
 // since then stay in the history; their files are what goes back.
 import { git, gitAsync, REF_PREFIX } from '../../platform/git.mjs';
 import { fullSnapshot, undoCheckpoint } from '../tasks/checkpoints.mjs';
-import { photoBefore, PHOTO_AT } from './turns.mjs';
+import { photoBefore, photoMoved, PHOTO_AT } from './turns.mjs';
+import { tr } from '../../platform/context.mjs';
 
 const RESCUE = `${REF_PREFIX}/rescate`;
 const KEEP = 10; // rescue copies kept per chat; the oldest go first
@@ -29,7 +30,7 @@ async function prune(repo, sid) {
 // message was sent is kept even if the photo does not hold it.
 export async function rewindFiles(cwd, sid, itemId, { messageAt = 0 } = {}) {
   const photo = await photoBefore(cwd, sid, itemId);
-  if (!photo) throw new Error('no photo');
+  if (!photo) throw new Error((await photoMoved(cwd, sid, itemId)) ? tr('msg.copy.rewindMoved') : 'no photo');
   const { repo, commit: target } = photo;
   const rescue = await fullSnapshot(repo, { message: `orb: rescate antes de rebobinar ${sid}` });
   if (!rescue?.commit) throw new Error('no rescue');

@@ -237,7 +237,8 @@ export default {
   'brain.noUsage': 'No usage on your plan until {when}',
   'brain.noUsageDay': 'No usage on your plan until {when}',
   'chat.workspace.local': 'Local',
-  'chat.workspace.worktree': 'Worktree',
+  'chat.workspace.worktree': 'Separate copy',
+  'chat.workspace.worktreeHelp': 'Separate copy (worktree)',
   'chat.workspace.tip': 'Where this chat works',
   'chat.workspace.localTip': 'Local: works directly in the project folder.',
   'chat.workspace.worktreeTip': 'Works in its own copy of the project (separate branch) that Orb keeps outside your repository. Your folder does not change until you join its work.',
@@ -252,7 +253,7 @@ export default {
   'guide.open': 'Model guide',
   'session.phChat': 'Ask for something, mention with @ or use / to see the commands',
   'chat.workspace.from': 'from {branch}',
-  'chat.workspace.locked': 'This chat has already started: where it works can no longer be changed.',
+  'chat.workspace.locked': 'This chat has already started. To change it, use "Move to a separate copy".',
   'chat.stopped.title': 'Orb stopped the turn',
   'chat.stopped.badge': 'Stopped'
 };

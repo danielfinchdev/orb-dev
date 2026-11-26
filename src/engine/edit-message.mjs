@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { tr } from '../platform/context.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { permissionOfAutonomy, globalAutonomy } from '../domain/security/guard.mjs';
-import { photoBefore } from '../domain/conversations/turns.mjs';
+import { photoBefore, photoMoved } from '../domain/conversations/turns.mjs';
 import { rewindFiles, undoRewindFiles } from '../domain/conversations/rewind.mjs';
 import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { isGitRepoAsync, repoRootAsync } from '../platform/git.mjs';
@@ -81,7 +81,7 @@ async function inspect(sessions, s, itemId) {
   if (!s.project) { info.rewindWhy = tr('msg.edit.noProject'); return info; }
   if (await otherRunning(sessions, s)) { info.rewindWhy = tr('msg.edit.otherRunning'); return info; }
   if (!(await isGitRepoAsync(s.cwd))) { info.rewindWhy = tr('msg.edit.noGit'); return info; }
-  if (!(await photoBefore(s.cwd, s.id, itemId))) { info.rewindWhy = tr('msg.edit.noPhoto'); return info; }
+  if (!(await photoBefore(s.cwd, s.id, itemId))) { info.rewindWhy = (await photoMoved(s.cwd, s.id, itemId)) ? tr('msg.copy.rewindMoved') : tr('msg.edit.noPhoto'); return info; }
   info.canRewind = true;
   return info;
 }
@@ -180,6 +180,8 @@ export async function undoRewind(sessions, id, itemId) {
     const item = row && parse(row);
     if (!item || typeof item.body !== 'object') fail('msg.edit.noRewind');
     if (item.body.undone) fail('msg.edit.alreadyUndone');
+    // the rescue copy holds the folder the chat left: putting it back here would write another folder's files
+    if ((sessions.board.settingJson(`chatmoves:${s.id}`) ?? []).some((m) => Number(m.item) >= item.id)) fail('msg.copy.rewindMoved');
     if (sessions.running.has(id) || sessions.pendingApprovals(id).length) fail('msg.edit.busy');
     if (await otherRunning(sessions, s)) fail('msg.edit.otherRunning');
     let out;

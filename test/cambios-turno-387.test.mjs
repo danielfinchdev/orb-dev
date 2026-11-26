@@ -44,8 +44,8 @@ before(() => {
 after(() => { try { sessions.stopAll(); board.db.close(); } catch { /* closed */ } t.cleanup(); });
 
 const allRefs = (id) => g('for-each-ref', '--format=%(refname)', `refs/orb/turnos/${id}/`).split('\n').filter(Boolean);
-// the numbered photos; refs/orb/turnos/<chat>/antes/<message> only mark where a message started
-const turnRefs = (id) => allRefs(id).filter((r) => !r.includes('/antes/'));
+// the numbered photos; refs/orb/turnos/<chat>/antes/<message> and pre/<turn> only mark where a message or a turn started
+const turnRefs = (id) => allRefs(id).filter((r) => !r.includes('/antes/') && !r.includes('/pre/'));
 // sends a message and waits until the turn ended and its photo exists
 async function turn(id, text, photos) {
   await call('sessions.send', { id, text });
