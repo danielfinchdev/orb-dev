@@ -214,3 +214,13 @@ Settings has ten tabs (`SECTIONS` in `src/ui/views/settings/index.jsx`; one file
 they lose focus, a cancelled value goes back to the saved one, and "Saved" confirms it. Deep links use aliases for the old
 section names. The Appearance tab offers four more typefaces (Inter, Geist, IBM Plex Sans and Mono) in `src/ui/fonts/`
 as woff2 files (OFL licences beside them), loaded by `src/ui/fonts.css` outside the JavaScript bundle.
+
+## Dictation engines (3.8.12)
+
+The microphone button supports three engines, chosen in Settings (`ui.dictation`): `windows` (Win+H voice typing, the
+default), `handy` and `whisper`. `src/shared/dictation.mjs` holds the rule that a missing engine falls back to Windows
+(`resolveDictation`). `src/engine/host/dictation.mjs` detects engines by file only (PATH and usual install folders; `.cmd`
+and `.bat` shims skipped) and never runs, downloads or installs anything. For Whisper, the window records the
+microphone (`src/ui/lib/recorder.js`), converts it to a mono 16 kHz WAV (`src/shared/wav.mjs`) and calls a PC-only engine
+method; the engine writes it to a private temporary folder, runs the detected program without a shell and with a time
+limit, removes the folder and returns the text. WebView2 grants the microphone to Orb's own page only.
