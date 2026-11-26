@@ -21,6 +21,7 @@ import { ADAPTIVE_THEMES } from '../../../shared/music.mjs';
 import { SkinPreview } from '@/components/skin-preview.jsx';
 import { save, markSaved, num, Row, WithKeys, sizes, MoreOptions, Block, Panel, Setting, Fld, Stack, Hint } from './rows.jsx';
 import { quiet } from '@/lib/quiet.js';
+import { DICTATION_ENGINES, dictationChoice, resolveDictation } from '../../../shared/dictation.mjs';
 
 export function AssistantCard({ c }) {
   const t = useT();
@@ -474,6 +475,48 @@ export function TerminalCard({ c }) {
           <Button size="sm" variant="outline" onClick={() => openTerminal()}><SquareTerminal />{t('settings.openTerminal')}</Button>
           <span className="text-faint-foreground text-control">Ctrl J</span>
         </Setting>
+      </Panel>
+    </Block>
+  );
+}
+
+// The speech-to-text engine of the microphone button. Windows is the default; Handy and Whisper are offered when found
+// on this PC (read-only search in the engine, nothing is downloaded). A chosen engine that is missing falls back to
+// Windows (composer.jsx), and the card says so.
+export function DictationCard({ c }) {
+  const t = useT();
+  const [found, setFound] = useState(null);
+  const look = () => { setFound(null); Promise.resolve(bridge.dictationEngines?.()).then((r) => setFound(r ?? {})).catch(() => setFound({})); };
+  useEffect(look, []);
+  if (!bridge.dictateWindows) return null; // only Orb for Windows dictates with an engine of this PC
+  const choice = dictationChoice(c);
+  const name = (id) => t(`settings.dictation.${id}`);
+  const have = (id) => id === 'windows' || Boolean(found?.[id]?.found);
+  const plan = found ? resolveDictation(choice, { handy: have('handy'), whisper: have('whisper') }) : null;
+  const status = !found ? t('settings.dictationChecking')
+    : plan?.reason === 'missing' ? t('settings.dictationMissingChosen', { engine: name(choice) }) : null;
+  const w = found?.whisper;
+  return (
+    <Block title={t('settings.dictationTitle')} note={t('settings.dictationNote')} data-testid="dictation-card">
+      <Panel>
+        <Setting label={t('settings.dictationEngine')} hint={t('settings.dictationEngineHint')}>
+          <Select caret="solid" className="min-w-0" value={choice} onValueChange={(dictation) => save({ ui: { dictation } })} title={t('settings.dictationEngine')}
+            options={DICTATION_ENGINES.map((id) => ({ value: id, label: found && id !== 'windows' && have(id) ? `${name(id)} · ${t('settings.dictationFound')}` : name(id) }))} />
+          <Button size="sm" variant="outline" onClick={look} data-testid="dictation-recheck">{t('settings.dictationRecheck')}</Button>
+        </Setting>
+        {status ? <Stack><Hint data-testid="dictation-status">{status}</Hint></Stack> : null}
+        {found ? <Stack>
+          {DICTATION_ENGINES.filter((id) => id !== 'windows' && !have(id)).map((id) => <Hint key={id}>{t('settings.dictationMissing', { engine: name(id) })}</Hint>)}
+          {found.handy?.found || w?.found ? <details>
+            <summary className="text-faint-foreground text-caption cursor-pointer">{t('settings.dictationDetails')}</summary>
+            <div className="text-faint-foreground text-caption mt-1 flex flex-col gap-0.5 break-all">
+              {found.handy?.found ? <span>Handy · {t('settings.dictationFile', { file: found.handy.file })}</span> : null}
+              {w?.found ? <span>Whisper · {t('settings.dictationFile', { file: w.file })}</span> : null}
+              {w?.version ? <span>{t('settings.dictationVersion', { version: w.version })}</span> : null}
+              {w?.found ? <span>{w.model ? t('settings.dictationModelFound') : t('settings.dictationModelMissing')}</span> : null}
+            </div>
+          </details> : null}
+        </Stack> : null}
       </Panel>
     </Block>
   );

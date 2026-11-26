@@ -153,7 +153,7 @@ test('the menu of Ajustes only has its ten sections: no entries of a block under
 test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing it lacks is lost', () => {
   const index = view('settings', 'index.jsx');
   // General: Asistente, Carpeta, Terminal, Git, Actualizaciones
-  assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><TerminalCard c=\{c\} \/><GitCard c=\{c\} \/><SubSection id="actualizaciones"/);
+  assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><TerminalCard c=\{c\} \/><DictationCard c=\{c\} \/><GitCard c=\{c\} \/><SubSection id="actualizaciones"/);
   // Apariencia: only the mock-up's rows (no density, chat width or text size)
   for (const gone of ['appearance.density', 'appearance.chatWidth', 'appearance.fontSize']) assert.ok(!general.includes(`'${gone}'`), gone);
   // Robot y sonidos: on and volume of the music first, its style and reactivity after

@@ -1,5 +1,5 @@
 // What WebView2 itself is told about Orb's window (Electron's session did the same): every permission a page may ask for
-// (camera, microphone, location, notifications…) is denied without asking, nothing is autofilled or offered to be saved
+// (camera, location, notifications…) is denied without asking, and the microphone only for Orb's own page, nothing is autofilled or offered to be saved
 // as a password, the window's picture for Ajustes › Contribuye (CapturePreview), and the real path of a file the user
 // dropped, pasted or picked in the page (window.orb.pathForFile: the page hands the File to WebView2 with
 // chrome.webview.postMessageWithAdditionalObjects and WebView2 gives Rust its path, as Electron's webUtils did). The page's
@@ -42,6 +42,14 @@ pub fn stray_separators(separators: &[bool]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
   #[test]
+  fn only_orbs_own_page_gets_the_microphone() {
+    assert!(super::grants_microphone(true, "http://tauri.localhost/index.html"));
+    assert!(!super::grants_microphone(false, "http://tauri.localhost/"));
+    assert!(!super::grants_microphone(true, "https://example.com/"));
+    assert!(!super::grants_microphone(true, "http://tauri.localhost.evil.com/"));
+  }
+
+  #[test]
   fn the_right_click_menu_keeps_editing_only() {
     for kept in ["cut", "copy", "paste", "selectAll", "undo", "redo", "emoji", "spellCheck"] {
       assert!(super::menu_item_kept(kept, false), "{kept}");
@@ -59,6 +67,12 @@ mod tests {
     assert_eq!(super::stray_separators(&[true, true]), vec![0, 1]);
     assert_eq!(super::stray_separators(&[]), Vec::<usize>::new());
   }
+}
+
+/// The only permission a page gets: the microphone, and only for Orb's own interface (the dictation button records what
+/// is said to transcribe it with a local engine). Any other page or permission is denied.
+pub(crate) fn grants_microphone(is_microphone: bool, uri: &str) -> bool {
+  is_microphone && uri.starts_with("http://tauri.localhost/")
 }
 
 #[cfg(windows)]
@@ -89,7 +103,12 @@ mod win {
       let _ = core.add_PermissionRequested(
         &PermissionRequestedEventHandler::create(Box::new(|_, args| {
           if let Some(args) = args {
-            args.SetState(COREWEBVIEW2_PERMISSION_STATE_DENY)?;
+            let mut kind = COREWEBVIEW2_PERMISSION_KIND::default();
+            args.PermissionKind(&mut kind)?;
+            let mut uri = PWSTR::null();
+            args.Uri(&mut uri)?;
+            let allow = grants_microphone(kind == COREWEBVIEW2_PERMISSION_KIND_MICROPHONE, &take(uri));
+            args.SetState(if allow { COREWEBVIEW2_PERMISSION_STATE_ALLOW } else { COREWEBVIEW2_PERMISSION_STATE_DENY })?;
           }
           Ok(())
         })),

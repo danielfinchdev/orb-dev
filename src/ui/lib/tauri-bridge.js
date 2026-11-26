@@ -98,6 +98,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     runAction: (action) => engine('app.runAction', action ?? {}),
     feedback: { capture, images: () => invoke('app_feedback_images'), send: (data) => engine('app.feedbackSend', data ?? {}) },
     moreApps: () => engine('app.moreApps'),
+    dictationEngines: () => engine('app.dictationEngines'),
+    transcribe: (wav) => engine('dictation.transcribe', { wav }),
     // New versions (src-tauri/src/updater.rs); the state also comes as the 'app:update' event.
     update: { get: () => invoke('app_update'), check: () => invoke('app_update_check'), download: () => invoke('app_update_download'), install: () => invoke('app_update_install') },
     // A promise here (Electron's preload answers at once): the callers wait for it either way.

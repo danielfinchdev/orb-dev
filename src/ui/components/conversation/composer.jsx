@@ -5,12 +5,14 @@ import { routeKey, takeDraft } from '@/lib/reload.js';
 import { useDraftValue, useDraftBlocks } from '@/lib/draft.js';
 import { isLongPaste, countLines, MAX_MESSAGE_CHARS } from '../../../shared/chat-compose.mjs';
 import { micMode } from '@/lib/mic.js';
+import { startRecording } from '@/lib/recorder.js';
+import { dictationChoice, resolveDictation } from '../../../shared/dictation.mjs';
 import { ArrowUp, Square, AtSign, Mic, ChevronRight, ClipboardPaste, X } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Tip } from '@/components/ui/overlay.jsx';
 import { bridge, useStore, call, act, getState } from '@/lib/store.js';
 import { cn } from '@/lib/utils.js';
-import { notifyWarn } from '@/lib/notify.js';
+import { notifyInfo, notifyWarn } from '@/lib/notify.js';
 import { useT, t as tNow } from '@/lib/i18n.js';
 
 // A conversation stays at its bottom while the user has not scrolled up (`stick`): when a line arrives (deps) and,
@@ -131,10 +133,42 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
   const mic = micMode({ desktop: Boolean(bridge.desktop), windowsDictation: Boolean(bridge.dictateWindows), androidApp: window.__orbHost?.app === true, mobile: Boolean(bridge.mobile),
     coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, webSpeech: Boolean(WebSpeech) });
   const [hearing, setHearing] = useState(false);
+  // Whisper: the microphone records until pressed again; then the engine transcribes (lib/recorder.js).
+  const [phase, setPhase] = useState(null); // null | 'listening' | 'transcribing'
+  const rec = useRef(null);
+  useEffect(() => () => rec.current?.cancel(), []);
+  const finishWhisper = async () => {
+    const r = rec.current; rec.current = null; if (!r) return;
+    setPhase('transcribing');
+    try {
+      const wav = await r.stop().catch(() => { throw new Error(tNow('chat.dictateFailed')); });
+      const { text } = await bridge.transcribe(wav);
+      // what was typed meanwhile stays: the text is added at the end of what the box holds now.
+      const cur = ta.current?.value ?? value;
+      if (text) onChange(cur.trim() ? `${cur.trimEnd()} ${text}` : text);
+    } catch (error) { notifyWarn(error?.message ? String(error.message) : tNow('chat.dictateFailed')); }
+    finally { setPhase(null); }
+  };
+  const startWhisper = async () => {
+    try { rec.current = await startRecording({ onLimit: finishWhisper }); setPhase('listening'); } catch (error) {
+      notifyWarn(tNow(error?.name === 'NotAllowedError' || error?.name === 'SecurityError' ? 'chat.dictateMicDenied' : 'chat.dictateFailed'));
+    }
+  };
   const dictate = async () => {
+    if (phase === 'listening') { await finishWhisper(); return; }
     // Windows writes what is said into the box that has the focus: the message box, with the cursor at the end.
     if (mic === 'windows') {
       const el = ta.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
+      // The engine chosen in Ajustes; a missing or undriveable one falls back to Windows and the person is told why.
+      const wanted = dictationChoice(getState().app?.config);
+      if (wanted !== 'windows') {
+        const found = await Promise.resolve(bridge.dictationEngines?.()).catch(() => ({}));
+        const plan = resolveDictation(wanted, { handy: Boolean(found?.handy?.found), whisper: Boolean(found?.whisper?.found) });
+        const engine = tNow(`settings.dictation.${wanted}`);
+        if (plan.engine === 'handy') { notifyInfo(tNow('chat.dictateHandy')); return; }
+        if (plan.engine === 'whisper') { await startWhisper(); return; }
+        if (plan.reason) notifyWarn(tNow('chat.dictateMissing', { engine }));
+      }
       await act(bridge.dictateWindows().catch(() => { throw new Error(t('chat.dictateFailed')); }));
       return;
     }
@@ -168,7 +202,8 @@ export function Composer({ draft, onSend, onStop, busy, placeholder, suggestion,
         {/* the mock-up's button bar: 6 px above a 32 px row and 8 px below, whatever its buttons measure */}
         <div className="flex items-center gap-2 px-3 pt-1.5 pb-2">
           <div className="flex min-h-(--ctl) min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-1 max-sm:flex-nowrap max-sm:overflow-hidden" data-testid="composer-bottom">{bottom}</div>
-          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing ? 'text-primary-text animate-pulse' : undefined} /></Button></Tip> : null}
+          {phase ? <span className="text-faint-foreground text-caption" role="status" data-testid="dictate-status">{t(phase === 'listening' ? 'chat.dictateListening' : 'chat.dictateTranscribing')}</span> : null}
+          {mic ? <Tip label={t('chat.dictate')}><Button size="icon-sm" variant="ghost" className="rounded-full" onClick={dictate} disabled={disabled || hearing || phase === 'transcribing'} aria-label={t('chat.dictate')} data-testid="dictate"><Mic className={hearing || phase ? 'text-primary-text animate-pulse' : undefined} /></Button></Tip> : null}
           {busy && onStop ? <Tip label={t('chat.stop')}><Button size="icon-sm" variant="secondary" onClick={onStop} aria-label={t('chat.stop')}><Square className="size-3.5 fill-current" /></Button></Tip> : null}
           <Button size="icon-sm" className={cn('rounded-full', !disabled && 'disabled:opacity-100')} onClick={() => onSend({ alt: false })} disabled={disabled || !(value.trim() || attached || blocks.length)} aria-label={t('chat.send')} data-testid="send"><ArrowUp /></Button>
         </div>

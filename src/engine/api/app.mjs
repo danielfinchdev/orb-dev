@@ -15,6 +15,8 @@ import path from 'node:path';
 import { guardedCore } from '../desktop-home.mjs';
 import { checkUnlock } from './master.mjs';
 import { sendFeedback, moreApps } from '../host/feedback.mjs';
+import { detectEngines, transcribeWav } from '../host/dictation.mjs';
+import { checkWav } from '../../shared/wav.mjs';
 
 const absolute = localPath;
 
@@ -26,6 +28,7 @@ const folderKey = (p) => { let r = path.resolve(p); try { r = fs.realpathSync.na
 export function appMethods({ home, version, folders = () => [] }) {
   const language = () => (ctx.config?.language === 'en' ? 'en' : 'es');
   const choice = () => ctx.config?.ui?.terminal ?? 'auto';
+  let busy = false; // one transcription at a time
   const openUrl = (url) => hostCall('host.openUrl', { url });
   return {
     // Ctrl+J: a terminal (Warp, Windows Terminal, PowerShell…) in the folder the window shows, or the workspace.
@@ -82,6 +85,21 @@ export function appMethods({ home, version, folders = () => [] }) {
     },
     // Ajustes › Contribuye and Más aplicaciones (src/engine/host/feedback.mjs).
     'app.feedbackSend': (data = {}) => sendFeedback(data, { version, language: language() }),
-    'app.moreApps': () => moreApps(version)
+    'app.moreApps': () => moreApps(version),
+    // Ajustes › dictation: which local speech-to-text engines are installed (read-only, no network).
+    'app.dictationEngines': () => detectEngines(),
+    // The microphone button's recording (mono 16 kHz WAV, base64, at most 2 minutes) → the text, from this PC's Whisper.
+    // This PC's window only: it is not in the methods a phone or an agent may call (src/domain/security/permissions.mjs).
+    'dictation.transcribe': async ({ wav } = {}) => {
+      if (typeof wav !== 'string' || wav.length > 6_000_000) fail(tr('msg.dictation.tooBig'));
+      const bytes = Buffer.from(wav, 'base64');
+      if (!checkWav(bytes)) fail(tr('msg.dictation.badAudio'));
+      if (busy) fail(tr('msg.dictation.busy'));
+      busy = true;
+      try { return { text: await transcribeWav(bytes) }; } catch (error) {
+        if (error.userFacing) throw error;
+        fail(tr(`msg.dictation.${['noEngine', 'noModel', 'timeout', 'empty'].includes(error.code) ? error.code : 'failed'}`));
+      } finally { busy = false; }
+    }
   };
 }
