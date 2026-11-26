@@ -357,8 +357,8 @@ class MenuScreensTest {
         rule.onNodeWithText("Cómo funciona").assertIsDisplayed()
         // Nothing for the PC alone, no keyboard shortcuts.
         for (t in listOf("Atajos de teclado", "Repetir el tutorial guiado")) rule.onNodeWithText(t).assertDoesNotExist()
-        assertEquals(17, TutorialTexts.FAQS.size)
-        assertTrue(TutorialTexts.TUTORIALS.none { it.id in setOf("agents", "usage", "expert", "games", "looks") })
+        assertEquals(16, TutorialTexts.FAQS.size)
+        assertTrue(TutorialTexts.TUTORIALS.none { it.id in setOf("agents", "usage", "expert", "games", "looks", "tabs", "copy", "accounts", "dictation", "reset", "android") })
         assertTrue((TutorialTexts.TUTORIALS.flatMap { it.lines } + TutorialTexts.FAQS.map { it.answer }).none { it.contains("Avisos") })
     }
 

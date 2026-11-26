@@ -51,10 +51,10 @@ data class ScanUiState(
 object ScanTexts {
     const val TITLE = "Escáner"
     const val HEADING = "Escanea el QR de tu Orb"
-    const val EXPIRES = "Caduca a los 5 minutos y sirve una vez."
+    const val EXPIRES = "Caduca en 5 min y sirve una vez."
     const val TORCH_ON = "Linterna encendida. "
     const val READ_TITLE = "QR leído"
-    const val READ_NOTE = "Vibración corta y paso a la huella."
+    const val READ_NOTE = "Vibra y sigue con tu huella."
     const val VALID = "Código QR válido"
     const val NOT_ORB = "Ese código no es de Orb."
     const val NEED_TITLE = "Necesito la cámara"

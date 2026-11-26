@@ -135,7 +135,7 @@ class LockScreenTest {
         rule.onNodeWithContentDescription("Orbe").assertIsDisplayed()
         rule.onNodeWithText(LockTexts.UNLOCK).assertIsDisplayed()
         rule.onNodeWithText(LockTexts.USE_PIN).assertIsDisplayed()
-        rule.onNodeWithText("Opcional · Menú › Este móvil › Bloqueo de la app").assertIsDisplayed()
+        rule.onNodeWithText("Lo cambias en Menú › Este móvil › Bloqueo de la app.").assertIsDisplayed()
         rule.onNodeWithText("Nunca pide la contraseña maestra.").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Más", substring = true).fetchSemanticsNodes().size)
     }
