@@ -171,7 +171,7 @@ class UpdateScreenTest {
     @Test fun withoutALinkItDoesNotGuess() {
         connection.value = ConnectionState.Offline(null, null)
         show()
-        rule.onNodeWithText("No puedo comprobarlo ahora").assertIsDisplayed()
+        rule.onNodeWithText("No se puede comprobar ahora").assertIsDisplayed()
         rule.onNodeWithText("Reintentar").performClick()
         assertEquals(1, retries)
     }

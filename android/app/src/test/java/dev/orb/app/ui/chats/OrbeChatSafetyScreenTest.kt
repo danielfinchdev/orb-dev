@@ -68,7 +68,7 @@ class OrbeChatSafetyScreenTest {
         b.taskDetail = held(setOf(TaskAction.SeeChanges))
         screen(b)
         rule.onNodeWithText("Retenida para que la revises: ha eliminado 2714 archivos en C:/app-movil.").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Aceptar").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Aceptar cambios").fetchSemanticsNodes().size)
         assertEquals(0, rule.onAllNodesWithText("Deshacer").fetchSemanticsNodes().size)
         assertEquals(0, rule.onAllNodesWithText("Aprobar").fetchSemanticsNodes().size)
         rule.onNodeWithText("Ver cambios").performClick()
@@ -90,7 +90,7 @@ class OrbeChatSafetyScreenTest {
         b.taskDetail = held(setOf(TaskAction.SeeChanges, TaskAction.AcceptHeld, TaskAction.UndoHeld))
         screen(b)
         // Even if a (wrong) set of actions reached the card, the held card draws none of them.
-        assertEquals(0, rule.onAllNodesWithText("Aceptar").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Aceptar cambios").fetchSemanticsNodes().size)
         assertEquals(0, rule.onAllNodesWithText("Deshacer").fetchSemanticsNodes().size)
     }
 

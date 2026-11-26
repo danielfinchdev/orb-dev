@@ -467,7 +467,7 @@ class WelcomeViewModelTest {
     @Test fun typedErrorsAreMappedToPlainSpanish() {
         assertTrue(pairErrorText(PairError.Offline(false)).contains("No se pudo llegar"))
         assertTrue(pairErrorText(PairError.KdfTooHeavy).contains("memoria"))
-        assertTrue(pairErrorText(PairError.Refused(426, "x", null, null, "pair")).contains("actualizar"))
+        assertTrue(pairErrorText(PairError.Refused(426, "x", null, null, "pair")).contains("Actualiza"))
         assertTrue(pairErrorText(PairError.Refused(403, "x", "newCode", null, null)).contains("código"))
         assertTrue(pairErrorText(PairError.BadAnswer).contains("No se ha enlazado"))
     }

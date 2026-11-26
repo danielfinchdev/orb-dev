@@ -50,7 +50,7 @@ class ErrorShotsTest {
 
     @Test fun direccionNoPrivada() = shoot("08-direccion-no-privada") {
         WelcomeContent(
-            WelcomeUiState(error = "Esa dirección no es privada: usa el Wi-Fi de casa o Tailscale.", errorKind = WelcomeErrorKind.NotPrivate), WelcomeActions(),
+            WelcomeUiState(error = "Esa dirección no es privada. Usa el Wi-Fi de casa o Tailscale.", errorKind = WelcomeErrorKind.NotPrivate), WelcomeActions(),
         )
     }
 

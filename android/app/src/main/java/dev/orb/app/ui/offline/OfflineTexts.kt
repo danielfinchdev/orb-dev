@@ -37,10 +37,10 @@ object OfflineTexts {
             if (s != null && s > 0) "$head Reintento\u00A0en\u00A0$s\u00A0s." else "$head Reintentando…"
         }
         dev.orb.app.link.net.ConnectionState.Connecting -> "Sin conexión con tu PC. Conectando…"
-        dev.orb.app.link.net.ConnectionState.UpdatePc -> "Hay que actualizar Orb en tu PC. Lo que escribas se queda en este móvil y no sale hasta entonces."
-        dev.orb.app.link.net.ConnectionState.UpdateApp -> "Hay que actualizar la app para hablar con tu PC. Lo que escribas se queda en este móvil hasta entonces."
+        dev.orb.app.link.net.ConnectionState.UpdatePc -> "Actualiza Orb en tu PC. Lo que escribas se queda en este móvil hasta entonces."
+        dev.orb.app.link.net.ConnectionState.UpdateApp -> "Actualiza la app para hablar con tu PC. Lo que escribas se queda en este móvil hasta entonces."
         dev.orb.app.link.net.ConnectionState.Unlinked -> "Este móvil ya no está enlazado con tu PC. Lo que escribas no saldrá hasta enlazarlo de nuevo."
-        is dev.orb.app.link.net.ConnectionState.Attention -> "Tu PC necesita atención (${c.code}). Lo que escribas saldrá cuando esté listo."
+        is dev.orb.app.link.net.ConnectionState.Attention -> "Tu PC necesita atención. Lo que escribas saldrá cuando esté listo."
     }
 
     /** «hace un momento», «hace 5 min», «hace 3 h», «hace 2 días». */

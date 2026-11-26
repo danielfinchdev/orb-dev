@@ -60,7 +60,7 @@ object MenuTexts {
         "agent_problem" to "Problema del agente",
         "log_written" to "Bitácora actualizada",
         "note" to "Nota",
-        "git_commit" to "Cambios guardados (commit)",
+        "git_commit" to "Cambios guardados",
         "files_changed" to "Archivos cambiados",
         "user_message" to "Mensaje del usuario",
         "review_verdict" to "Veredicto de la revisión",
