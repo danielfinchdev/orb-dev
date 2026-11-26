@@ -24,9 +24,11 @@ test('POSTUNINSTALL purges only with /ORBPURGE and its code, never in an update,
   assert.match(code, /\/ORBPURGE=/); assert.match(code, /StrLen \$2 \$1\n\s+\$\{If\} \$2 == 32/); assert.match(code, /0123456789abcdef/);
   const allowed = /Function un\.OrbPurgeAllowed[\s\S]*?FunctionEnd/.exec(hooks)[0];
   assert.match(allowed, /"code":"/); assert.match(allowed, /"expires":/); assert.match(allowed, /Int64Op \$3 > \$0/);
-  assert.match(allowed, /"encrypted":true/); assert.match(allowed, /"games":true/);
+  assert.match(allowed, /"kept":true/); assert.match(allowed, /"games":true/);
   const purge = /Function un\.OrbPurge\n[\s\S]*?FunctionEnd/.exec(hooks)[0];
-  assert.match(purge, /\$OrbKeepClaves == 1/); assert.match(purge, /\$1 != "claves"/);
+  assert.match(purge, /\$OrbKept == 1/); assert.match(purge, /\$1 != "claves"/);
+  assert.ok(purge.includes('"ubicacion.json"') && purge.includes('"desinstalado.json"'));
+  assert.ok(purge.includes('RMDir "${ORB_DATA_DIR}\\claves"'), 'claves is only removed when empty');
   assert.match(purge, /ORB_LOCAL_DIR/); assert.match(purge, /\$OrbKeepGames != 1/);
   // only the two folders of the app's data are ever named
   assert.deepEqual([...new Set([...purge.matchAll(/\$\{(ORB_\w+)\}/g)].map((m) => m[1]))].sort(), ['ORB_DATA_DIR', 'ORB_LOCAL_DIR']);

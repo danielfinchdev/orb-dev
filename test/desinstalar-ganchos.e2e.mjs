@@ -42,7 +42,7 @@ function install(name, { mark = null } = {}) {
   return dirs;
 }
 const uninstall = (dirs, args) => { const r = spawnSync(path.join(dirs.target, 'uninstall.exe'), [...args, `_?=${dirs.target}`], { encoding: 'utf8' }); assert.equal(r.status, 0, 'uninstaller'); };
-const markText = (o = {}) => JSON.stringify({ v: 1, at: new Date().toISOString(), mode: 'uninstall', encrypted: false, games: false, code: CODE, expires: Date.now() + 3_600_000, ...o });
+const markText = (o = {}) => JSON.stringify({ v: 1, at: new Date().toISOString(), mode: 'uninstall', kept: false, games: false, code: CODE, expires: Date.now() + 3_600_000, ...o });
 const exists = (...p) => fs.existsSync(path.join(...p));
 
 try {
@@ -53,7 +53,7 @@ try {
     assert.ok(exists(d.data, 'ubicacion.json') && exists(d.data, 'claves', 'k.v2.enc') && exists(d.local, 'EBWebView', 'x'));
   });
   check('an existing mark is never overwritten by a Windows uninstall', () => {
-    const d = install('previa', { mark: markText({ encrypted: true }) }); uninstall(d, ['/S']);
+    const d = install('previa', { mark: markText({ kept: true }) }); uninstall(d, ['/S']);
     assert.equal(JSON.parse(fs.readFileSync(path.join(d.data, 'desinstalado.json'), 'utf8')).code, CODE);
   });
   check('reinstalling keeps a mark that was already there', () => {
@@ -62,15 +62,17 @@ try {
   });
   check('with the code: the app data and the web view profile go', () => {
     const d = install('purga', { mark: markText() }); uninstall(d, ['/S', `/ORBPURGE=${CODE}`]);
-    assert.ok(!exists(d.data) && !exists(d.local));
+    assert.ok(!exists(d.data, 'ubicacion.json') && !exists(d.data, 'desinstalado.json') && !exists(d.local), 'the data and the profile go');
+    assert.ok(exists(d.data, 'claves', 'k.v2.enc'), 'the keys folder is never ours to delete (other workspaces keep theirs there)');
   });
-  check('something encrypted kept: the keys folder stays, the rest of the data goes', () => {
-    const d = install('claves', { mark: markText({ encrypted: true }) }); uninstall(d, ['/S', `/ORBPURGE=${CODE}`]);
-    assert.ok(exists(d.data, 'claves', 'k.v2.enc')); assert.ok(!exists(d.data, 'ubicacion.json') && !exists(d.data, 'desinstalado.json')); assert.ok(!exists(d.local));
+  check('anything kept: the saved location and the mark stay, the rest goes', () => {
+    const d = install('claves', { mark: markText({ kept: true }) }); uninstall(d, ['/S', `/ORBPURGE=${CODE}`]);
+    assert.ok(exists(d.data, 'claves', 'k.v2.enc')); assert.ok(exists(d.data, 'ubicacion.json') && exists(d.data, 'desinstalado.json')); assert.ok(!exists(d.local));
+    fs.writeFileSync(path.join(d.data, 'otro.json'), 'x');
   });
   check('minigames kept: the web view profile stays', () => {
     const d = install('juegos', { mark: markText({ games: true }) }); uninstall(d, ['/S', `/ORBPURGE=${CODE}`]);
-    assert.ok(exists(d.local, 'EBWebView', 'x')); assert.ok(!exists(d.data));
+    assert.ok(exists(d.local, 'EBWebView', 'x')); assert.ok(!exists(d.data, 'ubicacion.json'));
   });
   for (const [name, args, mark] of [
     ['expired code', [`/ORBPURGE=${CODE}`], markText({ expires: Date.now() - 1000 })],
@@ -96,7 +98,7 @@ try {
     const outside = path.join(tmp, 'ajena'); fs.mkdirSync(outside); fs.writeFileSync(path.join(outside, 'mia.txt'), 'mia');
     fs.symlinkSync(outside, path.join(d.data, 'enlace'), 'junction');
     uninstall(d, ['/S', `/ORBPURGE=${CODE}`]);
-    assert.ok(!exists(d.data)); assert.equal(fs.readFileSync(path.join(outside, 'mia.txt'), 'utf8'), 'mia');
+    assert.ok(!exists(d.data, 'enlace')); assert.equal(fs.readFileSync(path.join(outside, 'mia.txt'), 'utf8'), 'mia');
   });
 } finally {
   try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp folder */ }

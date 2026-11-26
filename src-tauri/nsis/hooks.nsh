@@ -457,7 +457,7 @@ FunctionEnd
 ; The app deletes the data itself and then starts this uninstaller with /P /ORBPURGE=<code>. The code is the one-use code of
 ; %APPDATA%\Orb.dev\desinstalado.json (compact JSON written by src/engine/api/uninstall.mjs › markText): 32 hex characters
 ; and an expiry in ms, one hour after it was made. Only with it, and never in an update ($UpdateMode = 1), the folders of the
-; app's own data are purged: %APPDATA%\Orb.dev (but its claves\ when the mark says something encrypted was kept) and
+; app's own data are purged: %APPDATA%\Orb.dev (never its claves folder, and its saved location and mark stay when the mark says anything was kept) and
 ; %LOCALAPPDATA%\dev.orb.app (the web view's profile, unless the minigames were kept). Nothing else is ever deleted here: not
 ; the workspace, not the projects, not the backups. An uninstall from Windows' Settings leaves a mark with no code (so the
 ; next install asks what to do with the data) and deletes nothing.
@@ -470,7 +470,7 @@ FunctionEnd
 !endif
 
 Var OrbHadMark ; installer: 1 when desinstalado.json was already there when this run began
-Var OrbKeepClaves ; uninstaller: 1 when the mark says something encrypted was kept (the key's folder stays)
+Var OrbKept ; uninstaller: 1 when the mark says anything was kept (the saved location and the mark stay)
 Var OrbKeepGames ; uninstaller: 1 when the mark says the minigames were kept
 
 ; $R0 = the code after /ORBPURGE= in the command line, only if it is 32 characters of 0-9a-f; else "".
@@ -518,7 +518,7 @@ Function un.OrbPurgeCode
 FunctionEnd
 
 ; $R0 = 1 when the mark (the file the app wrote) holds the code in $R0 (compared in the same case) and its expiry has not
-; passed; also sets $OrbKeepClaves and $OrbKeepGames from it. Any doubt: 0.
+; passed; also sets $OrbKept and $OrbKeepGames from it. Any doubt: 0.
 Function un.OrbPurgeAllowed
   Push $0
   Push $1
@@ -526,7 +526,7 @@ Function un.OrbPurgeAllowed
   Push $3
   StrCpy $1 $R0 ; the code asked
   StrCpy $R0 0
-  StrCpy $OrbKeepClaves 1 ; unreadable: keep what could hold keys
+  StrCpy $OrbKept 1 ; unreadable: keep what could hold keys
   StrCpy $OrbKeepGames 1
   ClearErrors
   FileOpen $0 "${ORB_DATA_DIR}\desinstalado.json" r
@@ -552,11 +552,11 @@ Function un.OrbPurgeAllowed
           Pop $0
           ${If} $0 == 1
             StrCpy $R0 1
-            StrCpy $OrbKeepClaves 0
+            StrCpy $OrbKept 0
             StrCpy $OrbKeepGames 0
-            ${un.WordFind} $2 '"encrypted":true' "E+1}" $3
+            ${un.WordFind} $2 '"kept":true' "E+1}" $3
             ${IfNot} ${Errors}
-              StrCpy $OrbKeepClaves 1
+              StrCpy $OrbKept 1
             ${EndIf}
             ClearErrors
             ${un.WordFind} $2 '"games":true' "E+1}" $3
@@ -613,23 +613,30 @@ Function un.OrbPurge
   Push $0
   Push $1
   Push $R0
-  ${If} $OrbKeepClaves == 1
-    ; everything in the app's data folder except the folder of the keys (claves)
-    FindFirst $0 $1 "${ORB_DATA_DIR}\*"
-    ${DoUntil} $1 == ""
-      ${If} $1 != "."
-      ${AndIf} $1 != ".."
-      ${AndIf} $1 != "claves"
+  ; Every entry of the app's data folder but the folder of the keys (claves: the app already removed this workspace's keys
+  ; and vault copy, and the other workspaces' are not ours to delete) and, when anything was kept, the saved location and
+  ; the mark (they are what makes the next install ask about the data).
+  FindFirst $0 $1 "${ORB_DATA_DIR}\*"
+  ${DoUntil} $1 == ""
+    ${If} $1 != "."
+    ${AndIf} $1 != ".."
+    ${AndIf} $1 != "claves"
+      ${If} $OrbKept == 1
+      ${AndIf} $1 == "ubicacion.json"
+        ; kept
+      ${ElseIf} $OrbKept == 1
+      ${AndIf} $1 == "desinstalado.json"
+        ; kept
+      ${Else}
         StrCpy $R0 "${ORB_DATA_DIR}\$1"
         Call un.OrbRemoveEntry
       ${EndIf}
-      FindNext $0 $1
-    ${Loop}
-    FindClose $0
-  ${Else}
-    StrCpy $R0 "${ORB_DATA_DIR}"
-    Call un.OrbRemoveEntry
-  ${EndIf}
+    ${EndIf}
+    FindNext $0 $1
+  ${Loop}
+  FindClose $0
+  RMDir "${ORB_DATA_DIR}\claves" ; only if it is empty
+  RMDir "${ORB_DATA_DIR}" ; and this one
   ${If} $OrbKeepGames != 1
     StrCpy $R0 "${ORB_LOCAL_DIR}"
     Call un.OrbRemoveEntry
@@ -652,7 +659,7 @@ FunctionEnd
     ClearErrors
     FileOpen $9 "${ORB_DATA_DIR}\desinstalado.json" w
     ${IfNot} ${Errors}
-      FileWrite $9 '{"v":1,"mode":"windows","encrypted":true,"games":true,"code":"","expires":0}'
+      FileWrite $9 '{"v":1,"mode":"windows","kept":true,"games":true,"code":"","expires":0}'
       FileClose $9
     ${EndIf}
   ${EndIf}
