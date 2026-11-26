@@ -32,11 +32,11 @@ test('projects.create: sin el parámetro crea la plantilla y el repositorio; con
   assert.ok(fs.existsSync(path.join(full.path, '.gitignore')));
   const bare = await call('projects.create', { name: 'solo-carpeta', category: 'web', template: false });
   assert.equal(bare.path, path.join(t.home, 'web', 'solo-carpeta'));
-  assert.deepEqual(fs.readdirSync(bare.path), [], 'sin .git ni archivos');
+  assert.deepEqual(fs.readdirSync(bare.path), ['.orb-creada'], 'sin .git ni plantilla: solo la marca de que la creó Orb');
   assert.ok((await call('projects.list')).some((p) => p.name === 'solo-carpeta'));
   // multi sin plantilla: tampoco subcarpetas de plataforma ni LEEME
   const multi = await call('projects.create', { name: 'multi-vacio', category: 'multi', platforms: ['web', 'android'], template: false });
-  assert.deepEqual(fs.readdirSync(multi.path), []);
+  assert.deepEqual(fs.readdirSync(multi.path), ['.orb-creada']);
   // un nombre malo se sigue negando
   await assert.rejects(() => call('projects.create', { name: 'mal/nombre', category: 'web', template: false }), /no puede llevar/);
 });
