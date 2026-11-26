@@ -311,7 +311,7 @@ function AppRoot() {
           // welcome left halfway, folders of an earlier Orb to decide about (lib/startup.js).
           const start = await startupPhase((method) => bridge.call(method), { mobile: bridge.mobile });
           if (start.phase !== 'app') {
-            if (start.phase === 'core' || start.phase === 'uninstalling') setCore(start.data);
+            if (start.phase === 'core' || start.phase === 'uninstalling' || start.phase === 'stoppedDelete') setCore(start.data);
             else if (start.phase === 'migration') setMigration(start.data);
             else if (start.phase === 'unlock' || start.phase === 'master') setMasterState(start.data);
             else if (start.phase === 'layout') setLayout(start.data);
@@ -446,6 +446,7 @@ function AppRoot() {
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
+  if (phase === 'stoppedDelete') return <>{strip}<StoppedDelete pending={core} /></>;
   if (phase === 'uninstalling') return <>{strip}<FinishUninstall code={core?.code} /></>;
   if (phase === 'core') return <>{strip}<Suspense fallback={null}><CoreMissing state={core} /></Suspense></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade={Boolean(masterState?.upgraded)} onDone={() => location.reload()} /></>;

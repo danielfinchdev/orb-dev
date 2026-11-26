@@ -4,6 +4,7 @@
 // → { phase, data }:
 //   core       core is gone and Orb could not bring it back (data: app.coreState)
 //   uninstalling  a «Borrar todo» finished at the start (data: { code }): the uninstaller goes on
+//   stoppedDelete  a «Desinstalar» / «Restablecer» that stopped (data: { done, left }): «Seguir borrando» or «Dejarlo así»
 //   migration  the data of 3.7 could not be updated (data: app.migrationState); a blocked engine answers only this
 //              and app.coreState (null), so the screen with «Reintentar» and «Buscar actualización» is reached
 //   unlock     the master password, typed (data: master.state): the PC cannot open the keys alone, or Orb is locked
@@ -21,6 +22,10 @@ export async function startupPhase(call, { mobile = false } = {}) {
   if (core?.uninstalled) return { phase: 'uninstalling', data: core };
   const migration = await call('app.migrationState');
   if (migration?.failed) return { phase: 'migration', data: migration };
+  // a delete that stopped (its journal is signed by this PC): decided before the welcome or the master password, or the user
+  // could make things the next «Seguir borrando» would delete. A journal that cannot be checked deletes nothing and waits in the app.
+  const del = await call('uninstall.pending').catch(() => null);
+  if (del?.state === 'stopped') return { phase: 'stoppedDelete', data: del };
   const ms = await call('master.state');
   // also Orb's own lock screen (Windows locked, the PC asleep or Orb unused for a while), after a reload.
   if (ms?.exists && (ms.locked || ms.lost || ms.screenLocked)) return { phase: 'unlock', data: ms };

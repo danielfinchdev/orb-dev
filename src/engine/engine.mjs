@@ -183,7 +183,9 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // a little before saying it is not there.
   // A delete that is not over (journal on disk) decides the start: nothing may be brought back from a replica or a backup.
   const U = await import('../domain/data/uninstall.mjs');
-  const journalLeft = () => !!ctx.userData && fs.existsSync(U.journalPath(ctx.userData));
+  const journalFile = () => !!ctx.userData && fs.existsSync(U.journalPath(ctx.userData));
+  // only a journal signed by this PC suppresses the repairs: one that cannot be checked deletes nothing, so a normal start runs
+  const journalLeft = () => journalFile() && ['stopped', 'running'].includes(U.pendingJournal(ctx.userData, ctx.keys?.approval ?? null).state);
   for (let i = 0; !fs.existsSync(home) && !journalLeft() && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
   if (!fs.existsSync(home) && !journalLeft()) throw new Error(tr('sys.engine.notHome', { home }));
   // A «Desinstalar» / «Restablecer» that was cut: its journal finishes what it can before anything below could bring data back.
@@ -218,7 +220,8 @@ async function uninstallFinished(plan) {
     async call(method, params, principal) {
       authorize(principal, method);
       if (method === 'app.coreState') return { missing: false, uninstalled: true, code };
-      if (method === 'uninstall.restart') { setTimeout(() => process.exit(75), 700).unref?.(); return { ok: true }; }
+      // the uninstaller did not start: its mark goes too, or the next start asks the reinstall question
+      if (method === 'uninstall.restart') { try { fs.rmSync(path.join(ctx.userData, (await import('../domain/data/uninstall.mjs')).MARK_FILE), { force: true }); } catch { /* it expires */ } setTimeout(() => process.exit(75), 700).unref?.(); return { ok: true }; }
       throw Object.assign(new Error(tr('data.core.blocked')), { userFacing: true });
     },
     shutdown() {}

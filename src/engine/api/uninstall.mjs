@@ -117,7 +117,7 @@ export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef
     'uninstall.discard': () => {
       if (running || ctx.uninstalling) fail(tr('uninstall.busy'));
       const now = pendingJournal(userData(), ctx.keys?.approval ?? null);
-      if (now.state !== 'stopped' && now.state !== 'untrusted') fail(tr('uninstall.noJournal'));
+      if (now.state !== 'stopped' && now.state !== 'untrusted' && now.state !== 'running') fail(tr('uninstall.noJournal'));
       closeJournal(userData());
       return { ok: true };
     },

@@ -534,7 +534,11 @@ export async function resumeJournal({ userData, signKey = null, confirmed = fals
     return { resumed: false, ok: false, untrusted: 'signature', ...nothing };
   }
   const h = journal.home;
-  if (typeof h !== 'string' || !path.isAbsolute(h) || !knownHome(userData, h)) return { resumed: false, ok: false, untrusted: 'home', ...nothing };
+  if (typeof h !== 'string' || !path.isAbsolute(h) || !knownHome(userData, h)) {
+    // signed by this PC but for a folder this app does not know: it is never run, and it must not wait unseen either
+    if (journal.stopped !== true) { journal.stopped = true; saveJournal({ userData, signKey }, journal); }
+    return { resumed: false, ok: false, untrusted: 'home', ...nothing };
+  }
   const config = (() => { try { return JSON.parse(fs.readFileSync(path.join(h, 'core', 'orb.json'), 'utf8')); } catch { return {}; } })();
   // the folders of copies were written, signed, when the run began: ultima.json and orb.json may be gone by now
   const dirs = (Array.isArray(journal.backupDirs) ? journal.backupDirs : []).filter((d) => typeof d === 'string' && path.isAbsolute(d));
@@ -544,6 +548,12 @@ export async function resumeJournal({ userData, signKey = null, confirmed = fals
   for (const i of journal.items) if (i.state === 'failed') i.state = 'pending';
   const r = await runPlan({ env, plan, resume: journal, hooks: { noHost: true } });
   if (r.ok) closeJournal(userData);
+  else {
+    // it did not end (settling failed, items left): the next start waits for the user's word instead of looping, with a
+    // healthy core in the meantime
+    journal.stopped = true; saveJournal(env, journal);
+    try { await stubCoreAfterStop(env, plan); } catch { /* the next start tries again */ }
+  }
   // what a finished «Borrar todo» needs to go on to the uninstaller (the mark with its code is written by the engine)
   return { resumed: true, ...r, mode: journal.mode, plan: { mode: journal.mode, keep: journal.keep, keptProjects: journal.keptProjects ?? [], keyKept: journal.keyKept } };
 }
