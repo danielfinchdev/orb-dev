@@ -85,7 +85,7 @@ object TutorialTexts {
         Tutorial(
             "menu", "Menú",
             listOf(
-                "El menú de Chats abre los sitios de Orb: Chats, Tareas, Proyectos, Programadas, Pizarra, Memorias y actividad, Uso y agentes, Juegos, Tutoriales y Este móvil.",
+                "El menú de Chats abre los sitios de Orb: Chats, Tareas, Proyectos, Programadas, Pizarra, Bitácoras y actividad, Uso y agentes, Juegos, Tutoriales y Este móvil.",
                 "Desde el menú también cambias entre modo claro y oscuro.",
                 "El menú indica si el móvil está conectado a tu PC. Sin conexión, Orb muestra lo último guardado.",
             ),
@@ -108,9 +108,9 @@ object TutorialTexts {
             ),
         ),
         Tutorial(
-            "logs", "Memorias y actividad",
+            "logs", "Bitácoras y actividad",
             listOf(
-                "Memorias y actividad reúne lo que Orb anota, en dos pestañas: Actividad y Bitácoras.",
+                "Bitácoras y actividad reúne lo que Orb anota, en dos pestañas: Actividad y Bitácoras.",
                 "En Bitácoras, una general y una por proyecto cuentan día a día lo que han hecho tus agentes. Son de solo lectura, privadas y ocultan tus claves.",
                 "Actividad muestra cada acción en orden: quién la hizo, qué pasó y cuándo.",
                 "Las normas de Orb y de tus agentes están en el PC, en Bitácoras › Normas.",

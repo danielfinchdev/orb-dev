@@ -190,7 +190,7 @@ class MenuScreensTest {
 
     @Test fun theMenuDrawsTheMockupsRowsWithTheNumbersOfTheBottomBar() {
         showMenu(menu(), MenuActions())
-        for (t in listOf("Chats", "Tareas", "Proyectos", "Programadas", "Pizarra", "Memorias y actividad", "Uso y agentes", "Juegos", "Tutoriales", "Este móvil", "Modo oscuro")) {
+        for (t in listOf("Chats", "Tareas", "Proyectos", "Programadas", "Pizarra", "Bitácoras y actividad", "Uso y agentes", "Juegos", "Tutoriales", "Este móvil", "Modo oscuro")) {
             rule.onNodeWithText(t).performScrollTo().assertIsDisplayed()
         }
         rule.onNodeWithText("3").performScrollTo().assertIsDisplayed()
@@ -227,7 +227,7 @@ class MenuScreensTest {
 
     @Test fun entriesTheLinkedPcCannotServeAreLeftOut() {
         showMenu(menu(schedules = false, activity = false, usage = false, whiteboard = false), MenuActions())
-        for (t in listOf("Programadas", "Memorias y actividad", "Uso y agentes", "Pizarra")) rule.onNodeWithText(t).assertDoesNotExist()
+        for (t in listOf("Programadas", "Bitácoras y actividad", "Uso y agentes", "Pizarra")) rule.onNodeWithText(t).assertDoesNotExist()
         rule.onNodeWithText("Chats").assertIsDisplayed()
     }
 
@@ -247,7 +247,7 @@ class MenuScreensTest {
                 )
             }
         }
-        for (t in listOf("Chats", "Tareas", "Proyectos", "Programadas", "Memorias y actividad", "Uso y agentes", "Pizarra", "Juegos", "Tutoriales", "Este móvil")) {
+        for (t in listOf("Chats", "Tareas", "Proyectos", "Programadas", "Bitácoras y actividad", "Uso y agentes", "Pizarra", "Juegos", "Tutoriales", "Este móvil")) {
             rule.onNodeWithText(t).performScrollTo().performClick()
         }
         rule.waitForIdle()
