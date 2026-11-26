@@ -24,6 +24,7 @@ export default {
   'activity.tool.pizarra': 'usar la pizarra',
   'activity.tool.pr_comment': 'comentar un cambio propuesto',
   'activity.tool.pr_merge': 'unir un cambio propuesto',
+  'activity.tool.copy_propose': 'proponer una copia aparte',
   'activity.tool.pr_view': 'ver un cambio propuesto',
   'activity.tool.read_log': 'leer la bitácora',
   'activity.tool.read_messages': 'leer mensajes',

@@ -237,7 +237,8 @@ export default {
   'brain.noUsage': 'Sin uso en tu plan hasta las {when}',
   'brain.noUsageDay': 'Sin uso en tu plan hasta el {when}',
   'chat.workspace.local': 'Local',
-  'chat.workspace.worktree': 'Worktree',
+  'chat.workspace.worktree': 'Copia aparte',
+  'chat.workspace.worktreeHelp': 'Copia aparte (worktree)',
   'chat.workspace.tip': 'Dónde trabaja este chat',
   'chat.workspace.localTip': 'Local: trabaja directamente en la carpeta del proyecto.',
   'chat.workspace.worktreeTip': 'Trabaja en una copia propia del proyecto (rama aparte) que Orb guarda fuera de tu repositorio. Tu carpeta no cambia hasta que unas su trabajo.',
@@ -252,7 +253,7 @@ export default {
   'guide.open': 'Guía de modelos',
   'session.phChat': 'Pide algo, menciona con @ o usa / para ver los comandos',
   'chat.workspace.from': 'desde {branch}',
-  'chat.workspace.locked': 'Este chat ya empezó: donde trabaja ya no se puede cambiar.',
+  'chat.workspace.locked': 'Este chat ya empezó. Para cambiarlo, usa «Pasar a una copia aparte».',
   'chat.stopped.title': 'Orb ha parado el turno',
   'chat.stopped.badge': 'Parada'
 };

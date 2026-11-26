@@ -56,7 +56,7 @@ export function WorkspacePills({ project, value, onChange, chat = null, branch =
         <BubbleTip title={t('chat.workspace.local')} text={t('chat.workspace.localTip')} side="top">
           <Button size="xs" variant="ghost" className={cn(SEGMENT, !worktree && ON)} onClick={() => pick('local')} aria-pressed={!worktree} data-testid="workspace-local"><Folder />{t('chat.workspace.local')}</Button>
         </BubbleTip>
-        <BubbleTip title={t('chat.workspace.worktree')} text={git ? t('chat.workspace.worktreeTip') : t('chat.workspace.noGit')} side="top">
+        <BubbleTip title={t('chat.workspace.worktreeHelp')} text={git ? t('chat.workspace.worktreeTip') : t('chat.workspace.noGit')} side="top">
           <span>
             <Button size="xs" variant="ghost" className={cn(SEGMENT, worktree && ON)} disabled={!git} onClick={() => pick('worktree')} aria-pressed={worktree} data-testid="workspace-worktree"><GitBranch />{t('chat.workspace.worktree')}</Button>
           </span>

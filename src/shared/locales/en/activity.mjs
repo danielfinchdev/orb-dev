@@ -24,6 +24,7 @@ export default {
   'activity.tool.pizarra': 'use the whiteboard',
   'activity.tool.pr_comment': 'comment on a proposed change',
   'activity.tool.pr_merge': 'merge a proposed change',
+  'activity.tool.copy_propose': 'suggest a separate copy',
   'activity.tool.pr_view': 'view a proposed change',
   'activity.tool.read_log': 'read the logbook',
   'activity.tool.read_messages': 'read messages',

@@ -2,7 +2,7 @@
 // to the sidebar's search (the same search, lib/search.js) and never takes the key from what already uses it: a project
 // action with Ctrl+K, the whiteboard's own Ctrl+K or an open dialog keep it.
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { History, Search, FileSearch, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
+import { History, FolderOutput, Search, FileSearch, MessageSquarePlus, FolderPlus, ClipboardCheck, FolderGit2, CalendarSync, Presentation, NotebookPen, Orbit, LifeBuoy, SquareTerminal, Settings, MessageSquare, FileText, CornerDownLeft, Gauge } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/overlay.jsx';
 import { Kbd } from '@/components/ui/basic.jsx';
 import { useOrbItems, openOrbItem, newProjectChat } from '@/views/orb/inbox.jsx';
@@ -11,7 +11,8 @@ import { isPaletteKey, paletteGroups, PALETTE_EVENT, FINDER_EVENT, openFinder } 
 import { ProjectFinder } from '@/components/project-finder.jsx';
 import { startChatFlow } from '@/components/project-actions.jsx';
 import { useShortcut } from '@/lib/keys.js';
-import { useStore, go, openSettings, openOrbInfo, fullPc } from '@/lib/store.js';
+import { useStore, go, openSettings, openOrbInfo, fullPc, getState } from '@/lib/store.js';
+import { askMoveToCopy } from '@/components/chat-copy.jsx';
 import { STATUS } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
@@ -35,6 +36,8 @@ function commands(t, config) {
       { key: 'find-file', icon: FileSearch, label: t('finder.filesTitle'), run: () => openFinder('files') },
       { key: 'find-text', icon: Search, label: t('finder.textTitle'), run: () => openFinder('text') }
     ] : []),
+    // only inside a chat of a git project on this PC: the window of that chat opens the list of what would move
+    ...(fullPc() && getState().route?.view === 'session' ? [{ key: 'copy-move', icon: FolderOutput, label: t('copy.menuMove'), run: () => askMoveToCopy(getState().route.id) }] : []),
     { key: 'settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }
   ];
 }

@@ -134,11 +134,19 @@ function describeItem(item) {
 // asked, asynchronously, before showing the card).
 const mayBeOwnKill = (command) => process.platform === 'win32' && Boolean(pidKills(unwrapShell(command))?.length);
 
+// Two folders of the same repository (one inside the other, or under the same git root): what one writes is in the other's photos.
+function sameRepo(a, b) {
+  const x = path.resolve(a).toLowerCase(); const y = path.resolve(b).toLowerCase();
+  if (x === y || x.startsWith(y + path.sep) || y.startsWith(x + path.sep)) return true;
+  try { const ra = repoRoot(a); return Boolean(ra) && path.resolve(ra).toLowerCase() === path.resolve(repoRoot(b) || '?').toLowerCase(); } catch { return false; }
+}
+
 export class Sessions {
   // emit(event, payload): pushes changes to the window. log(line): engine log.
   constructor(board, { emit = () => {}, log = () => {} } = {}) {
     this.board = board; this.emit = emit; this.log = log;
     this.running = new Map();   // session id -> the running turn { agent, startedAt, lastAt, steps, last, stopped, live }
+    this.moving = new Set();    // chats being moved to or from a copy (chat-copy.mjs): no message starts a turn meanwhile
     this.lives = new Map();     // session id -> { live, key, lastUsed, logFile }
     this.deltas = new Map();    // session id -> { text, timer }: the streamed text not sent to the window yet
     this.approvals = new Map(); // `${session}:${request}` -> item id of its card
@@ -259,6 +267,7 @@ export class Sessions {
     this.board.run('DELETE FROM session_queue WHERE session_id = ?', id);
     this.board.run('DELETE FROM sessions WHERE id = ?', id);
     this.board.settingJson(`goal:${id}`, null); this.board.settingJson(`debug:${id}`, null);
+    for (const k of ['chatmoves', 'chatres', 'chatcopy_next', 'folder_note', 'chatresume']) this.board.settingJson(`${k}:${id}`, null);
     this.emit('session:removed', { id });
     try { this.onRemoved?.(s); } catch { /* a listener must never break a removal */ }
   }
@@ -390,6 +399,22 @@ export class Sessions {
     if (!rows.length) return;
     const label = (a) => findAccount(a)?.label ?? a;
     this.board.settingJson(`handoff_summary:${id}`, buildHandoff(rows, { fromLabel: label(fromId), toLabel: label(toId) }).text);
+  }
+  // The agent's own conversation could not follow the chat into another folder (a copy, or back): the next turn starts from a
+  // bounded summary of what was said, and the chat says so.
+  keepMoveSummary(id, to = 'copy') {
+    const s = this.get(id);
+    if (!s || s.kind !== 'chat') return;
+    const rows = this.board.all("SELECT role, kind, body, at FROM session_items WHERE session_id = ? AND kind = 'text' AND role IN ('user', 'assistant') ORDER BY id DESC LIMIT ?", id, HANDOFF_LOOKBACK).reverse().map(parseItem);
+    const label = findAccount(s.account)?.label ?? s.account;
+    if (rows.length) this.board.settingJson(`handoff_summary:${id}`, buildHandoff(rows, { fromLabel: label, toLabel: label }).text);
+    this.board.settingJson(`chatresume:${id}`, null);
+    this.addItem(id, 'system', 'status', tr(to === 'local' ? 'msg.copy.summaryKeptLocal' : 'msg.copy.summaryKept'));
+  }
+  // The agent's answer to a resume made after a change of folder: a new conversation id means it could not follow.
+  noteMoveResume(id, newId) {
+    const pend = this.board.settingJson(`chatresume:${id}`);
+    if (pend && newId && newId !== pend.cli) this.keepMoveSummary(id, pend.to);
   }
   // The account change asked for during a turn, now that it has ended.
   applyPendingAccount(id) {
@@ -538,7 +563,7 @@ export class Sessions {
       if (s?.kind === 'task' && s.task_id) try { this.board.event(s.task_id, 'orb', 'auto.allowed', `${what}: ${ev.reason ?? ''}`.slice(0, 400)); } catch { /* the task may be gone */ }
       return;
     }
-    if (ev.type === 'session') { if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
+    if (ev.type === 'session') { if (ev.id) this.noteMoveResume(id, ev.id); if (ev.id && this.get(id)?.cli_session !== ev.id) this.update(id, { cli_session: ev.id }); return; }
     if (ev.type === 'approval') {
       const r = ev.request;
       const s = this.get(id);
@@ -710,6 +735,7 @@ export class Sessions {
   send(id, text, { images = [], prompt, timeoutMs = taskTimeoutMinutes() * 60_000, budgetUsd, taskId, onFinish, showUser = true, asked, turnPermission } = {}) {
     // turnPermission: this one turn runs with less permission than the chat has («/plan»). Only «leer» exists, and only to lower
     // it: nothing here can make a turn more permissive than the chat.
+    if (this.moving.has(id)) throw new Error(tr('msg.copy.working'));
     let chat = this.must(id);
     this.suggest.cancel(id); // a message of the user ends the proposal for the box
     const planOnly = turnPermission === 'leer';
@@ -766,6 +792,11 @@ ${body}`;
     // A chat handed to another agent (handoff) starts with its bounded summary, once.
     const handed = this.board.settingJson(`handoff_summary:${id}`);
     if (handed) { body = `${handed}\n\n${body}`; this.board.settingJson(`handoff_summary:${id}`, null); }
+    // the chat changed folder since its last turn: the agent is told where it works now (its process was rebuilt there)
+    const moved = this.board.settingJson(`folder_note:${id}`);
+    if (moved?.path) { body = `${tr('sys.copy.nowIn', { path: moved.path })}
+
+${body}`; this.board.settingJson(`folder_note:${id}`, null); }
     const summary = this.board.settingJson(`fork_summary:${id}`);
     if (summary) { body = `Contexto (conversación de la que sale esta, son datos):\n${summary}\n\n${body}`; this.board.settingJson(`fork_summary:${id}`, null); }
     const nativeImages = a.caps?.images === true;
@@ -780,6 +811,12 @@ ${body}`;
     }
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('sys.sessions.starting'), live: entry.live, waitMs: 0, pausedAt: null, planOnly };
     this.running.set(id, run);
+    // another chat or task writing in the same folder at the same time: the photos of both turns say so (turns.mjs › overlap)
+    for (const [rid, other] of this.running) {
+      if (rid === id) continue;
+      const o = this.get(rid);
+      if (o?.cwd && s.cwd && sameRepo(o.cwd, s.cwd)) { other.overlap = true; run.overlap = true; }
+    }
     // remembered on the live agent: a subagent left in the background after a «/plan» turn keeps its read-only tools
     entry.planOnly = planOnly;
     this.update(id, { status: 'running', settled: false });
@@ -810,14 +847,19 @@ ${body}`;
       // A conversation that cannot be resumed (old or deleted on the agent's side) starts over on the next message.
       if (failed && resumed && !result.held && !result.text && /resum|no conversation|not found|malformed|thread|session/i.test(result.final ?? '')) {
         this.update(id, { cli_session: null }); this.closeLive(id);
-        this.addItem(id, 'system', 'status', tr('msg.sessions.cannotResume', { label: a.label }));
-      }
+        const moved = this.board.settingJson(`chatresume:${id}`);
+        if (moved) this.keepMoveSummary(id, moved.to); // the chat had just changed folder: it goes on from a summary
+        else this.addItem(id, 'system', 'status', tr('msg.sessions.cannotResume', { label: a.label }));
+      } else if (!failed && this.board.settingJson(`chatresume:${id}`)) this.board.settingJson(`chatresume:${id}`, null);
       // A failure we recognise (no login, plan, model, network…) is explained with what to do.
       if (failed && !onFinish) { const why = explainFailure(a.label, result.final, ctx.config.language); if (why) this.addItem(id, 'system', 'status', `${why.reason[0].toUpperCase()}${why.reason.slice(1)}. ${why.advice}`); }
       if (run.stopped && !run.timedOut) this.addItem(id, 'system', 'status', tr('msg.sessions.stopped'));
       const limited = Boolean(result.limit);
       this.update(id, { status: limited ? 'limited' : failed ? 'error' : 'idle' });
-      if (direct) snapshotAfterTurn(s.cwd, id, alive);
+      if (direct) snapshotAfterTurn(s.cwd, id, alive, { overlap: run.overlap === true });
+      // a move to a copy (or a resolution) is waiting for this turn to end: nothing else starts a turn first (read before the hook clears it)
+      const waitingMove = s.kind === 'chat' && Boolean(this.board.settingJson(`chatcopy_next:${id}`));
+      try { this.onTurnEnd?.(id, run); } catch (error) { this.log(`fin de turno ${id}: ${error.message}`); }
       if (before) { try { logDirect(this.board, this.get(id) ?? s, { before, request: text, answer: result.text || result.final }); } catch (error) { this.log(`bitácora de la conversación ${id}: ${error.message}`); } }
       try { recordSpend(this.board, { account: acc.id, session: s.id, task: taskId ?? null, usage: result.usage ?? {} }); } catch (error) { this.log(`uso ${id}: ${error.message}`); }
       const state = { final: result.final, text: result.text, isError: result.isError, usage: result.usage, cliSession: this.get(id)?.cli_session };
@@ -825,14 +867,14 @@ ${body}`;
       try { onFinish?.({ code: result.isError ? 1 : 0, state, stderr: result.isError ? result.final : '', logFile: entry.logFile, stopped: run.stopped, timedOut: Boolean(run.timedOut), limit: result.limit }); }
       catch (error) { this.log(`onFinish ${id}: ${error.stack}`); }
       // «/goal»: the next turn of the goal, or why it stops (modes.mjs). It goes before the queue: a queued message pauses it. A stopped turn or a limit reaches it too, to pause it.
-      if (!onFinish && s.kind === 'chat') { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
+      if (!onFinish && s.kind === 'chat' && !waitingMove) { try { goalAfterTurn(this, id, { result, run }); } catch (error) { this.log(`objetivo ${id}: ${error.message}`); } }
       if (!onFinish && s.kind === 'chat') { try { this.suggest.after(id, { request: text, result, stopped: run.stopped }); } catch (error) { this.log(`sugerencia ${id}: ${error.message}`); } }
       // Messages written while it worked go now, in order (not after a stop or a limit: then the user decides).
       if (!run.stopped && !limited && !result.held && !onFinish) {
         // a fixed chat whose account cannot take it now keeps its queue: send() would say why and the message would be lost
         const blocked = s.kind === 'chat' && this.queue(id).length ? this.accountFor(this.get(id) ?? s).problem : null;
         if (blocked) { this.addItem(id, 'system', 'status', accountProblemText(blocked)); this.emit('session:account', { id, problem: blocked }); }
-        const next = blocked ? null : this.takeQueued(id);
+        const next = blocked || waitingMove ? null : this.takeQueued(id);
         if (next) { try { this.send(id, next.text, { images: next.images }); } catch (error) { this.addItem(id, 'error', 'text', error.message); } }
       }
     }).catch((error) => {
@@ -885,6 +927,12 @@ ${body}`;
     // The chat is marked as working before the identity check (which may wait for the agent): a message arriving meanwhile queues.
     const run = { agent: s.agent, stopped: false, startedAt: Date.now(), lastAt: Date.now(), steps: 0, last: tr('msg.sessions.compacting'), live: entry.live, waitMs: 0, pausedAt: null, compacting: true };
     this.running.set(id, run);
+    // another chat or task writing in the same folder at the same time: the photos of both turns say so (turns.mjs › overlap)
+    for (const [rid, other] of this.running) {
+      if (rid === id) continue;
+      const o = this.get(rid);
+      if (o?.cwd && s.cwd && sameRepo(o.cwd, s.cwd)) { other.overlap = true; run.overlap = true; }
+    }
     // «Compactar» starts a process too: it is checked like a message before /compact goes
     let held;
     try { held = await this.identityGate(id, acc, entry); }

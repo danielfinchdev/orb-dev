@@ -55,7 +55,7 @@ const items = (id) => board.all('SELECT * FROM session_items WHERE session_id = 
 const userItems = (id) => items(id).filter((i) => i.role === 'user');
 const users = (id) => userItems(id).map((i) => i.body);
 const idle = (id) => until(() => sessions.get(id).status === 'idle' && !sessions.running.has(id), 'turno');
-const photos = (id) => g(sessions.get(id).cwd, 'for-each-ref', '--format=%(refname)', `refs/orb/turnos/${id}/`).split('\n').filter((r) => !r.includes('/antes/') && /\/\d+$/.test(r)).length;
+const photos = (id) => g(sessions.get(id).cwd, 'for-each-ref', '--format=%(refname)', `refs/orb/turnos/${id}/`).split('\n').filter((r) => !r.includes('/antes/') && !r.includes('/pre/') && /\/\d+$/.test(r)).length;
 // a turn and its closing photo
 async function turn(id, text) {
   const had = sent.length; const photosBefore = photos(id);

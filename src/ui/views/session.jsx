@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, PanelRight, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, SquareTerminal } from 'lucide-react';
+import { Info, PanelRight, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, SquareTerminal, FolderOutput } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
@@ -35,6 +35,7 @@ import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf, modelLabel, AgentChip, AUTO } from '@/components/brain-picker.jsx';
 import { AccountActions } from '@/components/account-notice.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
+import { CopyBar, CopyAskCards, MoveToCopyDialog, MoveToCopyButton, askMoveToCopy } from '@/components/chat-copy.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
@@ -545,7 +546,7 @@ export function SessionView({ route }) {
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="session-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-[250px]">
-            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} /><DropdownMenuSeparator /></> : null}
+            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} /><DropdownMenuItem onSelect={() => (running ? act(call('copy.wait', { id: s.id })) : askMoveToCopy(s.id))} data-testid="copy-move-menu"><FolderOutput />{running ? t('copy.afterTurn') : t('copy.menuMove')}</DropdownMenuItem><DropdownMenuSeparator /></> : null}
             {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
             {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
@@ -611,6 +612,7 @@ export function SessionView({ route }) {
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       <PrCards sessionId={s.id} />
+      {s.kind === 'chat' && s.project && fullPc() ? <><CopyAskCards sessionId={s.id} /><CopyBar s={s} running={running} onChanged={refresh} /><MoveToCopyDialog sessionId={s.id} onMoved={refresh} /></> : null}
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-[calc(var(--chat-max-width)+2.5rem)] shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
@@ -621,6 +623,7 @@ export function SessionView({ route }) {
         above={s.kind === 'chat' && ((s.project && fullPc()) || compactable) ? <>
           {/* where this chat works (Local or its worktree and the branch it started from; fixed once started) and «Compactar»: in a project's chat on the PC both are always there («Compactar» disabled, with its reason, until the context is full). */}
           {s.project && fullPc() ? <WorkspacePills project={s.project} chat={s.id} branch={s.branch ?? ''} value={{ mode: 'local', base: '' }} onChange={() => {}} /> : null}
+          {s.kind === 'chat' && s.project && fullPc() ? <MoveToCopyButton s={s} running={running} /> : null}
           {s.project && fullPc()
             ? <span className="ml-auto"><CompactButton onCompact={compact} busy={compacting} reason={compactable ? null : CAN_COMPACT[s.agent] !== true ? t('msg.sessions.cannotCompact', { label: AGENT[s.agent] }) : running ? t('msg.orch.compactBusy') : t('compact.noRoom')} /></span>
             : <ContextSlot className="ml-auto" items={[compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null]} />}

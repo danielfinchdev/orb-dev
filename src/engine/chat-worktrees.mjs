@@ -17,7 +17,7 @@ const REF_OK = /^[\w][\w./@-]{0,199}$/;
 // Ignored folders that a tool rebuilds on its own (dependencies, build output, caches). Exact folder names of well-known
 // tools only: any other ignored path (.env, *.db, a folder of local data) may be the user's only copy, so it stays work.
 const REGENERABLE_DIRS = new Set(['node_modules', '.venv', 'venv', '__pycache__', '.pytest_cache', '.mypy_cache', '.ruff_cache', 'dist', 'build', 'out', 'target', '.next', '.nuxt', '.turbo', '.gradle', '.cache', 'coverage']);
-const regenerable = (p) => { const last = p.replace(/\/+$/, '').split('/').pop(); return REGENERABLE_DIRS.has(last) || /\.py[co]$/.test(last); };
+export const regenerable = (p) => { const last = p.replace(/\/+$/, '').split('/').pop(); return REGENERABLE_DIRS.has(last) || /\.py[co]$/.test(last); };
 const isRepo = async (dir) => Boolean(dir) && fs.existsSync(dir) && (await gitAsync(dir, {}, 'rev-parse', '--git-dir')).status === 0;
 
 export class ChatWorktrees {
@@ -50,7 +50,8 @@ export class ChatWorktrees {
       const cwd = lower(s.cwd);
       info = this.all().find((r) => !r.removed && String(r.project).toLowerCase() === String(s.project).toLowerCase() && this.managed(r.path) && (cwd === lower(r.path) || cwd.startsWith(lower(r.path) + path.sep))) ?? null;
     }
-    if (!info) return null;
+    // detached: the chat went back to the project's folder and its copy stayed (it held files that were not joined)
+    if (!info || info.detached) return null;
     if (info.removed || !this.managed(info.path) || !fs.existsSync(info.path)) throw new Error(tr('msg.chatWt.noCopy'));
     return info.path;
   }
@@ -119,7 +120,8 @@ export class ChatWorktrees {
 
   // Makes the worktree of chat `id` for `project`, from `base` (a local branch or commit; the current HEAD by default).
   // → { cwd, info }. Throws, leaving nothing behind, when it cannot.
-  create({ id, project, base }) {
+  // extra: fields saved with the record BEFORE git is asked to make the folder, so a switch cut short leaves a journal to finish or undo.
+  create({ id, project, base, extra = null }) {
     const root = isGitRepo(project.path) ? repoRoot(project.path) : null;
     if (!root) throw new Error(tr('msg.chatWt.notGit'));
     const from = base == null || base === '' ? 'HEAD' : String(base);
@@ -127,18 +129,24 @@ export class ChatWorktrees {
     const sha = git(project.path, 'rev-parse', '--verify', '--quiet', `${from}^{commit}`).stdout.trim();
     if (!sha) throw new Error(from === 'HEAD' ? tr('msg.chatWt.noCommits') : tr('msg.chatWt.badBase', { base: from }));
     const short = String(id).replace(/[^a-z0-9]/gi, '').slice(0, 8).toLowerCase();
-    const branch = `${BRANCH_PREFIX}/chat-${short}`;
-    const dir = path.join(ctx.paths.chatTrees, `${slug(project.name)}-${short}`);
+    // A chat that goes to a copy again (an earlier copy's branch may be kept for its undo point) gets a new name, never a reused one.
+    let branch; let dir;
+    for (let n = 1; ; n++) {
+      const tail = n > 1 ? `-${n}` : '';
+      branch = `${BRANCH_PREFIX}/chat-${short}${tail}`; dir = path.join(ctx.paths.chatTrees, `${slug(project.name)}-${short}${tail}`);
+      if (!extra || n > 50 || (!fs.existsSync(dir) && git(project.path, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`).status !== 0)) break;
+    }
     if (!this.managed(dir)) throw new Error(tr('msg.chatWt.badBase', { base: dir }));
     if (fs.existsSync(dir)) throw new Error(tr('msg.chatWt.exists', { dir }));
     fs.mkdirSync(ctx.paths.chatTrees, { recursive: true });
     git(project.path, 'worktree', 'prune'); // a folder deleted by hand is still registered in git
     if (git(project.path, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`).status === 0) throw new Error(tr('msg.chatWt.exists', { dir: branch }));
-    const res = git(project.path, 'worktree', 'add', '-b', branch, dir, sha);
-    if (res.status !== 0) throw new Error(tr('msg.workspace.worktreeFailed', { error: res.stderr.trim() }));
     // A project that lives in a subfolder of a repo works in the same subfolder of its worktree.
     const prefix = git(project.path, 'rev-parse', '--show-prefix').stdout.trim().replace(/[\\/]$/, '');
-    const info = { project: project.name, repo: project.path, path: dir, branch, base: from === 'HEAD' ? (git(project.path, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim() || 'HEAD') : from, baseSha: sha, prefix, at: new Date().toISOString() };
+    const info = { project: project.name, repo: project.path, path: dir, branch, base: from === 'HEAD' ? (git(project.path, 'rev-parse', '--abbrev-ref', 'HEAD').stdout.trim() || 'HEAD') : from, baseSha: sha, prefix, at: new Date().toISOString(), ...(extra ?? {}) };
+    if (extra) this.board.settingJson(KEY(id), info);
+    const res = git(project.path, 'worktree', 'add', '-b', branch, dir, sha);
+    if (res.status !== 0) { if (extra) this.board.settingJson(KEY(id), null); throw new Error(tr('msg.workspace.worktreeFailed', { error: res.stderr.trim() })); }
     this.board.settingJson(KEY(id), info);
     return { cwd: prefix ? path.join(dir, prefix) : dir, info };
   }
