@@ -9,7 +9,7 @@ import { tempHome } from './helpers.mjs';
 import { ctx } from '../src/platform/context.mjs';
 import { saveConfig } from '../src/platform/config.mjs';
 import { loadConfig } from '../src/platform/config-file.mjs';
-import { detectEngines, transcribeWav, runCli } from '../src/engine/host/dictation.mjs';
+import { detectEngines, handyCandidates, transcribeWav, runCli } from '../src/engine/host/dictation.mjs';
 import { encodeWav, checkWav, MAX_WAV_BYTES } from '../src/shared/wav.mjs';
 import { appMethods } from '../src/engine/api/app.mjs';
 import { METHODS, REMOTE_METHODS } from '../src/domain/security/permissions.mjs';
@@ -19,40 +19,39 @@ const t = tempHome();
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-dictado-'));
 after(() => { t.cleanup(); fs.rmSync(root, { recursive: true, force: true }); });
 const touch = (file) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, ''); return file; };
-const noProbe = async () => null;
 
 test('nothing installed: nothing found', async () => {
   const home = path.join(root, 'empty-home'); const bin = path.join(root, 'empty-bin'); fs.mkdirSync(bin, { recursive: true });
-  const r = await detectEngines({ platform: 'linux', env: { PATH: bin }, home, probe: noProbe });
+  const r = await detectEngines({ platform: 'linux', env: { PATH: bin }, home,  });
   assert.equal(r.handy.found, false); assert.equal(r.whisper.found, false); assert.equal(r.whisper.model, false);
 });
 
-test('whisper CLI on PATH is found, its version read and its model detected, never fetched', async () => {
+test('whisper CLI on PATH is found by its file and its model detected, never run or fetched', async () => {
   const home = path.join(root, 'h1'); const bin = path.join(root, 'bin1');
   const file = touch(path.join(bin, 'whisper-cli'));
   assert.equal(fs.existsSync(path.join(home, '.cache', 'whisper')), false);
-  let probed = null;
-  const r1 = await detectEngines({ platform: 'linux', env: { PATH: bin }, home, probe: async (f) => { probed = f; return 'whisper 1.7'; } });
-  assert.equal(r1.whisper.found, true); assert.equal(r1.whisper.file, file); assert.equal(r1.whisper.version, 'whisper 1.7'); assert.equal(probed, file);
+  const r1 = await detectEngines({ platform: 'linux', env: { PATH: bin }, home });
+  assert.equal(r1.whisper.found, true); assert.equal(r1.whisper.file, file); assert.equal('version' in r1.whisper, false, 'the program is never run to ask its version');
   assert.equal(r1.whisper.model, false);
   assert.equal(fs.existsSync(path.join(home, '.cache', 'whisper')), false, 'detection creates nothing');
   touch(path.join(home, '.cache', 'whisper', 'ggml-base.bin'));
-  assert.equal((await detectEngines({ platform: 'linux', env: { PATH: bin }, home, probe: noProbe })).whisper.model, true);
+  assert.equal((await detectEngines({ platform: 'linux', env: { PATH: bin }, home,  })).whisper.model, true);
 });
 
 test('Handy is found by its install folder on Windows and is never started', async () => {
   const local = path.join(root, 'local');
   const file = touch(path.join(local, 'Handy', 'handy.exe'));
-  let probed = false;
-  const r = await detectEngines({ platform: 'win32', env: { LOCALAPPDATA: local, PATH: '' }, home: root, probe: async () => { probed = true; return null; } });
+  const r = await detectEngines({ platform: 'win32', env: { LOCALAPPDATA: local, PATH: '' }, home: root });
   assert.equal(r.handy.found, true); assert.equal(r.handy.file, file);
-  assert.equal(probed, false, 'no version probe on a desktop app');
 });
 
-test('a version probe that fails or hangs does not hide the engine', async () => {
-  const bin = path.join(root, 'bin2'); touch(path.join(bin, 'whisper-ctranslate2'));
-  const r = await detectEngines({ platform: 'linux', env: { PATH: bin }, home: root, probe: noProbe });
-  assert.equal(r.whisper.found, true); assert.equal(r.whisper.version, null);
+test('on Windows a .cmd or .bat shim is not an engine (it cannot be run without a shell) and ProgramFiles keeps its backslash', async () => {
+  const bin = path.join(root, 'bin-win'); touch(path.join(bin, 'whisper-cli.cmd')); touch(path.join(bin, 'whisper-cpp.bat'));
+  assert.equal((await detectEngines({ platform: 'win32', env: { PATH: bin }, home: root })).whisper.found, false);
+  const exe = touch(path.join(bin, 'whisper-cli.exe'));
+  assert.equal((await detectEngines({ platform: 'win32', env: { PATH: bin }, home: root })).whisper.file, exe);
+  // no ProgramFiles in the environment: the default folder is a real path, not «C:Program Files»
+  assert.ok(handyCandidates('win32', { LOCALAPPDATA: 'C:\\L' }, 'C:\\Users\\a').includes(path.join('C:\\Program Files', 'Handy', 'handy.exe')));
 });
 
 test('fallback: Windows is the default and a missing engine falls back to it', () => {

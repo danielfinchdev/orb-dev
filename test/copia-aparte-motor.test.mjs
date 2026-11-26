@@ -416,13 +416,17 @@ test('the agent’s proposal: the card is answered on this PC; yes waits for the
   const yes = props.run(live, { reason: 'big refactor' });
   assert.equal(props.pending().length, 1); assert.equal(seen[0][0], 'copy:request'); assert.equal(seen[0][1].reason, 'big refactor');
   assert.throws(() => props.answer({ id: props.pending()[0].id, session: 'other' }), /ya no está/);
+  // the agent proposes from inside its turn: a turn is running while the answer arrives (with none, the list opens at once)
+  sessions.running.set(s.id, {});
   props.answer({ id: props.pending()[0].id, session: s.id });
   assert.match((await yes).text, /Termina tu turno ahora sin tocar nada más/);
+  sessions.running.delete(s.id);
   assert.equal(copy.waitingFor(s.id), true); assert.equal(copy.where(s.id), 'local');
   // when the turn ends the window is told to show the list; nothing moved by itself
   await turn(p, s.id, 'write a.txt=two');
   await until(() => events.some((e) => e.event === 'copy:ready' && e.payload.id === s.id), 'lista');
-  assert.equal(copy.where(s.id), 'local'); assert.equal(copy.waitingFor(s.id), false);
+  assert.equal(copy.where(s.id), 'local'); assert.equal(copy.waitingFor(s.id), false); assert.ok(copy.readyFor(s.id), 'kept as ready until the window answers');
+  copy.cancelWait(s.id);
   // a no
   const no = props.run(live, { reason: 'x' }); props.decline({ id: props.pending()[0].id, session: s.id });
   assert.match((await no).text, /prefiere seguir en su carpeta/);

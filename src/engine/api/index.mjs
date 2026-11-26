@@ -500,10 +500,16 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
       const sid = str(id, 'conversación', 64);
       const out = await chatCopy.toCopy(sid, { fingerprint: typeof fingerprint === 'string' ? fingerprint.slice(0, 80) : '', mixed: mixed === 'take' || mixed === 'leave' ? mixed : null, ack: ack === true });
       // the agent proposed it: it goes on now, told where it works
-      if (proceed === true) sessions.send(sid, tr('sys.copy.continue'), { asked: [] });
+      // (a message queued during the turn may already have started, once the move freed the queue: then this one queues behind it)
+      if (proceed === true) {
+        try { sessions.send(sid, tr('sys.copy.continue'), { asked: [] }); } catch (error) {
+          if (!sessions.running.has(sid)) throw error;
+          sessions.enqueue(sid, tr('sys.copy.continue'));
+        }
+      }
       return out;
     },
-    'copy.wait': ({ id }) => chatCopy.wait(str(id, 'conversación', 64), false),
+    'copy.wait': ({ id }) => chatCopy.wait(str(id, 'conversación', 64), false, emit),
     'copy.cancelWait': ({ id }) => { chatCopy.cancelWait(str(id, 'conversación', 64)); return true; },
     'copy.merge': ({ id }) => chatCopy.merge(str(id, 'conversación', 64)),
     'copy.undoMerge': ({ id }) => chatCopy.undoMerge(str(id, 'conversación', 64)),

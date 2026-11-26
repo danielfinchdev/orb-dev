@@ -12,7 +12,7 @@ import { ProjectFinder } from '@/components/project-finder.jsx';
 import { startChatFlow } from '@/components/project-actions.jsx';
 import { useShortcut } from '@/lib/keys.js';
 import { useStore, go, openSettings, openOrbInfo, fullPc, getState } from '@/lib/store.js';
-import { askMoveToCopy } from '@/components/chat-copy.jsx';
+import { askMoveToCopy, copyWhere } from '@/components/chat-copy.jsx';
 import { STATUS } from '@/lib/labels.js';
 import { useT } from '@/lib/i18n.js';
 import { cn } from '@/lib/utils.js';
@@ -36,8 +36,8 @@ function commands(t, config) {
       { key: 'find-file', icon: FileSearch, label: t('finder.filesTitle'), run: () => openFinder('files') },
       { key: 'find-text', icon: Search, label: t('finder.textTitle'), run: () => openFinder('text') }
     ] : []),
-    // only inside a chat of a git project on this PC: the window of that chat opens the list of what would move
-    ...(fullPc() && getState().route?.view === 'session' ? [{ key: 'copy-move', icon: FolderOutput, label: t('copy.menuMove'), run: () => askMoveToCopy(getState().route.id) }] : []),
+    // only inside a chat of a git project on this PC that still works in its own folder (not in a copy already)
+    ...(fullPc() && getState().route?.view === 'session' && copyWhere(getState().route.id) === 'local' ? [{ key: 'copy-move', icon: FolderOutput, label: t('copy.menuMove'), run: () => askMoveToCopy(getState().route.id) }] : []),
     { key: 'settings', icon: Settings, label: t('nav.settings'), run: () => openSettings() }
   ];
 }

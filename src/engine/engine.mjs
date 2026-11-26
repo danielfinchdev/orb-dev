@@ -181,10 +181,24 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // and what can be done (coreBlocked). All of it before the database opens.
   // a workspace on a drive that is waking up or coming back (a USB or network disk) is waited for
   // a little before saying it is not there.
-  for (let i = 0; !fs.existsSync(home) && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
-  if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
+  // A delete that is not over (journal on disk) decides the start: nothing may be brought back from a replica or a backup.
+  const U = await import('../domain/data/uninstall.mjs');
+  const journalFile = () => !!ctx.userData && fs.existsSync(U.journalPath(ctx.userData));
+  // only a journal signed by this PC suppresses the repairs: one that cannot be checked deletes nothing, so a normal start runs
+  const journalLeft = () => journalFile() && ['stopped', 'running'].includes(U.pendingJournal(ctx.userData, ctx.keys?.approval ?? null).state);
+  for (let i = 0; !fs.existsSync(home) && !journalLeft() && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
+  if (!fs.existsSync(home) && !journalLeft()) throw new Error(tr('sys.engine.notHome', { home }));
   // A «Desinstalar» / «Restablecer» that was cut: its journal finishes what it can before anything below could bring data back.
-  if (ctx.userData) { try { const r = await (await import('../domain/data/uninstall.mjs')).resumeAndReport(ctx.userData, ctx.keys?.approval ?? null); if (r) log(`desinstalar: diario retomado (${r.ok ? 'terminado' : 'incompleto'})`); } catch (error) { log(`desinstalar: ${error.message}`); } }
+  let resumed = null;
+  if (ctx.userData) { try { resumed = await U.resumeAndReport(ctx.userData, ctx.keys?.approval ?? null); if (resumed) log(`desinstalar: diario retomado (${resumed.ok ? 'terminado' : 'incompleto'})`); } catch (error) { log(`desinstalar: ${error.message}`); } }
+  // «Borrar todo» finished by this start: the window goes on to the uninstaller with a new code (nothing is left to open).
+  if (resumed?.resumed && resumed.ok && resumed.mode === 'uninstall') return uninstallFinished(resumed.plan);
+  if (journalLeft()) {
+    // stopped, or one this PC cannot check: the window offers «Seguir borrando» / «Dejarlo así» on what is there
+    fs.mkdirSync(home, { recursive: true });
+    mirror = null; // openMaster would bring the vault back from its replica
+    return open({ home, version, repair: null });
+  }
   const { migrateWorkspace } = await import('../domain/workspace/core-folder.mjs');
   migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message
   // The first 3.8 builds named this workspace's backups' folder after its whole path: taken over once.
@@ -195,6 +209,24 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   const repair = await repairCore(home, { secret: secretOf(home), adopt: adopter(home) });
   if (!repair.ok) return coreBlocked({ home, version, repair });
   return open({ home, version, repair });
+}
+// After «Borrar todo» was finished by a restart: only the window's way to the uninstaller (app.coreState tells it to go on).
+async function uninstallFinished(plan) {
+  const code = (await import('node:crypto')).randomBytes(16).toString('hex');
+  const { markText } = await import('./api/uninstall.mjs');
+  fs.mkdirSync(ctx.userData, { recursive: true });
+  fs.writeFileSync(path.join(ctx.userData, (await import('../domain/data/uninstall.mjs')).MARK_FILE), markText({ plan, code }));
+  api = {
+    async call(method, params, principal) {
+      authorize(principal, method);
+      if (method === 'app.coreState') return { missing: false, uninstalled: true, code };
+      // the uninstaller did not start: its mark goes too, or the next start asks the reinstall question
+      if (method === 'uninstall.restart') { try { fs.rmSync(path.join(ctx.userData, (await import('../domain/data/uninstall.mjs')).MARK_FILE), { force: true }); } catch { /* it expires */ } setTimeout(() => process.exit(75), 700).unref?.(); return { ok: true }; }
+      throw Object.assign(new Error(tr('data.core.blocked')), { userFacing: true });
+    },
+    shutdown() {}
+  };
+  return { home: ctx.home ?? null, name: PRODUCT.assistant, core: null };
 }
 // The secret the backups are sealed with: the app's, or the plain one of a run without the app (never made here).
 // This PC's backup key: from the vault (the app), or from the plain clave.bin of a run without it (never made here).

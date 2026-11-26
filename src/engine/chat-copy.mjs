@@ -24,6 +24,8 @@ const MOVES = (id) => `chatmoves:${id}`;
 const POINT = (id) => `chatcp:${id}`;
 const RESOLVE = (id) => `chatres:${id}`;
 const PENDING = (id) => `chatcopy_next:${id}`;
+// How long a switch that is ready waits for the window to open its list before the chat's queue goes on.
+const READY_MS = 5 * 60_000;
 const SHOWN = 30; // files named in a list; the counts are whole
 const HASH = /^[0-9a-f]{40,64}$/;
 const lower = (p) => path.resolve(p).toLowerCase();
@@ -78,6 +80,7 @@ export class ChatCopy {
     this.board = board; this.sessions = sessions; this.chatTrees = chatTrees; this.hold = hold; this.held = held; this.log = log;
     this.claudeDir = claudeDir ?? ((s) => { const acc = account(s.account); return acc ? accountDir(acc) : accountDir({ agent: 'claude' }); });
     this.working = new Set();
+    this.readyTimers = new Map(); this.readyMs = READY_MS;
   }
 
   record(id) { return this.chatTrees.info(id); }
@@ -170,7 +173,7 @@ export class ChatCopy {
     const others = sorted([...dirty.keys()].filter((p) => !chat.has(p)));
     const state = await gitAsync(repo, {}, 'status', '--porcelain=v1', '-z', '-uall', '--ignored=matching');
     const entries = state.status === 0 ? state.stdout.split('\0').filter((e) => e.length > 3) : [];
-    const ignored = entries.filter((e) => e.startsWith('!!')).map((e) => e.slice(3)).filter((p) => !regenerable(p));
+    const ignored = entries.filter((e) => e.startsWith('!!')).map((e) => e.slice(3)).filter((p) => !regenerable(p) && path.basename(p) !== '.orb-creada');
     const secret = entries.filter((e) => !e.startsWith('!!')).map((e) => e.slice(3)).filter(isSecretPath);
     const staged = (await gitAsync(repo, {}, 'diff', '--cached', '--name-only', '-z', 'HEAD')).stdout.split('\0').filter(Boolean);
     const tree = (await gitAsync(repo, {}, 'rev-parse', `${snap.commit}^{tree}`)).stdout.trim();
@@ -185,6 +188,8 @@ export class ChatCopy {
   }
   // The plan as the window shows it (without the internals).
   async preview(id) {
+    // the list is open: the window has taken the ready switch, so the queue is not freed behind its back
+    clearTimeout(this.readyTimers.get(String(id))); this.readyTimers.delete(String(id));
     const p = await this.plan(id);
     if (!p.ok) return p;
     const { snap, head, repo, zero, ...shown } = p;
@@ -218,6 +223,7 @@ export class ChatCopy {
   // someone else also changed; `ack`: the user agreed to leave their own changes where they are.
   async toCopy(id, { fingerprint, mixed = null, ack = false } = {}) {
     const { s, project } = this.check(id);
+    this.dropPending(s.id);
     if (this.folderBusy(project, s.id)) throw userError('msg.copy.folderBusy');
     this.working.add(s.id); this.sessions.moving.add(s.id);
     const release = this.hold(project.name);
@@ -340,6 +346,8 @@ export class ChatCopy {
 
   // At start: a switch that was cut short is finished when its last step was done, and undone otherwise.
   async recover() {
+    // a switch waiting for a turn, or a resolution, did not survive the restart: nothing would ever finish it
+    for (const r of this.board.all("SELECT key FROM settings WHERE key LIKE 'chatcopy_next:%'")) this.board.settingJson(r.key, null);
     for (const rec of this.chatTrees.all()) {
       if (!rec.switching || rec.switching.failed) continue; // a failed undo waits for the user: it is never tried again alone
       this.sessions.moving.add(rec.id);
@@ -565,6 +573,9 @@ export class ChatCopy {
   }
   async finishMerge(info) {
     await gitAsync(info.path, {}, 'add', '-A');
+    // a secret created while resolving never joins the commit (same rule as commitPending)
+    const staged = (await gitAsync(info.path, {}, 'diff', '--cached', '--name-only', '-z')).stdout.split('\0').filter(Boolean);
+    for (const p of staged.filter(isSecretPath)) await gitAsync(info.path, {}, '--literal-pathspecs', 'rm', '-q', '--cached', '--ignore-unmatch', '--', p);
     const r = await gitAsync(info.path, {}, ...ORB_GIT, 'commit', '-q', '--no-edit', '-m', 'orb: trae la carpeta a la copia aparte');
     return r.status === 0 || /nothing to commit/i.test(`${r.stdout}${r.stderr}`);
   }
@@ -587,22 +598,39 @@ export class ChatCopy {
     const nowTree = now ? (await gitAsync(repo, {}, 'rev-parse', `${now.commit}^{tree}`)).stdout.trim() : '';
     this.log(`copia aparte ${id}: resuelto; carpeta ${nowTree === res.tree ? 'igual' : 'cambiada'}`);
     if (nowTree !== res.tree) { this.board.settingJson(RESOLVE(id), null); this.sessions.addItem(id, 'system', 'status', tr('msg.copy.folderChanged')); return this.resolve(id).catch((error) => ({ ok: false, error: error.message })); }
-    try { return await this.merge(id); } catch (error) { this.sessions.addItem(id, 'system', 'status', error.message); this.resumeQueue(id); return { ok: false, error: error.message }; }
+    try { const out = await this.merge(id); this.resumeQueue(id); return out; } catch (error) { this.sessions.addItem(id, 'system', 'status', error.message); this.resumeQueue(id); return { ok: false, error: error.message }; }
   }
 
   // ----- a switch asked for during a turn: it happens when the turn ends -----
 
   // proceed: the agent proposed it, so once moved it is told to go on (the window sends that with the confirmation)
-  wait(id, proceed = false) { this.check0(id); if (this.board.settingJson(PENDING(id))?.resolve) throw userError('msg.copy.busy'); this.board.settingJson(PENDING(id), { toCopy: true, proceed: proceed === true }); return { waiting: true }; }
+  // With no turn running there is nothing to wait for: the window is told to open the list now.
+  wait(id, proceed = false, emit = () => {}) {
+    this.check0(id);
+    if (this.board.settingJson(PENDING(id))?.resolve) throw userError('msg.copy.busy');
+    if (!this.sessions.running.has(String(id))) { emit('copy:ready', { id: String(id), proceed: proceed === true }); return { waiting: false, ready: true }; }
+    this.board.settingJson(PENDING(id), { toCopy: true, proceed: proceed === true }); return { waiting: true };
+  }
+  dropPending(id) { clearTimeout(this.readyTimers.get(id)); this.readyTimers.delete(id); this.board.settingJson(PENDING(id), null); }
   check0(id) { const s = this.sessions.get(String(id)); if (!s || s.kind !== 'chat') throw userError('msg.chatWt.none'); if (!s.project) throw userError('msg.chatWt.needsProject'); }
-  waitingFor(id) { return Boolean(this.board.settingJson(PENDING(id))?.toCopy); }
-  cancelWait(id) { this.board.settingJson(PENDING(id), null); this.resumeQueue(String(id)); }
+  waitingFor(id) { const p = this.board.settingJson(PENDING(id)); return Boolean(p?.toCopy) && !p.ready; }
+  readyFor(id) { const p = this.board.settingJson(PENDING(id)); return p?.toCopy && p.ready ? { proceed: p.proceed === true } : null; }
+  cancelWait(id) { this.dropPending(String(id)); this.resumeQueue(String(id)); }
   // Called by the engine when a chat's turn ended. → what to do: the window opens the list for a waiting switch.
   async afterTurn(id, emit = () => {}) {
     const pend = this.board.settingJson(PENDING(id));
     if (!pend) return null;
     if (pend.resolve) return this.finishResolve(id);
-    if (pend.toCopy) { this.board.settingJson(PENDING(id), null); emit('copy:ready', { id, proceed: pend.proceed === true }); return { ready: true }; }
+    if (pend.toCopy) {
+      // kept as «ready» until the window answers (it may be showing another chat: copy.state tells it on entering this one);
+      // if nobody takes it the chat's queue goes on
+      this.board.settingJson(PENDING(id), { toCopy: true, ready: true, proceed: pend.proceed === true });
+      clearTimeout(this.readyTimers.get(id));
+      const timer = setTimeout(() => { this.readyTimers.delete(id); if (this.readyFor(id)) this.cancelWait(id); }, this.readyMs);
+      timer.unref?.(); this.readyTimers.set(id, timer);
+      emit('copy:ready', { id, proceed: pend.proceed === true });
+      return { ready: true };
+    }
     return null;
   }
 
@@ -617,7 +645,7 @@ export class ChatCopy {
     return {
       where: this.where(id), branch: info && !info.removed && !info.detached ? info.branch : null, path: info && !info.removed && !info.detached ? info.path : null,
       blocked: info?.switching ? tr('msg.copy.pendingUndo') : null,
-      undo: Boolean(point?.before) && !point.undone, waiting: this.waitingFor(id), resolving: Boolean(this.board.settingJson(PENDING(id))?.resolve), conflict: this.board.settingJson(RESOLVE(id))?.files ?? [],
+      undo: Boolean(point?.before) && !point.undone, waiting: this.waitingFor(id), ready: this.readyFor(id), resolving: Boolean(this.board.settingJson(PENDING(id))?.resolve), conflict: this.board.settingJson(RESOLVE(id))?.files ?? [],
     };
   }
 }

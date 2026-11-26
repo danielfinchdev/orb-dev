@@ -135,10 +135,20 @@ function describeItem(item) {
 const mayBeOwnKill = (command) => process.platform === 'win32' && Boolean(pidKills(unwrapShell(command))?.length);
 
 // Two folders of the same repository (one inside the other, or under the same git root): what one writes is in the other's photos.
+// The git root of a folder is asked once a minute: two synchronous git calls per running chat would block the engine at every turn start.
+const rootCache = new Map();
+function cachedRoot(dir) {
+  const hit = rootCache.get(dir);
+  if (hit && Date.now() - hit.at < 60_000) return hit.root;
+  let root = null; try { root = repoRoot(dir) || null; } catch { root = null; }
+  if (rootCache.size > 500) rootCache.clear();
+  rootCache.set(dir, { root, at: Date.now() });
+  return root;
+}
 function sameRepo(a, b) {
   const x = path.resolve(a).toLowerCase(); const y = path.resolve(b).toLowerCase();
   if (x === y || x.startsWith(y + path.sep) || y.startsWith(x + path.sep)) return true;
-  try { const ra = repoRoot(a); return Boolean(ra) && path.resolve(ra).toLowerCase() === path.resolve(repoRoot(b) || '?').toLowerCase(); } catch { return false; }
+  try { const ra = cachedRoot(a); return Boolean(ra) && path.resolve(ra).toLowerCase() === path.resolve(cachedRoot(b) || '?').toLowerCase(); } catch { return false; }
 }
 
 export class Sessions {

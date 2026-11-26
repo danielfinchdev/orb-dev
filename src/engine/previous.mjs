@@ -30,7 +30,8 @@ export function previousData(opts) {
     if (found) { home = found; source = 'folder'; }
   }
   if (!home) return null;
-  if (fs.existsSync(path.join(paths(home).core, RESET_MARK))) return null;
+  // a start the user already decided about; a mark left beside it must not ask the question at the next start
+  if (fs.existsSync(path.join(paths(home).core, RESET_MARK))) { if (mark) clearMark(userData); return null; }
   let since = 0; try { since = fs.statSync(paths(home).config).mtimeMs; } catch { /* unknown */ }
   const size = sizeOf(paths(home).core);
   return { home, source, since, bytes: size.bytes };

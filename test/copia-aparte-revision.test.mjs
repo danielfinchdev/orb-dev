@@ -17,7 +17,7 @@ import { rewindFiles } from '../src/domain/conversations/rewind.mjs';
 import { createCopyProposals } from '../src/engine/host/copy-proposal.mjs';
 
 let t; let board; let api; let sessions; let scheduler; let chatTrees; let copy; let sent; let counter = 0;
-let gate = null; let leaveMarkers = false;
+let gate = null; let leaveMarkers = false; let leaveSecret = false;
 const events = [];
 const call = (method, params = {}) => api.call(method, params, DESKTOP);
 const g = (dir, ...a) => git(dir, ...a).stdout.trim();
@@ -42,6 +42,7 @@ before(() => {
     if (/Hay archivos que cambiaron a la vez/.test(text)) {
       if (gate) await gate;
       const list = /copia: (.+?)\. Orb ha/.exec(text)?.[1] ?? '';
+      if (leaveSecret) fs.writeFileSync(path.join(s.cwd, '.env'), 'TOKEN=abc' + String.fromCharCode(10));
       if (!leaveMarkers) for (const f of list.split(', ').filter(Boolean)) fs.writeFileSync(path.join(s.cwd, f), 'resolved\n');
     }
     return { final: 'ok', text: 'ok', isError: false, usage: {} };
@@ -172,7 +173,7 @@ test('6: undoing a join keeps the branch and its refs until the point would have
   assert.equal(g(p.dir, 'branch', '--list', branch), '');
 });
 
-test('7: a message queued during the turn does not start before a waiting move or resolution', async () => {
+test('7: a ready move waits for the window (shown by copy.state) and, if nobody takes it, the queue goes on by itself', async () => {
   const p = mkProject(); const s = await mkChat(p);
   await turn(p, s.id, 'write a.txt=two');
   let release; gate = new Promise((r) => { release = r; });
@@ -185,6 +186,55 @@ test('7: a message queued during the turn does not start before a waiting move o
   await until(() => !sessions.running.has(s.id), 'fin');
   assert.ok(!sent.some((x) => x.id === s.id && /q\.txt/.test(x.text)), 'the queued message did not start');
   assert.equal(sessions.queue(s.id).length, 1);
+  // the window was on another chat: entering this one it finds the switch ready, not lost
+  assert.deepEqual(copy.state(s.id).ready, { proceed: false }); assert.equal(copy.state(s.id).waiting, false);
+  copy.readyMs = 100; copy.afterTurn(s.id); // a turn that ends again rearms the timer, now short
+  await until(() => sent.some((x) => x.id === s.id && /q\.txt/.test(x.text)), 'nobody took it: the queue goes on');
+  assert.equal(copy.state(s.id).ready, null); copy.readyMs = 5 * 60_000;
+});
+
+test('H: opening the list stops the five-minute timer, so the queue is not freed behind an open dialog', async () => {
+  const p = mkProject(); const s = await mkChat(p);
+  await turn(p, s.id, 'write a.txt=two');
+  board.settingJson(`chatcopy_next:${s.id}`, { toCopy: true });
+  copy.readyMs = 150; await copy.afterTurn(s.id);
+  assert.equal(copy.readyTimers.has(s.id), true);
+  await copy.preview(s.id);
+  assert.equal(copy.readyTimers.has(s.id), false);
+  await new Promise((r) => setTimeout(r, 400));
+  assert.ok(copy.readyFor(s.id), 'still ready: the window has it open');
+  copy.cancelWait(s.id); copy.readyMs = 5 * 60_000;
+});
+
+test('E: «wait» with no turn running opens the list now, and a restart drops what waited', async () => {
+  const p = mkProject(); const s = await mkChat(p);
+  const before = events.length;
+  assert.deepEqual(copy.wait(s.id, false, (e, pl) => events.push({ event: e, payload: pl })), { waiting: false, ready: true });
+  assert.ok(events.slice(before).some((e) => e.event === 'copy:ready' && e.payload.id === s.id));
+  assert.equal(board.settingJson(`chatcopy_next:${s.id}`), null, 'nothing is left waiting for a turn that is not there');
+  board.settingJson(`chatcopy_next:${s.id}`, { toCopy: true, ready: true });
+  await copy.recover();
+  assert.equal(board.settingJson(`chatcopy_next:${s.id}`), null);
+});
+
+test('F: the .orb-creada mark (in info/exclude) is not listed as a file that does not travel', async () => {
+  const p = mkProject();
+  fs.appendFileSync(path.join(p.dir, '.git', 'info', 'exclude'), '.orb-creada' + String.fromCharCode(10));
+  fs.writeFileSync(path.join(p.dir, '.orb-creada'), 'token');
+  const s = await mkChat(p);
+  const pre = await copy.preview(s.id);
+  assert.equal(pre.stay.ignoredTotal, 0, JSON.stringify(pre.stay));
+});
+
+test('G: a secret the agent creates while resolving a conflict is never committed nor joined', async () => {
+  const p = mkProject(); const s = await mkChat(p);
+  await move(s.id);
+  await turn(p, s.id, 'write a.txt=chat');
+  fs.writeFileSync(path.join(p.dir, 'a.txt'), 'user' + String.fromCharCode(10));
+  leaveSecret = true;
+  try { await copy.resolve(s.id); await until(() => copy.where(s.id) === 'local', 'unido', 30000); } finally { leaveSecret = false; }
+  assert.equal(fs.existsSync(path.join(p.dir, '.env')), false, 'the secret did not reach the folder');
+  assert.equal(g(p.dir, 'log', '--all', '--format=%H', '--', '.env'), '', 'no commit holds it');
 });
 
 test('8: the proposals are dropped when Orb locks or the chat is removed', async () => {

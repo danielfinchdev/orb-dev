@@ -236,32 +236,49 @@ export async function runUninstall(mode) {
   try { await bridge.uninstall(done.code); } catch (error) { notifyError(error); await call('uninstall.restart').catch(quiet); setTimeout(() => window.location.reload(), 1500); }
 }
 
+// «Borrar todo» was finished by the start itself: the window only launches the uninstaller (or says it could not).
+export function FinishUninstall({ code }) {
+  useEffect(() => {
+    (async () => {
+      notifyOk(tNow('uninstall.removing'), { ms: 8000 });
+      try { await bridge.uninstall(code); } catch (error) { notifyError(error); await call('uninstall.restart').catch(quiet); setTimeout(() => window.location.reload(), 1500); }
+    })();
+  }, [code]);
+  return null;
+}
+
 // At the start: a delete that stopped (a reported failure) or that Orb cannot check waits for the user's word. «Seguir borrando»
 // lets the engine run its journal again; «Dejarlo así» closes it and nothing more is deleted. Closing the dialog asks again next time.
-export function StoppedDelete() {
+export function StoppedDelete({ pending = null }) {
   useEffect(() => {
     if (bridge.mobile) return undefined;
     let alive = true;
     (async () => {
-      const p = await call('uninstall.pending').catch(() => null);
-      if (!alive || !p || (p.state !== 'stopped' && p.state !== 'untrusted')) return;
-      const stopped = p.state === 'stopped';
-      const answer = await confirm(tNow(stopped ? 'uninstall.stoppedTitle' : 'uninstall.untrustedTitle'),
-        stopped ? tNow('uninstall.stoppedBody', { done: p.done, left: p.left }) : tNow('uninstall.untrustedBody'),
-        { ok: tNow(stopped ? 'uninstall.stoppedKeep' : 'uninstall.stoppedLeave'), cancel: tNow(stopped ? 'uninstall.stoppedLeave' : 'uninstall.untrustedNotNow'), danger: stopped, noClose: true });
-      // true: go on (stopped) or close it (untrusted); false: leave it (stopped) or ask again (untrusted)
-      const doResume = stopped && answer === true;
-      const doClose = (stopped && answer === false) || (!stopped && answer === true);
-      if (!doResume && !doClose) return;
-      const unlock = await unlockCore('uninstall');
-      if (!unlock) return;
-      try {
-        if (doResume) { await call('uninstall.resume', { unlock }); notifyOk(tNow('uninstall.resuming'), { ms: 6000 }); setTimeout(() => window.location.reload(), 2500); }
-        else await call('uninstall.discard', { unlock });
-      } catch (error) { notifyError(error); }
+      // outside the app (the start decided it) the question is asked until it is answered: there is nothing else on screen
+      for (;;) {
+        const p = pending ?? await call('uninstall.pending').catch(() => null);
+        if (!alive || !p || (p.state !== 'stopped' && p.state !== 'untrusted')) return;
+        const stopped = p.state === 'stopped';
+        const answer = await confirm(tNow(stopped ? 'uninstall.stoppedTitle' : 'uninstall.untrustedTitle'),
+          stopped ? tNow('uninstall.stoppedBody', { done: p.done, left: p.left }) : tNow('uninstall.untrustedBody'),
+          { ok: tNow(stopped ? 'uninstall.stoppedKeep' : 'uninstall.stoppedLeave'), cancel: tNow(stopped ? 'uninstall.stoppedLeave' : 'uninstall.untrustedNotNow'), danger: stopped, noClose: true });
+        // true: go on (stopped) or close it (untrusted); false: leave it (stopped) or ask again (untrusted)
+        const doResume = stopped && answer === true;
+        const doClose = (stopped && answer === false) || (!stopped && answer === true);
+        if (!doResume && !doClose) return;
+        // no master password on disk (the vault may be gone already): nothing to unlock
+        const ms = await call('master.state').catch(() => null);
+        const unlock = ms?.exists ? await unlockCore('uninstall') : null;
+        if (ms?.exists && !unlock) { if (!pending) return; continue; }
+        try {
+          if (doResume) { await call('uninstall.resume', unlock ? { unlock } : {}); notifyOk(tNow('uninstall.resuming'), { ms: 6000 }); setTimeout(() => window.location.reload(), 2500); }
+          else { await call('uninstall.discard', unlock ? { unlock } : {}); if (pending) window.location.reload(); }
+          return;
+        } catch (error) { notifyError(error); if (!pending) return; }
+      }
     })();
     return () => { alive = false; };
-  }, []);
+  }, [pending]);
   return null;
 }
 

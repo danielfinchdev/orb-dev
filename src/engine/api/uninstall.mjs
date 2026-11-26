@@ -10,7 +10,7 @@ import { hostCall } from '../host/host.mjs';
 import { fail } from './common.mjs';
 import { BOXES, MODES } from '../../shared/uninstall-boxes.mjs';
 import { BOXES as ALL_BOXES } from '../../shared/uninstall-boxes.mjs';
-import { planUninstall, runPlan, uninstallEnv, closeJournal, confirmResume, pendingJournal, MARK_FILE } from '../../domain/data/uninstall.mjs';
+import { planUninstall, runPlan, uninstallEnv, closeJournal, confirmResume, pendingJournal, stubCoreAfterStop, MARK_FILE } from '../../domain/data/uninstall.mjs';
 import { asideList, deleteAside } from '../previous.mjs';
 
 // What must be typed to confirm «Borrar todo»; either language's word is taken.
@@ -87,6 +87,8 @@ export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef
         const r = await runPlan({ env: env(), plan: pl, hooks });
         if (!r.ok) {
           log(`desinstalar: cortado (${r.failed[0]?.error ?? 'pendiente'})`);
+          // core's data may be gone already: the next start needs something healthy, not a restore from a backup
+          try { await stubCoreAfterStop(env(), pl); } catch (error) { log(`desinstalar: core mínimo: ${error.message}`); }
           restart();
           return { ok: false, report: r };
         }
@@ -115,12 +117,13 @@ export function uninstallApi({ board, emit = () => {}, log = () => {}, remoteRef
     'uninstall.discard': () => {
       if (running || ctx.uninstalling) fail(tr('uninstall.busy'));
       const now = pendingJournal(userData(), ctx.keys?.approval ?? null);
-      if (now.state !== 'stopped' && now.state !== 'untrusted') fail(tr('uninstall.noJournal'));
+      if (now.state !== 'stopped' && now.state !== 'untrusted' && now.state !== 'running') fail(tr('uninstall.noJournal'));
       closeJournal(userData());
       return { ok: true };
     },
     // the uninstaller could not be started (the window says so): the engine, closed by the run, starts again
-    'uninstall.restart': () => { restart(); return { ok: true }; },
+    // its mark goes: nothing was uninstalled, so the next start must not ask the reinstall question
+    'uninstall.restart': () => { try { fs.rmSync(path.join(userData(), MARK_FILE), { force: true }); } catch { /* the mark expires in an hour */ } restart(); return { ok: true }; },
     'previous.list': () => ({ list: asideList(ctx.home) }),
     'previous.delete': ({ name }) => {
       const r = deleteAside(ctx.home, String(name ?? ''), { projects: board.projects().map((x) => x.path) });

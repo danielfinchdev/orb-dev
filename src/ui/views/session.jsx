@@ -35,7 +35,7 @@ import { NotificationBell } from '@/components/notification-center.jsx';
 import { useCatalog, modelsOf, modelLabel, AgentChip, AUTO } from '@/components/brain-picker.jsx';
 import { AccountActions } from '@/components/account-notice.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
-import { CopyBar, CopyAskCards, MoveToCopyDialog, MoveToCopyButton, askMoveToCopy } from '@/components/chat-copy.jsx';
+import { CopyBar, CopyAskCards, MoveToCopyDialog, MoveToCopyButton, askMoveToCopy, useCopyState } from '@/components/chat-copy.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
@@ -439,6 +439,7 @@ export function SessionView({ route }) {
   const turnRunning = s?.status === 'running';
   useEffect(() => { if (turnRunning) setSuggestion(''); }, [turnRunning]);
   const dropSuggestion = () => { setSuggestion(''); call('sessions.suggestCancel', { id: route.id }).catch(quiet); };
+  const [copyState] = useCopyState(route.id, `${s?.cwd}|${s?.updated_at}`);
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
@@ -546,7 +547,7 @@ export function SessionView({ route }) {
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="session-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-[250px]">
-            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} /><DropdownMenuItem onSelect={() => (running ? act(call('copy.wait', { id: s.id })) : askMoveToCopy(s.id))} data-testid="copy-move-menu"><FolderOutput />{running ? t('copy.afterTurn') : t('copy.menuMove')}</DropdownMenuItem><DropdownMenuSeparator /></> : null}
+            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} />{copyState.where === 'local' ? <DropdownMenuItem onSelect={() => (running ? act(call('copy.wait', { id: s.id })) : askMoveToCopy(s.id))} data-testid="copy-move-menu"><FolderOutput />{running ? t('copy.afterTurn') : t('copy.menuMove')}</DropdownMenuItem> : null}<DropdownMenuSeparator /></> : null}
             {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
             {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>

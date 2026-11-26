@@ -512,7 +512,6 @@ export function DictationCard({ c }) {
             <div className="text-faint-foreground text-caption mt-1 flex flex-col gap-0.5 break-all">
               {found.handy?.found ? <span>Handy · {t('settings.dictationFile', { file: found.handy.file })}</span> : null}
               {w?.found ? <span>Whisper · {t('settings.dictationFile', { file: w.file })}</span> : null}
-              {w?.version ? <span>{t('settings.dictationVersion', { version: w.version })}</span> : null}
               {w?.found ? <span>{w.model ? t('settings.dictationModelFound') : t('settings.dictationModelMissing')}</span> : null}
             </div>
           </details> : null}
