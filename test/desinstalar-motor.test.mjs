@@ -196,8 +196,11 @@ test('«uninstall.restart» (the uninstaller could not start) makes the engine e
   const w = await world({ backups: false, vault: false }); w.close();
   const e = await boot(w, hex(), fakeApp(w));
   let code = null;
+  // the uninstaller did not start: the mark with its one-hour code goes, or the next start asks the reinstall question
+  fs.writeFileSync(path.join(w.userData, 'desinstalado.json'), JSON.stringify({ v: 1, code: 'a'.repeat(32), expires: Date.now() + 3_600_000 }));
   try {
     assert.deepEqual(await e.call('uninstall.restart', {}), { ok: true });
+    assert.equal(fs.existsSync(path.join(w.userData, 'desinstalado.json')), false);
     code = await Promise.race([e.exited, wait(10000).then(() => null)]);
     assert.equal(code, 75);
   } finally { if (code !== 75) await e.stop(); }

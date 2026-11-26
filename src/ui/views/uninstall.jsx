@@ -236,6 +236,17 @@ export async function runUninstall(mode) {
   try { await bridge.uninstall(done.code); } catch (error) { notifyError(error); await call('uninstall.restart').catch(quiet); setTimeout(() => window.location.reload(), 1500); }
 }
 
+// «Borrar todo» was finished by the start itself: the window only launches the uninstaller (or says it could not).
+export function FinishUninstall({ code }) {
+  useEffect(() => {
+    (async () => {
+      notifyOk(tNow('uninstall.removing'), { ms: 8000 });
+      try { await bridge.uninstall(code); } catch (error) { notifyError(error); await call('uninstall.restart').catch(quiet); setTimeout(() => window.location.reload(), 1500); }
+    })();
+  }, [code]);
+  return null;
+}
+
 // At the start: a delete that stopped (a reported failure) or that Orb cannot check waits for the user's word. «Seguir borrando»
 // lets the engine run its journal again; «Dejarlo así» closes it and nothing more is deleted. Closing the dialog asks again next time.
 export function StoppedDelete() {

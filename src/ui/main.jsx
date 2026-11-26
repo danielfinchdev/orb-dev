@@ -54,7 +54,7 @@ import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { StartNotice, StartDetails, StartPath, StartProgress, startText, startHint } from '@/components/start-card.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
-import { StoppedDelete } from '@/views/uninstall.jsx';
+import { StoppedDelete, FinishUninstall } from '@/views/uninstall.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
 import { quiet } from '@/lib/quiet.js';
@@ -311,7 +311,7 @@ function AppRoot() {
           // welcome left halfway, folders of an earlier Orb to decide about (lib/startup.js).
           const start = await startupPhase((method) => bridge.call(method), { mobile: bridge.mobile });
           if (start.phase !== 'app') {
-            if (start.phase === 'core') setCore(start.data);
+            if (start.phase === 'core' || start.phase === 'uninstalling') setCore(start.data);
             else if (start.phase === 'migration') setMigration(start.data);
             else if (start.phase === 'unlock' || start.phase === 'master') setMasterState(start.data);
             else if (start.phase === 'layout') setLayout(start.data);
@@ -446,6 +446,7 @@ function AppRoot() {
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
+  if (phase === 'uninstalling') return <>{strip}<FinishUninstall code={core?.code} /></>;
   if (phase === 'core') return <>{strip}<Suspense fallback={null}><CoreMissing state={core} /></Suspense></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade={Boolean(masterState?.upgraded)} onDone={() => location.reload()} /></>;
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => { if (masterState?.screenLocked && getState().ready) { setPhase('app'); refreshSoon(); } else location.reload(); }} /></>;

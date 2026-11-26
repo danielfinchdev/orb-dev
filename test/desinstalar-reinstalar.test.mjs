@@ -19,6 +19,16 @@ import { secretsCopy } from '../src/engine/desktop-home.mjs';
 const opts = (w, extra = {}) => ({ userData: w.userData, packaged: true, separateData: false, documents: path.join(w.base, 'Documentos'), profile: path.join(w.base, 'perfil'), platform: 'linux', ...extra });
 const mark = (w) => fs.writeFileSync(path.join(w.userData, 'desinstalado.json'), '{"v":1,"code":"","expires":0}');
 
+test('a reset core with the uninstall mark beside it clears the mark and does not ask', async () => {
+  const w = await world({ backups: false }); w.close();
+  try {
+    mark(w);
+    fs.writeFileSync(path.join(w.p.core, 'restablecido'), 'x');
+    assert.equal(previousData(opts(w)), null);
+    assert.equal(fs.existsSync(path.join(w.userData, 'desinstalado.json')), false, 'the mark does not wait for the next start');
+  } finally { w.cleanup(); }
+});
+
 test('the question comes with a mark of an uninstall, or with no saved location and an Orb folder; never in an update or a plain start', async () => {
   const w = await world({ backups: false }); w.close();
   try {

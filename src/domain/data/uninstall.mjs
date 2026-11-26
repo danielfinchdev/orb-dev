@@ -452,6 +452,8 @@ export async function settleWorkspace(env, plan) {
     return { core: true };
   }
   // «Borrar todo»: the categories and the workspace only if they are empty
+  // the minimal core written so a start after a stopped run had something healthy (never what the user made since)
+  if (plan.stubCore) for (const f of [env.p.config, ...childrenOf(env.p.data).filter((d) => DB_NAME.test(d)).map((d) => path.join(env.p.data, d))]) fs.rmSync(f, { force: true });
   fs.rmSync(path.join(env.p.core, RESET_MARK), { force: true });
   fs.rmSync(path.join(env.p.core, 'proyectos-conservados.json'), { force: true });
   removeIfEmpty(env.p.core);
@@ -487,7 +489,7 @@ export async function runPlan({ env, plan, hooks = {}, resume = null }) {
   }
   if (journal.items.some((i) => i.state === 'pending')) return report(journal, false);
   if (!dbClosed) { await hooks.closeDb?.(); dbClosed = true; }
-  try { await settleWorkspace(env, { ...plan, items: journal.items }); } catch (error) { journal.settle = String(error?.message ?? error).slice(0, 300); save(); return { ...report(journal, false), settle: journal.settle }; }
+  try { await settleWorkspace(env, { ...plan, items: journal.items, stubCore: journal.stubCore === true }); } catch (error) { journal.settle = String(error?.message ?? error).slice(0, 300); save(); return { ...report(journal, false), settle: journal.settle }; }
   return report(journal, true);
 }
 const report = (journal, ok) => ({
@@ -497,6 +499,17 @@ const report = (journal, ok) => ({
   pending: journal.items.filter((i) => i.state === 'pending').map((i) => ({ box: i.box, path: i.path, name: i.name ?? null })),
   skipped: journal.items.filter((i) => i.state === 'skipped').map((i) => ({ box: i.box, path: i.path, name: i.name ?? null }))
 });
+
+// A run stopped after core's settings or database were already deleted: the next start must find a healthy core instead of
+// restoring one from a backup, so a minimal one is written and the journal remembers it is a stub (settleWorkspace removes it).
+export async function stubCoreAfterStop(env, plan) {
+  const j = readJournal(env.userData);
+  if (!j || (fs.existsSync(env.p.config) && fs.existsSync(env.p.db))) return false;
+  await writeHealthyCore(env, { keepSettings: plan.keep.settings, resetMark: plan.mode === 'reset' });
+  j.stubCore = true;
+  saveJournal(env, j);
+  return true;
+}
 
 // The run is over (all done): the journal goes. Kept (with what failed) otherwise, for the next start.
 export const closeJournal = (userData) => { try { fs.rmSync(journalPath(userData), { force: true }); } catch { /* the next start tries again */ } };
@@ -531,7 +544,8 @@ export async function resumeJournal({ userData, signKey = null, confirmed = fals
   for (const i of journal.items) if (i.state === 'failed') i.state = 'pending';
   const r = await runPlan({ env, plan, resume: journal, hooks: { noHost: true } });
   if (r.ok) closeJournal(userData);
-  return { resumed: true, ...r };
+  // what a finished «Borrar todo» needs to go on to the uninstaller (the mark with its code is written by the engine)
+  return { resumed: true, ...r, mode: journal.mode, plan: { mode: journal.mode, keep: journal.keep, keptProjects: journal.keptProjects ?? [], keyKept: journal.keyKept } };
 }
 
 // What waits at the start, for the window to offer «Seguir borrando» / «Dejarlo así»: 'stopped' (a reported failure), 'untrusted' (a

@@ -3,6 +3,7 @@
 // call(method): the engine's answer (bridge.call). The phone asks none of it: it opens Orb.
 // → { phase, data }:
 //   core       core is gone and Orb could not bring it back (data: app.coreState)
+//   uninstalling  a «Borrar todo» finished at the start (data: { code }): the uninstaller goes on
 //   migration  the data of 3.7 could not be updated (data: app.migrationState); a blocked engine answers only this
 //              and app.coreState (null), so the screen with «Reintentar» and «Buscar actualización» is reached
 //   unlock     the master password, typed (data: master.state): the PC cannot open the keys alone, or Orb is locked
@@ -16,6 +17,8 @@ export async function startupPhase(call, { mobile = false } = {}) {
   if (mobile) return { phase: 'app' };
   const core = await call('app.coreState');
   if (core?.missing) return { phase: 'core', data: core };
+  // a «Borrar todo» that a restart finished: only the uninstaller is left to start
+  if (core?.uninstalled) return { phase: 'uninstalling', data: core };
   const migration = await call('app.migrationState');
   if (migration?.failed) return { phase: 'migration', data: migration };
   const ms = await call('master.state');
