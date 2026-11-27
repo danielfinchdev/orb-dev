@@ -31,7 +31,8 @@ import { rewritePaths, coreHealth } from '../workspace/core-folder.mjs';
 import { inside } from '../../platform/fsx.mjs';
 import { tr } from '../../platform/context.mjs';
 import { ARCHIVE_DIR, forgetRun } from './legacy/migrate-38.mjs';
-import { KEPT as SECRET_FILES } from '../security/master.mjs';
+import { KEPT as SECRET_FILES, FILES as SECRET_NAMES, keyIdOf } from '../security/master.mjs';
+import { normalizeCode } from '../security/recovery-code.mjs';
 import { LIVE_DIR, SCOPED_DIR, OLD_DIR } from '../extensions/extensions.mjs';
 
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
@@ -60,11 +61,7 @@ const tick = () => new Promise((r) => setImmediate(r));
 const machineKek = (key) => new Uint8Array(Buffer.from(key));
 // A recovery code typed with or without dashes and spaces, in any case, gives the same key; any other passphrase is used
 // as written (NFKC, trimmed).
-function normalizePassphrase(text) {
-  const s = String(text ?? '').normalize('NFKC').trim();
-  const compact = s.replace(/[\s-]+/g, '').toUpperCase();
-  return /^[A-Z2-9]{32}$/.test(compact) && /^[A-Za-z2-9\s-]+$/.test(s) ? compact : s;
-}
+export const normalizePassphrase = normalizeCode;
 const passKek = (passphrase, kdf) => {
   const pass = normalizePassphrase(passphrase);
   if (!pass) throw new BackupError('needsPassphrase');
@@ -82,9 +79,10 @@ export function newRecoveryCode() {
 }
 
 // The recovery wrap kept on this machine (sealed with its secret): the scheduled copies use it without asking for the code.
-const recoveryFile = (home) => path.join(paths(home).data, 'copia-clave.json');
-export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT } = {}) {
-  const kdf = { alg: 'scrypt', ...params, salt: b64(crypto.randomBytes(16)) };
+export const recoveryFile = (home) => path.join(paths(home).data, 'copia-clave.json');
+// salt: chosen by the caller when the vault's code file must name this wrap (master.mjs › setCode copyId).
+export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT, salt = null } = {}) {
+  const kdf = { alg: 'scrypt', ...params, salt: salt || b64(crypto.randomBytes(16)) };
   const kek = passKek(passphrase, kdf);
   const sealed = wrap(machineKek(secret), kek, 'orbbak:recovery');
   const file = recoveryFile(home);
@@ -92,6 +90,8 @@ export function setRecovery(home, secret, passphrase, { kdf: params = SCRYPT } =
   fs.writeFileSync(file, `${JSON.stringify({ v: 1, kdf, kek: sealed, at: new Date().toISOString() }, null, 2)}\n`, { mode: 0o600 });
   return { kdf, at: new Date().toISOString() };
 }
+// The salt of the recovery wrap in a folder, which says which code it was made for (the vault's code file names it).
+const wrapSaltOf = (file) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')).kdf?.salt ?? null; } catch { return null; } };
 export function recoveryOf(home, secret) {
   let raw; try { raw = JSON.parse(fs.readFileSync(recoveryFile(home), 'utf8')); } catch { return null; }
   try { return { kdf: raw.kdf, kek: unwrap(machineKek(secret), raw.kek, 'orbbak:recovery'), at: raw.at }; } catch { return null; }
@@ -119,7 +119,7 @@ export function orbIdOf(home) {
 
 // This workspace's id without making one (a core that lost its data folder has none): from core, or else from the note
 // kept beside the backups (ultima.json).
-function knownOrbId(home) {
+export function knownOrbId(home) {
   try { const x = JSON.parse(fs.readFileSync(identityFile(home), 'utf8')); if (/^[0-9a-f]{32}$/.test(x.orbId)) return x.orbId; } catch { /* below */ }
   const last = readLast(home);
   return /^[0-9a-f]{32}$/.test(last.orbId ?? '') ? last.orbId : null;
@@ -571,6 +571,49 @@ export async function pruneBackups(dir, opts) {
 
 // ---- restore: verify, unpack into a fresh folder, test-open the database, then swap at the next start
 export const pendingDir = (home) => path.join(paths(home).internal, 'restaurar-pendiente');
+// The master password's wraps of a copy being restored. A copy brings its code wrap, its password wrap and its sealed
+// secrets as they were, so none of them may open a data key this PC no longer uses without the password or the code:
+//  - the code wrap and the Hello and approval entries are settled in the vault (keys.adopt: a right code opens the copy's data
+//    key and the wrap is written again for it, otherwise it goes);
+//  - a copy for another data key than this PC's, with a password or code in use here, is restored only with proof (a right
+//    password, keys.proof, or the copy's code): without it the secrets stay as they are (→ true).
+export async function settleEnvelopes(home, tmp, keys) {
+  const staged = paths(tmp).secrets; const current = paths(home).secrets;
+  const stagedVault = path.join(staged, SECRET_NAMES.vault);
+  const nowKey = keyIdOf(path.join(current, SECRET_NAMES.vault));
+  const inUse = fs.existsSync(path.join(current, SECRET_NAMES.master)) || fs.existsSync(path.join(current, SECRET_NAMES.code));
+  if (!fs.existsSync(stagedVault)) {
+    // Wraps without secrets are old wraps all the same: they replace this PC's only with proof.
+    const wraps = [SECRET_NAMES.master, SECRET_NAMES.machine, SECRET_NAMES.code].some((n) => fs.existsSync(path.join(staged, n)));
+    if (wraps && inUse && keys.proof !== true) { fs.rmSync(staged, { recursive: true, force: true }); return true; }
+    fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
+    return false;
+  }
+  let byCode = false; let settled = false; let openedKey = null;
+  if (keys.adopt) { try { const r = await keys.adopt(staged, typeof keys.passphrase === 'string' ? keys.passphrase : '', recoveryFile(tmp)); byCode = r?.byCode === true; openedKey = r?.keyId ?? null; settled = true; if (r?.turnedOff === true && keys.outcome) keys.outcome.turnedOff = true; } catch { byCode = false; } }
+  // Without the vault's word on it, the copy's code wrap is never taken.
+  if (!settled) fs.rmSync(path.join(staged, SECRET_NAMES.code), { force: true });
+  // The same data key is what the vault opened, not what the copy's file says it is.
+  const sameKey = Boolean(openedKey) && openedKey === nowKey;
+  if (!(byCode || keys.proof === true || !inUse || sameKey)) { fs.rmSync(staged, { recursive: true, force: true }); return true; }
+  // Restored with this PC's own key: this PC's code wrap stays when it is for that data key (the copy's was dropped).
+  const own = path.join(current, SECRET_NAMES.code);
+  if (!byCode && sameKey && keyIdOf(own) === openedKey) {
+    // The code file names the copies' wrap it was made with (copyId). A copy from before the code was replaced brings an
+    // older wrap: this PC's code file would then be dropped at its first use and the code the person holds now would stop
+    // working, so this PC's own wrap comes along with it. When neither wrap is the one it names, the copy's decides.
+    const mine = wrapSaltOf(recoveryFile(home)); const brought = wrapSaltOf(recoveryFile(tmp));
+    let copyId = null; try { copyId = JSON.parse(fs.readFileSync(own, 'utf8')).copyId ?? null; } catch { /* unreadable: not taken */ }
+    if (copyId && copyId === brought) fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+    else if (copyId && copyId === mine) {
+      fs.copyFileSync(own, path.join(staged, SECRET_NAMES.code));
+      fs.mkdirSync(path.dirname(recoveryFile(tmp)), { recursive: true });
+      fs.copyFileSync(recoveryFile(home), recoveryFile(tmp));
+    }
+  }
+  return false;
+}
+
 export async function stageRestore(home, file, keys = {}) {
   const ready = pendingDir(home);
   await fsp.mkdir(paths(home).internal, { recursive: true });
@@ -592,10 +635,12 @@ export async function stageRestore(home, file, keys = {}) {
       if (keys.secret && keys.passphrase) setRecovery(tmp, keys.secret, keys.passphrase);
       else { fs.rmSync(staged, { force: true }); recoveryOther = true; }
     }
-    fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ recoveryOther, from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
+    const outcome = { turnedOff: false };
+    const secretsKept = await settleEnvelopes(home, tmp, { ...keys, outcome });
+    fs.writeFileSync(path.join(tmp, 'listo.json'), JSON.stringify({ recoveryOther, secretsKept, from: path.basename(file), legacy: r.legacy, header: { id: r.header.id, orbId: r.header.orbId, incarnation: r.header.incarnation, created: r.header.created, version: r.header.version, move: r.header.move }, at: new Date().toISOString() }));
     await fsp.rm(ready, { recursive: true, force: true });
     await fsp.rename(tmp, ready);
-    return { files: r.files, bytes: r.bytes, header: r.header };
+    return { files: r.files, bytes: r.bytes, header: r.header, secretsKept, turnedOff: outcome.turnedOff };
   } catch (error) { await fsp.rm(tmp, { recursive: true, force: true }); throw error; }
 }
 
@@ -662,7 +707,7 @@ export function applyPendingRestore(home, { onlyMissing = false } = {}) {
 // and no copy, Orb cannot go on by itself (the window offers to start again or to pick a copy); a database that is not
 // there and no copy at all is a workspace made a moment ago. → { ok, restored?, fresh?, reason?, backup?, missing }
 // reason: 'noBackup' | 'needsPassphrase' (the newest copy that needs its recovery code) | 'damaged' (none usable).
-export async function repairCore(home, { secret = null, passphrase = null, file = null, config = null } = {}) {
+export async function repairCore(home, { secret = null, passphrase = null, file = null, config = null, adopt = null } = {}) {
   const health = coreHealth(home);
   if (health.ok) return { ok: true, missing: [] };
   const lostConfig = health.missing.includes('core') || health.missing.includes('config');
@@ -670,7 +715,7 @@ export async function repairCore(home, { secret = null, passphrase = null, file 
   if (!list.length) return lostConfig ? { ok: false, reason: 'noBackup', missing: health.missing } : { ok: true, fresh: true, missing: health.missing };
   let failed = null;
   for (const backup of list) {
-    try { await stageRestore(home, backup.file, { secret, passphrase }); } catch (error) {
+    try { await stageRestore(home, backup.file, { secret, passphrase, adopt }); } catch (error) {
       const reason = ['needsPassphrase', 'otherMachine', 'wrongPassphrase', 'noKey'].includes(error?.code) ? 'needsPassphrase' : 'damaged';
       // What the window says: the newest copy that only needs its code, else the newest damaged one.
       if (!failed || (reason === 'needsPassphrase' && failed.reason !== 'needsPassphrase')) failed = { reason, error: error.message, backup: { file: backup.file, created: backup.created } };

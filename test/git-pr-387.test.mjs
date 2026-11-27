@@ -338,7 +338,7 @@ test('interface: the menu item, the PR tab and the style card exist, in both lan
   const bar = read('ui', 'components', 'pr-card.jsx');
   for (const id of ['pr-fix-comments', 'pr-fix-conflicts', 'pr-watch']) assert.match(bar, new RegExp(id));
   assert.match(read('ui', 'components', 'commit-dialog.jsx'), /commit-push/);
-  assert.match(read('ui', 'views', 'agents.jsx'), /CommitStyleCard/);
+  assert.match(read('ui', 'views', 'settings', 'general.jsx'), /export function GitCard/);
   const es = createT('es'); const en = createT('en');
   const keys = ['commit.button', 'commit.commit', 'commit.commitPush', 'prbar.fixComments', 'prbar.fixConflicts', 'prbar.watch', 'agents.commit.title', 'msg.ciwatch.tries', 'msg.prfix.commentsIntro'];
   for (const k of keys) { assert.notEqual(es(k, { n: 1, max: 3, title: 'x', count: 1 }), k, k); assert.notEqual(en(k, { n: 1, max: 3, title: 'x', count: 1 }), k, k); }

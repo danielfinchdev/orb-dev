@@ -37,3 +37,8 @@ Settings › Agents and usage (`SPEND_PRESETS` in `settings.jsx`) sets the limit
 empty folder, one at a time, at startup (every 12 h), with "Check" and when the picker knows none
 (`catalog.mjs`: `refreshModels`, `rememberModels`, which cleans up the names). `checkModel` accepts those models in
 tasks, and `models.catalog` is cached for 5 s.
+
+**Usage tab (3.8.11).** `usage.records` (remote RPC) returns the stored usage records for a period; older data without
+the newer fields still reads. The tab (`src/ui/views/settings/usage-tab.jsx`) filters them, groups them by day and shows
+cost, tokens or limits. `src/ui/lib/usage-data.js` does the grouping and totals, and `src/ui/components/usage-chart.jsx`
+draws the line chart as hand-written SVG (no chart library). CSV export neutralises cells that start like a formula.

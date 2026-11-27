@@ -98,3 +98,19 @@ test('the usage panel is the same, with its reload button, and links to the page
   assert.equal((main.match(/usage: UsageView/g) ?? []).length, 2, 'on the PC and on the phone');
   assert.match(read('components', 'command-palette.jsx'), /go\(\{ view: 'usage' \}\)/, 'and from Ctrl+K');
 });
+
+test('usage.records: one record per day, account and chat or task; rows without account or project stay empty', async () => {
+  const { lastInsertRowid } = board.run("INSERT INTO conversations (title, project, created_at, updated_at) VALUES ('Carrito', 'tienda', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')");
+  const chat = Number(lastInsertRowid);
+  recordSpend(board, { account: 'claude', conversation: chat, usage: { inputTokens: 10, outputTokens: 5, costUsd: 0.5 } });
+  recordSpend(board, { account: 'claude', conversation: chat, usage: { inputTokens: 20, outputTokens: 5, cacheReadTokens: 7, costUsd: 0.25 } });
+  recordSpend(board, { usage: { inputTokens: 3, outputTokens: 1 } });
+  const out = await call('usage.records', { days: 7 });
+  assert.equal(out.records.length === 0, false);
+  const mine = out.records.find((r) => r.kind === 'chat' && r.id === chat);
+  assert.deepEqual([mine.title, mine.project, mine.tokensIn, mine.tokensOut, mine.tokensCache, mine.usd, mine.turns], ['Carrito', 'tienda', 30, 10, 7, 0.75, 2]);
+  const old = out.records.find((r) => r.kind === 'other');
+  assert.deepEqual([old.account, old.project, old.title, old.model], ['', '', '', '']);
+  assert.equal((await call('usage.records', { days: 9999 })).records.length > 0, true);
+  assert.equal(METHODS['usage.records'], 'remote');
+});

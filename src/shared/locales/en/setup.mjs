@@ -25,6 +25,6 @@ export default {
   'setup.step.equipo': 'Set up your PC',
   'setup.kick': 'Step {n}',
   'setup.themeTitle': 'Choose your theme',
-  'setup.themeDesc': 'Changes the colours and style of the whole app. You can change it later in Settings › General › Appearance.',
+  'setup.themeDesc': 'Changes the colours and style of the whole app. You can change it later in Settings › Appearance.',
   'setup.themeLabel': 'Theme'
 };

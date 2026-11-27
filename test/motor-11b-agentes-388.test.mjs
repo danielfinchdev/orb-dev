@@ -161,12 +161,12 @@ test('cerrar sesión: un proceso vivo de la cuenta lo impide (en reposo se cierr
   // a side chat answering refuses too
   const side = { id: 's1', parent: 'chat-1', live: fake, status: 'running', account: acc.id };
   sessions.side.map.set('s1', side);
-  await assert.rejects(call('accounts.logout', { id: acc.id, confirm: 'Viva' }), /chat abierto/);
+  await assert.rejects(call('accounts.logout', { id: acc.id, confirm: 'Viva' }), /conversación en curso/);
   side.status = 'done';
   // the assistant's live process on this account, working: refuses
   // the assistant's own live process on this account: working refuses, at rest it is closed
   const lane = orch.lane(1); lane.live = fake; lane.liveAccount = acc.id; lane.busy = true;
-  await assert.rejects(call('accounts.logout', { id: acc.id, confirm: 'Viva' }), /chat abierto/);
+  await assert.rejects(call('accounts.logout', { id: acc.id, confirm: 'Viva' }), /conversación en curso/);
   assert.equal(closed, 0);
   lane.busy = false;
   assert.equal(await call('accounts.logout', { id: acc.id, confirm: 'Viva' }), true);

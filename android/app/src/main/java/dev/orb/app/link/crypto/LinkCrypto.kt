@@ -146,6 +146,32 @@ object LinkCrypto {
     suspend fun shortSecretAsync(code: String, pcPubB64: String): String =
         withContext(Dispatchers.Default) { shortSecret(code, pcPubB64) }
 
+    // ---------------------------------------------------------------- linking with a one-use code, no password
+
+    /** A link made with the QR's 128-bit secret (`link`) or with the 8 characters typed (`linkcode`) asks for no master password. */
+    fun isPasswordFree(via: String): Boolean = via == "link" || via == "linkcode"
+
+    /** The PAKE's cost fields of such a link: fixed and empty, there is no password to stretch. */
+    val LINK_KDF = PairKdf(0, 0, 0, "")
+
+    /** How long the phone waits for the PC's owner to say yes before it gives up. */
+    const val LINK_GIVE_UP_MS = 2 * 60_000L
+
+    /** The code as typed: upper case letters and digits only (src/shared/mobile-crypto.mjs > normalLinkCode). */
+    fun normalLinkCode(code: String): String = code.uppercase(java.util.Locale.ROOT).filter { it in 'A'..'Z' || it in '0'..'9' }
+
+    /**
+     * The 8 typed characters stretched with the code's own salt mixed with the PC's key, so a table made for a salt a fake PC
+     * chose is no good against another PC (src/shared/mobile-crypto.mjs > linkSecret). Blocking, 64 MB like the password's.
+     */
+    fun linkSecret(code: String, saltB64: String, pcPub: ByteArray, available: () -> Long = ::availableHeap): String {
+        val salt = sha256(cat(utf8("orb-corto-v5"), field(B64.dec(saltB64)), field(pcPub)))
+        return "corto5:" + B64.enc(scrypt(utf8(normalLinkCode(code)), salt, 1 shl 16, 8, 1, available))
+    }
+
+    suspend fun linkSecretAsync(code: String, saltB64: String, pcPub: ByteArray): String =
+        withContext(Dispatchers.Default) { linkSecret(code, saltB64, pcPub) }
+
     /** A short readable fingerprint of a public key, shown on both sides to compare by eye. */
     fun fingerprint(pub: ByteArray): String =
         sha256(pub).copyOf(6).joinToString("") { "%02x".format(it.toInt() and 0xFF) }.chunked(4).joinToString("-")

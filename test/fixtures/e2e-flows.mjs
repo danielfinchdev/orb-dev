@@ -16,7 +16,7 @@ export { TEST_MASTER };
 // The backups (%LOCALAPPDATA%\Orb\copias), the 3.7 bridge folder (%LOCALAPPDATA%\OrbPuente) and adb stay out of the test.
 export const sandboxEnv = (tmp) => ({ ORB_NO_ADB: '1', ORB_BACKUP_ROOT: path.join(tmp, 'copias'), ORB_BRIDGE_DIR: path.join(tmp, 'puente') });
 
-const SCREENS = { theme: '[data-testid=setup-theme]', layout: '[data-testid=layout-review]', master: '[data-testid=master-create]', prepare: '[data-testid=setup-prepare]' };
+const SCREENS = { theme: '[data-testid=setup-theme]', layout: '[data-testid=layout-review]', master: '[data-testid=master-create]', hello: '[data-testid=hello-offer]', prepare: '[data-testid=setup-prepare]' };
 
 // thorough: also the strength meter, a repeat that does not match and the button waiting for the box.
 export async function createMaster(page, { password = TEST_MASTER, thorough = false, onCode = null } = {}) {
@@ -54,7 +54,7 @@ export async function createMaster(page, { password = TEST_MASTER, thorough = fa
 }
 
 // ready: the selector of the app itself. onScreen(name, page): before each screen is passed (e.g. a screenshot); name is
-// 'theme', 'layout', 'master', 'code' (the recovery code shown after the password is made) or 'prepare'. layout: 'apply' (the choices it proposes) or 'keep' («Dejar todo como está»).
+// 'theme', 'layout', 'master', 'code' (the recovery code shown after the password is made), 'hello' (the Windows Hello offer, skipped) or 'prepare'. layout: 'apply' (the choices it proposes) or 'keep' («Dejar todo como está»).
 // → the screens seen, in order.
 export async function throughStart(page, { ready = '[data-testid=sidebar-home]', password = TEST_MASTER, onScreen = null, layout = 'apply', thorough = false, timeout = 60000 } = {}) {
   const seen = [];
@@ -80,6 +80,10 @@ export async function throughStart(page, { ready = '[data-testid=sidebar-home]',
       await page.locator(SCREENS.theme).waitFor({ state: 'detached', timeout: 20000 });
     } else if (name === 'master') {
       await createMaster(page, { password, thorough, onCode: onScreen ? (p) => onScreen('code', p) : null });
+    } else if (name === 'hello') {
+      // The Windows Hello offer comes after the password; the tests never turn it on.
+      await page.click('[data-testid=hello-offer-skip]');
+      await page.locator(SCREENS.hello).waitFor({ state: 'detached', timeout: 20000 });
     } else {
       await page.click('[data-testid=setup-continue]');
       await page.locator(SCREENS.prepare).waitFor({ state: 'detached', timeout: 20000 });

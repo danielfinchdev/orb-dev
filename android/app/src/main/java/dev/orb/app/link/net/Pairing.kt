@@ -16,6 +16,8 @@ import dev.orb.app.link.payload.orderBases
 import dev.orb.app.link.payload.pairingSecret
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -55,7 +57,14 @@ const val INVALID_INPUT = "invalidInput"
 class PairingException(val error: PairError) : Exception(error.toString())
 
 /** A link ready to ask for the password: [fp] is shown so the person compares it with the PC's screen first. */
-class ResolvedLink(val urls: List<String>, val code: String, val pc: String, val pcPub: ByteArray, val fp: String, val name: String?, val via: LinkVia)
+class ResolvedLink(
+    val urls: List<String>, val code: String, val pc: String, val pcPub: ByteArray, val fp: String, val name: String?, val via: LinkVia,
+    /** The code's own salt, when the PC said the typed code links without the master password (`short` 4 in /api/hello). */
+    val salt: String? = null,
+) {
+    /** A one-use code: no master password is asked, and the PC's owner confirms this phone's name at the PC. */
+    val passwordFree: Boolean get() = via == LinkVia.LINK || via == LinkVia.LINKCODE
+}
 
 class PairOk(val session: LinkSession, val info: JsonObject?, val skewMs: Long)
 
@@ -114,6 +123,8 @@ class Pairing(
         var urls = payload.urls
         var pc = payload.pc
         var name = payload.name
+        var via = payload.via
+        var salt: String? = null
         if (pc == null) {
             val first = urls.firstOrNull() ?: fail(PairError.Offline(false))
             if (!allowedBase(first)) fail(PairError.Offline(false))
@@ -123,26 +134,40 @@ class Pairing(
             pc = d["pc"].str()
             if (!ok || pc == null) fail(PairError.NoShortCode)
             // Only an Orb that ties the code to its own key (an older one, or an answer changed on the way: the QR).
-            if (!((d["short"].num() ?: 0.0) >= 3)) fail(PairError.OldOrb)
+            val short = d["short"].num() ?: 0.0
+            if (!(short >= 3)) fail(PairError.OldOrb)
+            // Short 4: the code on screen links without the master password; its salt stretches the typed characters.
+            if (short == 4.0) {
+                salt = d["salt"].str()
+                if (salt == null || try { B64.dec(salt).size != 16 } catch (e: LinkCryptoException) { true }) fail(PairError.OldOrb)
+                via = LinkVia.LINKCODE
+            }
             val others = (d["urls"] as? JsonArray)?.mapNotNull { it.str() }
             if (others != null) urls = listOf(first) + orderBases(others).filter { it != first }
             name = name ?: d["name"].str()
         }
         val pub = try { B64.dec(pc) } catch (e: LinkCryptoException) { fail(PairError.OldQr) }
         if (pub.size != 32) fail(PairError.OldQr)
-        ResolvedLink(urls, payload.code, pc, pub, LinkCrypto.fingerprint(pub), name, payload.via)
+        ResolvedLink(urls, payload.code, pc, pub, LinkCrypto.fingerprint(pub), name, via, salt)
     }
 
     /** Links with the PC's master password, trying the addresses in order. */
     suspend fun link(link: ResolvedLink, password: String, deviceName: String, kind: String = "phone"): Result<PairOk> = guarded {
-        val via = if (link.via == LinkVia.CODE) "code3" else "qr"
-        val secret = if (link.via == LinkVia.CODE) LinkCrypto.shortSecretAsync(normalCode(link.code), link.pc)
-        else pairingSecret(LinkPayload(null, link.urls, link.pc, link.code, link.name, null, link.via))
+        val via = when (link.via) { LinkVia.CODE -> "code3"; LinkVia.LINK -> "link"; LinkVia.LINKCODE -> "linkcode"; else -> "qr" }
+        val secret = when (link.via) {
+            LinkVia.CODE -> LinkCrypto.shortSecretAsync(normalCode(link.code), link.pc)
+            LinkVia.LINKCODE -> LinkCrypto.linkSecretAsync(link.code, link.salt ?: fail(PairError.OldOrb), link.pcPub)
+            else -> pairingSecret(LinkPayload(null, link.urls, link.pc, link.code, link.name, null, link.via))
+        }
         var last: PairingException? = null
         for (base in link.urls) {
             if (!allowedBase(base)) continue
             try {
-                val r = linkDevice(base, link.pcPub, secret, via, deviceName, kind, password, link.urls)
+                // A one-use code ends in two minutes: the PC waits for its owner's yes, and the phone gives up first.
+                val r = if (link.passwordFree) {
+                    try { withTimeout(LinkCrypto.LINK_GIVE_UP_MS) { linkDevice(base, link.pcPub, secret, via, deviceName, kind, "", link.urls) } }
+                    catch (e: TimeoutCancellationException) { fail(PairError.Refused(0, "timeout", "timeout", null, null)) }
+                } else linkDevice(base, link.pcPub, secret, via, deviceName, kind, password, link.urls)
                 val urls = listOf(base) + link.urls.filter { it != base }
                 val session = LinkSession(r.id, r.priv, link.pcPub, urls, 0, (r.info?.get("name")).str() ?: link.name)
                 return@guarded PairOk(session, r.info, r.skew)
@@ -162,8 +187,11 @@ class Pairing(
         val codeKey = LinkCrypto.pairingKey(pair.priv, pcPub, secret)
         var skew = 0L
 
-        suspend fun post(body: JsonObject): Response =
-            send(Request.Builder().url("$base/api/pair").post(lenientJson.encodeToString(JsonObject.serializer(), body).toJsonBody()).build(), timeouts.pair, urls)
+        val noPassword = LinkCrypto.isPasswordFree(via)
+
+        // The finish of a link with a one-use code waits for the owner's yes at the PC: it may take up to the two minutes.
+        suspend fun post(body: JsonObject, ms: Long = timeouts.pair): Response =
+            send(Request.Builder().url("$base/api/pair").post(lenientJson.encodeToString(JsonObject.serializer(), body).toJsonBody()).build(), ms, urls)
 
         // The PC's answer to a step: its JSON, or its refusal as the PC worded it.
         fun answer(code: Int, ok: Boolean, d: JsonObject): JsonObject {
@@ -199,10 +227,10 @@ class Pairing(
             ?: fail(PairError.BadAnswer)
         val sid = ch["sid"].str()
         val kdf = PairKdf.fromJson(ch["kdf"])
-        if (sid == null || sid != challenge["sid"].str() || kdf == null || !LinkCrypto.pairKdfOk(kdf)) fail(PairError.BadAnswer)
+        if (sid == null || sid != challenge["sid"].str() || kdf == null || !(noPassword || LinkCrypto.pairKdfOk(kdf))) fail(PairError.BadAnswer)
 
         // scrypt can ask for 256 MB: too much for some phones, which is an answer to give, not a crash.
-        val verifier = try {
+        val verifier = if (noPassword) null else try {
             verifierOf(password, kdf)
         } catch (e: OutOfMemoryError) {
             fail(PairError.KdfTooHeavy)
@@ -210,17 +238,17 @@ class Pairing(
             // The pre-check in LinkCrypto and the OOM net above are the same answer for the person.
             fail(errorOf(e).let { if (it == PairError.OldQr) PairError.BadAnswer else it })
         }
-        val transcript = try { LinkCrypto.pakeTranscript(via, pair.pub, pcPub, sid, kdf) } catch (e: LinkCryptoException) { fail(PairError.BadAnswer) }
+        val transcript = try { LinkCrypto.pakeTranscript(via, pair.pub, pcPub, sid, if (noPassword) LinkCrypto.LINK_KDF else kdf) } catch (e: LinkCryptoException) { fail(PairError.BadAnswer) }
         val k = try {
-            LinkCrypto.pakeKey(secret, LinkCrypto.sharedSecret(pair.priv, pcPub), LinkCrypto.sharedSecret(verifier.priv, pcPub), transcript)
+            LinkCrypto.pakeKey(secret, LinkCrypto.sharedSecret(pair.priv, pcPub), if (verifier == null) ByteArray(0) else LinkCrypto.sharedSecret(verifier.priv, pcPub), transcript)
         } catch (e: LinkCryptoException) {
             fail(PairError.BadAnswer)
         }
         val finishBody = buildJsonObject {
-            put("step", "finish"); put("sid", sid); put("pub", pubB)
+            put("step", "finish"); put("via", via); put("sid", sid); put("pub", pubB)
             put("mac", B64.enc(LinkCrypto.pakeMac(k, LinkCrypto.MAC_PHONE)))
         }
-        val fin = post(finishBody)
+        val fin = post(finishBody, if (noPassword) LinkCrypto.LINK_GIVE_UP_MS else timeouts.pair)
         val finCode = fin.code
         val finOk = fin.isSuccessful
         val done = answer(finCode, finOk, fin.readObject(urls))

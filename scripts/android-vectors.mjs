@@ -105,6 +105,18 @@ function shortVectors() {
     .map(([code, pcPubB64]) => ({ code, pcPubB64, secret: C.shortSecret(code, pcPubB64) }));
 }
 
+// The 8 typed characters of a link without the master password, stretched with the code's own salt.
+async function linkSecretVectors() {
+  const salts = [fill(16, (i) => i + 1), fill(16, (i) => 0xf0 - i)];
+  const out = [];
+  for (const [code, i] of [['abcd-efgh', 0], ['ABCDEFGH', 0], ['23456789', 1], [' q w-e r t y u i ', 1], ['código', 0]]) {
+    const saltB64 = b64.enc(salts[i]);
+    const pcPubB64 = b64.enc(pubOf(i === 0 ? 'seq' : 'ff'));
+    out.push({ code, saltB64, pcPubB64, secret: await C.linkSecret(code, saltB64, b64.dec(pcPubB64)) });
+  }
+  return out;
+}
+
 async function verifierVectors() {
   const salt = fill(16, (i) => 0xa0 + i);
   const kdf = { N: 2 ** 15, r: 8, p: 1, salt: b64.enc(salt) };
@@ -135,13 +147,14 @@ async function verifierVectors() {
 function pakeVectors() {
   const kdf = { N: 2 ** 16, r: 8, p: 1, salt: b64.enc(fill(16, (i) => 0x40 + i)) };
   const base = { devPub: pubOf('seq'), pcPub: pubOf('ff'), sid: 'sid-0123456789abcdef', kdf };
-  const transcripts = [{ ...base, via: 'qr' }, { ...base, via: 'corto', sid: 'sid-ñ' }].map((t) => ({
+  // The third is a link with a one-use code: no password, so its cost fields are the fixed empty ones.
+  const transcripts = [{ ...base, via: 'qr' }, { ...base, via: 'corto', sid: 'sid-ñ' }, { ...base, via: 'link', kdf: C.LINK_KDF }].map((t) => ({
     via: t.via, devPub: hex(t.devPub), pcPub: hex(t.pcPub), sid: t.sid, kdf: t.kdf, transcript: hex(C.pakeTranscript(t))
   }));
   const keys = [];
   for (const [i, t] of transcripts.entries()) {
-    const secret = i === 0 ? 'abc_DEF-123' : 'corto:ABCDEFGH';
-    const dhDevice = C.sharedSecret(PRIVS.seq, pubOf('ff')); const dhPassword = C.sharedSecret(PRIVS.low, pubOf('ff'));
+    const secret = ['abc_DEF-123', 'corto:ABCDEFGH', 'AbCdEfGhIjKlMnOpQrStUv'][i];
+    const dhDevice = C.sharedSecret(PRIVS.seq, pubOf('ff')); const dhPassword = i === 2 ? new Uint8Array(0) : C.sharedSecret(PRIVS.low, pubOf('ff'));
     const key = C.pakeKey({ secret, dhDevice, dhPassword, transcript: unhex(t.transcript) });
     keys.push({
       secret, dhDevice: hex(dhDevice), dhPassword: hex(dhPassword), transcript: t.transcript, key: hex(key),
@@ -226,6 +239,7 @@ async function buildCrypto() {
     x25519: x25519Vectors(),
     keys: keyVectors(),
     shortSecret: shortVectors(),
+    linkSecret: await linkSecretVectors(),
     verifier: await verifierVectors(),
     pake: pakeVectors(),
     seal: sealVectors()
@@ -254,6 +268,8 @@ function buildLink() {
     `http://8.8.8.8:3131/#vincular=abc&pc=${PC}`, `orb://x/#vincular=abc&pc=${PC}`,
     `https://orb.example.com/#vincular=abc&pc=${PC}`,
     // extra edge cases
+    `http://192.168.1.2:3131/#enlace=AbCdEfGhIjKlMnOpQrStUv&pc=${PC}&v=4&n=Casa`, `http://192.168.1.2:3131/#enlace=corto&pc=${PC}`, `http://192.168.1.2:3131/#enlace=AbCdEfGhIjKlMnOpQrStUv&vincular=zzz&pc=${PC}`,
+    JSON.stringify({ v: 4, urls: ['http://192.168.1.2:3131'], pc: PC, link: 'AbCdEfGhIjKlMnOpQrStUv', name: 'Casa' }),
     `  http://10.0.0.5:3131/#vincular=z&pc=${PC}  `, `HTTP://LOCALHOST:3131/#vincular=z&pc=${PC}`, `http://[fd12:3456::1]:3131/#vincular=z&pc=${PC}`,
     `http://192.168.1.2/#vincular=z&pc=${PC}`, `http://192.168.1.2:80/#vincular=z&pc=${PC}`, `https://pc.ts.net:443/#vincular=z&pc=${PC}`,
     `http://192.168.1.2:3131/#vincular=z&pc=${PC}=`, `http://192.168.1.2:3131/#vincular=z&pc=${PC}&v=abc`, `http://192.168.1.2:3131/#vincular=z&pc=${PC}&v=3&n=Caf%C3%A9+%F0%9F%98%80`,
@@ -289,7 +305,7 @@ function buildLink() {
   const addrs = [...HOSTILE, '100.64.1.2', '100.64.1.2:3131', 'casa.tail.ts.net', 'http://100.64.1.2', 'https://pc.tail.ts.net/', 'HTTPS://PC.TS.NET:8443/x?y#z', ' 10.0.0.1 ', '', '   ', null, '[fd12::1]', '[fd12::1]:4000',
     'http://[::1]', 'http://host:80', 'https://host:443', 'http://host:99999', 'http://', 'http://exa mple.com', 'http://用户.example', 'http://192.168.1.1:3131/', 'http://192.168.1.1.', 'http://0x7f.1', 'http://2130706433', 'http://user:pw@host'].map((i) => call(L.normalAddress, i));
 
-  const secrets = [{ via: 'qr', code: 'abc_DEF-123' }, { via: 'code', code: 'abcd-efgh' }, { via: 'code', code: 'oO0o1234' }, { via: 'code', code: 'a'.repeat(20) }, { via: 'code', code: null }]
+  const secrets = [{ via: 'qr', code: 'abc_DEF-123' }, { via: 'code', code: 'abcd-efgh' }, { via: 'code', code: 'oO0o1234' }, { via: 'code', code: 'a'.repeat(20) }, { via: 'code', code: null }, { via: 'link', code: 'AbCdEfGhIjKlMnOpQrStUv' }]
     .map((i) => call(L.pairingSecret, i));
   const normalCode = ['abcd-efgh', 'ABCD EFGH', 'oO01', 'a'.repeat(20), '', null, 'ñandú-12'].map((i) => call(L.normalCode, i));
   const shortCodeLabel = ['abcdefgh', 'ABCD-EFGH', 'abc', 'abcd', 'abcde', 'a'.repeat(20), '', null, 'ab cd.ef'].map((i) => call(L.shortCodeLabel, i));
@@ -310,12 +326,48 @@ function buildLink() {
   };
 }
 
+// ---------------------------------------------------------------- approvals
+// The bytes a phone signs to approve a sensitive action (src/domain/security/approve.mjs, the same layout as the vault's
+// src-tauri/vault/src/approve.rs) and the hash of the parameters' summary: Kotlin must build and read exactly these.
+async function buildApprove() {
+  const A = await import('../src/domain/security/approve.mjs');
+  const cases = [
+    { action: 'secrets.connector', params: { name: 'github' }, nonce: fill(32, (i) => i + 1), orbId: 'orb-1a2b', deviceId: '11111111-2222-3333-4444-555555555555', pcPub: fill(32, (i) => 255 - i), expires: 1_800_000_000_000 },
+    { action: 'secrets.saveConnector', params: { name: 'github', env: { GITHUB_TOKEN: 'ghp_secreto' }, unlock: 'tok' }, nonce: fill(32, (i) => i * 3), orbId: 'orb:x_y.z', deviceId: 'dev-2', pcPub: fill(32, (i) => i * 5), expires: 1_700_000_000_123 },
+    { action: 'approve.enroll', params: { name: 'Pixel de Dani' }, nonce: fill(32, (i) => 7), orbId: 'orb-1a2b', deviceId: 'dev-3', pcPub: fill(32, (i) => i), expires: 4_102_444_800_000 },
+    { action: 'master.rebuild', params: {}, nonce: fill(32, (i) => 200 + i), orbId: 'o', deviceId: 'd', pcPub: fill(32, () => 9), expires: 1 }
+  ];
+  const good = cases.map((c) => {
+    const summary = A.approveSummary(c.params, Buffer.alloc(32, 4));
+    const hash = A.summaryHash(summary);
+    const payload = A.buildPayload({ action: c.action, hash, nonce: c.nonce, orbId: c.orbId, deviceId: c.deviceId, pcPub: c.pcPub, expires: c.expires });
+    return { action: c.action, summary, hash, nonce: hex(c.nonce), orbId: c.orbId, deviceId: c.deviceId, pcPub: hex(c.pcPub), expires: c.expires, payload: hex(payload), purpose: A.approvePurpose(c.action, c.params, Buffer.alloc(32, 4)) };
+  });
+  // Bytes that are not a payload of this protocol: Kotlin must refuse every one.
+  const base = Buffer.from(good[0].payload, 'hex');
+  const withField = (i, bytes) => { const f = []; let at = 0; while (at < base.length) { const n = base.readUInt32BE(at); f.push(base.subarray(at + 4, at + 4 + n)); at += 4 + n; } f[i] = bytes; return Buffer.concat(f.map((x) => { const l = Buffer.alloc(4); l.writeUInt32BE(x.length); return Buffer.concat([l, x]); })); };
+  const bad = {
+    empty: '',
+    truncated: hex(base.subarray(0, base.length - 1)),
+    extraByte: hex(Buffer.concat([base, Buffer.from([0])])),
+    otherTag: hex(withField(0, Buffer.from('orb-approve-v2'))),
+    shortHash: hex(withField(2, Buffer.alloc(31))),
+    shortNonce: hex(withField(3, Buffer.alloc(31))),
+    spaceInAction: hex(withField(1, Buffer.from('secrets connector'))),
+    emptyOrb: hex(withField(4, Buffer.alloc(0))),
+    longExpiry: hex(withField(7, Buffer.alloc(9))),
+    hugeLength: 'ffffffff00'
+  };
+  return { generatedBy: GENERATED_BY, source: sha('src/domain/security/approve.mjs'), good, bad };
+}
+
 // ---------------------------------------------------------------- write
 const out = path.resolve(process.argv[2] ?? path.join(ROOT, 'android/app/src/test/resources/vectors'));
 fs.mkdirSync(out, { recursive: true });
 const write = (name, data) => fs.writeFileSync(path.join(out, name), `${JSON.stringify(data, null, 2)}\n`);
 write('crypto.json', await buildCrypto());
 write('link-payload.json', buildLink());
+write('approve.json', await buildApprove());
 // The methods a linked phone may call (src/domain/security/permissions.mjs): the client's contract test checks every
 // method its API wrapper calls against this list, so a wrapper can never name a method the PC would refuse.
 const { REMOTE_METHODS } = await import('../src/domain/security/permissions.mjs');

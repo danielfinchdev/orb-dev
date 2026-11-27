@@ -3,6 +3,9 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { REMOTE_METHODS } from '../../domain/security/permissions.mjs';
 
+// Who an account is (the fingerprint and the masked e-mail) stays on this PC: a phone gets neither.
+const withoutIdentity = (a) => { const { who: _who, hint: _hint, foundHint: _found, ...rest } = a ?? {}; return rest; };
+
 // The settings a phone gets: what the interface shows, without connector commands and secrets, login folders or paths
 // of the agents' programs.
 export function phoneConfig(c) {
@@ -10,7 +13,7 @@ export function phoneConfig(c) {
   return {
     ...c,
     mcpServers: (c.mcpServers ?? []).map((m) => ({ name: m.name, enabled: m.enabled, agents: m.agents })),
-    accounts: (c.accounts ?? []).map(({ home: _home, ...a }) => a),
+    accounts: (c.accounts ?? []).map(({ home: _home, ...a }) => withoutIdentity(a)),
     agents: Object.fromEntries(Object.entries(c.agents ?? {}).map(([k, a]) => { const { path: _path, ...rest } = a ?? {}; return [k, rest]; })),
     projectRoots: [], mobile: { enabled: c.mobile?.enabled, preview: pushPreview(c) }
   };
@@ -85,6 +88,8 @@ export function shapeResult(method, result) {
     const cut = (v) => Array.isArray(v) ? v.some(cut) : typeof v === 'string' && Boolean(re) && cutHome(v, re) !== v;
     return { ...withoutPaths(result), descriptionCut: cut(result.description) || cut(result.user_asked) };
   }
+  // The agents' list carries each account's identity for this PC's window; a phone sees the state, not who.
+  if (method === 'agents.status' && Array.isArray(result)) return withoutPaths(result.map((a) => ({ ...a, accounts: Array.isArray(a?.accounts) ? a.accounts.map(withoutIdentity) : a?.accounts })));
   if (method !== 'app.state' || !result) return withoutPaths(result);
   const { home: _home, paths: _paths, ...rest } = result;
   const activeProject = rest.activeProject ? (({ path: _path, ...p }) => p)(rest.activeProject) : rest.activeProject;
@@ -142,4 +147,13 @@ export function sniffUpload(b, hint = '') {
   const want = String(hint).toLowerCase();
   if (want === 'json') { try { JSON.parse(text); return 'json'; } catch { return 'txt'; } }
   return TEXT_KINDS.has(want) ? want : 'txt';
+}
+
+// Runs `work` and gives up waiting after `ms` with the error `onTimeout` makes. The work itself cannot be stopped from here
+// (and its late result or failure is dropped), so a caller must answer the timeout as final and never run it again.
+export function withDeadline(work, ms, onTimeout) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(onTimeout()), ms);
+    Promise.resolve().then(work).then(resolve, reject).finally(() => clearTimeout(timer));
+  });
 }

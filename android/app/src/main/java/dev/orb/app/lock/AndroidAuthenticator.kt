@@ -44,8 +44,12 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
 
     override fun capability() = if (promptReady() || pinSet()) AuthCapability.Ready else AuthCapability.NothingSet
 
+    override fun strongBiometric() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && BiometricManager.from(activity).canAuthenticate(BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS
+
     override fun authenticate(request: AuthRequest, onResult: (AuthResult) -> Unit) {
         when {
+            // A key-bound request has no credential-screen fallback: only the prompt can unlock a cipher.
+            request.cipher != null || request.signature != null -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) prompt(request, onResult) else onResult(AuthResult.Failed)
             !request.credentialOnly && promptReady() -> prompt(request, onResult)
             pinSet() -> credential(request, onResult)
             else -> onResult(AuthResult.NothingSet)
@@ -54,7 +58,18 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
 
     private fun prompt(request: AuthRequest, onResult: (AuthResult) -> Unit) {
         val callback = object : BiometricPrompt.AuthenticationCallback() {
-            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) = onResult(AuthResult.Success)
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                val cipher = result.cryptoObject?.cipher
+                val signature = result.cryptoObject?.signature
+                onResult(
+                    when {
+                        request.signature != null -> if (signature != null) AuthResult.Signed(signature) else AuthResult.Failed
+                        request.cipher == null -> AuthResult.Success
+                        cipher != null -> AuthResult.Crypto(cipher)
+                        else -> AuthResult.Failed
+                    },
+                )
+            }
 
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 onResult(
@@ -68,17 +83,25 @@ class AndroidAuthenticator(private val activity: FragmentActivity) : Authenticat
                 )
             }
         }
-        val info = BiometricPrompt.PromptInfo.Builder()
+        val builder = BiometricPrompt.PromptInfo.Builder()
             .setTitle(request.title)
             .setSubtitle(request.subtitle)
-            .setAllowedAuthenticators(authenticators)
             .setConfirmationRequired(false)
-            .build()
+        // A signing key takes strong biometrics alone: no PIN to fall back to, so the prompt carries its own «Cancelar».
+        if (request.signature != null) builder.setAllowedAuthenticators(BIOMETRIC_STRONG).setNegativeButtonText(request.negative ?: "Cancelar")
+        else builder.setAllowedAuthenticators(if (request.cipher != null && request.credentialOnly) DEVICE_CREDENTIAL else authenticators)
+        val info = builder.build()
         try {
-            BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), callback).authenticate(info)
+            val prompt = BiometricPrompt(activity, ContextCompat.getMainExecutor(activity), callback)
+            when {
+                request.signature != null -> prompt.authenticate(info, BiometricPrompt.CryptoObject(request.signature))
+                request.cipher != null -> prompt.authenticate(info, BiometricPrompt.CryptoObject(request.cipher))
+                else -> prompt.authenticate(info)
+            }
         } catch (e: RuntimeException) {
-            // The prompt could not be shown (a theme or fragment state problem): the credential screen still can.
-            if (pinSet()) credential(request, onResult) else onResult(AuthResult.Failed)
+            // The prompt could not be shown (a theme or fragment state problem): the credential screen still can,
+            // unless the request needs the key, which only the prompt can unlock.
+            if (request.cipher == null && request.signature == null && pinSet()) credential(request, onResult) else onResult(AuthResult.Failed)
         }
     }
 

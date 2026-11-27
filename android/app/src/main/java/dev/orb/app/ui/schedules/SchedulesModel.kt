@@ -44,6 +44,8 @@ data class ScheduleItem(
     val autonomy: String? = null,
     /** Whether a run tells the phone; null when the PC does not say (an older one). */
     val notifyMobile: Boolean? = null,
+    /** The PC's fingerprint of this schedule: approving or running an unapproved one sends it back, so a change since is refused. */
+    val previewHash: String? = null,
 )
 
 /** What the form sends to `schedules.create`. */
@@ -98,6 +100,8 @@ data class SchedulePatch(
     val tz: String? = null,
     val notifyMobile: Boolean? = null,
     val autonomy: String? = null,
+    /** With [approve]: the fingerprint of the schedule the person saw. */
+    val hash: String? = null,
 ) {
     /** True when nothing would change on the PC. */
     val isEmpty get() = this == SchedulePatch()
@@ -119,6 +123,7 @@ object SchedulesParser {
             tz = o.str("tz")?.takeIf { it.isNotBlank() }, monthDay = o.int("month_day"),
             model = o.str("model")?.takeIf { it.isNotBlank() }, autonomy = o.str("autonomy")?.takeIf { it.isNotBlank() },
             notifyMobile = if (o.containsKey("notify_mobile")) o.bool("notify_mobile") else null,
+            previewHash = o.str("previewHash")?.takeIf { it.isNotBlank() },
         )
     }
 

@@ -2,7 +2,9 @@ package dev.orb.app.ui.welcome
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.orb.app.link.net.FoundPc
 import dev.orb.app.link.net.PairError
+import dev.orb.app.link.net.PcDiscovery
 import dev.orb.app.link.net.PairOk
 import dev.orb.app.link.net.pcNameOrNull
 import dev.orb.app.link.net.PairingException
@@ -47,7 +49,11 @@ enum class WelcomeErrorKind {
 }
 
 /** What the PC answered, for the person to compare with the PC's own screen. */
-data class PcIdentity(val name: String, val groups: List<String>, val viaCode: Boolean)
+data class PcIdentity(
+    val name: String, val groups: List<String>, val viaCode: Boolean,
+    /** A one-use code that links without the master password: no password field, and the PC asks its owner to confirm this phone. */
+    val passwordFree: Boolean = false,
+)
 
 data class WelcomeUiState(
     val stage: WelcomeStage = WelcomeStage.Entry,
@@ -76,6 +82,15 @@ data class WelcomeUiState(
     // The person said «Ahora no» to notices: the bottom message points to «Este móvil».
     val noticesLater: Boolean = false,
     val noticesOn: Boolean = false,
+    // The offer to lock the app with the fingerprint or face: shown when the phone can do it and it is not on yet; it starts ticked.
+    val protectOffer: Boolean = false,
+    val protect: Boolean = true,
+    // «Buscar mi PC en Tailscale»: the PC's name as typed, the Orbs that answered, and whether a search ran or is running.
+    val tsOpen: Boolean = false,
+    val tsQuery: String = "",
+    val tsFound: List<FoundPc> = emptyList(),
+    val tsSearching: Boolean = false,
+    val tsSearched: Boolean = false,
 ) {
     /** How many of the three steps of «Enlazando» really happened: the PC's code, the password, the key saved. */
     val stepsDone: Int get() = when (stage) {
@@ -95,6 +110,16 @@ interface NoticeGate {
     fun request()
 }
 
+/** The app lock as the first-run flow needs it. */
+interface LockOffer {
+    /** True when the phone has a fingerprint, face or PIN to lock the app with. */
+    fun available(): Boolean
+    val enabled: Boolean
+
+    /** Turns the lock on after the system authenticated the person; [onDone] gets whether it is on. */
+    fun enable(onDone: (Boolean) -> Unit)
+}
+
 /** The fingerprint as the groups the person compares with the PC's screen (the same ones the PC shows). */
 fun fingerprintGroups(fp: String): List<String> = fp.split('-', ' ').filter { it.isNotBlank() }
 
@@ -105,6 +130,8 @@ class WelcomeViewModel(
     private val onLinked: (PairOk) -> Unit,
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val notices: NoticeGate? = null,
+    private val lockOffer: LockOffer? = null,
+    private val discovery: PcDiscovery? = null,
 ) : ViewModel() {
     private val _state = MutableStateFlow(WelcomeUiState())
     val state: StateFlow<WelcomeUiState> = _state.asStateFlow()
@@ -129,6 +156,27 @@ class WelcomeViewModel(
     fun setLink(v: String) = _state.update { it.copy(link = v, error = null) }
     fun setCode(v: String) = _state.update { it.copy(code = v, error = null) }
     fun setAddress(v: String) = _state.update { it.copy(address = v, error = null) }
+
+    fun toggleTs() = _state.update { it.copy(tsOpen = !it.tsOpen) }
+    fun setTsQuery(v: String) = _state.update { it.copy(tsQuery = v, tsSearched = false, tsFound = emptyList(), error = null) }
+
+    /** Looks for Orbs on the person's tailnet. It only learns where a PC is: nothing is linked and no key is exchanged. */
+    fun searchTs() {
+        val s = _state.value
+        val d = discovery ?: return
+        if (s.tsSearching || s.busy || s.tsQuery.isBlank()) return
+        _state.update { it.copy(tsSearching = true, tsSearched = false, tsFound = emptyList(), error = null) }
+        viewModelScope.launch(dispatcher) {
+            val found = try { d.find(s.tsQuery) } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList() }
+            _state.update { it.copy(tsSearching = false, tsSearched = true, tsFound = found) }
+        }
+    }
+
+    /**
+     * A PC from the list: its address fills the form, so the person only types the short code shown on the PC. The link is then the
+     * same as ever (code, fingerprint, master password): being on the tailnet is not a reason to trust a device.
+     */
+    fun pickTs(found: FoundPc) = _state.update { it.copy(link = "", address = found.base, error = null) }
 
     /** The «Pegar» button: whatever the clipboard holds replaces the link field. */
     fun paste(text: String?) {
@@ -158,13 +206,13 @@ class WelcomeViewModel(
                 _state.update {
                     it.copy(
                         busy = false, sheet = false, stage = WelcomeStage.Fingerprint,
-                        pc = PcIdentity(pcNameOrNull(r.name) ?: "Tu PC", fingerprintGroups(r.fp), r.via == LinkVia.CODE),
+                        pc = PcIdentity(pcNameOrNull(r.name) ?: "Tu PC", fingerprintGroups(r.fp), r.via == LinkVia.CODE || r.via == LinkVia.LINKCODE, r.passwordFree),
                     )
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                fail("Error inesperado (${e.javaClass.simpleName}).")
+                fail("Algo ha fallado. Inténtalo de nuevo.")
             }
         }
     }
@@ -174,7 +222,7 @@ class WelcomeViewModel(
         val s = _state.value
         val r = resolved
         if (s.checking || s.stage != WelcomeStage.Fingerprint || r == null) return
-        if (s.password.isEmpty()) return _state.update { it.copy(passwordError = "Escribe la contraseña maestra del PC.") }
+        if (!r.passwordFree && s.password.isEmpty()) return _state.update { it.copy(passwordError = "Escribe la contraseña maestra del PC.") }
         val password = s.password
         _state.update { it.copy(checking = true, error = null, passwordError = null, password = "", showPassword = false) }
         viewModelScope.launch(dispatcher) {
@@ -183,7 +231,7 @@ class WelcomeViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                return@launch _state.update { it.copy(checking = false, stage = WelcomeStage.Fingerprint, error = "Error inesperado (${e.javaClass.simpleName}).") }
+                return@launch _state.update { it.copy(checking = false, stage = WelcomeStage.Fingerprint, error = "Algo ha fallado. Inténtalo de nuevo.") }
             }
             // The PC has accepted: its code is spent, so nothing below may send the person back to the fingerprint.
             try {
@@ -197,7 +245,8 @@ class WelcomeViewModel(
             resolved = null
             val ask = try { notices?.shouldAsk() == true } catch (e: Exception) { false }
             val on = try { notices?.enabled == true } catch (e: Exception) { false }
-            _state.update { it.copy(checking = false, stage = WelcomeStage.Done, passwordLength = 0, noticeDialog = ask, noticesOn = on) }
+            val offer = try { lockOffer?.let { it.available() && !it.enabled } == true } catch (e: Exception) { false }
+            _state.update { it.copy(checking = false, stage = WelcomeStage.Done, passwordLength = 0, noticeDialog = ask, noticesOn = on, protectOffer = offer, protect = true) }
         }
     }
 
@@ -206,6 +255,17 @@ class WelcomeViewModel(
         if (_state.value.checking || _state.value.stage != WelcomeStage.Fingerprint) return
         resolved = null
         _state.update { it.copy(stage = WelcomeStage.Entry, pc = null, password = "", passwordLength = 0, showPassword = false, error = null, passwordError = null) }
+    }
+
+    fun setProtect(on: Boolean) = _state.update { it.copy(protect = on) }
+
+    /** «Ir a Chats»: if the offer is still ticked the system asks for the fingerprint first; the person leaves either way. */
+    fun finish(leave: () -> Unit) {
+        val s = _state.value
+        val offer = lockOffer
+        if (!s.protectOffer || !s.protect || offer == null) return leave()
+        _state.update { it.copy(protectOffer = false) }
+        try { offer.enable { leave() } } catch (e: Exception) { leave() }
     }
 
     /** «Activar» in «¿Avisos de Orb?»: only now does Android's own permission request appear. */
@@ -236,7 +296,7 @@ class WelcomeViewModel(
     // tries, and "newCode" when the last password try failed. "tries" is the master password's general lock (the code
     // is still good), and 404/410 mean the address is not an Orb: none of those spend the code.
     private fun isSpent(r: PairError.Refused) =
-        r.reason == "password" && r.left == 0 || r.reason == "newCode" || r.reason == null && r.status == 401
+        r.reason == "password" && r.left == 0 || r.reason == "newCode" || r.reason == "declined" || r.reason == "timeout" || r.reason == null && r.status == 401
 
     /** Forgets what the PC answered and shows the first page again with [message]; the spent code is not kept. */
     private fun backToEntry(message: String, kind: WelcomeErrorKind = WelcomeErrorKind.CodeSpent) {

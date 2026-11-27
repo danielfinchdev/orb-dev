@@ -26,10 +26,10 @@ export const phoneSkin = (skin) => (skin === 'orb' ? 'orb' : SKINS[0]);
 
 // Interface font. «outfit» is the theme's own letter (the default and what every orb.json already stores), «system» is the
 // system's, and «outfit-fija» is Outfit in every theme, titles included.
-export const FONTS = ['outfit', 'system', 'outfit-fija'];
+export const FONTS = ['outfit', 'system', 'outfit-fija', 'inter', 'geist', 'ibm-plex-sans'];
 
 // Font of code (chat code blocks, files, diffs). geist-mono is the one Orb has always used.
-export const CODE_FONTS = ['geist-mono', 'jetbrains-mono', 'consolas'];
+export const CODE_FONTS = ['geist-mono', 'jetbrains-mono', 'ibm-plex-mono', 'consolas'];
 
 // Colours of code (syntax highlighting). «orb» follows light / dark; «claro» and «oscuro» keep one scheme in either mode.
 export const CODE_THEMES = ['orb', 'claro', 'oscuro'];

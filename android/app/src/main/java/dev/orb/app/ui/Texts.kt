@@ -14,13 +14,15 @@ fun pairErrorText(e: PairError, via: dev.orb.app.link.payload.LinkVia? = null): 
         else "No se pudo llegar al PC. Comprueba que está encendido y que Orb está abierto."
     PairError.BadAnswer -> "La respuesta no es la del PC de este código. No se ha enlazado."
     is PairError.Refused -> when {
-        e.update != null || e.status == 426 -> "Hay que actualizar la app para enlazar con este PC."
+        e.update != null || e.status == 426 -> "Actualiza la app para enlazar con este PC."
         e.reason == "password" -> e.left?.let { "No es la contraseña. Te quedan $it ${if (it == 1) "intento" else "intentos"} con este código." } ?: "No es la contraseña."
-        e.reason == "newCode" -> "Demasiados intentos: el código ya no vale. Genera uno nuevo en el PC."
+        e.reason == "newCode" -> "Demasiados intentos. El código ya no vale: genera uno nuevo en el PC."
+        e.reason == "declined" -> "El PC no ha confirmado el enlace. Genera un código nuevo en el PC si quieres volver a intentarlo."
+        e.reason == "timeout" -> "El PC no ha confirmado el enlace a tiempo. Genera un código nuevo en el PC y vuelve a probar."
         e.reason == "wait" -> "Espera un momento antes de volver a probar."
         e.reason == "noMaster" || e.reason == "noVerifier" -> "El PC no tiene contraseña maestra para enlazar. Créala en Orb y vuelve a probar."
         e.reason == "tries" -> "Demasiados intentos. Espera un rato o desbloquea el PC."
-        e.reason == null && e.status == 401 && via == dev.orb.app.link.payload.LinkVia.CODE -> "El código no coincide o ya no vale. Compruébalo o genera uno nuevo en el PC."
+        e.reason == null && e.status == 401 && (via == dev.orb.app.link.payload.LinkVia.CODE || via == dev.orb.app.link.payload.LinkVia.LINKCODE) -> "El código no coincide o ya no vale. Compruébalo o genera uno nuevo en el PC."
         e.reason == null && e.status == 401 -> "Este código ya no vale: ha caducado, se ha usado o se ha anulado. Genera uno nuevo en el PC."
         e.reason == null && e.status == 429 -> "Demasiados intentos desde este móvil. Espera unos minutos."
         e.reason == null && (e.status == 404 || e.status == 410) -> "Esa dirección no responde como un Orb. Revisa la dirección del PC."
@@ -36,7 +38,7 @@ fun payloadErrorText(key: String): String = when (key) {
     LinkErrors.BAD_ADDRESS -> "La dirección no es válida."
     LinkErrors.BAD_QR -> "El enlace no es válido."
     LinkErrors.OLD_QR -> "El código es demasiado antiguo. Genera uno nuevo en el PC."
-    LinkErrors.INSECURE -> "Esa dirección no es privada: usa el Wi-Fi de casa o Tailscale."
+    LinkErrors.INSECURE -> "Esa dirección no es privada. Usa el Wi-Fi de casa o Tailscale."
     LinkErrors.NO_CODE -> "Escribe el código de enlace (6 caracteres o más) o pega el enlace."
     else -> "Revisa los datos del enlace."
 }
@@ -45,22 +47,22 @@ fun linkErrorText(e: Throwable): String = when (val err = (e as? dev.orb.app.lin
     LinkError.Offline -> "Sin conexión con el PC."
     LinkError.Timeout -> "El PC no ha contestado a tiempo."
     LinkError.NotLinked -> "El PC ya no reconoce este móvil. Vuelve a enlazar."
-    is LinkError.Refused -> "El PC lo rechazó (${err.status})."
-    is LinkError.Attention -> "El PC necesita atención (${err.code})."
-    is LinkError.Update -> if (err.side == UpdateSide.App) "Hay que actualizar la app." else "Hay que actualizar Orb en el PC."
-    LinkError.BadAnswer -> "La respuesta del PC no es de fiar."
+    is LinkError.Refused -> "El PC lo rechazó."
+    is LinkError.Attention -> "El PC necesita atención."
+    is LinkError.Update -> if (err.side == UpdateSide.App) "Actualiza la app." else "Actualiza Orb en el PC."
+    LinkError.BadAnswer -> "No se pudo comprobar la respuesta del PC."
     is LinkError.Unsupported -> "Este PC no tiene ${err.method}."
-    null -> "Error inesperado (${e.javaClass.simpleName})."
+    null -> "Algo ha fallado. Inténtalo de nuevo."
 }
 
 fun connectionText(s: ConnectionState): String = when (s) {
     ConnectionState.Connecting -> "Conectando…"
     is ConnectionState.Online -> "Conectado" + (s.pcName?.let { " a $it" } ?: "")
     is ConnectionState.Offline -> "Sin conexión"
-    ConnectionState.UpdateApp -> "Hay que actualizar la app"
-    ConnectionState.UpdatePc -> "Hay que actualizar Orb en el PC"
-    ConnectionState.Unlinked -> "Desvinculado: el PC no reconoce este móvil"
-    is ConnectionState.Attention -> "El PC necesita atención (${s.code})"
+    ConnectionState.UpdateApp -> "Actualiza la app"
+    ConnectionState.UpdatePc -> "Actualiza Orb en el PC"
+    ConnectionState.Unlinked -> "Sin enlazar. El PC no reconoce este móvil"
+    is ConnectionState.Attention -> "El PC necesita atención"
 }
 
 /** Texts of the appearance sheet. */

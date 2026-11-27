@@ -59,6 +59,7 @@ try {
   // 3.6 (M3): the phone opens on the Orb zone's chat list; «+» › Nuevo chat.
   await page.waitForSelector('[data-testid=orb-inbox]', { timeout: 30000 });
   await page.click('[data-testid=chats-new]'); await page.click('[data-testid=new-conversation]');
+  await page.click('[data-testid=new-chat-picker] [data-testid=new-conversation]'); // «New chat» opens the project picker next
   await page.waitForSelector('[data-testid=chat-input]');
   const cls = await page.evaluate(() => document.documentElement.className);
   assert.match(cls, /\bglass\b/, 'la app de Android lleva el aspecto de cristal');
@@ -104,6 +105,7 @@ try {
     const under = await page.locator('[data-testid=orb-inbox]').evaluate((el, top) => el.getBoundingClientRect().bottom <= top + 1, bar.top);
     assert.ok(under, 'la lista termina encima de la barra, no debajo');
     await page.click('[data-testid=chats-new]'); await page.locator('[data-testid=new-conversation]:visible').click();
+    await page.click('[data-testid=new-chat-picker] [data-testid=new-conversation]'); // the project picker comes next
     await page.waitForSelector('[data-testid=chat-greeting]');
     await shot('04-chat-nuevo');
 
@@ -115,8 +117,8 @@ try {
     await page.getByRole('button', { name: /Publicar la web/ }).first().click();
     await page.waitForSelector('[data-testid=task-detail]');
     await shot('06-tarea');
-    step = `${scheme}: hoja`;
-    await page.locator('[data-testid=task-detail]').getByRole('button', { name: 'Cancelar' }).first().click();
+    step = `${scheme}: hoja`; // a finished task: «Deshacer esta tarea» opens the sheet
+    await page.locator('[data-testid=task-detail]').getByRole('button', { name: /Deshacer esta tarea/ }).first().click();
     await page.waitForSelector('[data-slot=dialog-content]');
     await page.waitForTimeout(400);
     await shot('07-hoja');

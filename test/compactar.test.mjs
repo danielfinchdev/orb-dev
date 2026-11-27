@@ -90,7 +90,7 @@ test('razonamiento «Extra»: solo con un modelo que lo admite; al cambiar a otr
   assert.equal(claude.models.find((m) => m.id === 'fake-claude-2').efforts, undefined);
   assert.equal((await call('chat.settings', { agent: 'claude', model: 'fake-claude-1', reasoning: 'xhigh' })).reasoning, 'xhigh');
   assert.equal((await call('chat.settings', { model: 'fake-claude-2' })).reasoning, 'high', 'otro modelo sin Extra: Alto');
-  await assert.rejects(call('chat.settings', { reasoning: 'xhigh' }), /no admite el razonamiento Extra/);
+  await assert.rejects(call('chat.settings', { reasoning: 'xhigh' }), /no admite ese nivel de razonamiento/);
 });
 
 // ---- the real Codex adapter against the fake app-server

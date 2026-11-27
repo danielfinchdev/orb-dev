@@ -308,6 +308,60 @@ export function pickAccount(board, { agent, preferred = null } = {}) {
   return usableAccounts(agent)[0] ?? accountsOf(agent)[0] ?? null;
 }
 
+// Why a chat turn cannot use this account right now, or null: a pause (usage limit, a model's limit) or the real-usage
+// brake. The launch counts are for tasks and do not apply to a chat's answers.
+export function chatBlock(board, id, model = null) {
+  const until = cooldownUntil(board, id) || modelLimitUntil(board, id, model);
+  if (until) return { paused: until, reason: tr('msg.budget.noQuota', { name: nameOf(id), time: untilText(until) }) };
+  const brake = usageBrake(board, id);
+  return brake ? { paused: brake.paused ?? brake.resetAt ?? null, reason: brake.reason, brake: true } : null;
+}
+
+// The account a chat turn runs on. fixed: that account and no other, ever: when it cannot take the turn the answer is a
+// `problem` (never another account): { kind: 'gone' | 'nosession' | 'limit', account, until?, reason?, other? } with `other`
+// the id of an account of the agent that could take the turn (for «Usar otra»). The brake (90 % of the real window) is
+// not a problem for a fixed chat: the message goes with a warning, as it always did.
+// Automatic: stays on its account while it can take the turn; otherwise it moves to the usable account of the agent with the
+// most room (`switched` says from where), unless continuity.switchAccount is off. When no account can, it stays where it is.
+// → { acc, problem, switched }
+export function resolveAccount(board, { agent, account = null, fixed = false, model = null } = {}) {
+  const usable = usableAccounts(agent);
+  const known = account ? findAccount(account) : null;
+  const mine = known && known.agent === agent ? known : null;
+  if (fixed && account) {
+    if (!mine) return { acc: null, problem: { kind: 'gone', account }, switched: null };
+    if (!usable.some((a) => a.id === mine.id)) return { acc: mine, problem: { kind: 'nosession', account: mine.id }, switched: null };
+    const block = chatBlock(board, mine.id, model);
+    if (block && !block.brake) {
+      const other = rankAccounts(board, usable.filter((a) => a.id !== mine.id), model).find((r) => !chatBlock(board, r.account, model));
+      return { acc: mine, problem: { kind: 'limit', account: mine.id, until: block.paused, reason: block.reason, other: other?.account ?? null }, switched: null };
+    }
+    return { acc: mine, problem: null, switched: null };
+  }
+  const current = mine && usable.some((a) => a.id === mine.id) ? mine : null;
+  if (current && !chatBlock(board, current.id, model)) return { acc: current, problem: null, switched: null };
+  const stay = ctx.config?.continuity?.switchAccount === false;
+  if (current && stay) return { acc: current, problem: null, switched: null };
+  const best = rankAccounts(board, usable, model).find((r) => !chatBlock(board, r.account, model));
+  const chosen = best ? findAccount(best.account) : current ?? usable[0] ?? accountsOf(agent)[0] ?? null;
+  return { acc: chosen, problem: null, switched: account && chosen && chosen.id !== account ? { from: account, why: current ? chatBlock(board, current.id, model) : null } : null };
+}
+
+// The chat line for a fixed chat's problem (resolveAccount) and for an automatic chat that moved to another account.
+export function accountProblemText(p) {
+  const name = nameOf(p.account);
+  if (p.kind === 'gone') return tr('msg.acct.gone', { account: p.account });
+  if (p.kind === 'nosession') return tr('msg.acct.nosession', { account: name });
+  if (p.kind === 'identity' || p.kind === 'identityNoMail' || p.kind === 'identityUnknown') return tr({ identity: 'msg.acct.identityMismatch', identityNoMail: 'msg.acct.identityNoMail', identityUnknown: 'msg.acct.identityUnknown' }[p.kind], { account: name });
+  return p.until ? tr('msg.acct.limit', { account: name, time: untilText(p.until) }) : tr('msg.acct.limitNoTime', { account: name });
+}
+export function accountSwitchText(sw, to) {
+  const toName = to?.label ?? to?.id ?? '';
+  if (!findAccount(sw.from) || !sw.why) return tr('msg.acct.switchedGone', { to: toName, from: sw.from });
+  if (sw.why?.paused) return tr('msg.acct.switchedLimit', { to: toName, from: nameOf(sw.from), time: untilText(sw.why.paused) });
+  return tr('msg.acct.switchedBrake', { to: toName, from: nameOf(sw.from) });
+}
+
 // What one turn spent (usage_ledger; the day in the owner's time zone). usage: what the agent reported ({ inputTokens,
 // outputTokens, costUsd } or the snake_case names); one turn per call unless usage.userTurns says.
 export function recordSpend(board, { account = null, conversation = null, session = null, task = null, usage = {} } = {}) {
@@ -355,4 +409,31 @@ export function usageHistory(board, { days = 30, now = new Date() } = {}) {
   }
   const most = (a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut);
   return { from: list[0], to: list.at(-1), days: [...byDay.values()], agents: [...byAgent.values()].sort(most), models: [...byModel.values()].sort(most), total, tokensCache: cache.total, byDay: [...cache.days.values()] };
+}
+
+// The ledger as flat records for the filters of the usage page: one per day, account and chat, task or agent session.
+// Agent, model and project come from what the turn was in; rows from before an account, project or title was recorded
+// keep '' there and the page names them («Cuenta principal», «Sin proyecto»). `days` counts back from today.
+export function usageRecords(board, { days = 30, now = new Date() } = {}) {
+  const tz = ownerTz(ctx.config);
+  const [y, m, d] = localDay(now, tz).split('-').map(Number);
+  const iso = (back) => new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10);
+  const from = iso(days - 1); const to = iso(0);
+  const agentOf = new Map(accounts().map((a) => [a.id, a.agent]));
+  const rows = board.all(`SELECT u.day, u.account_id AS account, u.conversation_id AS conv, u.session_id AS session, u.task_id AS task,
+      SUM(u.turns) AS turns, SUM(u.tokens_in) AS tin, SUM(u.tokens_out) AS tout, SUM(u.tokens_cache) AS tcache, SUM(u.usd) AS usd,
+      MAX(COALESCE(s.agent, t.assigned_to, t.agent, c.agent)) AS agent, MAX(COALESCE(s.model, t.model, c.model)) AS model,
+      MAX(COALESCE(t.project, s.project, c.project, '')) AS project, MAX(t.title) AS ttitle, MAX(s.title) AS stitle, MAX(c.title) AS ctitle
+    FROM usage_ledger u LEFT JOIN sessions s ON s.id = u.session_id LEFT JOIN tasks t ON t.id = u.task_id LEFT JOIN conversations c ON c.id = u.conversation_id
+    WHERE u.day >= ? AND u.day <= ? GROUP BY u.day, u.account_id, u.conversation_id, u.session_id, u.task_id`, from, to);
+  const records = rows.map((r) => {
+    const kind = r.task != null ? 'task' : r.session ? 'session' : r.conv != null ? 'chat' : 'other';
+    const id = kind === 'task' ? r.task : kind === 'session' ? r.session : kind === 'chat' ? r.conv : null;
+    return {
+      day: r.day, account: r.account ?? '', agent: agentOf.get(r.account) ?? r.agent ?? 'claude', model: r.model ?? '', project: r.project ?? '',
+      kind, id, title: (kind === 'task' ? r.ttitle : kind === 'session' ? r.stitle : r.ctitle) ?? '',
+      turns: r.turns ?? 0, tokensIn: r.tin ?? 0, tokensOut: r.tout ?? 0, tokensCache: r.tcache ?? 0, usd: r.usd ?? 0
+    };
+  }).filter((r) => r.tokensIn + r.tokensOut + r.tokensCache || r.usd || r.turns);
+  return { from, to, records };
 }

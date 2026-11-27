@@ -9,14 +9,17 @@ import en from '../src/shared/locales/en.mjs';
 
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 const agents = read('src/ui/views/agents.jsx');
+const tools = read('src/ui/views/agents-tools.jsx');
 const usage = read('src/ui/views/usage.jsx');
 const tab = read('src/ui/views/settings/usage-tab.jsx');
 
-test('Prepara tu equipo: Flutter, SDK de Android y Java solo se detectan; no llevan botón de instalar', () => {
+test('Prepara tu equipo: solo Flutter se detecta sin instalador; Java y Android Studio se instalan con winget', () => {
   assert.match(agents, /call\('installer\.devTools'\)/);
-  const block = agents.slice(agents.indexOf('team.dev?.map'), agents.indexOf('</Setting>', agents.indexOf('team.dev?.map')));
-  assert.match(block, /data-testid=\{`team-dev-\$\{d\.id\}`\}/);
-  assert.doesNotMatch(block, /team\.install|<Button/, 'Orb installs none of them');
+  // they come from team.dev as rows without an installer: «Cómo instalarlo» opens their official page and starts nothing
+  assert.match(tools, /\(team\.dev \?\? \[\]\)\.filter\(\(d\) => !team\.items\.some\(\(i\) => i\.id === d\.id\)\)\.map/);
+  assert.match(tools, /installable: false/);
+  assert.match(tools, /data-testid=\{`team-howto-\$\{x\.id\}`\}/);
+  assert.match(tools, /x\.installable\s*\? <Button[\s\S]*?team\.install\(\[x\.id\]\)/, 'only an installer item has the install button');
   for (const id of ['flutter', 'androidSdk', 'java']) for (const l of [es, en]) assert.ok(l[`agents.team.tool.${id}`], id);
 });
 
@@ -36,9 +39,9 @@ test('Cerrar sesión: en el «⋯» de la cuenta, con el nombre escrito; las dem
 });
 
 test('Versión nueva: «Versión X · hay Y», «Actualizar a Y» con confirmación y el comando donde no hay instalador', () => {
-  assert.match(agents, /t\(upd\.available === true \? 'agents\.versionUpdate' : 'agents\.versionCurrent'/);
-  // an unknown installed version is not «up to date»; the repair stays in the card's «⋯»; Claude's installer promises no version
-  assert.match(agents, /if \(upd && upd\.available === false && !busy\)/);
+  assert.match(agents, /upd\.available === true \? t\('agents\.newVersion', \{ latest: upd\.latest \}\) : t\('agents\.upToDate'\)/);
+  // «Actualizar» only when a newer version is known; the repair stays in the detail's «⋯»; Claude's installer promises no version
+  assert.match(agents, /if \(a\.installed && !upd\?\.available && !busy\) return null/);
   assert.match(agents, /agent-reinstall-/);
   assert.match(agents, /agents\.updateConfirmBodyRun/);
   assert.match(agents, /<IconButton label=\{t\('agents\.tipUpdatesTitle'\)\} onClick=\{searchUpdates\}/);
@@ -55,14 +58,13 @@ test('Versión nueva: «Versión X · hay Y», «Actualizar a Y» con confirmaci
   assert.match(agents, /onClick=\{searchUpdates\} disabled=\{searching\} data-testid="agents-check-all"/);
 });
 
-test('Uso: barras por agente y día con su leyenda, y los cuatro números de la maqueta', () => {
-  assert.match(usage, /function DaysLegend/);
-  assert.match(usage, /data-testid="usage-days-legend"/);
-  assert.match(usage, /actions=\{<DaysLegend byDay=\{data\.byDay\} order=\{order\} warn=\{warn\} \/>\}/);
-  assert.match(usage, /\[t\('usage\.cache'\), cacheTokens \? tokens\(cacheTokens\) : '—'\]/);
-  assert.match(usage, /t\('usage\.total'\), tokens\(totalTokens\)/);
-  assert.match(usage, /tokens_cache/);
-  assert.match(usage, /data-testid="usage-turns"/, 'the turns, which the mock-up does not draw, stay under «Más opciones»');
+test('Uso: líneas por día con su leyenda de series, y los números de la maqueta', () => {
+  const chart = read('src/ui/components/usage-chart.jsx');
+  assert.match(chart, /data-testid="usage-legend"/);
+  assert.match(chart, /aria-pressed=\{!hidden\[l\.key\]\}/, 'a box per series turns it on and off');
+  assert.match(usage, /\[t\('usage\.cache'\), tot\.tokensCache \? tokens\(tot\.tokensCache\) : '—'\]/);
+  assert.match(usage, /\[t\('usage\.total'\), tokens\(tot\.tokens\), deltaBadge\]/);
+  assert.match(usage, /data-testid="usage-local-toggle"/, 'the turns and hours outside Orb stay in their own fold');
 });
 
 test('Uso: aviso en las barras, leyenda y «Aviso» en la cuenta; el aviso y el cambio de cuenta se ajustan en Uso y en Ajustes', () => {
@@ -81,7 +83,7 @@ test('Uso: aviso en las barras, leyenda y «Aviso» en la cuenta; el aviso y el 
 
 test('con el agente desactivado ninguna cuenta dice «Activa»: solo que tiene la sesión iniciada', () => {
   assert.match(agents, /acc\.login === 'si' \? \(agentOn \? \[t\('agents\.accountActive'\), 'success'\] : \[t\('login\.si'\), 'secondary'\]\) : login/);
-  assert.match(agents, /<AccountRow [^>]*agentOn=\{!!cfg\.enabled\} \/>/);
+  assert.match(agents, /<AccountRow .*agentOn=\{!!cfg\.enabled\}.* \/>/);
 });
 
 test('la acentuación sigue siendo un token en las dos páginas', () => {

@@ -33,6 +33,7 @@ import { quiet } from '@/lib/quiet.js';
 import { needsApproval } from '@/lib/task-approval.js';
 import { since, plural, lastLogEntry, repoOf, repoOfPr } from '@/lib/project-status.js';
 import { useProjectInfo, forgetInfo } from '@/lib/use-project-info.js';
+import { ToolSuggestions } from './agents-tools.jsx';
 
 const WEEK = 7 * 86_400_000;
 const H3 = 'font-(family-name:--title) text-card-title font-semibold';
@@ -381,6 +382,7 @@ export function ProjectPage({ p }) {
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto [scrollbar-gutter:stable] pt-5 pr-[calc(1.5rem-var(--sb-w))] pb-10 pl-6 md:pb-28">
         <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
+          <ToolSuggestions project={p.name} />
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList variant="line" data-testid="project-tabs">
               {tabs.map(([id, Icon, label, n]) => <TabsTrigger key={id} value={id} data-testid={`project-tab-${id}`}><Icon />{label}{n ? <span className="text-faint-foreground">{n}</span> : null}</TabsTrigger>)}

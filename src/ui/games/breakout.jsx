@@ -52,7 +52,7 @@ export default function Breakout({ level, onScore, onOver, paused }) {
     if (s.over) { ctx.fillStyle = tint(p.danger, 0.1); roundRect(ctx, 0, 0, WIDTH, HEIGHT, corner(p, 14)); }
     ctx.restore();
   };
-  useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setupCanvas(canvas.current, WIDTH, HEIGHT, draw); draw(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useLoop((dt) => {
     const s = g.current; s.sparks.step(dt); if (s.flash > 0) s.flash -= dt; if (s.lost > 0) s.lost -= dt; s.shake = Math.max(0, s.shake - dt * 0.03);
     if (s.over) { if (s.sparks.alive || s.shake > 0) draw(); return; }

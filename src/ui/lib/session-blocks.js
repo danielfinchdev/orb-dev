@@ -38,3 +38,17 @@ export function subagentState(b) {
   if (b.result?.status === 'stopped') return 'stopped';
   return !b.result ? 'running' : b.result.error ? 'failed' : 'done';
 }
+
+// The line an agent writes when a turn starts («Claude Code · claude-sonnet-5-5») is already in the chat's header. It only
+// stays where the agent or the model changed, so it tells from which answer on; the first one and the repeats go.
+const AGENT_LINE = /^(.+?) · ([\w.:\-/[\]]+)$/;
+export function dropRepeatedAgent(blocks) {
+  let last = null;
+  return blocks.filter((b) => {
+    const body = b.type === 'item' && b.item?.kind === 'status' ? b.item.body : null;
+    if (typeof body !== 'string' || !AGENT_LINE.test(body)) return true;
+    const keep = last !== null && body !== last;
+    last = body;
+    return keep;
+  });
+}

@@ -66,6 +66,10 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     desktop: true,
     setup: (data) => invoke('app_setup', { data: data ?? {} }),
     switchHome: (folder) => invoke('app_switch_home', { target: String(folder ?? '') }),
+    // «¿Los recupero o empiezo de cero?» after reinstalling over a workspace that was already there: 'recover' | 'fresh'.
+    previous: (choice) => invoke('app_previous', { choice: choice === 'fresh' ? 'fresh' : 'recover' }),
+    // The last step of «Desinstalar»: the code the engine gave when the data was gone; Orb ends and its uninstaller starts.
+    uninstall: (code) => invoke('app_uninstall', { code: String(code ?? '') }),
     // Windows' own dialogs, opened by Rust (the page has no dialog permission).
     pickFolder: (title) => invoke('app_pick_folder', { title: text(title) }),
     pickAttachments: () => invoke('app_pick_attachments'),
@@ -80,6 +84,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     deleteProject: (name, unlock, step) => invoke('app_delete_project', { name: String(name ?? ''), unlock: text(unlock), step: ['retry', 'forever', 'cancel'].includes(step) ? step : null }),
     showBrowser: () => invoke('app_show_browser'),
     zoom: (value) => invoke('app_zoom', { value: value ?? null }),
+    // The window is created hidden: this shows it once the page has a first screen (Rust command window_ready).
+    windowReady: () => invoke('window_ready'),
     windowControls: {
       act: windowAct,
       onState: (fn) => {
@@ -96,6 +102,8 @@ if (import.meta.env.MODE !== 'android' && window.__TAURI_INTERNALS__ && !window.
     runAction: (action) => engine('app.runAction', action ?? {}),
     feedback: { capture, images: () => invoke('app_feedback_images'), send: (data) => engine('app.feedbackSend', data ?? {}) },
     moreApps: () => engine('app.moreApps'),
+    dictationEngines: () => engine('app.dictationEngines'),
+    transcribe: (wav) => engine('dictation.transcribe', { wav }),
     // New versions (src-tauri/src/updater.rs); the state also comes as the 'app:update' event.
     update: { get: () => invoke('app_update'), check: () => invoke('app_update_check'), download: () => invoke('app_update_download'), install: () => invoke('app_update_install') },
     // A promise here (Electron's preload answers at once): the callers wait for it either way.

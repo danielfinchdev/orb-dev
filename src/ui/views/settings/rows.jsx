@@ -2,21 +2,35 @@
 import { Kbd, Field } from '@/components/ui/basic.jsx';
 import { ListCard } from '@/components/ui/primitives.jsx';
 import { cn } from '@/lib/utils.js';
-import { useState } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronRight, Check } from 'lucide-react';
 import { InfoTip, Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/overlay.jsx';
 import { call, act, setState, getState, applyTheme, applyAppearance } from '@/lib/store.js';
 import { t } from '@/lib/i18n.js';
 import { unlockCore } from '@/lib/core-access.js';
 import { railValuesChange } from '../../../shared/rails-registry.mjs';
 
+// «Guardado»: every setting saves as it changes, so the header only shows a discreet notice for a moment.
+const savedListeners = new Set();
+export function markSaved() { for (const fn of savedListeners) fn(); }
+export function SavedNotice() {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    let timer = 0;
+    const show = () => { setOn(true); clearTimeout(timer); timer = setTimeout(() => setOn(false), 2200); };
+    savedListeners.add(show);
+    return () => { savedListeners.delete(show); clearTimeout(timer); };
+  }, []);
+  return <span role="status" aria-live="polite" data-testid="settings-saved" className={cn('text-muted-foreground ml-3 inline-flex items-center gap-1 text-caption transition-opacity', on ? 'opacity-100' : 'opacity-0')}>{on ? <><Check className="size-3.5" aria-hidden="true" />{t('settings.saved')}</> : null}</span>;
+}
+
 // unlock: the master password's token, for a change that needs it (src/domain/security/permissions.mjs › needsUnlock).
 // A patch that changes a rail's value asks the password every time ('rails'); cancelling saves nothing and returns undefined,
 // so a caller that already moved its control can put it back.
-export async function save(patch, ok = t('settings.saved'), unlock = null) {
+export async function save(patch, ok = null, unlock = null) {
   if (!unlock) if (patch?.rails !== undefined || railValuesChange(patch, getState().app?.config)) { unlock = await unlockCore('rails'); if (!unlock) return undefined; }
   const config = await act(call('config.save', { patch, ...(unlock ? { unlock } : {}) }), ok);
-  if (config) { setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
+  if (config) { markSaved(); setState({ app: { ...getState().app, config } }); applyTheme(config.ui?.theme); applyAppearance(config.ui); }
   return config;
 }
 export const num = (v) => Number(v) || 0;

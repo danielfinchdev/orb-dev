@@ -106,3 +106,13 @@ phone does not have the app open. On iPhone they work with Orb added to the home
   `test/mobile.e2e.mjs`.
 - Pending, on hold: using it from anywhere without Tailscale through our own relay on Cloudflare
   ([`MOBILE-RELAY.md`](../MOBILE-RELAY.md)).
+
+## Tailscale discovery and resuming (3.8.10)
+
+- Settings › Devices has a Tailscale card (`src/engine/transport/tailscale-status.mjs`, `tailscale.status` and
+  `tailscale.login`, PC only): install with winget, sign in and list the tailnet marking Orb phones. `GET /api/discover`
+  (`{ orb, v, name }`) lets the Android "Find my PC on Tailscale" fill in the address once the user types the PC's name;
+  it answers only through the Tailscale interface and pairing still needs the link code.
+- The phone web resumes the event stream with `Last-Event-ID` (`?since=` from the app), asks for a `resync` like Android
+  and resends a lost `call` once with the same sealed request, which the PC answers from its stored result. A newly linked
+  phone never gets events from before its link. `scripts/aguante.mjs` is the endurance test of the link.

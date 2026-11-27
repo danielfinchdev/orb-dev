@@ -3,12 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ctx, tr } from './context.mjs';
 import { paths, writeJson } from './paths.mjs';
-import { merge, AGENT_IDS, DEFAULT_CONFIG } from './config-file.mjs';
+import { merge, AGENT_IDS, DEFAULT_CONFIG, storedConfig } from './config-file.mjs';
 import { switchableIds } from '../shared/rails-registry.mjs';
 import { relabelEmptyLogs } from './journal-files.mjs';
 import { inside as insideOf } from './fsx.mjs';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, ACCENTS, CONTRASTS, migrateAppearance } from '../shared/appearance.mjs';
 import { ADAPTIVE_THEMES } from '../shared/music.mjs';
+import { REASONING_LEVELS } from '../shared/reasoning-levels.mjs';
+import { DICTATION_ENGINES } from '../shared/dictation.mjs';
+import { ACCOUNT_COLORS, TAG_RE } from '../shared/account-marks.mjs';
 
 // Settings saved from the app. Only known top-level keys are accepted.
 // A connector's name as it goes into environment variable names (case does not count on Windows).
@@ -49,7 +52,7 @@ export function saveConfig(patch) {
   // (an out-of-range round limit, a malformed rails entry) are repaired first so they cannot block saving something else.
   const next = merge(tidyStored(ctx.config), patch);
   validateConfig(next);
-  writeJson(ctx.paths.config, next);
+  writeJson(ctx.paths.config, storedConfig(next));
   if (next.language !== ctx.config.language) relabelEmptyLogs(ctx.home, ctx.config, next);
   ctx.config = next;
   return next;
@@ -71,6 +74,7 @@ export function validateConfig(c) {
   const int = (v, min, max, name) => { if (!Number.isInteger(v) || v < min || v > max) throw new Error(tr('msg.ctx.numRange', { name, min, max })); };
   int(c.maxParallel, 1, 10, 'maxParallel'); int(c.perAgent, 1, 5, 'perAgent'); int(c.timeoutMinutes, 5, 600, 'timeoutMinutes');
   if (c.budget?.windowHours !== undefined) int(c.budget.windowHours, 1, 24, 'budget.windowHours');
+  if (c.ui?.dictation !== undefined && !DICTATION_ENGINES.includes(c.ui.dictation)) throw new Error(tr('msg.ctx.badDictation'));
   if (c.ui?.lockMinutes !== undefined) int(c.ui.lockMinutes, 1, 240, 'ui.lockMinutes');
   if (!String(c.assistantName ?? '').trim()) throw new Error(tr('msg.ctx.needName'));
   if (!['es', 'en'].includes(c.language)) throw new Error(tr('msg.ctx.badLanguage'));
@@ -95,7 +99,7 @@ export function validateConfig(c) {
   if (!AGENT_IDS.includes(brain)) throw new Error(tr('msg.ctx.missingAgentCfg', { id: brain }));
   if (brain === 'claude' && !o.models.some((m) => m.id === o.model) && !/^(sonnet|opus|haiku)$/.test(o.model ?? '')) throw new Error(tr('msg.ctx.assistantModelOneOf', { labels: o.models.map((m) => m.label).join(', ') }));
   if (brain !== 'claude' && o.model && !/^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/.test(o.model)) throw new Error(tr('msg.ctx.badModels', { id: brain }));
-  if (!['low', 'medium', 'high', 'xhigh'].includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
+  if (!REASONING_LEVELS.includes(o.reasoning)) throw new Error(tr('msg.ctx.badReasoning'));
   if (typeof o.orchestrate !== 'boolean') throw new Error(tr('msg.ctx.orchestrateBool'));
   int(o.maxTurns, 2, 200, 'maxTurns');
   if (o.parallel !== undefined) int(o.parallel, 1, 6, 'parallel'); // conversations answered at the same time
@@ -112,6 +116,7 @@ export function validateConfig(c) {
     ids.add(a.id);
     if (!AGENT_IDS.includes(a.agent)) throw new Error(tr('msg.ctx.accountAgent', { id: a.id }));
     if (typeof a.label !== 'string' || !a.label.trim() || a.label.length > 60) throw new Error(tr('msg.ctx.accountName', { id: a.id }));
+    if ((a.tag !== undefined && !(typeof a.tag === 'string' && TAG_RE.test(a.tag))) || (a.color !== undefined && !ACCOUNT_COLORS.includes(a.color))) throw new Error(tr('msg.ctx.accountMark', { id: a.id }));
     if (a.home && (typeof a.home !== 'string' || !path.isAbsolute(a.home))) throw new Error(tr('msg.ctx.accountHomeAbs', { label: a.label }));
     if (a.home) checkAccountHome(a.home, c);
     if (a.agent === 'cursor' && a.home) throw new Error(tr('msg.ctx.cursorFixed'));
@@ -157,6 +162,7 @@ export function validateConfig(c) {
   bool(c.ui?.gameMusic, 'ui.gameMusic');
   bool(c.setupPending, 'setupPending'); // the welcome is not over yet (src/ui/views/setup.jsx)
   bool(c.budget?.autoModel, 'budget.autoModel'); // Orb chooses each task's model (true / missing) or the agents' defaults
+  bool(c.ui?.hideModelHelp, 'ui.hideModelHelp'); // «Recomendados» and «Guía de modelos» hidden from the selector
   bool(c.ui?.tourDone, 'ui.tourDone');
   bool(c.ui?.autoNoticed, 'ui.autoNoticed'); // the one notice about «Auto» was shown
   bool(c.ui?.recoveryNoticed, 'ui.recoveryNoticed'); // the one notice about the recovery code was shown // the guided tour was seen (or skipped) in this assistant folder

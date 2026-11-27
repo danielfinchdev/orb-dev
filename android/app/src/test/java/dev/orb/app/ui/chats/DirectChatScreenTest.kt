@@ -69,7 +69,7 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Permitir").assertIsDisplayed()
         rule.onNodeWithText("Siempre").assertIsDisplayed()
         // «Siempre» is one tap from the main button: the card says how far it reaches, and a screen reader hears it too
-        rule.onNodeWithText("«Siempre» lo permite aquí, en este chat; no vale para otros.").assertIsDisplayed()
+        rule.onNodeWithText("«Siempre» vale solo en este chat.").assertIsDisplayed()
         rule.onNodeWithContentDescription("Permitir siempre aquí").assertIsDisplayed()
     }
 
@@ -187,7 +187,7 @@ class DirectChatScreenTest {
         rule.onNodeWithText("Chat con Codex").assertIsDisplayed()
         for (t in listOf("Bifurcar desde aquí", "Compactar contexto", "Reanudar sesión", "Dar por terminado", "Parar")) rule.onNodeWithText(t).assertIsDisplayed()
         rule.onNodeWithText("58 %").assertIsDisplayed()
-        rule.onNodeWithText("Acceso total, Usar mi móvil, secretos y terminal integrado: solo en el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Acceso total, Usar mi móvil, bóveda y terminal: solo en el PC.").assertIsDisplayed()
         // nothing to resume and nothing running: those two are drawn but off, and say why
         rule.onNodeWithText("Reanudar sesión").assertIsNotEnabled()
         rule.onNodeWithText("Parar").assertIsNotEnabled()
@@ -302,7 +302,7 @@ class DirectChatScreenTest {
         rule.onNode(hasSetTextAction()).performTextInput("Sigue")
         rule.waitForIdle()
         assertEquals(0, rule.onAllNodesWithText("Corregir").fetchSemanticsNodes().size)
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("send - Sigue"))
     }

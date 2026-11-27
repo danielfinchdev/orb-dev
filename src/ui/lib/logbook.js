@@ -1,3 +1,4 @@
+import { foldText } from './mark-matches.js';
 // Pure helpers of the Logs tab.
 
 // The log file names the engine lists → the three groups of the list. «general» is alone; a deleted project's log
@@ -65,22 +66,38 @@ export function splitParts(text) {
   };
 }
 
+function hashText(text) {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h * 33) ^ text.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
 // The body of a log as cards: what precedes the first «### » heading (the index and the rules) and the entries, each with
 // its number (1 = the oldest), the date, the author and the topic of its heading «### AAAA-MM-DD HH:MM — author — topic».
 // A heading of another shape keeps its whole text as the topic.
 export function parseEntries(body) {
   const parts = String(body ?? '').split(/^(?=### )/m);
   const pre = parts.length && !parts[0].startsWith('### ') ? parts.shift().trim() : '';
+  // A stable id per entry: the short reading starts at the latest entries, so the number `n` (1 = oldest) is not the same
+  // entry in both readings. The id is a hash of the text plus its occurrence counted from the newest, which both share.
+  const seen = new Map();
+  const ids = new Array(parts.length);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const h = hashText(parts[i]);
+    const k = seen.get(h) ?? 0;
+    seen.set(h, k + 1);
+    ids[i] = `${h}.${k}`;
+  }
   const entries = parts.map((raw, i) => {
     const nl = raw.indexOf('\n');
     const head = (nl === -1 ? raw : raw.slice(0, nl)).replace(/^###\s+/, '').trim();
     const rest = nl === -1 ? '' : raw.slice(nl + 1).trim();
     const m = head.match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?[ \t]*—[ \t]*(.*)$/);
-    if (!m) return { n: i + 1, date: null, time: '', author: '', topic: head, body: rest, ...splitParts(rest), raw };
+    if (!m) return { id: ids[i], n: i + 1, date: null, time: '', author: '', topic: head, body: rest, ...splitParts(rest), raw };
     const bits = m[6].split(/[ \t]+—[ \t]+/);
     const author = bits.length > 1 ? bits[0].trim() : '';
     const topic = (bits.length > 1 ? bits.slice(1).join(' — ') : bits[0]).trim();
-    return { n: i + 1, date: new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), time: m[4] ? `${m[4]}:${m[5]}` : '', author, topic, body: rest, ...splitParts(rest), raw };
+    return { id: ids[i], n: i + 1, date: new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])), time: m[4] ? `${m[4]}:${m[5]}` : '', author, topic, body: rest, ...splitParts(rest), raw };
   });
   return { pre, entries };
 }
@@ -92,14 +109,22 @@ export function authorAgent(author) {
   return 'other';
 }
 
-// The logs whose text mentions the needle: { name → hits }. Logs with no hit are left out. Plain text, never markup.
-export function countHits(bodies, q) {
-  const needle = String(q ?? '').trim().toLowerCase();
+// A log cut into its entries and folded once (no case, no accents): the form the searches compare against.
+export const foldedEntries = (body) => String(body ?? '').split(/^(?=### )/m).filter((p) => p.startsWith('### ')).map(foldText);
+
+// The logs whose entries mention the needle: { name → hits }, from the folded entries of each. Logs with no hit are left out.
+export function countFolded(byLog, q) {
+  const needle = foldText(String(q ?? '').trim());
   const out = {};
   if (!needle) return out;
-  for (const [name, body] of Object.entries(bodies ?? {})) {
-    const hits = String(body ?? '').split(/^(?=### )/m).filter((p) => p.startsWith('### ') && p.toLowerCase().includes(needle)).length;
+  for (const [name, entries] of Object.entries(byLog ?? {})) {
+    const hits = entries.filter((e) => e.includes(needle)).length;
     if (hits) out[name] = hits;
   }
   return out;
+}
+
+// The same from whole bodies. Plain text, never markup.
+export function countHits(bodies, q) {
+  return countFolded(Object.fromEntries(Object.entries(bodies ?? {}).map(([name, body]) => [name, foldedEntries(body)])), q);
 }

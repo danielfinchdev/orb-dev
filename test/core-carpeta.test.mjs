@@ -260,7 +260,7 @@ test('sin copia: Orb espera y la ventana ofrece seguir sin copia; una copia que 
       assert.equal(await e.call('app.coreState'), null);
       assert.ok((await e.call('app.state')).config);
       const { unlock } = await e.call('master.create', { password: 'contraseña de prueba' });
-      await e.call('backup.recovery', { code: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH', unlock });
+      await e.call('backup.recovery', { code: 'AAAA-BBBB-CCCC-DDDD-EEEE-FFFF-GGGG-HHHH', password: 'contraseña de prueba' });
       await e.call('backup.now', {});
     } finally { await e.stop(); }
     // Another secret (another PC, or the sealed key gone): the copy needs its recovery code.

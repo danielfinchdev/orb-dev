@@ -110,7 +110,7 @@ export default {
   'msg.pr.commentFailed': 'The user accepted the comment on pull request #{n}, but it could not be posted: {detail}',
   'htmlpage.untitled': 'Untitled page',
   'htmlpage.internet': 'Allow internet',
-  'htmlpage.internetHint': 'Off by default. Only for this page; changing it reloads the page.',
+  'htmlpage.internetHint': 'Off by default. Only for this page. Changing it reloads the page.',
   'htmlpage.close': 'Close page',
   'htmlpage.frame': 'HTML page: {title}',
   'msg.html.noChat': 'This tool only works from a chat.',
@@ -179,11 +179,9 @@ export default {
   'prbar.watchOn': 'CI watch turned on.',
   'prbar.watchOff': 'CI watch turned off.',
   'agents.commit.title': 'Commit messages',
-  'agents.commit.desc': 'How Orb writes the message of "Commit…". It never carries AI signatures.',
   'agents.commit.conventional': 'Conventional Commits (recommended)',
   'agents.commit.repo': 'The repository\'s own conventions',
   'agents.commit.custom': 'My instructions',
   'agents.commit.instructions': 'Instructions',
   'agents.commit.ph': 'For example: one line, start with the module name.',
-  'agents.commit.save': 'Save'
 };

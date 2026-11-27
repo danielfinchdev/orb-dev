@@ -3,7 +3,7 @@
 import { notifyError, notifyOk } from './notify.js';
 import { bumpNav, navTicket, stillHere } from './nav.js';
 import { cleanRoute, backStep } from './phone-nav.js';
-import { t } from './i18n.js';
+import { t, rememberLanguage } from './i18n.js';
 import { SKINS, FONTS, CODE_FONTS, CODE_THEMES, PALETTES, plainSkin, robotSkin, darkOnlySkin, lightOnlySkin, phoneSkin } from '../../shared/appearance.mjs';
 export { plainSkin, robotSkin, darkOnlySkin, lightOnlySkin };
 import { applyFeed, sinceOf } from '../../shared/feed.mjs';
@@ -151,6 +151,7 @@ export const refresh = oneAtATime(async () => {
   applyAppearance(app.config.ui);
   document.title = app.config.assistantName;
   document.documentElement.lang = uiLanguage(getState()) === 'en' ? 'en' : 'es';
+  rememberLanguage(uiLanguage(getState()));
 });
 // The app's language (Ajustes › General).
 

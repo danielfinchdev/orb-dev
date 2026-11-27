@@ -9,7 +9,7 @@ static SERVER: OnceLock<Option<Arc<Server>>> = OnceLock::new();
 
 fn server() -> Option<Arc<Server>> {
   SERVER
-    .get_or_init(|| orb_vault::start_grants(None).ok().map(|grants| Arc::new(Server { costs: Costs { test: false }, caller_clock: false, grants, sealer: Arc::new(orb_vault::machine::Dpapi) })))
+    .get_or_init(|| orb_vault::start_grants(None).ok().map(|grants| Arc::new(Server { costs: Costs { test: false }, caller_clock: false, grants, sealer: Arc::new(orb_vault::machine::Dpapi), hello: real_hello() })))
     .clone()
 }
 
@@ -27,4 +27,12 @@ pub fn channel() -> Result<(String, impl FnOnce(u32) + Send + 'static), String> 
       .map(drop)
       .unwrap_or_default();
   }))
+}
+
+/// Windows Hello where there is a Windows; no Hello anywhere else.
+fn real_hello() -> Arc<dyn orb_vault::hello::Hello> {
+  #[cfg(windows)]
+  return Arc::new(orb_vault::windows_hello::WindowsHello);
+  #[cfg(not(windows))]
+  Arc::new(orb_vault::hello::Absent)
 }

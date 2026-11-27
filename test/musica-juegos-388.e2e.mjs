@@ -67,6 +67,7 @@ try {
 
   step('silent first: the volume of Ajustes at zero');
   await page.click('[data-testid=nav-settings]');
+  await page.click('[data-testid=settings-nav-apariencia]');
   await page.locator('[data-testid=music-volume]').focus();
   await page.keyboard.press('Home');
   await until(async () => (await ui()).music?.volume === 0, 'the volume at zero');
@@ -95,7 +96,7 @@ try {
   assert.equal((await contexts()).length, 1);
 
   step('«Reiniciar» keeps the same music playing, without a cut');
-  await dialog.getByRole('button', { name: /^(Reiniciar|Jugar otra vez)$/ }).click();
+  await dialog.locator('[data-testid=games-restart]').click();
   await page.waitForTimeout(700);
   assert.equal((await contexts()).length, 1, 'the same context');
   assert.equal((await contexts())[0].state, 'running');
@@ -105,7 +106,7 @@ try {
   await closed(0);
   await until(async () => (await ui()).gameMusic === false, 'the mute saved');
   assert.equal(await musicButton.getAttribute('aria-pressed'), 'false');
-  await dialog.getByRole('button', { name: /^(Reiniciar|Jugar otra vez)$/ }).click();
+  await dialog.locator('[data-testid=games-restart]').click();
   await page.waitForTimeout(900);
   assert.equal((await contexts()).length, 1, 'muted: a new game starts no music');
   await musicButton.click();

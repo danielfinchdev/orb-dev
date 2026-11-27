@@ -93,7 +93,7 @@ class TaskDiffShotsTest {
     @Test fun menu() = shoot("-menu") { rule.onNodeWithContentDescription("Más opciones").performClick() }
     @Test fun menuOceano() = shoot("-menu", palette = OrbPaletteChoice.Oceano) { rule.onNodeWithContentDescription("Más opciones").performClick() }
     @Test fun undoDialog() = shoot("-deshacer") { rule.onNodeWithText("Deshacer").performClick() }
-    @Test fun accepted() = shoot("-aceptado") { rule.onNodeWithText("Aceptar").performClick() }
+    @Test fun accepted() = shoot("-aceptado") { rule.onNodeWithText("Aceptar cambios").performClick() }
 
     // What the mockup leaves out
 

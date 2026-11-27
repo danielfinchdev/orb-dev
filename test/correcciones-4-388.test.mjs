@@ -37,10 +37,10 @@ test('3: the account switch says in one line which account it would pass from an
   }
 });
 
-test('4: the legend names the warning first and the brake after; «Más opciones» only appears with content', () => {
+test('4: the legend names the warning first and the pause after; the fold outside Orb only appears with content', () => {
   const usage = read('src/ui/views/usage.jsx');
   assert.ok(usage.indexOf("t('usage.legendWarn'") < usage.indexOf("t('usage.legendBrake'"));
-  assert.match(usage, /data\?\.total\?\.turns \|\| data\?\.days\?\.length \|\| local\?\.total\?\.turns \? <MoreOptions/);
+  assert.match(usage, /if \(!data\?\.total\?\.turns\) return null;/);
 });
 
 test('5: «Ver en Tareas» is link-blue and the zone note moved into the field\'s tooltip', () => {
@@ -70,7 +70,6 @@ test('9: the date fields show the period on view while nothing is chosen, in the
   const field = read('src/ui/components/date-field.jsx');
   assert.match(field, /text \|\| implied \|\| placeholder \|\| label/);
   const a = read('src/ui/views/activity.jsx');
-  assert.match(a, /fallback=\{firstDay \? toIso\(firstDay\) : undefined\}/);
-  assert.match(a, /fallback=\{toIso\(new Date\(\)\)\}/);
+  assert.match(a, /fallback=\{today\}/);
   assert.match(a, /buildQuery\(filters, page\.next\)/);
 });

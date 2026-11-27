@@ -23,9 +23,9 @@ test('Actividad: los totales se piden con la primera página y se leen solo si t
   assert.deepEqual(normalizeActivity(good).counts, { sources: good.counts.sources, levels: good.counts.levels, partial: true });
   assert.equal(normalizeActivity({ items: [], next: null }).counts, null);
   assert.equal(normalizeActivity({ items: [], counts: { sources: { orb: 'x' }, levels: {} } }).counts, null);
-  assert.match(activity, /data-testid="activity-count"/);
-  assert.match(activity, /num\(counts\?\.sources\[s\]\)/);
-  assert.match(activity, /num\(counts\?\.levels\[l\]\)/);
+  // the number of «Problemas» is the engine's total of warnings and errors, never a count of the lines loaded
+  assert.match(activity, /totals\.levels\.warn \+ totals\.levels\.error/);
+  assert.match(activity, /data-testid="activity-problems"/);
 });
 
 test('Actividad: «Revisar tarea #N» sale solo de una fila con tarea y abre esa tarea', () => {
@@ -35,10 +35,10 @@ test('Actividad: «Revisar tarea #N» sale solo de una fila con tarea y abre esa
 });
 
 test('Actividad: el pie dice lo que rota de verdad (10 MB en Orb, Usuario y App; Subagentes no)', () => {
-  assert.match(es['logbooks.local'], /10 MB/);
-  assert.match(es['logbooks.local'], /Subagentes no rota/);
-  assert.match(en['logbooks.local'], /10 MB/);
-  assert.match(en['logbooks.local'], /Subagents one does not rotate/);
+  assert.match(es['logbooks.localHint'], /10 MB/);
+  assert.match(es['logbooks.localHint'], /el de los agentes no rota/);
+  assert.match(en['logbooks.localHint'], /10 MB/);
+  assert.match(en['logbooks.localHint'], /log of the agents does not rotate/);
 });
 
 test('el desbloqueo: solo se lee cuánto queda, nunca la ficha', () => {
@@ -77,7 +77,7 @@ test('Normas: las llamadas y lo que pide cada cambio son los de siempre', () => 
   assert.equal(ruleAction('delete', { de_serie: true }), 'ruleSeed');
   assert.equal(ruleAction('restoreDefaults'), 'ruleSeed');
   assert.equal(railAction(), 'rails');
-  assert.deepEqual([...FRESH_ACTIONS].sort(), ['deleteProject', 'newKey', 'rails', 'ruleSeed', 'secretSave', 'secretSaved']);
+  assert.deepEqual([...FRESH_ACTIONS].sort(), ['deleteProject', 'linkCode', 'newKey', 'rails', 'ruleSeed', 'secretSave', 'secretSaved']);
   assert.ok(asksEveryTime('rails') && asksEveryTime('ruleSeed') && !asksEveryTime('rules'));
   // the call and its parameters are built where they always were; a token already asked in line only replaces the asking
   assert.match(actions, /const unlock = given \?\? await unlockCore\(action\);/);

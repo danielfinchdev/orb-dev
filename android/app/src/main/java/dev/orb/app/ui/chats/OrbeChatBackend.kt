@@ -241,7 +241,11 @@ class RuntimeOrbeChatBackend(private val container: AppContainer, private val ru
 
     override suspend fun brain(conversation: Long): Result<BrainInfo?> =
         if (!api.available(ApiMethods.CHAT_SETTINGS)) Result.success(null)
-        else api.chat.settings(buildJsonObject { put("conversation", conversation) }).map { OrbeParser.brain(it) }
+        else api.chat.settings(buildJsonObject { put("conversation", conversation) }).map { settings ->
+            // The mark comes from the catalog; without it the brain is still shown, only unmarked.
+            val catalog = if (api.available(ApiMethods.MODELS_CATALOG)) api.models.catalog().getOrNull() else null
+            OrbeParser.brain(settings, catalog)
+        }
 
     override suspend fun liveTasks(): Result<List<LiveTask>> =
         if (!api.available(ApiMethods.TASKS_LIVE)) Result.success(emptyList()) else api.tasks.live().map { OrbeParser.liveTasks(it) }
@@ -293,6 +297,10 @@ object ChatErrors {
     /** The PC refused because the queued message has another text now than the one the person saw. */
     fun queuedChanged(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ha cambiado desde que lo viste", ignoreCase = true) || it.contains("has changed since you saw it", ignoreCase = true) } == true
+
+    /** The PC refused to accept or undo because the last run's changes are not stored yet. */
+    fun notReady(e: Throwable): Boolean =
+        refusal(e)?.let { it.contains("aún no están listos", ignoreCase = true) || it.contains("not ready yet", ignoreCase = true) } == true
 
     fun queuedGone(e: Throwable): Boolean =
         refusal(e)?.let { it.contains("ya no está en la cola", ignoreCase = true) || it.contains("no longer in the queue", ignoreCase = true) } == true

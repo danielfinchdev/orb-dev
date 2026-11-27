@@ -325,6 +325,7 @@ class OrbeChatViewModel(
                 reloads.trySend(Unit)
             }
             LinkEvent.RELOAD -> if (o != null && OrbeParser.conversationOf(o) == conversation) { reloads.trySend(Unit); viewModelScope.launch { loadSnapshot() } }
+            LinkEvent.RESYNC -> { reloads.trySend(Unit); viewModelScope.launch { loadSnapshot() } }
             "config:changed" -> viewModelScope.launch { loadSnapshot() }
             "board:changed" -> { liveRequests.trySend(Unit); taskRefreshes.trySend(Unit) }
             "approval:changed" -> taskRefreshes.trySend(Unit)

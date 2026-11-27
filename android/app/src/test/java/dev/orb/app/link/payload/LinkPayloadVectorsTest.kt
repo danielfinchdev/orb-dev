@@ -156,7 +156,7 @@ class LinkPayloadVectorsTest {
     @Test fun pairingSecretVectors() {
         check("pairingSecret") { c ->
             val i = c["input"]!!.jsonObject
-            val via = if (i.getValue("via").jsonPrimitive.content == "code") LinkVia.CODE else LinkVia.QR
+            val via = LinkVia.entries.first { it.wire == i.getValue("via").jsonPrimitive.content }
             // A null code (JS) is the empty string: normalCode gives "" for both.
             JsonPrimitive(pairingSecret(LinkPayload(null, emptyList(), null, str(i["code"]) ?: "", null, null, via)))
         }

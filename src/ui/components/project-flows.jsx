@@ -20,7 +20,7 @@ export async function finishFlow(p, t) {
 }
 export async function deleteProjectFlow(p, t) {
   if (!(await confirm(t('projects.delete.title'), t('projects.delete.body', { name: p.name, path: p.path }), { ok: t('projects.delete.ok'), danger: true }))) return false;
-  const unlock = await unlockCore('deleteProject');
+  const unlock = await unlockCore('deleteProject', { what: p.name });
   if (!unlock) return false;
   try {
     let r = await bridge.deleteProject(p.name, unlock);

@@ -10,50 +10,44 @@ const locale = (lang) => fs.readFileSync(path.join(ROOT, 'src', 'shared', 'local
 const usage = src('views', 'usage.jsx');
 const agents = src('views', 'agents.jsx');
 
-test('1: the period is Hoy / 7 / 30 and «Ver 90 días» is an item of the header «⋯» with the same call', () => {
-  assert.match(usage, /\['1', '7', '30'\]\.map/);
-  assert.match(usage, /<DropdownMenuItem onSelect=\{\(\) => setDays\('90'\)\} data-testid="usage-range-90">/);
-  assert.match(usage, /testid: `usage-range-\$\{d\}`/);
-  for (const l of ['es', 'en']) assert.match(locale(l), /'usage\.view90'/);
+test('1: the period is a filter with Hoy, 7, 30, 90 days and dates of your own', () => {
+  assert.match(usage, /\['1', '7', '30', '90'\]\.map/);
+  assert.match(usage, /value: 'custom'/);
+  assert.match(usage, /data-testid="usage-date-apply"/);
+  for (const l of ['es', 'en']) assert.match(fs.readFileSync(path.join(ROOT, 'src/shared/locales', l, 'uso.mjs'), 'utf8'), /'usage\.pickDates'/);
 });
 
-test('2: «Al llegar al límite» is in view after «Por agente y modelo», with the switch and the warning selector', () => {
-  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
-  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
-  assert.ok(!more.includes('<Limits cfg='));
+test('2: «Al llegar al límite» closes «Límites», with the switch and the warning selector', () => {
   const at = usage.indexOf('<Limits cfg=');
-  assert.ok(at > usage.indexOf('byAgentModel') && at < start);
+  assert.ok(at > usage.indexOf('<LimitCard key='));
   for (const id of ['usage-switch-account', 'usage-warn-at']) assert.ok(usage.includes(`data-testid="${id}"`), id);
 });
 
-test('3: the legend of «Uso por día» names the warning only when one is set', () => {
-  assert.match(usage, /function DaysLegend\(\{ byDay, order, warn = 0 \}\)/);
-  assert.match(usage, /\{warn > 0 \? <span[^>]*data-testid="usage-days-legend-warn"><TriangleAlert[^>]*\/>\{t\('usage\.legendWarn', \{ pct: Math\.round\(warn \* 100\) \}\)\}<\/span> : null\}/);
+test('3: the legend of «Límites» names the warning only when one is set', () => {
+  assert.match(usage, /\{warn > 0 \? <span[^>]*data-testid="usage-legend-warn"><TriangleAlert[^>]*\/>\{t\('usage\.legendWarn', \{ pct: Math\.round\(warn \* 100\) \}\)\}<\/span> : null\}/);
 });
 
-test('4: what the mock-up does not draw in Uso stays under «Más opciones»', () => {
-  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
-  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
-  for (const piece of ['data-testid="usage-turns"', '<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
+test('4: what Orb adds to the mock-up in Uso stays in its own fold at the end', () => {
+  const start = usage.indexOf('<LocalUsage data=');
+  assert.ok(start > usage.indexOf('data-testid="usage-top"'));
+  for (const piece of ['data-testid="usage-local-toggle"', 'data-testid="usage-heat"']) assert.ok(usage.includes(piece), piece);
 });
 
 test('5: an account row says its state as Activa / En pausa / Sin sesión, with the plan only when known', () => {
   assert.match(agents, /acc\.login === 'no' \? \[t\('agents\.accountNoLogin'\), 'warning'\] : acc\.enabled === false \? \[t\('agents\.accountPaused'\), 'secondary'\] : acc\.login === 'si' \? \(agentOn \? \[t\('agents\.accountActive'\), 'success'\]/);
-  assert.match(agents, /meta=\{plan \? <span>\{plan\}<\/span> : null\}/);
+  assert.match(agents, /\{plan \? <span>\{plan\}<\/span> : null\}/);
   for (const l of ['es', 'en']) for (const k of ['accountActive', 'accountPaused', 'accountNoLogin']) assert.match(locale(l), new RegExp(`'agents\\.${k}'`));
 });
 
-test('6: the card foot keeps the mock-up buttons; the technical ones moved to the card «⋯» and «Más opciones»', () => {
-  const menu = agents.slice(agents.indexOf('data-testid={`agent-more-${a.id}`}'), agents.indexOf('{!cfg.enabled && OFF_AGENTS'));
-  for (const id of ['agent-toggle-', 'agent-settings-', 'agent-scan-', 'agent-open-', 'agent-check-']) assert.ok(menu.includes('data-testid={`' + id + '${a.id}`}'), id);
-  const foot = agents.slice(agents.indexOf('<CardFoot className="flex-wrap gap-2">'), agents.indexOf('</CardFoot>', agents.indexOf('<CardFoot className="flex-wrap gap-2">')));
-  for (const id of ['agent-add-account-', 'agent-signout-']) assert.ok(foot.includes('data-testid={`' + id + '${a.id}`}'), id);
-  for (const gone of ['agent-scan-', 'agent-open-', 'agents.check']) assert.ok(!foot.includes(gone), `${gone} left the foot`);
-  assert.ok(!agents.includes('<CollapsibleTrigger className="text-muted-foreground hover:text-foreground group flex cursor-pointer items-center gap-1 text-xs"><ChevronRight className="size-3.5 transition-transform group-data-[state=open]:rotate-90" />{t(\'agents.modelsSettings\')}'));
-  // a turned-off agent keeps «Activar» in view
-  assert.match(agents, /data-testid=\{`agent-enable-\$\{a\.id\}`\}/);
-  const tail = agents.slice(agents.indexOf('<MoreOptions testid="agents-more-options">'));
-  assert.ok(tail.includes('agents.projectSettingsTitle') && tail.includes('<CommitStyleCard />'));
+test('6: the agent row opens into its detail; the technical actions live in the detail «⋯»', () => {
+  const from = agents.indexOf('data-testid={`agent-more-${a.id}`}');
+  const menu = agents.slice(from, agents.indexOf('</DropdownMenuContent>', from));
+  for (const id of ['agent-toggle-', 'agent-scan-', 'agent-open-', 'agent-path-', 'agent-check-', 'agent-reinstall-']) assert.ok(menu.includes('data-testid={`' + id + '${a.id}`}'), id);
+  assert.ok(agents.includes('data-testid={`agent-add-account-${a.id}`}'));
+  assert.ok(!agents.includes('<CardFoot className="flex-wrap gap-2">'), 'no card inside a card');
+  // «Más opciones» is gone from the page, and the commit style lives in Ajustes › General › Git
+  assert.ok(!agents.includes('<MoreOptions'));
+  assert.ok(!agents.includes('CommitStyleCard'));
 });
 
 test('7: one active account says so, as the mock-up does', () => {

@@ -28,12 +28,15 @@ import ws6 from './en/ws6.mjs';
 import ws6android from './en/ws6-android.mjs';
 import phoneEngine from './en/phone-engine.mjs';
 import master from './en/master.mjs';
+import uninstall from './en/uninstall.mjs';
+import cuentasUi from './en/cuentas-ui.mjs';
 import modos from './en/modos.mjs';
 import ola1 from './en/ola1.mjs';
 import mensajeria from './en/mensajeria.mjs';
 import pestanas from './en/pestanas.mjs';
 import comodidad from './en/comodidad.mjs';
 import rebobinar from './en/rebobinar.mjs';
+import copia from './en/copia.mjs';
 import orbchats from './en/orbchats.mjs';
 import notes from './en/notes.mjs';
 import ext from './en/ext.mjs';
@@ -44,6 +47,7 @@ import herramientas from './en/herramientas.mjs';
 import f6nuevas from './en/f6-nuevas.mjs';
 import f6bitacoras from './en/f6-bitacoras.mjs';
 import f6normas from './en/f6-normas.mjs';
+import uso from './en/uso.mjs';
 
 export default {
   ...base,
@@ -75,12 +79,15 @@ export default {
   ...ws6android,
   ...phoneEngine,
   ...master,
+  ...uninstall,
+  ...cuentasUi,
   ...modos,
   ...ola1,
   ...mensajeria,
   ...pestanas,
   ...comodidad,
   ...rebobinar,
+  ...copia,
   ...orbchats,
   ...notes,
   ...ext,
@@ -90,5 +97,6 @@ export default {
   ...herramientas,
   ...f6nuevas,
   ...f6bitacoras,
-  ...f6normas
+  ...f6normas,
+  ...uso
 };

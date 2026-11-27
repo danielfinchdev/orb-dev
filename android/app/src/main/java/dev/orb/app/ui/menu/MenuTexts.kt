@@ -1,12 +1,12 @@
 package dev.orb.app.ui.menu
 
-/** Every text of the menu and of «Memorias y actividad», in Spanish and with the words the desktop app uses. */
+/** Every text of the menu and of «Bitácoras y actividad», in Spanish and with the words the desktop app uses. */
 object MenuTexts {
     const val CHATS = "Chats"
     const val TASKS = "Tareas"
     const val PROJECTS = "Proyectos"
     const val SCHEDULES = "Programadas"
-    const val ACTIVITY = "Memorias y actividad"
+    const val ACTIVITY = "Bitácoras y actividad"
     const val USAGE = "Uso y agentes"
     const val WHITEBOARD = "Pizarra"
     const val GAMES = "Juegos"
@@ -60,7 +60,7 @@ object MenuTexts {
         "agent_problem" to "Problema del agente",
         "log_written" to "Bitácora actualizada",
         "note" to "Nota",
-        "git_commit" to "Cambios guardados (commit)",
+        "git_commit" to "Cambios guardados",
         "files_changed" to "Archivos cambiados",
         "user_message" to "Mensaje del usuario",
         "review_verdict" to "Veredicto de la revisión",

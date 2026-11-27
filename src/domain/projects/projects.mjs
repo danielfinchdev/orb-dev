@@ -11,6 +11,7 @@ import { projectNameProblem } from '../../shared/product.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { scopesRenamed, scopesRemoved } from '../extensions/catalog.mjs';
 import { settleDeleting, deletingProjects } from './project-close.mjs';
+import { newToken, writeMark } from './created-marks.mjs';
 
 export const checkCategory = (category) => {
   const c = String(category ?? '').trim().toLowerCase() || DEFAULT_CATEGORY;
@@ -41,7 +42,9 @@ export function createProject(board, { name, notes = '', category, platforms = [
   const folder = path.join(ctx.paths.categories[cat], dir);
   if (fs.existsSync(folder) && fs.readdirSync(folder).length) throw new Error(tr('msg.projects.folderNotEmpty', { folder }));
   fs.mkdirSync(folder, { recursive: true });
-  if (template === false) return board.addProject({ name: clean, path: folder, notes }, actor);
+  // The mark goes in last, once the folder is whole; a failure to write it only leaves the folder unmarked (kept on uninstall).
+  const marked = () => { const token = newToken(); try { writeMark(folder, token); return token; } catch { return null; } };
+  if (template === false) return board.addProject({ name: clean, path: folder, notes }, actor, { mark: marked() });
   // "-b" needs git 2.28+; older versions get the default branch renamed instead. Without git the project still works
   // (undo then uses a copy of the folder), it just has no branches or GitHub.
   let init = git(folder, 'init', '-q', '-b', 'main');
@@ -57,7 +60,7 @@ export function createProject(board, { name, notes = '', category, platforms = [
     git(folder, 'add', '.');
     git(folder, ...ORB_GIT, 'commit', '-q', '-m', tr('sys.projects.firstCommit'));
   }
-  return board.addProject({ name: clean, path: folder, notes }, actor);
+  return board.addProject({ name: clean, path: folder, notes }, actor, { mark: marked() });
 }
 
 // renames a project and, when it is a project folder of a category, its folder too (name = folder). Only when

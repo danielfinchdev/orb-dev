@@ -162,6 +162,8 @@ fun ThisPhoneScreen(
                             ThisPhoneTexts.LINK_TEST, subtitle = ThisPhoneTexts.LINK_TEST_HINT, onClick = onLinkTest,
                             trailing = { Chevron() },
                         )
+                        // Only the PC allows a phone to approve; here it is just said whether this one may.
+                        OrbSettingRow(ThisPhoneTexts.approveTitle(), subtitle = ThisPhoneTexts.approveLine(state.approve))
                         // What the person can change about Orb in Android, shown as the system has it right now.
                         OrbSettingRow(
                             ThisPhoneTexts.CAMERA, subtitle = when (state.camera) {
@@ -265,6 +267,8 @@ private fun LinkCard(s: ThisPhoneState) {
                     Kv(OrbIcons.Monitor, ThisPhoneTexts.LINK_PC, s.pcName?.takeIf { it.isNotBlank() } ?: ThisPhoneTexts.NO_NAME)
                     Kv(OrbIcons.Fingerprint, ThisPhoneTexts.LINK_FINGERPRINT, s.fingerprint ?: ThisPhoneTexts.NO_FINGERPRINT, mono = true)
                     Kv(OrbIcons.Route, ThisPhoneTexts.LINK_ROUTE, ThisPhoneTexts.route(s))
+                    // Every way to the PC with the last time it worked, so a failure can be told apart (home Wi-Fi or Tailscale).
+                    s.paths.forEach { Kv(OrbIcons.Route, it.label, it.text) }
                 }
             }
         }

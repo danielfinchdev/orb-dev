@@ -35,10 +35,15 @@ export function MsgTime({ at, hover = false, inline = false }) {
   return <time className={cn(hover ? 'msg-time msg-time-hover' : 'msg-time', inline && 'msg-time-inline')} dateTime={d.toISOString()}>{today ? time : `${msgFormat(locale, true).format(d)} ${time}`}</time>;
 }
 
-// The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's).
+// The bar's pause / resume of all of Orb's work (the chat's bar and an agent conversation's). Pausing everything only means
+// something with several agents going at once, so the button stays out of the way until two or more are working; paused,
+// it stays to resume. A task runs in a session, so the larger of the two counts is the number of agents.
+export const WORKING_MIN = 2;
 export function BarPause() {
   const t = useT();
   const paused = useStore((s) => Boolean(s.app?.paused));
+  const working = useStore((s) => Math.max(s.sessions.filter((x) => x.status === 'running').length, s.tasks.filter((x) => x.status === 'running').length));
+  if (!paused && working < WORKING_MIN) return null;
   return paused
     ? <BubbleTip title={t('bar.resume')} text={t('bar.resumeText')}><Button variant="soft" size="icon-sm" onClick={() => setQueuePaused(false, t)} aria-label={t('bar.resume')} data-testid="bar-resume"><Play /></Button></BubbleTip>
     : <BubbleTip title={t('bar.pause')} text={t('bar.pauseText')}><Button variant="ghost" size="icon-sm" onClick={() => setQueuePaused(true, t)} aria-label={t('bar.pause')} data-testid="bar-pause"><Pause /></Button></BubbleTip>;

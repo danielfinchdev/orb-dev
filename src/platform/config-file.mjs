@@ -5,6 +5,7 @@ import { PRODUCT } from '../shared/product.mjs';
 import { APPEARANCE_DEFAULTS, migrateAppearance } from '../shared/appearance.mjs';
 import { DEFAULT_PROTECTED } from '../shared/layout.mjs';
 import { CONFIG_FILE, paths } from './paths.mjs';
+import { REASONING_LEVELS, nearestLevel } from '../shared/reasoning-levels.mjs';
 
 // besides Claude Code, Codex and Cursor, the agents that speak ACP (src/agents/acp.mjs). They show up in Agentes and
 // take work only when their program is installed on this PC.
@@ -121,6 +122,22 @@ export function merge(base, over) {
   return out;
 }
 
+// The assistant's reasoning level on disk. Orb 3.8.9 refuses to save any settings when orchestrator.reasoning is not one of
+// these four, so the file keeps the closest of them there and the real level in reasoningLevel (which that version ignores).
+const LEGACY_REASONING = ['low', 'medium', 'high', 'xhigh'];
+export function storedConfig(config) {
+  const level = config?.orchestrator?.reasoning;
+  if (!REASONING_LEVELS.includes(level)) return config;
+  return { ...config, orchestrator: { ...config.orchestrator, reasoning: nearestLevel(level, LEGACY_REASONING), reasoningLevel: level } };
+}
+// The reverse, on load: the real level wins only while the old field still agrees with it (a 3.8.9 that saved in between
+// moved the old field and left a stale real level behind).
+function readReasoning(config) {
+  const o = config.orchestrator; if (!o) return;
+  const level = o.reasoningLevel; delete o.reasoningLevel;
+  if (REASONING_LEVELS.includes(level) && nearestLevel(level, LEGACY_REASONING) === o.reasoning) o.reasoning = level;
+}
+
 export function loadConfig(home) {
   let stored = {};
   try { stored = JSON.parse(fs.readFileSync(paths(home).config, 'utf8')); } catch (error) { if (error.code !== 'ENOENT') throw new Error(`${CONFIG_FILE} no es válido: ${error.message}`); }
@@ -148,6 +165,7 @@ export function configFrom(stored) {
     if (config.assistantName.trim() === 'Orb·e') config.assistantName = PRODUCT.assistant;
     config.version = 5;
   }
+
   // Orbs no longer link with each other: this Orb's role (todo / centro / taller) and «Orb para programar» go.
   delete config.role; delete config.devTarget;
   // «Monitoreo del equipo» and Opti Bot are gone, and so are the bots, Open Control Edge and the «Orb | Bots» mode too.
@@ -163,5 +181,6 @@ export function configFrom(stored) {
     if (!config.accounts.some((x) => x.agent === a)) config.accounts.push({ id: a, agent: a, label: AGENT_LABELS[a], home: '', enabled: true });
     if (!config.agentOrder.includes(a)) config.agentOrder.push(a);
   }
+  readReasoning(config);
   return config;
 }

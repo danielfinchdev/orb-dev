@@ -52,6 +52,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { Turn, Approvals } from '../../src/agents/live.mjs';
 import { decide } from '../../src/domain/security/guard.mjs';
+import { identityFromClaude, identityFromCodex } from '../../src/agents/identity.mjs';
 
 const SCRIPT = (() => { try { return process.env.ORB_FAKE_SCRIPT ? JSON.parse(fs.readFileSync(process.env.ORB_FAKE_SCRIPT, 'utf8')) : []; } catch { return []; } })();
 
@@ -81,6 +82,13 @@ async function mcpCall(server, name, args, whole = false) {
   return out.result?.content?.[0]?.text ?? JSON.stringify(out);
 }
 
+// Who the folder is signed in to: globalThis.__orbFakeWho(env) returns what the agent's own call would (Claude's accountInfo,
+// Codex's account/read) and goes through the real fingerprint code; nothing set (or null) = the agent does not answer.
+const whoIs = (id, env) => {
+  const raw = typeof globalThis.__orbFakeWho === 'function' ? globalThis.__orbFakeWho(env ?? {}) : null;
+  return id === 'claude' ? identityFromClaude(raw) : id === 'codex' ? identityFromCodex(raw) : null;
+};
+
 export function fakeAdapter(id, real) {
   const caps = { ...(real?.caps ?? { images: false, steer: false, fork: false, approvals: true, models: true, context: true }) };
   return {
@@ -91,6 +99,7 @@ export function fakeAdapter(id, real) {
     loginCommand: (exe) => ({ cmd: exe.cmd, args: ['--version'] }),
     // 3.5: the windowless sign-in of Claude and Codex runs test/fixtures/fake-login.mjs (link, code and outcome).
     windowlessLogin: real?.windowlessLogin, loginExe: () => ({ cmd: process.execPath, pre: [fileURLToPath(new URL('./fake-login.mjs', import.meta.url))] }),
+    accountIdentity: async (exe, env) => whoIs(id, env),
     createLive: (o) => createFakeLive(id, real?.label ?? id, caps, o),
     // 2.6: the models it offers. Fixed test models (clearly marked as such) unless ORB_FAKE_REAL_MODELS=1: then the real
     // agent of this PC is asked (a demo with fake agents shows the real names), if it is installed.
@@ -119,6 +128,7 @@ function createFakeLive(agent, label, caps, o) {
   // A fork or a new conversation gets its own id; a resumed one keeps the agent's id.
   const sessionId = o.forkSession ? `fork-${crypto.randomUUID()}` : o.resumeId || o.newSessionId || `${agent}-${crypto.randomUUID()}`;
   const live = { sessionId, caps: { ...caps, interrupt: true }, pid: process.pid, get busy() { return Boolean(turn && !turn.done); } };
+  live.whoami = async () => (closed ? null : whoIs(agent, o.env));
   const record = (what) => {
     const line = JSON.stringify({ fake: agent, at: new Date().toISOString(), sessionId, resumeId: o.resumeId ?? null, forkSession: Boolean(o.forkSession), newSessionId: o.newSessionId ?? null,
       model, permission, cwd: o.cwd, codexHome: o.env?.CODEX_HOME ?? null, claudeDir: o.env?.CLAUDE_CONFIG_DIR ?? null, orbTask: o.env?.ORB_TASK_ID ?? null, budgetUsd: o.budgetUsd ?? null, ...what });

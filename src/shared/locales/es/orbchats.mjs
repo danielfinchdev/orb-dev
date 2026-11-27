@@ -9,6 +9,7 @@ export default {
   'orbchats.activity': 'Toda la actividad',
   'orbchats.activityTip': 'Bitácoras › Actividad',
   'orbchats.doneCount': 'Completados · {n}',
+  'orbchats.undoDone': 'Deshacer',
   'orbchats.places': 'Más sitios de Orb',
   'orbchats.noProject': 'Sin proyecto',
   'orbchats.empty': 'Aún no hay chats. Empieza uno con «Nuevo chat».',
@@ -110,7 +111,7 @@ export default {
   'orbchats.orchestratorTip': 'En un chat con {name}, {name} reparte el trabajo entre los agentes. Para hablar directamente con un agente, empieza un chat nuevo con el orquestador apagado.',
   'orbchats.tasks': 'Tareas de este chat',
   'orbchats.noTasks': 'Este chat aún no ha creado tareas.',
-  'orbchats.compact': 'Compactar la conversación',
+  'orbchats.compact': 'Compactar el chat',
   'orbchats.export': 'Exportar el chat',
   'orbchats.exported': 'Chat exportado',
   'orbchats.exportYou': 'Tú',
@@ -122,6 +123,10 @@ export default {
   'orbchats.pBoard': 'Pizarra',
   'orbchats.pLog': 'Bitácora',
   'orbchats.pSettings': 'Ajustes del proyecto',
-  'orbchats.pGod': 'Abrir en God mode',
-  'orbchats.pNoPath': 'Sin carpeta'
+  'orbchats.pGod': 'Abrir en modo experto',
+  'orbchats.pNoPath': 'Sin carpeta',
+  'newchat.project': 'Nuevo proyecto',
+  'newchat.hint': 'Elige dónde empezar',
+  'newchat.pickHint': 'Elige el proyecto del chat, o empieza sin proyecto. Ctrl+1, Ctrl+2… eligen directamente.',
+  'newchat.search': 'Buscar proyecto'
 };

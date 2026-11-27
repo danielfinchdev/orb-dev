@@ -32,7 +32,7 @@ export const STATE_KEYS = Object.freeze({
     'digest_shown:': 'device',
     // a task's (by its id)
     'accepted:': 'task', 'auto_retry:': 'task', 'budget_ok:': 'task', 'checkpoint:': 'task', 'followup:': 'task', 'integrate:': 'task',
-    'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',
+    'integrate_error:': 'task', 'integrate_error_at:': 'task', 'isolated:': 'task', 'join_task:': 'task', 'joinpartial:': 'task', 'engine_task:': 'task', 'leftovers_pending:': 'task',
     'orphan_copy:': 'task', 'pause_offer:': 'task', 'progress:': 'task', 'quiet_notice:': 'task', 'readonly_bitacora:': 'task',
     'resumed_run:': 'task', 'review:': 'task', 'unblock_asked:': 'task', 'undone:': 'task', 'wait_notice:': 'task',
     // an account's or an agent's
@@ -40,13 +40,13 @@ export const STATE_KEYS = Object.freeze({
     'models_try:': 'account', 'model_limit:': 'account', 'model_limit_at:': 'account', 'plan:': 'account', 'plan_try:': 'account',
     'rate:': 'account', 'rates:': 'account',
     // a session's (a direct conversation with an agent or a task's run)
-    'fork_pending:': 'session', 'fork_summary:': 'session', 'handoff_summary:': 'session', 'grant_prev:': 'session', 'goal:': 'session', 'debug:': 'session',
+    'fork_pending:': 'session', 'pending_account:': 'session', 'account_problem:': 'session', 'fork_summary:': 'session', 'handoff_summary:': 'session', 'grant_prev:': 'session', 'goal:': 'session', 'debug:': 'session',
     // a conversation's with the assistant
-    'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation',
+    'pending_questions:': 'conversation', 'report_queue:': 'conversation', 'inbox_since:': 'conversation', 'assistant_cwd:': 'conversation', 'brake_told:': 'conversation', 'pending_brain:': 'conversation',
     // a project's
     'actions:': 'project', 'wb_seen:': 'project', 'pr_review:': 'project',
     // a chat's own worktree (src/engine/chat-worktrees.mjs, by session id)
-    'chatwt:': 'session',
+    'chatwt:': 'session', 'chatmoves:': 'session', 'chatcp:': 'session', 'chatres:': 'session', 'chatcopy_next:': 'session', 'folder_note:': 'session', 'chatresume:': 'session',
     // older versions' (deleted when the engine starts or by the 3.8 migration)
     'orchestrator_conv:': 'legacy', 'agent_id:': 'legacy', 'secret:': 'legacy',
   }),

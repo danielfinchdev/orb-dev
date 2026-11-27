@@ -11,7 +11,7 @@ export default {
   'wb.saving': 'Guardando…',
   'wb.attachments': 'Adjuntos',
   'wb.attach': 'Adjuntar archivos',
-  'wb.attachHint': 'Fotos, vídeos y documentos. También puedes arrastrarlos aquí; para insertar una imagen en el dibujo, arrástrala al lienzo.',
+  'wb.attachHint': 'Fotos, vídeos y documentos. También puedes arrastrarlos aquí. Para insertar una imagen en el dibujo, arrástrala al lienzo.',
   'wb.attachPcOnly': 'Los archivos se adjuntan desde el PC.',
   'wb.attached': 'Adjuntados: {n}',
   'wb.notePh': 'Nota para {assistant}: para qué sirve este archivo',

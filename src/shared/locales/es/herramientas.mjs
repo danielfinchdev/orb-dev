@@ -110,7 +110,7 @@ export default {
   'msg.pr.commentFailed': 'El usuario aceptó el comentario en el pull request #{n}, pero no se pudo publicar: {detail}',
   'htmlpage.untitled': 'Página sin título',
   'htmlpage.internet': 'Permitir internet',
-  'htmlpage.internetHint': 'Apagado de serie. Solo para esta página; al cambiarlo se recarga.',
+  'htmlpage.internetHint': 'Apagado de serie. Solo para esta página. Al cambiarlo se recarga.',
   'htmlpage.close': 'Cerrar página',
   'htmlpage.frame': 'Página HTML: {title}',
   'msg.html.noChat': 'Esta herramienta solo funciona desde un chat.',
@@ -179,11 +179,9 @@ export default {
   'prbar.watchOn': 'Vigilancia de la CI activada.',
   'prbar.watchOff': 'Vigilancia de la CI apagada.',
   'agents.commit.title': 'Mensajes de commit',
-  'agents.commit.desc': 'Cómo escribe Orb el mensaje de «Hacer commit…». Nunca lleva firmas de IA.',
   'agents.commit.conventional': 'Conventional Commits (recomendado)',
   'agents.commit.repo': 'Las convenciones del repositorio',
   'agents.commit.custom': 'Mis instrucciones',
   'agents.commit.instructions': 'Instrucciones',
   'agents.commit.ph': 'Por ejemplo: en español, una línea, empieza por el módulo.',
-  'agents.commit.save': 'Guardar'
 };

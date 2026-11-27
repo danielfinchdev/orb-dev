@@ -19,16 +19,16 @@ const keptHere = (userData, h) => {
   const keys = [homeKey(h), oldHomeKey(h)];
   return names.some((n) => keys.some((k) => n === k || n.startsWith(`${k}.`) || n.startsWith(`${k}-`)));
 };
-function readLocation(userData) {
+export function readLocation(userData) {
   try { const h = JSON.parse(fs.readFileSync(location(userData), 'utf8')).home; return typeof h === 'string' && h && (isHome(h) || (fs.existsSync(h) && keptHere(userData, h))) ? h : null; } catch { return null; }
 }
-function saveLocation(userData, home) { fs.mkdirSync(userData, { recursive: true }); writeJson(location(userData), { home }); }
+export function saveLocation(userData, home) { fs.mkdirSync(userData, { recursive: true }); writeJson(location(userData), { home }); }
 
 // A fresh install (no saved location) on a PC that already has an Orb folder uses it as it is: <drive>:\Orb, Documents\Orb
 // or <user>\Orb, the most recently used one if there are several. Nothing is created or overwritten. Only for an installed
 // app with its normal data folder: tests and runs from the code (separate data folder or not packaged) never pick up a
 // real folder.
-function findExistingHome({ packaged, separateData, documents, profile, platform = process.platform }) {
+export function findExistingHome({ packaged, separateData, documents, profile, platform = process.platform }) {
   if (!packaged || separateData) return null;
   // Drive letters only exist on Windows; on Linux / macOS, Documents/Orb and ~/Orb.
   const drives = platform !== 'win32' ? [] : 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } });
@@ -48,6 +48,7 @@ export function locateHome({ userData, packaged = false, separateData = false, d
 export function setupHome({ userData, base, assistantName, userName, language }) {
   const { home } = createHome(String(base ?? ''), { assistantName: String(assistantName ?? PRODUCT.assistant), userName: String(userName ?? ''), language: language === 'en' ? 'en' : 'es' });
   saveLocation(userData, home);
+  try { fs.rmSync(path.join(userData, 'desinstalado.json'), { force: true }); } catch { /* the next start asks again */ }
   return home;
 }
 

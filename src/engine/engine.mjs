@@ -139,6 +139,7 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // This workspace's keys only (a switch of workspace starts again in the same process).
   let keys = null; ctx.keys = null; ctx.secret = null;
   if (typeof userData === 'string' && path.isAbsolute(userData)) {
+    ctx.userData = userData;
     adoptOldKeyNames(userData, home);
     keep ??= secretsCopy(userData, home);
     if (!validSecret(secret) && hostSecret === true) keys = await secretFromApp(home, userData, newSecret);
@@ -180,8 +181,24 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // and what can be done (coreBlocked). All of it before the database opens.
   // a workspace on a drive that is waking up or coming back (a USB or network disk) is waited for
   // a little before saying it is not there.
-  for (let i = 0; !fs.existsSync(home) && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
-  if (!fs.existsSync(home)) throw new Error(tr('sys.engine.notHome', { home }));
+  // A delete that is not over (journal on disk) decides the start: nothing may be brought back from a replica or a backup.
+  const U = await import('../domain/data/uninstall.mjs');
+  const journalFile = () => !!ctx.userData && fs.existsSync(U.journalPath(ctx.userData));
+  // only a journal signed by this PC suppresses the repairs: one that cannot be checked deletes nothing, so a normal start runs
+  const journalLeft = () => journalFile() && ['stopped', 'running'].includes(U.pendingJournal(ctx.userData, ctx.keys?.approval ?? null).state);
+  for (let i = 0; !fs.existsSync(home) && !journalLeft() && i < HOME_WAIT_TRIES; i++) await new Promise((r) => setTimeout(r, 1000));
+  if (!fs.existsSync(home) && !journalLeft()) throw new Error(tr('sys.engine.notHome', { home }));
+  // A «Desinstalar» / «Restablecer» that was cut: its journal finishes what it can before anything below could bring data back.
+  let resumed = null;
+  if (ctx.userData) { try { resumed = await U.resumeAndReport(ctx.userData, ctx.keys?.approval ?? null); if (resumed) log(`desinstalar: diario retomado (${resumed.ok ? 'terminado' : 'incompleto'})`); } catch (error) { log(`desinstalar: ${error.message}`); } }
+  // «Borrar todo» finished by this start: the window goes on to the uninstaller with a new code (nothing is left to open).
+  if (resumed?.resumed && resumed.ok && resumed.mode === 'uninstall') return uninstallFinished(resumed.plan);
+  if (journalLeft()) {
+    // stopped, or one this PC cannot check: the window offers «Seguir borrando» / «Dejarlo así» on what is there
+    fs.mkdirSync(home, { recursive: true });
+    mirror = null; // openMaster would bring the vault back from its replica
+    return open({ home, version, repair: null });
+  }
   const { migrateWorkspace } = await import('../domain/workspace/core-folder.mjs');
   migrateWorkspace(home); // a folder some program is using: nothing moves and the start fails with a clear message
   // The first 3.8 builds named this workspace's backups' folder after its whole path: taken over once.
@@ -189,13 +206,33 @@ async function start(home, version, secret, browser, keep = null, userData = nul
   // the master password's files come back first from their copy outside core (newer than any backup).
   { const { restoreMissing } = await import('../domain/security/master.mjs'); try { restoreMissing(paths(home).secrets, mirror); } catch (error) { console.error(`secretos: ${error.message}`); } }
   const { repairCore } = await import('../domain/data/backup.mjs');
-  const repair = await repairCore(home, { secret: secretOf(home) });
+  const repair = await repairCore(home, { secret: secretOf(home), adopt: adopter(home) });
   if (!repair.ok) return coreBlocked({ home, version, repair });
   return open({ home, version, repair });
+}
+// After «Borrar todo» was finished by a restart: only the window's way to the uninstaller (app.coreState tells it to go on).
+async function uninstallFinished(plan) {
+  const code = (await import('node:crypto')).randomBytes(16).toString('hex');
+  const { markText } = await import('./api/uninstall.mjs');
+  fs.mkdirSync(ctx.userData, { recursive: true });
+  fs.writeFileSync(path.join(ctx.userData, (await import('../domain/data/uninstall.mjs')).MARK_FILE), markText({ plan, code }));
+  api = {
+    async call(method, params, principal) {
+      authorize(principal, method);
+      if (method === 'app.coreState') return { missing: false, uninstalled: true, code };
+      // the uninstaller did not start: its mark goes too, or the next start asks the reinstall question
+      if (method === 'uninstall.restart') { try { fs.rmSync(path.join(ctx.userData, (await import('../domain/data/uninstall.mjs')).MARK_FILE), { force: true }); } catch { /* it expires */ } setTimeout(() => process.exit(75), 700).unref?.(); return { ok: true }; }
+      throw Object.assign(new Error(tr('data.core.blocked')), { userFacing: true });
+    },
+    shutdown() {}
+  };
+  return { home: ctx.home ?? null, name: PRODUCT.assistant, core: null };
 }
 // The secret the backups are sealed with: the app's, or the plain one of a run without the app (never made here).
 // This PC's backup key: from the vault (the app), or from the plain clave.bin of a run without it (never made here).
 const secretOf = (home) => machineKeys({ create: false, home })?.backup ?? null;
+// What settles a restored copy's code wrap in the vault (master.mjs › adoptStaged); none without a secret to open it with.
+const adopter = (home) => { const s = masterSecret(home); return s ? async (dir, code, copy) => (await import('../domain/security/master.mjs')).adoptStaged(dir, code, s, copy) : null; };
 // What opens core\secretos for this PC: the vault's own secret (the app), a given one, or the plain clave.bin.
 const masterSecret = (home) => (ctx.keys?.inVault ? IN_VAULT : ctx.secret ?? (() => { try { const k = fs.readFileSync(paths(home).key); return k.length >= 32 ? k : null; } catch { return null; } })());
 
@@ -257,7 +294,7 @@ function coreBlocked({ home, version, repair }) {
       if (!fs.existsSync(cfg)) writeJson(cfg, merge(DEFAULT_CONFIG, { language: language === 'en' ? 'en' : 'es' }));
     } else {
       const { repairCore } = await import('../domain/data/backup.mjs');
-      next = await repairCore(home, { secret: secretOf(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,
+      next = await repairCore(home, { secret: secretOf(home), adopt: adopter(home), passphrase: typeof passphrase === 'string' && passphrase ? passphrase.slice(0, 200) : null,
         file: typeof file === 'string' && /\.orbbak$/i.test(file) && path.isAbsolute(file) && fs.existsSync(file) ? file : null });
       if (!next.ok) { core = { ...core, reason: next.reason, backup: next.backup ?? core.backup, error: next.error ?? null }; return core; }
     }
@@ -394,7 +431,9 @@ async function run(board, { home, version, restored, repair }) {
   if (ctx.master.unlocked()) settleWaitingKeys(board, log);
   // Orb locked: the agents' browser stops recording (host-browser.mjs › lock).
   const onLocked = () => { hostBrowser?.lock().catch?.((error) => log(`navegador del agente: grabación: ${error.message}`)); };
-  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked, onLocked });
+  api = buildApi({ board, sessions, orchestrator, scheduler, emit, log, version, remoteRef, onUnlocked, onLocked,
+    // what only this file holds: the agents' browser, the developer's control line and the phone access
+    onQuiesce: async () => { try { hostBrowser?.shutdown(); } catch { /* stopping anyway */ } try { devControl?.stop(); } catch { /* stopping anyway */ } await Promise.resolve(remote?.stop()).catch(() => {}); } });
   remote = remoteRef.current = createRemote({ board, api, log, emit, version });
   // only an unpacked Orb.dev started with ORB_DEV_CONTROL=1 (the app decides: src-tauri/src/lib.rs; never an installed Orb).
   if (process.env.ORB_DEV_CONTROL === '1') {
@@ -420,6 +459,8 @@ async function run(board, { home, version, restored, repair }) {
   const { syncProjects } = await import('../domain/projects/projects.mjs');
   // a project delete the app left half-way (closed between the check and the end) is finished or undone.
   try { (await import('../domain/projects/project-close.mjs')).settleDeleting(board, home, { all: true }); } catch (error) { log(`eliminar proyecto: ${error.message}`); }
+  // after «Empezar de cero»: the projects Orb made come back with their mark, before the folders are looked at
+  try { (await import('../domain/data/uninstall.mjs')).importKeptProjects(home, board); } catch (error) { log(`proyectos conservados: ${error.message}`); }
   syncProjects(board);
   // the skills of core that are on, ready for the agents (core\skills\.activas).
   try { (await import('./api/extensions.mjs')).refreshSkills(); } catch (error) { log(`skills: ${error.message}`); }
@@ -428,7 +469,8 @@ async function run(board, { home, version, restored, repair }) {
   const limitWatch = createLimitWatch({ board, announce: (fact) => remote?.announce(fact) });
   let ticking = false; let lastSync = Date.now();
   const loop = () => {
-    if (ticking) return; ticking = true;
+    // «Desinstalar» / «Restablecer» is deleting core: the loop must not take that for a core lost (it would restore it).
+    if (ticking || ctx.uninstalling) return; ticking = true;
     try {
       // Folders created or deleted by hand in the assistant's folder show up in the app within a few seconds.
       if (Date.now() - lastSync > 5000) {
@@ -454,6 +496,8 @@ async function run(board, { home, version, restored, repair }) {
   if (repair?.restored) board.notice(tr('data.core.restored', { created: String(repair.restored.created ?? '').slice(0, 16).replace('T', ' ') }), 'warning');
   // «two keys» is said once for each clave.enc of Orb 3.8.0, not at every start.
   for (const key of keyNotices.splice(0)) board.notice(tr(key, { name: PRODUCT.name }), 'warning');
+  // what a run of «Desinstalar» / «Restablecer» that was cut could not finish (domain/data/uninstall.mjs › resumeAndReport)
+  if (ctx.userData) { try { const r = (await import('../domain/data/uninstall.mjs')).takeReport(ctx.userData); if (r && !r.untrusted && !r.stopped) board.notice(tr('uninstall.cut', { done: r.done, left: r.failed + r.skipped }), 'warning'); } catch (error) { log(`desinstalar: ${error.message}`); } }
   if (restored) { log(`copia restaurada: ${restored.from} (lo anterior está en ${restored.aside})`); board.notice(tr('data.backup.restored', { created: String(restored.header?.created ?? '').slice(0, 16).replace('T', ' ') }), 'success'); }
   // a data folder of 3.5–3.7 was moved to 3.8 when its database opened (src/domain/data/legacy/migrate-38.mjs): said once.
   {
@@ -523,8 +567,15 @@ function shutdown() {
 // (sys.main.*, sys.dialog.* and sys.terminal.*: the terminals and editors it opens) in the language of the settings.
 // Not API methods: the window cannot send them.
 const SHELL_TEXTS = /^sys\.(main|dialog|terminal)\./;
+const locateOptions = (m) => ({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null });
 const APP_MESSAGES = {
-  locate: (m) => ({ home: locateHome({ userData: String(m.userData ?? ''), packaged: m.packaged === true, separateData: m.separateData === true, documents: m.documents ?? null, profile: m.profile ?? null }) }),
+  // A workspace left by an earlier install is never adopted in silence: previous says so and the window asks (src/engine/previous.mjs).
+  locate: async (m) => {
+    const where = locateOptions(m);
+    const previous = (await import('./previous.mjs')).previousData(where);
+    return { home: previous ? null : locateHome(where), previous };
+  },
+  previousChoice: async (m) => (await import('./previous.mjs')).answerPrevious({ ...locateOptions(m), language: m.language === 'en' ? 'en' : 'es' }, String(m.choice ?? '')),
   setup: (m) => ({ home: setupHome({ userData: String(m.userData ?? ''), base: m.base, assistantName: m.assistantName, userName: m.userName, language: m.language }) }),
   switchHome: (m) => ({ ok: switchHome({ userData: String(m.userData ?? ''), target: m.target }) }),
   // The little window of the agents' browser: its buttons and Ajustes › «Ver el navegador» (src/engine/browser/host-browser.mjs).

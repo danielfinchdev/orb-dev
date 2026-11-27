@@ -62,20 +62,37 @@ data class LiveInfo(val busy: Boolean, val waiting: Boolean, val queued: Int, va
 
 /** The brain a conversation thinks with, as the PC names it (`chat.settings`). Nothing here is guessed. */
 @Immutable
-data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reasoning: String?) {
+data class BrainInfo(val agentLabel: String?, val modelLabel: String?, val reasoning: String?, val account: AccountMark? = null) {
     /** «Opus · alto»: the model (or the agent when the PC names no model) and the reasoning level. */
     val label: String?
         get() = listOfNotNull((modelLabel ?: agentLabel)?.takeIf { it.isNotBlank() }, reasoning?.let(::reasoningWord)).joinToString(" · ").ifEmpty { null }
 
+    /** «[PGC] Opus · alto» or «[Auto·PGC] Opus · alto»: [label] with the account's mark in front, when the agent has several. */
+    val markedLabel: String?
+        get() = label?.let { l -> account?.let { "[${it.text}] $l" } ?: l }
+
     companion object {
         fun reasoningWord(level: String): String = when (level) {
+            "minimal" -> "mínimo"
             "low" -> "bajo"
             "medium" -> "medio"
             "high" -> "alto"
-            "xhigh" -> "extra"
+            "xhigh" -> "extra alto"
+            "max" -> "máximo"
             else -> level
         }
     }
+}
+
+/**
+ * The account a chat uses, as the PC marks it (`tag`, `color`). Only built when the agent has more than one account.
+ * [pendingTag] is the account a change is waiting to switch to once the running turn ends.
+ */
+@Immutable
+data class AccountMark(val tag: String, val color: String?, val fixed: Boolean, val pendingTag: String? = null) {
+    /** «PGC» (fixed), «Auto·PGC» (automatic) and «PGC → STA» while a change waits. */
+    val text: String
+        get() = (if (fixed) tag else "Auto·$tag").let { t -> pendingTag?.let { "$t → $it" } ?: t }
 }
 
 /** A message that waits in the PC's queue behind the running turn (`chat.queue`); [id] is the PC's own. */
@@ -190,10 +207,22 @@ object OrbeParser {
     fun answer(state: JsonObject): ChatMessage? = (state["answer"] as? JsonObject)?.let(::message)
 
     /** `chat.settings` → the brain; null when the PC says nothing usable. */
-    fun brain(el: kotlinx.serialization.json.JsonElement?): BrainInfo? {
+    fun brain(el: kotlinx.serialization.json.JsonElement?, catalog: kotlinx.serialization.json.JsonElement? = null): BrainInfo? {
         val o = el as? JsonObject ?: return null
-        val info = BrainInfo(o.str("agentLabel"), o.str("modelLabel"), o.str("reasoning"))
+        val info = BrainInfo(o.str("agentLabel"), o.str("modelLabel"), o.str("reasoning"), accountMark(o, catalog))
         return info.takeIf { it.label != null }
+    }
+
+    /** The mark of the chat's account from `models.catalog`; null when the agent has one account only or the catalog does not name it. */
+    private fun accountMark(settings: JsonObject, catalog: kotlinx.serialization.json.JsonElement?): AccountMark? {
+        val agent = (catalog as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }.firstOrNull { it.str("id") == settings.str("agent") } ?: return null
+        val entries = ((agent["accounts"] as? JsonArray).orEmpty() + (agent["unusable"] as? JsonArray).orEmpty()).mapNotNull { it as? JsonObject }
+        if (entries.size < 2) return null
+        fun tagOf(id: String?) = entries.firstOrNull { it.str("id") == id }
+        val mine = tagOf(settings.str("account")) ?: return null
+        val tag = mine.str("tag")?.takeIf { it.isNotBlank() } ?: return null
+        val pending = (settings["pending"] as? JsonObject)?.str("account")?.takeIf { it != settings.str("account") }
+        return AccountMark(tag, mine.str("color"), settings.bool("accountFixed"), tagOf(pending)?.str("tag"))
     }
 
     /** `tasks.live` → the running tasks. */

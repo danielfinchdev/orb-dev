@@ -17,7 +17,13 @@ pub const MASTER: &str = "maestra.json";
 pub const MACHINE: &str = "maestra-pc.json";
 pub const VAULT: &str = "secretos.json";
 pub const TRIES: &str = "intentos.json";
-pub const KEPT: [&str; 3] = [MASTER, MACHINE, VAULT];
+pub const CODE: &str = "maestra-codigo.json";
+pub const KEPT: [&str; 4] = [MASTER, CODE, MACHINE, VAULT];
+/// The secrets a data key authenticates and a new one never carries over (Hello's public key; the phones' approval keys).
+pub const APPROVE_PREFIX: &str = "master/approve/";
+/// Left in a restored folder when its secrets could not be opened there: the first open drops what a copy must not bring back.
+const RESTORED: &str = "restaurado.json";
+pub mod code;
 pub const MIN_LENGTH: usize = 10;
 pub const MAX_LENGTH: usize = 256;
 pub const UNLOCK_MS: u64 = 5 * 60_000;
@@ -36,6 +42,10 @@ pub enum Code {
   Lost,
   Locked,
   Damaged,
+  /// A chosen phrase where a generated code is needed.
+  Phrase,
+  /// The action needs the password itself (a code alone cannot rewrap maestra.json).
+  NeedsPassword,
 }
 impl Code {
   pub fn as_str(self) -> &'static str {
@@ -46,6 +56,8 @@ impl Code {
       Self::Lost => "lost",
       Self::Locked => "locked",
       Self::Damaged => "damaged",
+      Self::Phrase => "phrase",
+      Self::NeedsPassword => "needsPassword",
     }
   }
 }
@@ -220,6 +232,25 @@ impl Tried {
   }
 }
 
+/// What proved the person is there. A password token is good for everything; a Hello token is not good for the secrets
+/// (the engine's permissions say which actions: src/domain/security/permissions.mjs), so the strength travels with it.
+/// A phone's approval (approve.rs) is the third: a one-use token for one action and its parameters, taken only by name.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Strength {
+  Password,
+  Hello,
+  Mobile,
+}
+impl Strength {
+  pub fn as_str(self) -> &'static str {
+    match self {
+      Self::Password => "password",
+      Self::Hello => "hello",
+      Self::Mobile => "mobile",
+    }
+  }
+}
+
 enum Cache {
   Unread,
   Empty,
@@ -233,7 +264,13 @@ pub struct Vault {
   dek: Option<Locked>,
   key_id: Option<String>,
   cache: Cache,
-  tokens: HashMap<String, (u64, Option<String>)>,
+  tokens: HashMap<String, (u64, Option<String>, Strength)>,
+  /// Windows Hello: the pending nonce and the limit of prompts (hello.rs); memory only.
+  pub(crate) hello: crate::hello::State,
+  /// The phones' approvals: challenges waiting for a signature and the rebuild's step (approve.rs); memory only.
+  pub(crate) approve: crate::approve::State,
+  /// The one-use link code (link.rs); memory only.
+  pub(crate) link: crate::link::State,
   fails: HashMap<String, u64>,
   fails_until: HashMap<String, u64>,
   had_machine: bool,
@@ -244,6 +281,8 @@ pub struct Vault {
   pub changed: bool,
   /// Channels that just reached another FREE_TRIES wrong tries in a row (the engine tells the owner).
   pub notices: Vec<(String, u64)>,
+  /// Wraps this start found for another data key and took out of the way (the engine tells the owner).
+  pub stale: Vec<&'static str>,
 }
 
 impl Vault {
@@ -256,12 +295,16 @@ impl Vault {
       key_id: None,
       cache: Cache::Unread,
       tokens: HashMap::new(),
+      hello: Default::default(),
+      approve: Default::default(),
+      link: Default::default(),
       fails: HashMap::new(),
       fails_until: HashMap::new(),
       had_machine: false,
       may_issue: false,
       changed: false,
       notices: Vec::new(),
+      stale: Vec::new(),
     }
   }
   pub fn costs(&self) -> Costs {
@@ -296,7 +339,7 @@ impl Vault {
     let file = wrapped(&m).is_some();
     let had = file || self.had_password() || read_json(&self.file(MACHINE)).is_some_and(|v| v.get("password") == Some(&json!(true)));
     let changed = m.as_ref().and_then(|m| m.get("changed").filter(|v| !v.is_null()).or_else(|| m.get("created").filter(|v| !v.is_null()))).cloned().unwrap_or(Value::Null);
-    json!({ "exists": had, "lost": had && !file, "locked": self.dek.is_none(), "changedAt": changed })
+    json!({ "exists": had, "lost": had && !file, "locked": self.dek.is_none(), "changedAt": changed, "hasCode": wrapped(&read_json(&self.file(CODE))).is_some() })
   }
 
   fn use_key(&mut self, key: Locked) {
@@ -320,6 +363,7 @@ impl Vault {
         if key.len() == 32 && crypto::key_id(key.as_slice()) == key_id {
           self.use_key(key);
           self.had_machine = had;
+          self.purge_stale();
           return Ok(true);
         }
       }
@@ -498,6 +542,11 @@ impl Vault {
       return None;
     }
     let key = crypto::unseal(kek, str_of(m, "wrapped")?, &aad_password(key_id))?;
+    self.accept_key(key, key_id)
+  }
+  /// A candidate data key (from a wrap) counts only when it is THE data key: the one open here (constant time), or, with
+  /// none open, one that opens the secrets that are here.
+  fn accept_key(&self, key: Locked, key_id: &str) -> Option<Locked> {
     if key.len() != 32 || crypto::key_id(key.as_slice()) != key_id {
       return None;
     }
@@ -519,6 +568,7 @@ impl Vault {
         self.use_key(k);
         self.had_machine = true;
         self.seal_for_machine();
+        self.purge_stale();
       }
     }
     if let Ok(items) = self.items() {
@@ -576,18 +626,26 @@ impl Vault {
       return Err(Code::Locked);
     }
     let mut items = self.items()?;
-    let kept: Map<String, Value> = keep.iter().filter_map(|id| items.0.remove(id).map(|v| (id.clone(), v))).collect();
+    let kept: Map<String, Value> = keep.iter().filter(|id| id.as_str() != crate::hello::HELLO_ID && !id.starts_with(APPROVE_PREFIX)).filter_map(|id| items.0.remove(id).map(|v| (id.clone(), v))).collect();
     let kept = Items(kept);
     self.use_key(crypto::random(32));
+    // A new data key never carries Hello over: its public key was authenticated by the old one. Its code wrap goes too.
+    self.hello = Default::default();
+    self.approve = Default::default();
+    self.tokens.clear();
+    let _ = std::fs::remove_file(self.file(CODE));
     self.write_items(&kept.0)
   }
   /// «Borrar secretos y empezar de cero»: the sealed files go, a new data key and an empty vault.
   pub fn wipe_all(&mut self) -> Result<(), Code> {
-    for f in KEPT {
+    for f in KEPT.iter().chain(&[RESTORED]) {
       let _ = std::fs::remove_file(self.file(f));
     }
     self.had_machine = false;
     self.use_key(crypto::random(32));
+    self.hello = Default::default();
+    self.approve = Default::default();
+    self.tokens.clear();
     self.write_items(&Map::new())
   }
   pub fn clear_tries(&mut self) {
@@ -597,25 +655,56 @@ impl Vault {
   }
 
   // ---- the window's unlock tokens (memory only)
+  /// A password (or the recovery code's step) was just checked: the window's token, or a one-use one for `purpose`.
   pub fn issue(&mut self, purpose: Option<String>, now: u64) -> Result<Value, Code> {
-    if !std::mem::take(&mut self.may_issue) {
+    // Only Hello makes the rebuild token (hello.rs › REBUILD): nothing a password checked can ask for it.
+    if purpose.as_deref() == Some(crate::hello::REBUILD) || !std::mem::take(&mut self.may_issue) {
       return Err(Code::Locked);
     }
+    Ok(self.issue_with(purpose, Strength::Password, now))
+  }
+  pub(crate) fn issue_with(&mut self, purpose: Option<String>, strength: Strength, now: u64) -> Value {
     self.tokens.retain(|_, t| t.0 > now);
     let token: String = crypto::random(24).as_slice().iter().map(|b| format!("{b:02x}")).collect();
     let until = now + if purpose.is_some() { FRESH_MS } else { UNLOCK_MS };
-    self.tokens.insert(token.clone(), (until, purpose));
-    Ok(json!({ "unlock": token, "until": until }))
+    self.tokens.insert(token.clone(), (until, purpose, strength));
+    json!({ "unlock": token, "until": until, "strength": strength.as_str() })
   }
   pub fn check_token(&mut self, token: &str, purpose: Option<&str>, consume: bool, now: u64) -> bool {
-    let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose);
+    self.check_strength(token, purpose, None, consume, now)
+  }
+  /// `need`: the weakest strength accepted (Some(Password) refuses a Hello token; Some(Hello) takes a password's or Hello's;
+  /// Some(Mobile) takes only a phone's approval, which nothing else does).
+  pub fn check_strength(&mut self, token: &str, purpose: Option<&str>, need: Option<Strength>, consume: bool, now: u64) -> bool {
+    let fits = |have: Strength| match need {
+      None => true,
+      Some(Strength::Password) => have == Strength::Password,
+      Some(Strength::Hello) => matches!(have, Strength::Password | Strength::Hello),
+      Some(Strength::Mobile) => have == Strength::Mobile,
+    };
+    let ok = self.tokens.get(token).is_some_and(|t| t.0 > now && t.1.as_deref() == purpose && fits(t.2));
     if ok && consume {
       self.tokens.remove(token);
     }
     ok
   }
+  pub fn strength_of(&self, token: &str, now: u64) -> Option<Strength> {
+    self.tokens.get(token).filter(|t| t.0 > now).map(|t| t.2)
+  }
+  /// Drops these tokens (a phone's approvals when it is unlinked).
+  pub(crate) fn drop_tokens(&mut self, list: &[String]) {
+    for t in list {
+      self.tokens.remove(t);
+    }
+  }
+  pub(crate) fn token_alive(&self, token: &str, now: u64) -> bool {
+    self.tokens.get(token).is_some_and(|t| t.0 > now)
+  }
   pub fn lock(&mut self) {
     self.tokens.clear();
+    self.hello.drop_pending();
+    self.approve = Default::default();
+    self.link = Default::default();
     self.may_issue = false;
   }
 

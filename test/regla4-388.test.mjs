@@ -24,19 +24,21 @@ test('d: Ajustes gathers what the mock-up lacks under one «Más opciones» piec
   assert.match(rows, /export function MoreOptions\(\{ fold = false/);
   for (const l of ['es', 'en']) assert.match(locale(l, 'settings'), /'settings\.moreOptions'/);
   assert.match(locale('es', 'settings'), /'settings\.moreOptions': 'Más opciones'/);
-  // General: chat tabs and shortcuts, not folded, after Actualizaciones
+  // General has no «Más opciones» any more: the chat tabs went to Apariencia and the shortcuts to their own section
   const index = src('views', 'settings', 'index.jsx');
-  assert.match(index, /<MoreOptions testid="more-options-general"><ZoomFineCard \/><TabsCard c=\{c\} \/><ShortcutsCard \/><\/MoreOptions>/);
+  assert.doesNotMatch(index, /more-options-general/);
   // Robot y sonidos: «Música que reacciona» and «Intensidad»
   const general = src('views', 'settings', 'general.jsx');
   const more = general.slice(general.indexOf('function MusicMore'), general.indexOf('function MusicSettings'));
-  assert.match(more, /<MoreOptions testid="more-options-music">/);
+  // no second «Más opciones» heading: General ends with its own
+  assert.ok(!general.slice(general.indexOf('function MusicMore'), general.indexOf('</>', general.indexOf('function MusicMore'))).includes('<MoreOptions'));
+  assert.ok(more.includes('data-testid="more-options-music"'));
   for (const id of ['music-reactive', 'music-intensity']) assert.ok(more.includes(`data-testid="${id}"`), id);
   const main = general.slice(general.indexOf('function MusicSettings'));
   for (const id of ['music-reactive', 'music-intensity']) assert.ok(!main.includes(`data-testid="${id}"`), `${id} left the main rows`);
   // Datos: the trash and the worktree copies, not folded; backups and the core folder stay (the mock-up draws them)
   const data = src('views', 'data.jsx');
-  assert.match(data, /<CoreCard \/><MoreOptions testid="more-options-datos"><TrashCard \/><WorktreesCard \/><\/MoreOptions>/);
+  assert.match(data, /<TrashCard \/><WorktreesCard \/><CoreCard \/>/);
   // Agentes y uso: «Opciones avanzadas» became «Más opciones», folded, same trigger testid
   assert.match(general, /<MoreOptions fold open=\{advanced\} onOpenChange=\{setAdvanced\} testid="spend-more" triggerTestid="spend-advanced">/);
   assert.ok(!/'settings\.advanced'/.test(locale('es', 'settings')));
@@ -58,21 +60,25 @@ test('e: Bitácoras «Copiar» (and «Ver completa») are items of the page «�
 test('f: an agent is turned on or off from the «⋯» of its card, with the same call', () => {
   const agents = src('views', 'agents.jsx');
   assert.match(agents, /<MoreButton small data-testid=\{`agent-more-\$\{a\.id\}`\} \/>/);
-  assert.match(agents, /<DropdownMenuItem onSelect=\{\(\) => save\(a\.id, \{ enabled: !cfg\.enabled \}\)\} data-testid=\{`agent-toggle-\$\{a\.id\}`\}>/);
+  assert.match(agents, /<DropdownMenuItem onSelect=\{turnOn\} data-testid=\{`agent-toggle-\$\{a\.id\}`\}>/);
+  assert.match(agents, /save\(a\.id, \{ enabled: !cfg\.enabled \}\)/);
   assert.ok(!/<Switch checked=\{cfg\.enabled\}/.test(agents));
-  // the state stays in the card's badge
-  assert.match(agents, /!cfg\.enabled \? <Badge variant="secondary">\{t\('agents\.disabled'\)\}<\/Badge>/);
+  // the state shows in the row's dot and its line
+  assert.match(agents, /!cfg\.enabled \? t\('agents\.disabled'\)/);
   for (const l of ['es', 'en']) assert.match(locale(l, 'agents'), /'agents\.turnOff'/);
 });
 
-test('g: Uso shows «Al llegar al límite» in view (the mock-up draws it) and keeps the local usage and «Tokens por día: tabla» under «Más opciones»', () => {
+test('g: Uso shows «Al llegar al límite» in view and keeps the local usage under «Uso fuera de Orb» and the table of days folded', () => {
   const usage = src('views', 'usage.jsx');
-  const start = usage.indexOf('<MoreOptions testid="usage-more-options">');
-  const more = usage.slice(start, usage.indexOf('</MoreOptions>', start));
-  for (const piece of ['<LocalUsage data=', '<DaysTable days=']) assert.ok(more.includes(piece), piece);
-  assert.ok(!more.includes('<Limits cfg='), 'the limits are not folded');
-  assert.ok(usage.indexOf('<Limits cfg=') > usage.indexOf('byAgentModel') && usage.indexOf('<Limits cfg=') < start, 'the limits follow «Por agente y modelo»');
+  // the limits stay in the limits view (not folded), after the accounts block
+  assert.ok(usage.includes('<Limits cfg='), 'the limits are drawn');
+  assert.ok(usage.indexOf('<Limits cfg=') > usage.indexOf("t('usage.byAccount')"), 'the limits follow «Por cuenta»');
+  assert.ok(!usage.includes('<MoreOptions testid="usage-more-options">'), 'no «Más opciones» fold holds the limits any more');
   for (const id of ['usage-switch-account', 'usage-warn-at', 'usage-stop-queue', 'usage-brake-5h', 'usage-brake-week']) assert.ok(usage.includes(`data-testid="${id}"`), id);
-  assert.match(usage, /<details className="text-faint-foreground text-caption" data-testid="usage-table">/);
-  assert.ok(usage.indexOf('<DaysTable days=') > usage.indexOf('<LocalUsage'));
+  // the local usage is the «Uso fuera de Orb» fold at the end of the page
+  const local = usage.slice(usage.indexOf('function LocalUsage'), usage.indexOf('function LocalUsage') + 900);
+  assert.match(local, /data-testid="usage-local-toggle">\{t\('usage\.outside'\)\}/);
+  assert.ok(usage.indexOf('<LocalUsage data=') > usage.indexOf('data-testid="usage-top"'), 'the local usage closes the page, after the top list');
+  assert.match(usage, /<details className="text-muted-foreground text-caption" data-testid="usage-table">/);
+  assert.ok(usage.indexOf('data-testid="usage-table"') < usage.indexOf('<LocalUsage data='));
 });

@@ -6,6 +6,8 @@
 // One random data key (32 bytes) encrypts every secret Orb stores (the PC's key for the phones, the connectors' keys).
 // The data key is never on disk in clear; it is kept twice, in core\secretos:
 //   maestra.json     wrapped by a key made from the master password (scrypt N=2^17 r8 p1, its own salt): opens on any PC
+//   maestra-codigo.json  the same key wrapped by a generated recovery code (HKDF of scrypt(code), its own salt): opens it on any
+//                    PC without the password. Only a code Orb generated (160 bits) does this; a phrase the user chose never does.
 //   maestra-pc.json  wrapped by a key derived from this PC's secret (the approval secret Windows keeps sealed,
 //                    core\datos\clave2.enc, opened in Rust: vault/src/machine.rs): Orb starts without asking for the password.
 //                    It also says (authenticated) that a password was made, so a deleted maestra.json is noticed.
@@ -28,10 +30,11 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { normalizeCode } from './recovery-code.mjs';
 
-export const FILES = { master: 'maestra.json', machine: 'maestra-pc.json', vault: 'secretos.json', tries: 'intentos.json' };
+export const FILES = { master: 'maestra.json', code: 'maestra-codigo.json', machine: 'maestra-pc.json', vault: 'secretos.json', tries: 'intentos.json' };
 // What a backup and the copy outside core take (the tries are this PC's only).
-export const KEPT = [FILES.master, FILES.machine, FILES.vault];
+export const KEPT = [FILES.master, FILES.code, FILES.machine, FILES.vault];
 export const MIN_LENGTH = 10;
 export const MAX_LENGTH = 256;
 export const UNLOCK_MS = 5 * 60_000;
@@ -40,7 +43,7 @@ export const FREE_TRIES = 5;
 export const CHANNELS = ['pc', 'pair', 'recovery'];
 // The vault's own entries (never a connector's key).
 export const PAIR_ID = 'master/pair';
-const CODES = new Set(['short', 'long', 'exists', 'lost', 'locked', 'damaged']);
+const CODES = new Set(['short', 'long', 'exists', 'lost', 'locked', 'damaged', 'phrase', 'needsPassword']);
 
 export class MasterError extends Error {
   constructor(code, extra = {}) { super(code); this.code = code; Object.assign(this, extra); }
@@ -93,7 +96,9 @@ function connect() {
     const dir = unix ? fs.mkdtempSync(path.join(os.tmpdir(), 'orb-boveda-')) : null;
     name = unix ? path.join(dir, 'c') : `\\\\.\\pipe\\orb-boveda-${id}`;
     const grants = unix ? path.join(dir, 'claves.sock') : `\\\\.\\pipe\\orb-claves-${id}`;
-    const args = ['--channel', name, '--grants', grants, ...(process.env.NODE_TEST_CONTEXT ? ['--test'] : [])];
+    // The tests' Windows Hello (a mode of src-tauri/vault/src/fake_hello.rs): the vault itself refuses it without --test.
+    const fake = process.env.NODE_TEST_CONTEXT && /^[a-z-]{0,20}$/.test(process.env.ORB_VAULT_FAKE_HELLO ?? '') ? process.env.ORB_VAULT_FAKE_HELLO : '';
+    const args = ['--channel', name, '--grants', grants, ...(process.env.NODE_TEST_CONTEXT ? ['--test', ...(fake ? [`--fake-hello=${fake}`] : [])] : [])];
     const child = spawn(bin, args, { stdio: ['ignore', 'ignore', 'inherit'], windowsHide: true });
     child.unref();
   }
@@ -147,6 +152,7 @@ export class Master {
     this.dir = dir; this.now = now; this.busy = Promise.resolve();
     this.onChange = () => {};
     this.onFails = () => {}; // (channel, fails): FREE_TRIES wrong ones in a row (the engine tells the owner)
+    this.onStale = () => {}; // (['code' | 'password']): wraps of another data key that this start deleted or set aside
     const s = secret !== IN_VAULT && secret && secret.length >= 32 ? Buffer.from(secret).toString('base64') : null;
     this.h = this.raw({ op: 'open', dir: path.resolve(dir), secret: s, ...(secret === IN_VAULT ? { machine: true } : {}) });
   }
@@ -154,6 +160,7 @@ export class Master {
   after(reply) {
     if (reply.changed) { try { this.onChange(); } catch { /* the next change copies again */ } }
     for (const [channel, n] of reply.notices ?? []) { try { this.onFails(channel, n); } catch { /* only a notice */ } }
+    if (reply.stale?.length) { try { this.onStale(reply.stale); } catch { /* only a notice */ } }
     if (!reply.ok) throw failed(reply);
     return reply.r;
   }
@@ -208,23 +215,73 @@ export class Master {
   // ---- the window's unlock: a token for 5 minutes (kept in Rust), dropped when the window locks or closes.
   // purpose: a token for ONE action that always asks again (FRESH_UNLOCK in src/domain/security/permissions.mjs): FRESH_MS.
   issue(purpose = null) { return this.call('issue', { purpose: purpose ?? null }); }
-  checkToken(token, purpose = null, { consume = false } = {}) {
+  // hello: a Windows Hello token passes too (only where Hello is enough: needsPassword() in permissions.mjs); by default only the password's.
+  // mobile: only a phone's one-use approval passes, and only for the purpose it was signed for (approvePurpose in approve.mjs).
+  checkToken(token, purpose = null, { consume = false, hello = false, mobile = false } = {}) {
     if (typeof token !== 'string' || token.length > 200) return false;
-    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume) });
+    return this.call('check', { token, purpose: purpose ?? null, consume: Boolean(consume), ...(mobile ? { need: 'mobile' } : hello ? { need: 'hello' } : {}) });
   }
+
+  // ---- Windows Hello (the proof is checked in Rust: src-tauri/vault/src/hello.rs). These never go through serial(): they wait
+  // for the person at the Windows prompt, and a password check must not wait behind it.
+  // → { available, enabled, valid?, tpm?, at?, waitUntil? }; a closed vault has no Hello to speak of.
+  helloState() {
+    try { return this.call('helloState'); } catch (error) { if (error.code === 'noVault') throw error; return { available: false, enabled: false }; }
+  }
+  // token: a one-use password token made for it (issue('hello.enable')). → { ok: true, tpm, at } | { ok: false, reason }.
+  helloEnable(account, token) { return this.job('helloEnable', { account, token }); }
+  // → { ok: true, unlock, until, strength: 'hello' } | { ok: false, reason, until? }.
+  helloUnlock(orbId, purpose = null) { return this.job('helloUnlock', { orbId, purpose: purpose ?? null }); }
+  // 'hello' | 'password' | null (no such token, or it ran out): the strength only, never what the token opens.
+  tokenStrength(token) { return typeof token === 'string' && token.length <= 200 ? this.call('tokenStrength', { token }) : null; }
+  helloDisable(token) { return this.call('helloDisable', { token }); }
   lock() { this.call('lock'); }
+
+  // ---- a phone's fingerprint (the proof is checked in Rust: src-tauri/vault/src/approve.rs). Quick requests; a refusal is { ok: false, reason }.
+  // The registered phones: [{ id, name, at }].
+  approveList() { return this.call('approveList'); }
+  // token: a one-use password token made for it (issue('approve.register')). → the challenge to send the phone, or a refusal.
+  approveBegin({ token, orbId, deviceId, name }) { return this.call('approveBegin', { token, orbId, deviceId, name }); }
+  approveEnroll(deviceId, nonce, pub, sig) { return this.call('approveEnroll', { deviceId, nonce, pub, sig }); }
+  // → { ok, nonce, payload, summary, until, deviceId } (what the phone gets) or { ok: false, reason: 'unknown' | 'noKeys' | 'big' }.
+  approveAsk({ orbId, deviceId, action, summary }) { return this.call('approveAsk', { orbId, deviceId, action, summary }); }
+  // → { ok, kind: 'approve', unlock, until, strength: 'mobile' } | { ok, kind: 'rebuild' } | { ok: false, reason }.
+  approveSign(deviceId, nonce, sig) { return this.call('approveSign', { deviceId, nonce, sig }); }
+  approveForget(deviceId) { return this.call('approveForget', { deviceId }); }
+  approveForgetAll() { return this.call('approveForgetAll'); }
+  // «Lo he olvidado todo», step 2: token is Hello's rebuild token. → the phone's challenge or { ok: false, reason: 'unknown' }.
+  rebuildBegin({ token, orbId, deviceId }) { return this.call('rebuildBegin', { token, orbId, deviceId }); }
+  // Step 3, after the phone said yes: a new password and a new generated code, in this one request. → { ok: true } | { ok: false, reason: 'approval' }.
+  rebuildFinish(next, code, copyId = '') { return this.serial(async () => this.job('rebuildFinish', { next: checkPassword(next), code: normalizeCode(code), ...(copyId ? { copyId } : {}) })); }
 
   // Changing it: the current one first (the same waits). The data key stays (only wrapped again).
   change(current, next) { return this.serial(async () => { const p = checkPassword(next); return this.job('change', { current: typed(current), next: p }); }); }
-  // «He olvidado la contraseña» (the caller checked the recovery code): a NEW data key, the secrets kept (keep(id))
-  // encrypted again with it, and the new password.
-  forgot(next, { keep = () => true } = {}) {
+  // «He olvidado la contraseña»: the vault checks the recovery code itself (with the waits of its 'recovery' channel; copy: the
+  // copies' recovery wrap, which a 3.8.9 code is checked against). A generated code opens the data key and the secrets all
+  // stay as they are; a phrase the user chose makes a NEW data key and the secrets kept (keep(id)) are encrypted again.
+  // → { ok: true, rotated } | the refusals of attempt() | { ok: false, reason: 'noCode' | 'noKey' }.
+  forgot(next, { code, copy, keep = () => true }) {
     return this.serial(async () => {
       const p = checkPassword(next);
-      if (!this.unlocked()) throw new MasterError('locked');
-      return this.job('forgot', { next: p, keep: this.ids('').filter((id) => keep(id)) });
+      const ids = this.unlocked() ? this.ids('').filter((id) => keep(id)) : [];
+      return this.job('forgot', { next: p, code: normalizeCode(code), copy: path.resolve(copy), keep: ids });
     });
   }
+  // The recovery code opens the data key (a PC that cannot open it by itself, the lock screen).
+  // → { ok: true } | the refusals of attempt() | { ok: false, reason: 'noCode' | 'noKey' }.
+  unlockWithCode(code, copy) { return this.serial(() => this.job('codeUnlock', { code: normalizeCode(code), copy: path.resolve(copy) })); }
+  // A new generated code, or (drop) a phrase in its place. password or current (the code now in force) is checked in the
+  // vault. rekey: a new data key too (needs the password; the vault itself keeps every secret but the phones' keys and Hello's). → { ok: true, rekeyed }
+  // or a refusal (attempt()'s, or reason 'needsAuth').
+  setCode({ code = '', password = '', current = '', copy, rekey = false, drop = false, copyId = '' }) {
+    return this.serial(async () => {
+      return this.job('codeSet', { code: normalizeCode(code), password: typed(password), current: normalizeCode(current), copy: path.resolve(copy), rekey, drop, ...(copyId ? { copyId } : {}) });
+    });
+  }
+  // A restore being prepared (dir: its staged core\secretos, never the live one): what the copy's code wrap may bring.
+  adopt(code, copy = '') { return this.job('adopt', { code: normalizeCode(code), ...(copy ? { copy: path.resolve(copy) } : {}) }); }
+  close() { try { request({ op: 'close', h: this.h }); } catch { /* the vault is gone */ } }
+
   // «Borrar secretos y empezar de cero»: the sealed files go, a new data key, an empty vault and the new password.
   reset(next) { return this.serial(async () => { const p = checkPassword(next); return this.job('reset', { next: p }); }); }
 
@@ -238,6 +295,21 @@ export class Master {
   // The phone's key confirmation, checked in Rust with the 'pair' waits: → attempt()'s answer (+ pcMac when right), or
   // { ok: false, reason: 'noVerifier' | 'bad' }.
   pairFinish(x) { return this.call('pairFinish', x); }
+  // ---- Linking with a one-use code, no password (src-tauri/vault/src/link.rs): the code lives in Rust; the engine only gets it
+  // once, from linkNew, to show it.
+  // token: one made for LINK_CODE_PURPOSE with Windows Hello or the password. → { ok, code, secret, salt, until } | { ok: false, reason }.
+  linkNew(token) { return this.job('linkNew', { token: String(token ?? '') }); }
+  // → { ok, salt, until } while a code is live (what a phone that only has the typed code needs), else { ok: false }.
+  linkInfo() { return this.call('linkInfo'); }
+  // The key that opens a phone's first message for its way (via: 'link' | 'linkcode'), or { ok: false }.
+  linkProbe(via, devPub) { return this.call('linkProbe', { via, devPub }); }
+  // A first message that did not open: counts toward the three tries. → { ok: false, reason: 'wrong' | 'dead' | 'gone', left }.
+  linkFail() { return this.call('linkFail'); }
+  // The phone's key confirmation: → { ok: true, waiting } (the PC's MAC stays in Rust until linkConfirm says yes) | { ok: false, reason }.
+  linkFinish(x) { return this.call('linkFinish', x); }
+  // The owner's answer at the PC. → { ok: true, pcMac } | { ok: false, reason: 'declined' | 'expired' | 'none' | 'gone' }.
+  linkConfirm(id, devPub, accept) { return this.call('linkConfirm', { id, devPub, accept: accept === true }); }
+  linkCancel() { try { return this.call('linkCancel'); } catch { return false; } }
   // A connector's keys for its launcher only: → { grant, pipe } or null (none, or not tied to this program any more).
   grant(bind, binding, vars) { return this.call('grant', { bind, binding, vars }); }
 }
@@ -256,12 +328,30 @@ export function mirrorTo(dir, mirror) {
   }
   return n;
 }
+// The keyId a sealed file names (maestra.json, maestra-pc.json, maestra-codigo.json and secretos.json say it in clear), or null.
+export function keyIdOf(file) {
+  try { const k = JSON.parse(fs.readFileSync(file, 'utf8'))?.keyId; return typeof k === 'string' ? k : null; } catch { return null; }
+}
+// What is missing in core comes back from the copy outside it, except what would bring a key back that the vault no longer
+// uses: the code wrap never (a code is only ever proved in the vault), and a password or PC wrap only when it is for the data
+// key of the secrets that are there (or come back with it).
 export function restoreMissing(dir, mirror) {
   if (!mirror || !fs.existsSync(mirror)) return [];
   const back = [];
+  const sealedWith = keyIdOf(path.join(dir, FILES.vault)) ?? keyIdOf(path.join(mirror, FILES.vault));
   for (const name of KEPT) {
+    if (name === FILES.code) continue;
     const from = path.join(mirror, name); const to = path.join(dir, name);
-    if (fs.existsSync(from) && !fs.existsSync(to)) { fs.mkdirSync(dir, { recursive: true }); fs.copyFileSync(from, to); back.push(name); }
+    if (!fs.existsSync(from) || fs.existsSync(to)) continue;
+    if ([FILES.master, FILES.machine].includes(name) && sealedWith && keyIdOf(from) !== sealedWith) continue;
+    fs.mkdirSync(dir, { recursive: true }); fs.copyFileSync(from, to); back.push(name);
   }
   return back;
+}
+
+// Opens a staged folder of secrets (a restore being prepared) in the vault and settles what the copy's code wrap and its
+// Hello and approval entries may bring (src-tauri/vault/src/code_ops.rs › adopt). → { ok, byCode, keyId }.
+export async function adoptStaged(dir, code, secret = IN_VAULT, copy = '') {
+  const m = new Master(dir, { secret });
+  try { return await m.adopt(code, copy); } finally { m.close(); }
 }

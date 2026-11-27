@@ -57,6 +57,8 @@ pub struct Engine {
   next: AtomicU64,
   status: watch::Sender<Status>,
   home: Mutex<Option<PathBuf>>,
+  /// A workspace left by an earlier install, found at the start: the window asks before using it (src/engine/previous.mjs).
+  previous: Mutex<Option<Value>>,
   texts: Mutex<HashMap<String, String>>,
   restarts: AtomicU32,
   quitting: AtomicBool,
@@ -96,6 +98,7 @@ impl Engine {
       next: AtomicU64::new(0),
       status: watch::channel(Status::Booting).0,
       home: Mutex::new(None),
+      previous: Mutex::new(None),
       texts: Mutex::new(HashMap::new()),
       restarts: AtomicU32::new(0),
       quitting: AtomicBool::new(false),
@@ -110,6 +113,14 @@ impl Engine {
   }
   pub fn home(&self) -> Option<PathBuf> {
     self.home.lock().unwrap().clone()
+  }
+  /// The earlier workspace the window must ask about ({ home, source, since, bytes }), while there is no workspace yet.
+  pub fn previous(&self) -> Option<Value> {
+    self.previous.lock().unwrap().clone()
+  }
+  /// What 'locate' and the answer to the question both ask the engine with.
+  fn locate_fields(&self) -> Value {
+    json!({ "userData": self.cfg.user_data, "packaged": self.cfg.packaged, "separateData": self.cfg.separate_data, "documents": self.cfg.documents, "profile": self.cfg.profile })
   }
   pub fn status(&self) -> Status {
     self.status.borrow().clone()
@@ -219,16 +230,12 @@ impl Engine {
       }
     }
     if self.home().is_none() {
-      let located = self
-        .request(
-          "locate",
-          json!({ "userData": self.cfg.user_data, "packaged": self.cfg.packaged, "separateData": self.cfg.separate_data,
-                  "documents": self.cfg.documents, "profile": self.cfg.profile }),
-          Duration::from_secs(30),
-        )
-        .await;
+      let located = self.request("locate", self.locate_fields(), Duration::from_secs(60)).await;
       match located {
-        Ok(v) => *self.home.lock().unwrap() = v.get("home").and_then(Value::as_str).map(PathBuf::from),
+        Ok(v) => {
+          *self.home.lock().unwrap() = v.get("home").and_then(Value::as_str).map(PathBuf::from);
+          *self.previous.lock().unwrap() = v.get("previous").filter(|p| p.is_object()).cloned();
+        }
         Err(e) => {
           self.status.send_replace(Status::Failed(e));
           return;
@@ -508,6 +515,29 @@ impl Engine {
     let v = self.request("setup", Value::Object(fields), Duration::from_secs(60)).await?;
     let home = v.get("home").and_then(Value::as_str).map(PathBuf::from).ok_or_else(|| self.t("sys.main.notHome", &[]))?;
     *self.home.lock().unwrap() = Some(home.clone());
+    self.refresh_texts().await;
+    self.start(false).await?;
+    Ok(json!({ "home": home }))
+  }
+
+  /// The answer to «¿Los recupero o empiezo de cero?»: 'recover' or 'fresh'. The engine looks at the disk again (it never takes a
+  /// path from the window); then the workspace starts as after the welcome.
+  pub async fn previous_choice(&self, choice: &str) -> Reply {
+    if self.home().is_some() || self.status() != Status::NoHome || self.previous().is_none() {
+      return Err(self.t("sys.main.alreadySetup", &[]));
+    }
+    if choice != "recover" && choice != "fresh" {
+      return Err(self.t("sys.main.badAction", &[]));
+    }
+    let mut fields = match self.locate_fields() {
+      Value::Object(m) => m,
+      _ => Map::new(),
+    };
+    fields.insert("choice".into(), json!(choice));
+    let v = self.request("previousChoice", Value::Object(fields), Duration::from_secs(300)).await?;
+    let home = v.get("home").and_then(Value::as_str).map(PathBuf::from).ok_or_else(|| self.t("sys.main.notHome", &[]))?;
+    *self.home.lock().unwrap() = Some(home.clone());
+    *self.previous.lock().unwrap() = None;
     self.refresh_texts().await;
     self.start(false).await?;
     Ok(json!({ "home": home }))

@@ -39,7 +39,7 @@ import dev.orb.app.ui.kit.OrbSubtitle
 import dev.orb.app.ui.offline.OfflineStrip
 import dev.orb.app.ui.shell.ScreenBar
 
-/** «Memorias y actividad»: the PC's recent events and its logbooks, read only. */
+/** «Bitácoras y actividad»: the PC's recent events and its logbooks, read only. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ActivityScreen(vm: ActivityViewModel, onBack: () -> Unit, modifier: Modifier = Modifier, nowMs: () -> Long = System::currentTimeMillis) {

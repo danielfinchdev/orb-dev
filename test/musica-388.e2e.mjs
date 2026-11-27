@@ -64,6 +64,7 @@ try {
   await button.waitFor();
   // Silent from the first note (the test runs on someone's PC): the volume to zero in Ajustes, before it ever plays.
   await page.click('[data-testid=nav-settings]');
+  await page.click('[data-testid=settings-nav-apariencia]');
   await page.locator('[data-testid=music-volume]').focus();
   await page.keyboard.press('Home');
   await until(async () => (await music()).volume === 0, 'the volume at zero');
@@ -114,6 +115,7 @@ try {
 
   step('Ajustes: theme, «Música que reacciona», intensity and volume');
   await page.click('[data-testid=nav-settings]');
+  await page.click('[data-testid=settings-nav-apariencia]');
   const settings = page.locator('[data-testid=music-settings]');
   await settings.scrollIntoViewIfNeeded();
   assert.equal(await page.locator('[data-testid=music-intensity]').count(), 0, 'no intensity while it reacts');
@@ -168,6 +170,7 @@ try {
   await orb.call('config.save', { patch: { ui: { music: { on: false, volume: 0.6, theme: 'marfil', reactive: true, intensity: 0.35, mode: 'tracks', track: 'gathu' } } } });
   await until(async () => (await music()).mode === 'tracks', 'the old profile saved');
   await page.click('[data-testid=nav-settings]');
+  await page.click('[data-testid=settings-nav-apariencia]');
   await page.locator('[data-testid=music-theme]').waitFor();
   assert.equal(await page.locator('[data-testid=music-mode]').count(), 0, 'no source to choose');
   assert.match(await page.locator('[data-testid=music-theme]').innerText(), /Marfil/, 'the style it had');

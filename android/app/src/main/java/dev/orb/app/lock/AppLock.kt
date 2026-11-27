@@ -5,6 +5,7 @@ import dev.orb.app.ui.theme.KeyValueStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import javax.crypto.Cipher
 
 /** How long the app may stay in the background before it asks again; [Immediate] is «Al salir». */
 enum class LockDelay(val key: String, val ms: Long) {
@@ -117,6 +118,12 @@ enum class AuthCapability {
 
 sealed interface AuthResult {
     data object Success : AuthResult
+
+    /** Authenticated through a [AuthRequest.cipher]: the system unlocked that cipher for one operation. */
+    class Crypto(val cipher: Cipher) : AuthResult
+
+    /** Authenticated through a [AuthRequest.signature]: the system unlocked that signature for one signing. */
+    class Signed(val signature: java.security.Signature) : AuthResult
     data object Cancelled : AuthResult
 
     /** Too many wrong tries: the system blocks the sensor for a while. Nothing is lost. */
@@ -128,11 +135,26 @@ sealed interface AuthResult {
     data object NothingSet : AuthResult
 }
 
-data class AuthRequest(val title: String, val subtitle: String?, val credentialOnly: Boolean = false)
+/**
+ * [cipher]: when set, the prompt is bound to it (a `CryptoObject`) and the answer is [AuthResult.Crypto].
+ * [signature]: the same for a signing key, answered by [AuthResult.Signed]; it takes strong biometrics only (no PIN), so the prompt
+ * needs its own [negative] button text.
+ */
+data class AuthRequest(
+    val title: String,
+    val subtitle: String?,
+    val credentialOnly: Boolean = false,
+    val cipher: Cipher? = null,
+    val signature: java.security.Signature? = null,
+    val negative: String? = null,
+)
 
 /** The system's authentication, behind an interface so the lock can be tested without Android. */
 interface Authenticator {
     fun capability(): AuthCapability
+
+    /** A strong (class 3) fingerprint or face is enrolled: the only thing that may approve the PC's sensitive actions. */
+    fun strongBiometric(): Boolean = false
     fun authenticate(request: AuthRequest, onResult: (AuthResult) -> Unit)
 }
 
@@ -140,7 +162,15 @@ interface Authenticator {
 enum class LockNotice { Blocked, Failed, NotRecognized }
 
 /** Ties the gate to the system authentication. The activity supplies the [authenticator] while it exists. */
-class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
+class AppLock(
+    val prefs: LockPrefs,
+    val gate: AppLockGate,
+    /** Null below Android 11: the lock then asks the system only, as it always did. */
+    private val crypto: LockCrypto? = null,
+    /** Debug log; it never receives secrets, only timings. */
+    private val log: (String) -> Unit = {},
+    private val nanos: () -> Long = System::nanoTime,
+) {
     @Volatile
     var authenticator: Authenticator? = null
         set(value) {
@@ -162,23 +192,62 @@ class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
     fun unlock(pin: Boolean = false) {
         val auth = authenticator ?: return
         // A phone with no screen lock protects nothing, and nothing could ever open this lock: it is dropped, not stuck.
-        if (auth.capability() == AuthCapability.NothingSet) {
-            gate.disable()
-            prefs.setAutoOff()
-            return
-        }
+        if (auth.capability() == AuthCapability.NothingSet) return dropLock()
         if (!_busy.compareAndSet(expect = false, update = true)) return
         _notice.value = null
-        auth.authenticate(AuthRequest(LockTexts.PROMPT_TITLE, LockTexts.PROMPT_SUBTITLE, credentialOnly = pin)) { result ->
-            _busy.value = false
-            when (result) {
-                AuthResult.Success -> gate.unlock()
-                AuthResult.Blocked -> _notice.value = LockNotice.Blocked
-                AuthResult.Failed, AuthResult.NothingSet -> _notice.value = LockNotice.Failed
-                AuthResult.NotRecognized -> _notice.value = LockNotice.NotRecognized
-                AuthResult.Cancelled -> Unit
+        if (crypto == null) {
+            auth.authenticate(AuthRequest(LockTexts.PROMPT_TITLE, LockTexts.PROMPT_SUBTITLE, credentialOnly = pin)) { result ->
+                _busy.value = false
+                if (result == AuthResult.Success) gate.unlock() else report(result)
+            }
+            return
+        }
+        when (val prepared = crypto.prepareUnlock()) {
+            is LockCipher.Ready -> {
+                val t0 = nanos()
+                auth.authenticate(AuthRequest(LockTexts.PROMPT_TITLE, LockTexts.PROMPT_SUBTITLE, credentialOnly = pin, cipher = prepared.cipher)) { result ->
+                    _busy.value = false
+                    if (result is AuthResult.Crypto && crypto.open(result.cipher)) {
+                        log("lock opened in ${(nanos() - t0) / 1_000_000} ms")
+                        gate.unlock()
+                    } else report(if (result is AuthResult.Crypto || result == AuthResult.Success) AuthResult.Failed else result)
+                }
+            }
+            // The key died (a new fingerprint or no screen lock any more) or never existed (a lock made before the key):
+            // the phone's PIN proves the person and a new key replaces it.
+            LockCipher.Invalidated -> renewKey(auth) { _busy.value = false }
+        }
+    }
+
+    private fun renewKey(auth: Authenticator, finished: () -> Unit) {
+        val crypto = crypto ?: return finished()
+        val fresh = crypto.prepareEnable()
+        if (fresh !is LockCipher.Ready) {
+            finished()
+            return dropLock()
+        }
+        auth.authenticate(AuthRequest(LockTexts.PROMPT_TITLE, LockTexts.RENEW_SUBTITLE, credentialOnly = true, cipher = fresh.cipher)) { result ->
+            finished()
+            if (result is AuthResult.Crypto && crypto.seal(result.cipher)) gate.unlock() else {
+                if (result is AuthResult.NothingSet) dropLock() else report(if (result is AuthResult.Crypto) AuthResult.Failed else result)
             }
         }
+    }
+
+    private fun report(result: AuthResult) {
+        when (result) {
+            AuthResult.Blocked -> _notice.value = LockNotice.Blocked
+            AuthResult.Failed, AuthResult.NothingSet, is AuthResult.Crypto, is AuthResult.Signed -> _notice.value = LockNotice.Failed
+            AuthResult.NotRecognized -> _notice.value = LockNotice.NotRecognized
+            AuthResult.Cancelled, AuthResult.Success -> Unit
+        }
+    }
+
+    /** The lock cannot be opened any more: it is turned off and «Este móvil» says why. */
+    private fun dropLock() {
+        gate.disable()
+        crypto?.clear()
+        prefs.setAutoOff()
     }
 
     /** Turning the lock on needs a valid authentication right now, so a lock nobody can open is never set. */
@@ -186,14 +255,37 @@ class AppLock(val prefs: LockPrefs, val gate: AppLockGate) {
         val auth = authenticator
         if (auth == null || auth.capability() != AuthCapability.Ready) return onDone(AuthResult.NothingSet)
         if (!_busy.compareAndSet(expect = false, update = true)) return onDone(AuthResult.Cancelled)
-        auth.authenticate(AuthRequest(LockTexts.ENABLE_TITLE, LockTexts.ENABLE_SUBTITLE)) { result ->
+        if (crypto == null) {
+            auth.authenticate(AuthRequest(LockTexts.ENABLE_TITLE, LockTexts.ENABLE_SUBTITLE)) { result ->
+                _busy.value = false
+                if (result == AuthResult.Success) gate.enable()
+                onDone(result)
+            }
+            return
+        }
+        val fresh = crypto.prepareEnable()
+        if (fresh !is LockCipher.Ready) {
             _busy.value = false
-            if (result == AuthResult.Success) gate.enable()
-            onDone(result)
+            return onDone(AuthResult.Failed)
+        }
+        val t0 = nanos()
+        auth.authenticate(AuthRequest(LockTexts.ENABLE_TITLE, LockTexts.ENABLE_SUBTITLE, cipher = fresh.cipher)) { result ->
+            _busy.value = false
+            if (result is AuthResult.Crypto && crypto.seal(result.cipher)) {
+                log("lock enabled in ${(nanos() - t0) / 1_000_000} ms")
+                gate.enable()
+                onDone(AuthResult.Success)
+            } else {
+                crypto.clear()
+                onDone(if (result is AuthResult.Crypto || result == AuthResult.Success) AuthResult.Failed else result)
+            }
         }
     }
 
-    fun disable() = gate.disable()
+    fun disable() {
+        gate.disable()
+        crypto?.clear()
+    }
 
     fun setDelay(delay: LockDelay) = prefs.setDelay(delay)
 }
@@ -203,12 +295,13 @@ object LockTexts {
     const val PROMPT_SUBTITLE = "Usa tu huella o el PIN del móvil"
     const val ENABLE_TITLE = "Activar el bloqueo de Orb"
     const val ENABLE_SUBTITLE = "Confirma que eres tú para activarlo"
+    const val RENEW_SUBTITLE = "La protección del móvil cambió. Usa tu PIN para renovar el bloqueo."
 
     const val LOCKED_TITLE = "Desbloquea para ver tus chats"
     const val LOCKED_NOTE = "Huella, cara o PIN del móvil"
     const val UNLOCK = "Desbloquear"
     const val UNLOCK_AGAIN = "Probar otra vez"
-    const val WHERE_TO_CHANGE = "Opcional · Menú › Este móvil › Bloqueo de la app"
+    const val WHERE_TO_CHANGE = "Lo cambias en Menú › Este móvil › Bloqueo de la app."
     const val NEVER_MASTER = "Nunca pide la contraseña maestra."
     const val USE_PIN = "Usar PIN del móvil"
     const val BLOCKED = "Demasiados intentos. Espera un momento o usa el PIN del móvil."

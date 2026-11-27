@@ -172,7 +172,7 @@ private fun ChipsRow(content: @Composable () -> Unit) {
     Row(Modifier.horizontalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 0.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) { content() }
 }
 
-/** One line of the «Cerebro» sheet: a brain the PC can really give, with the model and reasoning it stands for. */
+/** One line of the «Agente y modelo» sheet: an agent the PC can really give, with the model and reasoning it stands for. */
 private class BrainRow(val agent: AgentOption, val model: ModelOption?, val effort: String?, val text: String)
 
 private val number = Regex("""\d+(?:\.\d+)?""")
@@ -193,7 +193,7 @@ private fun claudeRows(a: AgentOption): List<BrainRow> = buildList {
     }
 }
 
-/** «Cerebro»: the usual brains as rows; the finer choices (model, reasoning, the PC's own) wait under «Más opciones». */
+/** «Agente y modelo»: the usual agents as rows; the finer choices (model, reasoning, the PC's own) wait under «Más opciones». */
 @Composable
 private fun BrainSheet(s: NewChatState, vm: NewChatViewModel, onDone: () -> Unit) {
     var moreOpen by rememberSaveable { mutableStateOf(false) }
@@ -258,7 +258,7 @@ private fun MoreBrainOptions(s: NewChatState, vm: NewChatViewModel, ready: Boole
         if (efforts.isNotEmpty()) {
             OrbSheetLabel(ChatTexts.NEW_CHAT_EFFORT)
             ChipsRow {
-                for (e in efforts) OrbChip(e, s.effort == e, { vm.pickBrain(agent.id, s.model, if (s.effort == e) null else e) })
+                for (e in efforts) OrbChip(BrainInfo.reasoningWord(e).replaceFirstChar { it.uppercase() }, s.effort == e, { vm.pickBrain(agent.id, s.model, if (s.effort == e) null else e) })
             }
         }
     }

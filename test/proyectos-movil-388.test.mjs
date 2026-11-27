@@ -1,7 +1,7 @@
 // 3.8.8: what the phone's project screens read from the PC: the branch and the number of uncommitted files of every
 // project (projects.list { withGit: true }), and that icons stay a PC-only choice.
 import { tempHome } from './helpers.mjs';
-import { test, before, after } from 'node:test';
+import { test, before, after, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -57,14 +57,21 @@ test('projects.list { withGit: true }: the branch and the count of uncommitted f
 });
 
 test('projects.list { withGit: true }: a project without git or without folder comes without the fields', async () => {
-  await call('projects.create', { name: 'sin-git', category: 'web', template: false });
-  const gone = await call('projects.create', { name: 'sin-carpeta', category: 'web', template: false });
-  fs.rmSync(gone.path, { recursive: true, force: true });
-  forgetStatuses();
-  for (const n of ['sin-git', 'sin-carpeta']) {
-    const p = await row(n, { withGit: true });
-    assert.ok(p, n); assert.ok(!('branch' in p) && !('changes' in p), n);
-  }
+  // projects.list syncs the board with the disk at most every 2 s, and that sync drops a project whose folder is gone. On a
+  // loaded PC the test can outlast the window, so the clock is frozen inside it (a list first, to open the window).
+  await call('projects.list');
+  const now = Date.now();
+  const clock = mock.method(Date, 'now', () => now);
+  try {
+    await call('projects.create', { name: 'sin-git', category: 'web', template: false });
+    const gone = await call('projects.create', { name: 'sin-carpeta', category: 'web', template: false });
+    fs.rmSync(gone.path, { recursive: true, force: true });
+    forgetStatuses();
+    for (const n of ['sin-git', 'sin-carpeta']) {
+      const p = await row(n, { withGit: true });
+      assert.ok(p, n); assert.ok(!('branch' in p) && !('changes' in p), n);
+    }
+  } finally { clock.mock.restore(); }
 });
 
 test('the branch of a detached HEAD is null and an empty repository still names its branch', async () => {

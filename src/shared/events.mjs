@@ -3,9 +3,9 @@
 // The window listens by name (bridge.on(name) or the engine events hook, src/ui/app/engine-events.js).
 export const ENGINE_EVENTS = Object.freeze([
   'agentBrowser:closeTask', 'agents:install', 'agents:login', 'approval:changed', 'backup:done', 'backup:progress',
-  'backup:restoreReady', 'board:changed', 'chat:new', 'chat:state', 'ciwatch:changed', 'config:changed', 'core:lost', 'html:closed', 'html:page', 'html:server', 'html:update', 'inbox:changed',
-  'installer:progress', 'keys:changed', 'link:devices', 'master:locked', 'master:unlocked', 'mcpext:changed', 'notes:read', 'notice', 'pr:done', 'pr:request', 'secret:done', 'secret:request',
-  'session:debug', 'session:delta', 'session:goal', 'session:item', 'session:queue', 'session:removed', 'session:reset', 'session:side', 'session:suggest', 'session:update', 'terminal:data', 'terminal:exit', 'trash:added',
+  'backup:restoreReady', 'board:changed', 'chat:new', 'chat:state', 'ciwatch:changed', 'config:changed', 'copy:done', 'copy:ready', 'copy:request', 'core:lost', 'html:closed', 'html:page', 'html:server', 'html:update', 'inbox:changed',
+  'installer:progress', 'keys:changed', 'link:confirm', 'link:devices', 'master:locked', 'master:unlocked', 'mcpext:changed', 'notes:read', 'notice', 'pr:done', 'pr:request', 'secret:done', 'secret:request',
+  'session:account', 'session:debug', 'session:delta', 'session:goal', 'session:item', 'session:queue', 'session:removed', 'session:reset', 'session:side', 'session:suggest', 'session:update', 'terminal:data', 'terminal:exit', 'trash:added',
 ]);
 // Sent by the app (src-tauri) or a bridge of the window itself (the phone's link, the browser pointer, the menu).
 const WINDOW_EVENTS = Object.freeze([

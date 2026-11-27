@@ -31,6 +31,26 @@ export function useKeys(handler) {
   }, []);
 }
 
+// Auto-repeat of held keys driven by the game's own clock. The browser repeats only the key pressed last, so holding ←
+// and tapping ↑ stopped the slide; here every held key keeps its own repeat, whatever else is pressed.
+export function keyRepeater({ delay = 150, every = 45 } = {}) {
+  const held = new Map();
+  return {
+    press(key) { if (!held.has(key)) held.set(key, delay); },
+    release(key) { held.delete(key); },
+    clear() { held.clear(); },
+    has: (key) => held.has(key),
+    // fire(key) once per elapsed repeat; the first one comes after `delay` ms, then one every `every` ms.
+    tick(dt, fire) {
+      for (const [key, wait] of held) {
+        let w = wait - dt;
+        while (w <= 0) { fire(key); w += every; }
+        held.set(key, w);
+      }
+    }
+  };
+}
+
 // The visual theme in use: html[data-skin] (predeterminado | cristal | orb | vaporwave | candy | retro) and html.dark.
 export const skin = () => document.documentElement.dataset.skin || 'predeterminado';
 export const isDark = () => document.documentElement.classList.contains('dark');
@@ -135,14 +155,32 @@ export function saveBest(game, level, score) {
   return false;
 }
 
-// A canvas sharp on high-density screens: draw in CSS pixels.
-export function setupCanvas(canvas, width, height) {
-  const ratio = window.devicePixelRatio || 1;
+// A canvas sharp on high-density screens: draw in CSS pixels. The game fits its box by a CSS scale (games.jsx), so the
+// bitmap is also made `boost` times denser: scaled up it is still drawn at the size it is shown, not stretched. `redraw`
+// repaints the frame when the density changes (a resize wipes the bitmap).
+const live = new Set();
+let boost = 1;
+export const canvasRatio = () => (window.devicePixelRatio || 1) * boost;
+function size(entry) {
+  const { canvas, width, height } = entry; const ratio = canvasRatio();
   canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
   canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
   const ctx = canvas.getContext('2d');
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   return ctx;
+}
+export function setupCanvas(canvas, width, height, redraw) {
+  for (const e of live) if (e.canvas === canvas || !e.canvas.isConnected) live.delete(e);
+  const entry = { canvas, width, height, redraw }; live.add(entry);
+  return size(entry);
+}
+// The extra density the games are drawn with: the scale they are shown at, in quarter steps, from 1 to 3.
+export const boostFor = (scale) => Math.min(3, Math.max(1, Math.ceil(scale * 4) / 4));
+export function setBoost(scale) {
+  const next = boostFor(scale);
+  if (next === boost) return;
+  boost = next;
+  for (const e of live) { if (!e.canvas.isConnected) { live.delete(e); continue; } size(e); e.redraw?.(); }
 }
 
 export function roundRect(ctx, x, y, w, h, r) {

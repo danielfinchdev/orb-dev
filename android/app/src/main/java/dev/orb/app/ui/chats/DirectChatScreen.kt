@@ -327,7 +327,7 @@ private fun DirectList(
                 val live by vm.liveText.collectAsStateWithLifecycle()
                 AgentLiveBubble(
                     state.agent, state.agentName ?: ChatTexts.AGENT_FALLBACK, state.activity, text = { live.text },
-                    modifier = Modifier.animateItem(fadeInSpec = tween(OrbMotion.Medium), fadeOutSpec = tween(OrbMotion.Fast)),
+                    modifier = liveRowMotion(),
                 )
             }
             if (state.stalled) item(key = "stalled", contentType = "stalled") {

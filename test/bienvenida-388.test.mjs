@@ -56,7 +56,7 @@ test('2: the strength line is built from what was typed, does not repeat the lev
 test('3: the words promise nothing false (no «al abrir Orb», the code is not the only way in)', () => {
   assert.match(es, /'master\.createIntro': [^\n]*Te la pedimos cuando Orb se bloquea y antes de acciones delicadas, como enlazar un móvil, restaurar una copia o abrir la carpeta core\./);
   assert.doesNotMatch(es, /'master\.createIntro'[^\n]*al abrir Orb/);
-  assert.match(es, /'master\.warnGive': 'Si la olvidas, podrás poner otra con el código de recuperación; sin él, habrá que borrar los secretos y empezar de cero\. Te lo damos al crearla: guárdalo fuera de este PC\.'/);
+  assert.match(es, /'master\.warnGive': 'Si la olvidas, podrás poner otra con el código de recuperación. Sin él, habrá que borrar los secretos y empezar de cero\. Te lo damos al crearla: guárdalo fuera de este PC\.'/);
   assert.match(es, /'master\.ackCode': 'Entiendo que, si la olvido, necesitaré el código de recuperación para no perder los secretos'/);
   assert.doesNotMatch(es, /solo podrás entrar con el código|solo podré entrar con el código|única forma de entrar/);
   assert.match(es, /'master\.warnHave': [^\n]*que creaste para tus copias[^\n]*Si no lo encuentras, crea otro en Ajustes › Datos\./);
@@ -67,15 +67,15 @@ test('3: the words promise nothing false (no «al abrir Orb», the code is not t
 
 test('4: the recovery code is made only when there is none, shown once, kept nowhere, and a failure asks the user', () => {
   assert.match(create, /call\('backup\.status'\)\.then\(\(s\) => setHasCode\(Boolean\(s\?\.recovery\)\)\)/);
-  assert.match(create, /if \(hasCode === true\) \{ onDone\?\.\(\); return; \}/);
+  assert.match(create, /if \(hasCode === true\) \{ finish\(\); return; \}/);
   assert.match(create, /\(await call\('master\.state'\)\)\?\.canForget\) return \{ have: true \}/);
-  assert.match(create, /call\('backup\.recovery', \{ unlock \}\)/);
+  assert.match(create, /call\('backup\.recovery', \{ unlock, password: v\.next \}\)/);
   assert.match(create, /const unlock = heldUnlock\(\);\s*if \(!unlock\) return \{ error: 'expired' \};/);
   assert.match(create, /catch \{ return \{ error: 'failed' \}; \}/);
   // A failed code is no toast: the card says so and the user retries or goes on.
   assert.doesNotMatch(create, /notifyWarn/);
   assert.match(create, /const retry = async \(\) => \{ setBusy\(true\); showIssue\(await issue\(\)\); \};/);
-  assert.match(create, /onRetry=\{retry\} onLater=\{\(\) => onDone\?\.\(\)\} onDone=\{\(\) => onDone\?\.\(\)\}/);
+  assert.match(create, /onRetry=\{retry\} onLater=\{finish\} onDone=\{finish\}/);
   assert.match(code, /master\.codeError[\s\S]*master-code-later[\s\S]*master-code-retry/);
   assert.match(code, /error === 'expired' \? null :/);
   assert.match(es, /'master\.codeError': 'No se ha podido crear el código de recuperación\.'/);

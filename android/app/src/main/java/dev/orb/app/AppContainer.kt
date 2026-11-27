@@ -148,8 +148,31 @@ class AppContainer(private val app: Application) {
     }
 
     /** The optional app lock (off by default). It keeps a flag and a delay; the secret is the system's own authentication. */
-    val lockPrefs = dev.orb.app.lock.LockPrefs(SharedPrefsStore(app.getSharedPreferences("orb.lock", android.content.Context.MODE_PRIVATE)))
-    val lock = dev.orb.app.lock.AppLock(lockPrefs, dev.orb.app.lock.AppLockGate(lockPrefs, android.os.SystemClock::elapsedRealtime))
+    private val lockStore = SharedPrefsStore(app.getSharedPreferences("orb.lock", android.content.Context.MODE_PRIVATE))
+    private fun lockLog(line: String) { if (app.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) android.util.Log.d("OrbLock", line) }
+    val lockPrefs = dev.orb.app.lock.LockPrefs(lockStore)
+    // Below Android 11 there is no key for the lock (it asks the system only); `log` gets timings, never data.
+    val lock = dev.orb.app.lock.AppLock(
+        lockPrefs, dev.orb.app.lock.AppLockGate(lockPrefs, android.os.SystemClock::elapsedRealtime),
+        crypto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) dev.orb.app.lock.KeystoreLockCrypto(lockStore, ::lockLog) else null,
+        log = ::lockLog,
+    )
+
+    /**
+     * The PC's sensitive actions, approved with this phone's fingerprint. The key exists only after the PC registers this phone
+     * (Ajustes › Dispositivos on the PC); Android 10 and older have none.
+     */
+    private val approveStore = SharedPrefsStore(app.getSharedPreferences("orb.approve", android.content.Context.MODE_PRIVATE))
+    private var linkIdentity: dev.orb.app.approve.LinkIdentity? = null
+    private var approveJob: Job? = null
+    val approver = dev.orb.app.approve.Approver(
+        crypto = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) dev.orb.app.approve.KeystoreApproveCrypto(approveStore, ::lockLog) else dev.orb.app.approve.NoApproveCrypto,
+        store = approveStore,
+        identity = { linkIdentity },
+        authenticator = { lock.authenticator },
+        send = { method, params -> _runtime.value?.client?.call(method, params) ?: Result.failure(dev.orb.app.link.net.LinkException(dev.orb.app.link.net.LinkError.NotLinked)) },
+        scope = scope,
+    )
 
     /** What the app lock plugs into: the content (and shared content) is shown only while this is open. */
     val gate: dev.orb.app.share.AppGate get() = lock.gate
@@ -218,6 +241,13 @@ class AppContainer(private val app: Application) {
         }
     }
 
+    /** «Buscar mi PC en Tailscale»: asks the tailnet's names whether an Orb answers there. */
+    val discovery: dev.orb.app.link.net.PcDiscovery = dev.orb.app.link.net.TailscaleDiscovery(dev.orb.app.link.net.HttpDiscoverProbe(http)) {
+        val cm = app.getSystemService(android.net.ConnectivityManager::class.java)
+        val caps = cm?.getNetworkCapabilities(cm.activeNetwork)
+        caps?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_VPN) == true
+    }
+
     /** Reads the saved link off the main thread (the Keystore can be slow); true when the phone is linked. */
     val startup = scope.async(Dispatchers.IO) {
         val session = readSavedSession { SecureStore.get(app, SESSION_KEY) }
@@ -248,10 +278,14 @@ class AppContainer(private val app: Application) {
         Unit
     }
 
-    /** Another network: a link that is not up tries again at once, whatever pause it was in the middle of. */
+    /**
+     * Another network: a link that is not up tries again at once, whatever pause it was in the middle of; one that is up
+     * opens a fresh stream, because the path it holds may be the one that just went away (the events missed are replayed).
+     */
     private fun retryLinkNow() = synchronized(runtimeLock) {
         val client = _runtime.value?.client ?: return@synchronized
-        if ((foreground || keepAliveRunning.value) && client.connection.value !is ConnectionState.Online) client.resume()
+        if (!(foreground || keepAliveRunning.value)) return@synchronized
+        if (client.connection.value !is ConnectionState.Online) client.resume() else client.reconnectEvents()
     }
 
     /** The fixed notice of the service: who it is connected to. */
@@ -303,6 +337,9 @@ class AppContainer(private val app: Application) {
         scope.launch { client.connection.map { it::class.simpleName ?: "?" }.distinctUntilChanged().collect { log.add("conexión $it") } }
         scope.launch { lastContact.track(client.connection, System::currentTimeMillis) }
         notifierJob?.cancel()
+        linkIdentity = dev.orb.app.approve.LinkIdentity(session.id, session.pcPub)
+        approveJob?.cancel()
+        approveJob = scope.launch { client.events.collect { if (it.name == "approve") approver.onEvent(it.payload) } }
         notifier = Notifier(client.events, { notifyPrefs.settings.value.copy(appLock = lockPrefs.settings.value.enabled) }, { foreground }, notePoster, log::add)
         notifierJob = notifier?.start(scope)
         notifyPrefs.linked = true
@@ -321,6 +358,9 @@ class AppContainer(private val app: Application) {
         val current = synchronized(runtimeLock) { _runtime.value.also { _runtime.value = null; notes?.second?.close(); notes = null } }
         current?.client?.stop()
         current?.sender?.cancel()
+        approveJob?.cancel()
+        linkIdentity = null
+        approver.forget()
         notifierJob?.cancel()
         notifier = null
         notePoster.clearNotes()

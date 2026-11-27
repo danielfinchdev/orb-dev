@@ -86,6 +86,13 @@ pub fn backup_key(secret: &[u8]) -> Locked {
   Hkdf::<Sha256>::new(Some(b"orb-backup"), secret).expand(b"machine-v1", out.as_mut_slice()).expect("32 bytes");
   out
 }
+/// The key a generated recovery code wraps the data key with: HKDF of scrypt(code), apart from the backups' key (their own
+/// scrypt of the same code is another key), so a copy's wrap and the vault's never open each other.
+pub fn code_kek(scrypt_out: &[u8]) -> Locked {
+  let mut out = Locked::zeroed(32);
+  Hkdf::<Sha256>::new(None, scrypt_out).expand(b"orb-vault-code-v1", out.as_mut_slice()).expect("32 bytes");
+  out
+}
 /// Lower-case hex, kept in locked memory (the sealed text of this PC's secret is its hex).
 pub fn hex_of(bytes: &[u8]) -> Locked {
   const D: &[u8; 16] = b"0123456789abcdef";
@@ -160,7 +167,8 @@ pub struct Pake<'a> {
 }
 
 /// K of one linking exchange: HKDF(code ‖ ECDH(phone, PC) ‖ ECDH(password key, PC)), salted with the exchange's hash.
-pub fn pake_key(x: &Pake, pc_priv: &[u8], verifier: &[u8]) -> Option<Locked> {
+/// `verifier` None is a link made with a one-use code and no password: that third part is empty.
+pub fn pake_key(x: &Pake, pc_priv: &[u8], verifier: Option<&[u8]>) -> Option<Locked> {
   let mut t = Vec::new();
   field(&mut t, b"orb-pake-v1");
   field(&mut t, x.via.as_bytes());
@@ -173,20 +181,35 @@ pub fn pake_key(x: &Pake, pc_priv: &[u8], verifier: &[u8]) -> Option<Locked> {
   let pc: [u8; 32] = pc_priv.try_into().ok()?;
   let pc = StaticSecret::from(pc);
   let dev: [u8; 32] = x.dev_pub.try_into().ok()?;
-  let ver: [u8; 32] = verifier.try_into().ok()?;
   let dh_device = pc.diffie_hellman(&PublicKey::from(dev));
-  let dh_password = pc.diffie_hellman(&PublicKey::from(ver));
+  let dh_password = match verifier {
+    Some(v) => Some(pc.diffie_hellman(&PublicKey::from(<[u8; 32]>::try_from(v).ok()?))),
+    None => None,
+  };
   let mut ikm = Locked::with_capacity(6 + x.secret.len() + 64);
   let mut part = Vec::new();
   field(&mut part, x.secret.as_bytes());
   ikm.extend(&part);
   zeroize::Zeroize::zeroize(&mut part);
-  for dh in [dh_device.as_bytes(), dh_password.as_bytes()] {
-    ikm.extend(&[0, 32]);
-    ikm.extend(dh);
+  ikm.extend(&[0, 32]);
+  ikm.extend(dh_device.as_bytes());
+  match &dh_password {
+    Some(dh) => {
+      ikm.extend(&[0, 32]);
+      ikm.extend(dh.as_bytes());
+    }
+    None => ikm.extend(&[0, 0]),
   }
   let mut k = Locked::zeroed(32);
   Hkdf::<Sha256>::new(Some(&transcript), ikm.as_slice()).expand(b"orb pake clave v1", k.as_mut_slice()).ok()?;
+  Some(k)
+}
+/// The key that only proves a phone read the code (mobile-crypto.mjs › pairingKey): HKDF(ECDH(PC, phone)), salted with the code.
+pub fn pairing_key(pc_priv: &[u8], dev_pub: &[u8], secret: &str) -> Option<Locked> {
+  let pc = StaticSecret::from(<[u8; 32]>::try_from(pc_priv).ok()?);
+  let dh = pc.diffie_hellman(&PublicKey::from(<[u8; 32]>::try_from(dev_pub).ok()?));
+  let mut k = Locked::zeroed(32);
+  Hkdf::<Sha256>::new(Some(format!("orb-vincular:{secret}").as_bytes()), dh.as_bytes()).expand(b"orb movil vincular v1", k.as_mut_slice()).ok()?;
   Some(k)
 }
 pub fn pake_mac(k: &[u8], label: &str) -> [u8; 32] {

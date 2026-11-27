@@ -261,14 +261,14 @@ test('the player is told how far the music has risen, in hundredths and only whe
 
 test('Ajustes and the sidebar: the switch, the theme, «Música que reacciona» and the next theme', () => {
   const settings = settingsSource();
-  assert.match(settings, /\{musicAvailable\(\) \? <MusicSettings \/> : null\}/);
+  assert.match(settings, /if \(!musicAvailable\(\)\) return null;[\s\S]*<MusicSettings \/>/);
   for (const id of ['music-on', 'music-theme', 'music-reactive', 'music-intensity', 'music-volume']) assert.match(settings, new RegExp(`data-testid="${id}"`), id);
   // There is only one source: nothing to choose it with.
   assert.doesNotMatch(settings, /music-mode|MUSIC_MODES|setMusicMode|musicSource/);
   // The switch is the sidebar's button: it shows what plays and goes through the same toggle.
   assert.match(settings, /<Switch checked=\{playing\} onCheckedChange=\{\(\) => toggleMusic\(\)\}/);
   // Under «Más opciones»: the style, «Música que reacciona» and the intensity.
-  assert.match(settings, /<Panel>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
+  assert.match(settings, /<Panel[^>]*>\s*<Setting label=\{t\('appearance\.musicTheme'\)\}>/);
   assert.match(settings, /value=\{prefs\.theme\} onValueChange=\{setMusicTheme\}/);
   assert.match(settings, /<Switch checked=\{prefs\.reactive\} onCheckedChange=\{setMusicReactive\}/);
   assert.match(settings, /\{prefs\.reactive \? null : \(/, 'the intensity shows only when it does not react');

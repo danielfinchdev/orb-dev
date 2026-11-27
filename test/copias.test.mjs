@@ -183,7 +183,7 @@ test('engine: backup.now, list, verify, recovery code and restore staged for the
     // 3.8: a new recovery code, checking a copy and restoring one need the master password (a fresh unlock).
     await assert.rejects(e.call('backup.recovery', {}), /contraseña maestra/);
     const { unlock } = await e.call('master.create', { password: 'contraseña de copias' });
-    const { code } = await e.call('backup.recovery', { unlock });
+    const { code } = await e.call('backup.recovery', { password: 'contraseña de copias' });
     assert.match(code, /^([A-Z2-9]{4}-){7}[A-Z2-9]{4}$/);
     assert.equal((await e.call('backup.status')).recovery, true);
     await e.call('projects.create', { name: 'casa' });

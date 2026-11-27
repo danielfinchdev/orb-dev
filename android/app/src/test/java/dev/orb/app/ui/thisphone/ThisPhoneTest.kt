@@ -369,7 +369,7 @@ class ThisPhoneTest {
     @Test fun saysWhenTheLockTurnedItselfOff() {
         backend.lock.value = LockSettings(enabled = false, autoOff = true)
         show()
-        rule.onNodeWithText(ThisPhoneTexts.LOCK_AUTO_OFF).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(ThisPhoneTexts.lockAutoOff()).performScrollTo().assertIsDisplayed()
     }
 
     // ------------------------------------------------------------------------------------------------ Desvincular y más opciones
@@ -380,7 +380,7 @@ class ThisPhoneTest {
         assertEquals(0, backend.unlinked)
         rule.onNodeWithText("¿Desvincular este móvil?").assertIsDisplayed()
         // the whole truth: the link, the saved copy and the unsent messages
-        rule.onNodeWithText("Se olvida el enlace con DanLaptop", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Se quita el enlace con DanLaptop", substring = true).assertIsDisplayed()
         rule.onNodeWithText("la copia guardada en el móvil", substring = true).assertIsDisplayed()
         rule.onNodeWithText("los mensajes sin enviar", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Desvincular").performClick()

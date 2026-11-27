@@ -102,6 +102,7 @@ import dev.orb.app.ui.scan.ScanScreen
 import dev.orb.app.ui.scan.ScanViewModel
 import dev.orb.app.ui.scan.findActivity
 import dev.orb.app.ui.scan.openScanner
+import dev.orb.app.ui.welcome.AndroidLockOffer
 import dev.orb.app.ui.welcome.WelcomeScreen
 import dev.orb.app.ui.welcome.WelcomeViewModel
 import dev.orb.app.ui.web.GamesScreen
@@ -167,6 +168,7 @@ fun OrbApp(container: AppContainer) {
                             Box(Modifier.fillMaxSize()) {
                                 OrbNav(container, start, nav)
                                 ShareWaiting(container, Modifier.align(Alignment.TopCenter).systemBarsPadding())
+                                dev.orb.app.ui.approve.ApproveHost(container.approver)
                             }
                         }
                     }
@@ -267,7 +269,7 @@ private fun OrbNav(container: AppContainer, start: Any, nav: androidx.navigation
     ) {
         composable<Welcome> { entry ->
             val vm = viewModel<WelcomeViewModel>(factory = viewModelFactory {
-                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess)) }
+                initializer { WelcomeViewModel(container.linker, container.deviceName, onLinked = container::linkWith, notices = AndroidNoticeGate(container.notificationAccess), lockOffer = AndroidLockOffer(container.lock), discovery = container.discovery) }
             })
             // What the scanner left for this page (it may have been recreated meanwhile): used once, then erased.
             val handle = entry.savedStateHandle

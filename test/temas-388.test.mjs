@@ -52,7 +52,7 @@ test('migrateAppearance: the theme', () => {
   assert.equal(skin('loquesea'), 'predeterminado');
   assert.equal(skin(null), 'predeterminado');
   assert.equal(skin(undefined), undefined);
-  assert.ok(!('skin' in migrateAppearance({ font: 'inter' })));
+  assert.ok(!('skin' in migrateAppearance({ font: 'roboto' })));
 });
 
 test('migrateAppearance: retired fonts, code colours, density, chat width and text size fall to the defaults', () => {
@@ -60,7 +60,7 @@ test('migrateAppearance: retired fonts, code colours, density, chat width and te
   const out = migrateAppearance(ui);
   assert.deepEqual(out, { skin: 'orb', font: 'outfit', codeFont: 'geist-mono', codeTheme: 'orb', theme: 'oscuro', music: { on: true } });
   assert.deepEqual(migrateAppearance(out), out, 'idempotent');
-  for (const f of ['inter', 'geist', 'plex']) assert.equal(migrateAppearance({ font: f }).font, 'outfit', f);
+  for (const f of ['roboto', 'lato', 'plex']) assert.equal(migrateAppearance({ font: f }).font, 'outfit', f);
   for (const f of ['fira-code', 'plex-mono', 'cascadia']) assert.equal(migrateAppearance({ codeFont: f }).codeFont, 'geist-mono', f);
   for (const c of ['github', 'one-dark', 'dracula', 'nord', 'solarized']) assert.equal(migrateAppearance({ codeTheme: c }).codeTheme, 'orb', c);
   // what the interface still offers is kept, and nothing is added where nothing was stored
@@ -96,7 +96,7 @@ test('migrateAppearance: the palette of the other retired themes and of the rest
 });
 
 test('migrateAppearance: pure, idempotent and keeps every other key', () => {
-  const ui = { skin: 'paletas', palette: 'marino', accent: 'tema', contrast: 'alto', theme: 'oscuro', font: 'inter', density: 'compacta', music: { on: true, volume: 0.4 } };
+  const ui = { skin: 'paletas', palette: 'marino', accent: 'tema', contrast: 'alto', theme: 'oscuro', font: 'roboto', density: 'compacta', music: { on: true, volume: 0.4 } };
   const frozen = structuredClone(ui);
   const out = migrateAppearance(ui);
   assert.deepEqual(ui, frozen, 'the input is not mutated');
@@ -117,7 +117,7 @@ function homeWith(config) {
 }
 
 test('an orb.json of the previous version with the «paletas» theme starts clean and keeps every other setting', () => {
-  const home = homeWith({ language: 'en', maxParallel: 3, ui: { skin: 'paletas', palette: 'marino', accent: 'tema', contrast: 'alto', theme: 'oscuro', font: 'inter', music: { on: true, volume: 0.4 } } });
+  const home = homeWith({ language: 'en', maxParallel: 3, ui: { skin: 'paletas', palette: 'marino', accent: 'tema', contrast: 'alto', theme: 'oscuro', font: 'roboto', music: { on: true, volume: 0.4 } } });
   try {
     const c = loadConfig(home);
     assert.doesNotThrow(() => validateConfig(c));
@@ -135,7 +135,7 @@ test('an orb.json of the previous version with the «paletas» theme starts clea
 
 test('an orb.json with a theme nobody knows, or a retired one, still loads', () => {
   for (const [skin, want] of [['loquesea', 'predeterminado'], ['nube', 'candy'], ['profesional', 'predeterminado'], ['grafito', 'predeterminado']]) {
-    const home = homeWith({ ui: { skin, palette: 'carbon', font: 'geist' } });
+    const home = homeWith({ ui: { skin, palette: 'carbon', font: 'lato' } });
     try {
       const c = loadConfig(home);
       assert.doesNotThrow(() => validateConfig(c), skin);

@@ -49,7 +49,7 @@ test('the window buttons are 32 px, close turns red and the header keeps 120 px 
   assert.match(rule('.win-control'), /width: var\(--ctl\); height: var\(--ctl\); border-radius: var\(--r-ctl\)/);
   assert.match(rule('.win-control.win-close:hover'), /background-color: var\(--destructive\)/);
   assert.match(rule('.win-controls'), /height: 56px/);
-  assert.match(css, /html\.has-win-controls \.bar \{ padding-right: 120px; \}/);
+  assert.match(css, /html\.has-win-controls \.bar \{ --bar-pr: 120px; \}/);
   assert.match(css, /html\.has-win-controls \{ --wco-inset: 7\.5rem; \}/);
   assert.match(css, /\.app-titlebar \{ -webkit-app-region: drag/);
   assert.match(read('src/ui/components/window-controls.jsx'), /data-testid=\{`window-\$\{action\}`\}/);
@@ -67,7 +67,7 @@ test('the open chats strip is 56 px, carries the window buttons and keeps how ta
   assert.match(rule('.tabs-strip'), /padding: 0 120px 0 10px/);
   assert.match(rule('.otab'), /height: var\(--ctl\)/);
   assert.match(rule('.otab[data-on="true"]'), /background: var\(--accent\)/);
-  assert.match(css, /html\.has-win-controls:has\(\.tabs-strip\) \.bar \{ padding-right: 10px; \}/);
+  assert.match(css, /html\.has-win-controls:has\(\.tabs-strip\) \.bar \{ --bar-pr: 10px; \}/);
 });
 
 test('«Normal» is the real 100 % and Ajustes offers four sizes', () => {
@@ -118,7 +118,7 @@ test('step 6C1: an agent chat is two full-height columns, so the panel strip car
   assert.match(panel, /chat-panel-tabs app-titlebar relative flex h-14/);
   assert.ok(panel.indexOf('data-testid="turn-changes-close"') < panel.indexOf('<WindowControlsSlot />'));
   // the header gives its 120 px up while the panel (not the header) holds the buttons; the strip makes room for them
-  assert.match(css, /html\.has-win-controls:has\(\.chat-panel\) \.bar \{ padding-right: 10px; \}/);
+  assert.match(css, /html\.has-win-controls:has\(\.chat-panel\) \.bar \{ --bar-pr: 10px; \}/);
   assert.match(css, /html\.has-win-controls \.chat-panel-tabs \{ padding-right: 118px; \}/);
   assert.match(css, /html\.has-win-controls:has\(\.tabs-strip\) \.chat-panel-tabs \{ padding-right: 10px; \}/);
   // two bars at the top: the panel's, being further right, wins the slot

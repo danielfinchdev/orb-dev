@@ -12,7 +12,7 @@ import { confirmPauseRail, confirmResumeRail } from '@/views/rules-dialogs.jsx';
 import { Account } from '@/views/usage.jsx';
 import { useT, useLocale } from '@/lib/i18n.js';
 import { quiet } from '@/lib/quiet.js';
-import { Block, Panel, Setting, CardFoot, MoreOptions, save } from './rows.jsx';
+import { Block, Panel, Setting, MoreOptions, save } from './rows.jsx';
 
 const pct = (v, fallback) => Math.round((v ?? fallback) * 100);
 
@@ -62,7 +62,7 @@ export function BrakesCard({ c }) {
   const field = (key, label, hint, testid) => (
     <Setting label={label} hint={valid(key) || readOnly ? hint : t('settings.brakeInvalid', { min: RANGE[key][0], max: RANGE[key][1] })}>
       {readOnly ? <span className="tabular-nums" data-testid={testid}>{key === 'stop' ? stopNow : key === 'week' ? weekNow : warnNow} %</span>
-        : <Input type="number" min={RANGE[key][0]} max={RANGE[key][1]} className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: e.target.value })} aria-label={label} aria-invalid={!valid(key)} data-testid={testid} />}
+        : <Input type="number" min={RANGE[key][0]} max={RANGE[key][1]} className="w-[72px]" value={v[key]} onChange={(e) => setV({ ...v, [key]: e.target.value })} onBlur={apply} aria-label={label} aria-invalid={!valid(key)} data-testid={testid} />}
     </Setting>
   );
   if (readOnly) {
@@ -82,7 +82,6 @@ export function BrakesCard({ c }) {
         {field('warn', t('settings.warnAt'), t('settings.warnAtHint'), 'brake-warn')}
         {field('stop', t('settings.stopAt'), t('settings.stopAtHint'), 'brake-stop')}
         {field('week', t('settings.weeklyStop'), t('settings.weeklyStopHint'), 'brake-week')}
-        <CardFoot><Button size="sm" onClick={apply} disabled={!allValid} data-testid="brakes-save">{t('settings.save')}</Button></CardFoot>
       </Panel>
     </Block>
   );

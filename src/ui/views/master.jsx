@@ -13,43 +13,25 @@ import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, FieldError, Input, Label, Textarea, Spinner } from '@/components/ui/basic.jsx';
 import { needsApproval } from '@/lib/task-approval.js';
 import { Checkbox } from '@/components/ui/overlay.jsx';
-import { form, choose } from '@/components/dialogs.jsx';
+import { form, choose, confirm } from '@/components/dialogs.jsx';
 import { call, bridge, getState, setState, act, useStore, robotSkin } from '@/lib/store.js';
 import { Select } from '@/components/ui/overlay.jsx';
 import { LOCK_MINUTES, lockMinutesOf } from '@/lib/idle-lock.js';
-import { setMasterAsker, keepUnlock, heldUnlock, dropUnlock, unlockCore, passwordStrength, passwordShape, MASTER_MIN } from '@/lib/core-access.js';
+import { setMasterAsker, keepUnlock, heldUnlock, dropUnlock, unlockCore, canUseHello, passwordStrength, passwordShape, MASTER_MIN } from '@/lib/core-access.js';
+import { helloMode, helloUsable } from '@/lib/hello.js';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { cn, errorText } from '@/lib/utils.js';
 import { quiet } from '@/lib/quiet.js';
 import { Block, Panel, Setting } from './settings/rows.jsx';
+import { HelloBox, HelloNotes, HelloPasswordOnly, HelloSetting, HelloOffer, helloOfferable } from './hello.jsx';
+import { MobileBox } from './approve.jsx';
+import { mobileReady, rebuildReadiness } from '@/lib/approve.js';
+import { rebuildFlow } from './rebuild.jsx';
+import { NewPassword, ready } from './new-password.jsx';
 
 const MIN = MASTER_MIN;
 const BAR = ['bg-destructive', 'bg-destructive', 'bg-warning', 'bg-success', 'bg-success'];
 
-// The new password twice, its strength and, when asked, the box «Entiendo que…».
-function NewPassword({ v, set, ack = null, autoFocus = false }) {
-  const t = useT();
-  const score = passwordStrength(v.next, MIN);
-  return (
-    <div className="grid gap-3">
-      <Field label={t('master.password')} hint={t('master.hint', { n: MIN })}>
-        <Input type="password" autoComplete="new-password" autoFocus={autoFocus} value={v.next} onChange={(e) => set({ next: e.target.value })} data-testid="master-new" />
-      </Field>
-      {v.next ? (
-        <div className="grid gap-1" data-testid="master-strength">
-          <div className="flex gap-1">{[1, 2, 3, 4].map((i) => <span key={i} className={cn('h-1 flex-1 rounded-full', i <= score ? BAR[score] : 'bg-muted')} />)}</div>
-          <span className="text-muted-foreground text-xs">{t(`master.strength.${score}`)}</span>
-        </div>
-      ) : null}
-      <Field label={t('master.repeat')}><Input type="password" autoComplete="new-password" value={v.again} onChange={(e) => set({ again: e.target.value })} data-testid="master-again" /></Field>
-      {v.again && v.again !== v.next ? <p className="text-destructive text-xs" role="alert">{t('master.mismatch')}</p> : null}
-      {ack ? (
-        <label className="flex cursor-pointer items-start gap-2 text-control"><Checkbox checked={Boolean(v.ack)} onCheckedChange={(c) => set({ ack: c === true })} data-testid="master-ack" className="mt-0.5" /><span>{ack}</span></label>
-      ) : null}
-    </div>
-  );
-}
-const ready = (v, ack = true) => [...String(v.next ?? '')].length >= MIN && v.next === v.again && (!ack || v.ack === true);
 
 // What «Si la olvidas no se puede recuperar» means, said where the password is made: plain grey text, its title leading it.
 // recovery: false = the code is given right after creating it, true = Orb already has one (kept as it is), null = not known
@@ -131,6 +113,9 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false, onBack =
   // would leave the one the user wrote down useless.
   const [hasCode, setHasCode] = useState(null);
   const [code, setCode] = useState(null);
+  // The password just typed, kept only until the offer of Windows Hello is answered (it proves turning Hello on).
+  const typed = useRef('');
+  const [offer, setOffer] = useState(false);
   const revealNew = useReveal();
   const revealAgain = useReveal();
   useEffect(() => { call('backup.status').then((s) => setHasCode(Boolean(s?.recovery))).catch(quiet); }, []);
@@ -142,11 +127,17 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false, onBack =
     if (!unlock) return { error: 'expired' };
     try {
       if ((await call('master.state'))?.canForget) return { have: true };
-      const made = (await call('backup.recovery', { unlock }))?.code;
+      const made = (await call('backup.recovery', { unlock, password: v.next }))?.code;
       return made ? { code: made } : { error: 'failed' };
     } catch { return { error: 'failed' }; }
   };
-  const showIssue = (r) => { if (r.have) onDone?.(); else { setCode(r); setBusy(false); } };
+  // The welcome's last word on the password: Windows Hello is offered when this PC has it and it is off.
+  const finish = async () => {
+    if (typed.current && !bridge.mobile && await helloOfferable()) { setOffer(true); return; }
+    typed.current = '';
+    onDone?.();
+  };
+  const showIssue = (r) => { if (r.have) finish(); else { setCode(r); setBusy(false); } };
   const submit = async (e) => {
     e.preventDefault();
     if (!ready(v)) return;
@@ -155,14 +146,16 @@ export function MasterCreate({ onDone, upgrade = false, wizard = false, onBack =
     try {
       keepUnlock(await call('master.create', { password: v.next }));
       notifyOk(t('master.created'));
+      typed.current = v.next;
       set({ next: '', again: '' });
-      if (hasCode === true) { onDone?.(); return; }
+      if (hasCode === true) { finish(); return; }
       showIssue(await issue());
     }
     catch (error) { notifyError(error); setBusy(false); }
   };
   const retry = async () => { setBusy(true); showIssue(await issue()); };
-  if (code) return <RecoveryCode code={code.code} error={code.error} busy={busy} wizard={wizard} onRetry={retry} onLater={() => onDone?.()} onDone={() => onDone?.()} />;
+  if (offer) return <HelloOffer password={typed.current} wizard={wizard} onDone={() => { typed.current = ''; onDone?.(); }} />;
+  if (code) return <RecoveryCode code={code.code} error={code.error} busy={busy} wizard={wizard} onRetry={retry} onLater={finish} onDone={finish} />;
   return (
     <WizardPage step={wizard ? 'maestra' : undefined}>
       <WizardCard as="form" onSubmit={submit} data-testid="master-create" kick={wizard ? t('setup.kick', { n: 4 }) : null}>
@@ -243,18 +236,26 @@ async function resetFlow() {
     onOk: async (v) => { if (!ready(v)) throw new Error(tNow(v.next !== v.again ? 'master.mismatch' : 'master.fillAll')); return call('master.reset', { password: v.next, confirm: true }); }
   });
 }
-// canForget: this PC can keep the secrets (it opened them and has a recovery code); otherwise only starting from scratch.
-async function forgotFlow({ canForget = false } = {}) {
+// «Lo he olvidado todo» when it cannot be done (no phone that approves, no Windows Hello, no password file): what is missing and that
+// starting from scratch is what is left. → the reset's answer or null.
+async function noRebuild(rb, lost) {
+  const why = lost ? 'rebuild.no.lost' : rb.reason === 'noHello' ? 'rebuild.no.noHello' : 'rebuild.no.noPhone';
+  if (!(await confirm(tNow('rebuild.noTitle'), `${tNow(why)} ${tNow('rebuild.noEnd')}`, { ok: tNow('master.reset'), danger: true }))) return null;
+  return resetFlow();
+}
+// canForget: this PC can keep the secrets (it opened them and has a recovery code). Without the code, a phone that approves and
+// Windows Hello can still make a new password and code («Lo he olvidado todo»); otherwise only starting from scratch.
+async function forgotFlow({ canForget = false, lost = false } = {}) {
   let r = null;
-  if (!canForget) r = await resetFlow();
-  else {
-    const how = await choose(tNow('master.forgot'), tNow('master.forgotChoose'), [
-      { value: 'code', label: tNow('master.forgotWithCode'), hint: tNow('master.forgotWithCodeHint') },
-      { value: 'reset', label: tNow('master.reset'), hint: tNow('master.resetHint'), variant: 'danger' }
-    ], { testid: 'master-forgot-choice' });
-    if (how === 'code') r = await forgotWithCode();
-    else if (how === 'reset') r = await resetFlow();
-  }
+  const rb = bridge.mobile ? { ok: false } : lost ? { ok: false } : await rebuildReadiness(call);
+  const how = await choose(tNow('master.forgot'), tNow(canForget ? 'master.forgotChoose' : 'master.forgotChooseNo'), [
+    ...(canForget ? [{ value: 'code', label: tNow('master.forgotWithCode'), hint: tNow('master.forgotWithCodeHint') }] : []),
+    ...(bridge.mobile ? [] : [{ value: 'all', label: tNow('master.forgotAll'), hint: tNow('master.forgotAllHint') }]),
+    { value: 'reset', label: tNow('master.reset'), hint: tNow('master.resetHint'), variant: 'danger' }
+  ], { testid: 'master-forgot-choice' });
+  if (how === 'code') r = await forgotWithCode();
+  else if (how === 'all') r = rb.ok ? await rebuildFlow(rb) : await noRebuild(rb, lost);
+  else if (how === 'reset') r = await resetFlow();
   if (r?.unlock) keepUnlock(r);
   return r;
 }
@@ -282,6 +283,7 @@ export function MasterLocked({ onDone, state = null }) {
   const reveal = useReveal();
   const fieldRef = useRef(null);
   const fieldId = useId();
+  const [hello, setHello] = useState(null); // master.helloState, read while the screen is locked
   const lost = Boolean(state?.lost);
   const screen = !lost && !state?.locked && Boolean(state?.screenLocked);
   const withCode = !lost && canForget;
@@ -291,6 +293,7 @@ export function MasterLocked({ onDone, state = null }) {
     if (!screen) return undefined;
     let live = true;
     call('master.state').then((s) => { if (!live) return; setLockInfo({ at: s?.lockedAt ?? null, reason: s?.lockReason ?? null }); setCanForget(Boolean(s?.canForget)); }).catch(quiet);
+    if (!bridge.mobile) call('master.helloState').then((s) => { if (live) setHello(s); }).catch(quiet);
     return () => { live = false; };
   }, [screen]);
   const time = screen ? clockOf(lockInfo?.at) : null;
@@ -315,7 +318,8 @@ export function MasterLocked({ onDone, state = null }) {
     try { keepUnlock(await call('master.unlock', { password })); onDone?.(); }
     catch (err) { setError(errorText(err)); setBusy(false); }
   };
-  const forgot = () => openDialog(() => forgotFlow({ canForget }));
+  const forgot = () => openDialog(() => forgotFlow({ canForget, lost }));
+  const helloMark = screen && !inCode ? helloMode(hello) : 'off';
   const switchTo = (next) => { if (busy) return; reveal.hide(); setError(null); setMode(next); };
   // Grey, 24 px tall with 12 px of side padding, as the mock-up's ghost button inside the «¿La olvidaste?» line.
   const linkClass = 'text-muted-foreground hover:text-foreground hover:underline focus-visible:ring-ring rounded-ctl inline-flex h-6 items-center px-3 align-middle text-[13px] outline-none focus-visible:ring-2';
@@ -354,6 +358,8 @@ export function MasterLocked({ onDone, state = null }) {
               {error ? <p className="text-destructive flex items-center gap-1.5 text-xs" role="alert" data-testid="master-error"><CircleAlert className="size-3.5 shrink-0" />{error}</p> : null}
               <Button type="submit" className="h-(--ctl) w-full" disabled={busy} data-testid="master-unlock">{busy ? <Spinner className="border-white/40 border-t-white" /> : null}{t(inCode ? 'master.unlockWithCode' : 'master.unlock')}</Button>
             </>)}
+            {helloMark === 'on' || helloMark === 'noChip' ? <HelloBox action="lock" wait={hello?.waitUntil} submit={false} onToken={(r) => finish(r)} data-testid="master-hello" /> : null}
+            {helloMark === 'changed' ? <HelloNotes changed /> : null}
             {withCode ? (
               <div className="text-muted-foreground grid justify-items-center gap-1 text-center text-xs">
                 {inCode ? (<>
@@ -424,13 +430,28 @@ function LockStatus() {
 
 // Before a guarded action: the password, once every 5 minutes. → { unlock, until } or null.
 // an action that asks every time (fresh: deleting a project) says so instead, and its token is for it alone.
-setMasterAsker((action, { fresh = false } = {}) => form(tNow('master.askTitle'), {
-  description: `${tNow(`master.ask.${action}`)} ${fresh ? tNow('master.askEveryTime') : tNow('master.askNote', { n: 5 })}`,
-  initial: { password: '' },
-  body: (v, set) => <Field label={tNow('master.password')}><Input type="password" autoComplete="current-password" autoFocus value={v.password} onChange={(e) => set({ password: e.target.value })} data-testid="master-ask" /></Field>,
-  ok: tNow('master.unlock'),
-  onOk: (v) => call('master.unlock', { password: v.password, ...(fresh ? { purpose: action } : {}) })
-}));
+// With Windows Hello on, the dialog first says in Orb's own words what is being approved (Windows' notice is generic) and offers
+// Hello; an action Hello never opens (what shows or saves a secret) says it needs the password instead.
+setMasterAsker(async (action, { fresh = false, what = null, request = null } = {}) => {
+  const state = bridge.mobile ? null : await call('master.helloState').catch(() => null);
+  const withPhone = !bridge.mobile && await mobileReady(call, request);
+  const usable = helloUsable(state);
+  const offerHello = usable && canUseHello(action);
+  let got = null; // the token Hello gave: the dialog's submit hands it back
+  return form(tNow('master.askTitle'), {
+    description: `${tNow(`master.ask.${action}`)} ${fresh ? tNow('master.askEveryTime') : tNow('master.askNote', { n: 5 })}`,
+    initial: { password: '' },
+    body: (v, set) => (<>
+      {offerHello ? <HelloBox action={action} what={what} purpose={fresh ? action : null} wait={state.waitUntil} onToken={(r) => { got = r; }} /> : null}
+      {helloMode(state) === 'changed' ? <HelloNotes changed /> : null}
+      {withPhone ? <MobileBox request={request} onToken={(r) => { got = r; }} /> : null}
+      <Field label={tNow('master.password')}><Input type="password" autoComplete="current-password" autoFocus={!offerHello} value={v.password} onChange={(e) => set({ password: e.target.value })} data-testid="master-ask" /></Field>
+      {usable && !offerHello ? <HelloPasswordOnly /> : null}
+    </>),
+    ok: tNow('master.unlock'),
+    onOk: (v) => got ?? call('master.unlock', { password: v.password, ...(fresh ? { purpose: action } : {}) })
+  });
+});
 // The window locked (Windows' lock screen), the password changed, or the engine says so: the unlock goes.
 if (typeof window !== 'undefined') bridge.on?.('master:locked', () => dropUnlock());
 
@@ -465,6 +486,7 @@ export function MasterCard() {
           <Button size="sm" variant="outline" onClick={change} data-testid="master-change"><KeyRound />{t('master.change')}</Button>
         </Setting>
         {bridge.mobile ? null : <LockMinutes />}
+        {bridge.mobile ? null : <HelloSetting canCode={st.canForget === true} />}
       </Panel>
     </Block>
   );
@@ -490,7 +512,7 @@ function LockMinutes() {
 // A connector's keys (Ajustes › Conectores): seen and changed after the password; one «NAME=value» per line.
 const KEY_LINE = /^([A-Za-z_][A-Za-z0-9_]{0,99})=(.*)$/;
 export async function connectorKeys(server) {
-  const unlock = await unlockCore('secrets');
+  const unlock = await unlockCore('secrets', { request: { method: 'secrets.connector', params: { name: server.name } } });
   if (!unlock) return;
   let current; try { current = await call('secrets.connector', { name: server.name, unlock }); } catch (error) { notifyError(error); return; }
   const text = Object.entries(current.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n');
@@ -503,7 +525,11 @@ export async function connectorKeys(server) {
     onOk: async (v) => {
       const env = {};
       for (const line of v.text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)) { const m = KEY_LINE.exec(line); if (!m) throw new Error(tNow('master.keysBad')); env[m[1]] = m[2]; }
-      return call('secrets.saveConnector', { name: server.name, env, unlock });
+      // What was seen used the first token (a phone's is for one call): saving asks again, now for exactly these keys.
+      const params = { name: server.name, env };
+      const again = await unlockCore('secrets', { request: { method: 'secrets.saveConnector', params } });
+      if (!again) return false;
+      return call('secrets.saveConnector', { ...params, unlock: again });
     }
   });
   if (!r) return;

@@ -3,7 +3,7 @@
 // close its session. The phone asks for the master password to link, and unlinking one asks for it here.
 import { useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
-import { QrCode, Smartphone, Globe, Pencil, Trash2, Ellipsis, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound, RefreshCw } from 'lucide-react';
+import { QrCode, Smartphone, Globe, Pencil, Trash2, Ellipsis, Copy, Check, LoaderCircle, ShieldCheck, TriangleAlert, ChevronDown, ExternalLink, KeyRound, RefreshCw, Monitor, Download, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Input } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
@@ -17,6 +17,7 @@ import { cn, ago } from '@/lib/utils.js';
 import { useT } from '@/lib/i18n.js';
 import { notifyError } from '@/lib/notify.js';
 import { quiet } from '@/lib/quiet.js';
+import { allowPhone } from './approve.jsx';
 
 const KIND_ICON = { phone: Smartphone, browser: Globe };
 
@@ -122,6 +123,99 @@ function PairCard({ device, pair, onPair }) {
   );
 }
 
+// «Enlazar sin contraseña»: a phone without the master password, with a one-use code that the PC shows after Windows Hello (or
+// the password). The code lives only in this component (and in the vault, in memory): leaving, locking or a device linking takes
+// it off the screen. When a phone proves it has the code, the PC asks here whether to link it, with the phone's name; without
+// a yes there is no link. A phone linked this way cannot approve anything with its fingerprint (that is registered later, with
+// the password).
+function LinkCodeCard() {
+  const t = useT();
+  const [via, setVia] = useState('tailscale');
+  const [code, setCode] = useState(null);
+  const [now, setNow] = useState(Date.now());
+  const [busy, setBusy] = useState(false);
+  const [wasExpired, setWasExpired] = useState(false);
+  // The phone access has to be on already: Windows Hello never turns it on.
+  const [needOn, setNeedOn] = useState(false);
+  const alive = useRef(true);
+  const reqN = useRef(0);
+  const asking = useRef(null);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; reqN.current += 1; }; }, []);
+  useEffect(() => { if (!code) return undefined; const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, [code]);
+  // The question of the PC: «¿Enlazar «name»?». Answered here, and only here.
+  const question = async (q) => {
+    if (!q?.id || asking.current === q.id) return;
+    asking.current = q.id;
+    const yes = await confirm(t('link.code.confirmTitle', { name: q.name }), t('link.code.confirmBody', { name: q.name, ip: q.ip || '?' }), { ok: t('link.code.confirmYes'), cancel: t('link.code.confirmNo'), noClose: true });
+    asking.current = null;
+    await call('link.codeAnswer', { id: q.id, accept: yes === true }).catch(quiet);
+  };
+  useEffect(() => bridge.on('*', (event, payload) => {
+    if (event === 'link:confirm') question(payload);
+    // A device linked, or Orb locked: the code is spent or cancelled.
+    if (event === 'link:devices' || event === 'master:locked') { reqN.current += 1; setCode(null); setBusy(false); }
+  }), []);
+  useEffect(() => { call('link.codeWaiting').then((q) => { if (q) question(q); }).catch(quiet); }, []);
+  const make = async () => {
+    const n = ++reqN.current;
+    const st = await call('remote.status').catch(() => null);
+    if (!alive.current || n !== reqN.current) return;
+    setNeedOn(!st?.running);
+    if (!st?.running) return;
+    // Windows Hello (or the password) first: the code is made only for a token of that.
+    const unlock = await unlockCore('linkCode');
+    if (!unlock || !alive.current || n !== reqN.current) return;
+    setBusy(true);
+    const r = await act(call('link.codeNew', { unlock, kind: via }));
+    if (!alive.current || n !== reqN.current) return;
+    const svg = r ? await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }) : null;
+    if (!alive.current || n !== reqN.current) return;
+    if (r) { setCode({ ...r, svg }); setVia(r.kind); setWasExpired(false); }
+    setBusy(false); setNow(Date.now());
+  };
+  const cancel = () => { reqN.current += 1; setCode(null); setBusy(false); call('link.codeCancel').catch(quiet); };
+  const expired = code && now >= code.expiresAt;
+  // Not while the PC's question about a phone is open: the vault keeps the code alive until it is answered.
+  useEffect(() => { if (expired && !asking.current) { setWasExpired(true); setCode(null); call('link.codeCancel').catch(quiet); } }, [expired]);
+  const showing = code && !expired;
+  return (
+    <Block title={t('link.code.title')} note={t('link.code.hint')} data-testid="link-code-card">
+      <Panel>
+        {showing ? (
+          <div className="animate-in fade-in-0 flex items-start gap-4 px-3.5 py-3 duration-200 max-sm:flex-col" data-testid="link-code-shown">
+            <img alt={t('link.qrAlt')} className="size-40 shrink-0 rounded-card bg-white p-2" src={`data:image/svg+xml;utf8,${encodeURIComponent(code.svg)}`} data-testid="link-code-qr" />
+            <div className="flex min-w-0 flex-col gap-1.5 text-control">
+              <b className="font-medium">{t('link.code.expires')} <span className="tabular-nums" data-testid="link-code-countdown">{countdown(code.expiresAt, now)}</span></b>
+              <span className="text-muted-foreground text-caption">{t('link.code.scan')}</span>
+              <code className="bg-muted w-fit rounded-ctl px-2.5 py-1 font-mono text-[20px] font-semibold tracking-widest tabular-nums select-all" data-testid="link-code-text">{code.code}</code>
+              <code className="text-muted-foreground font-mono text-caption break-all">{code.address}</code>
+              <span className="text-muted-foreground text-caption">{t('link.fpLabel')}</span>
+              <code className="font-mono text-caption break-all" data-testid="link-code-fp">{code.pc}</code>
+              <span className="text-muted-foreground text-caption">{t('link.code.fpHint')}</span>
+              <span className="text-muted-foreground text-caption">{t('link.code.once')}</span>
+              <span className="text-muted-foreground flex items-start gap-1.5 text-caption" data-testid="link-code-noapprove"><ShieldCheck className="mt-0.5 size-3.5 shrink-0" />{t('link.code.noApprove')}</span>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <Button size="sm" variant="outline" onClick={cancel} data-testid="link-code-cancel">{t('link.code.cancel')}</Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <Stack>
+            <div className="flex flex-wrap items-center gap-2">
+              <Select caret="solid" value={via} onValueChange={setVia} title={t('link.via')} data-testid="link-code-via"
+                options={PAIR_VIA.map((k) => ({ value: k, label: t(k === 'wifi' ? 'settings.mobileWifi' : 'settings.mobileTs') }))} />
+              {busy ? <LoaderCircle className="text-muted-foreground size-5 animate-spin" />
+                : <Button size="sm" onClick={make} data-testid="link-code-make"><KeyRound />{wasExpired ? t('link.code.again') : t('link.code.make')}</Button>}
+              {wasExpired ? <span className="text-muted-foreground text-caption">{t('link.code.expired')}</span> : null}
+            </div>
+            {needOn ? <span className="text-warning-ink text-caption" role="alert" data-testid="link-code-needon">{t('link.code.needOn')}</span> : null}
+          </Stack>
+        )}
+      </Panel>
+    </Block>
+  );
+}
+
 // What the drawing does not show, for «Más opciones»: what is being linked, and how to reach this PC from outside home.
 function PairMore({ device, onDevice }) {
   const t = useT();
@@ -149,9 +243,61 @@ function OutsideGuide() {
   );
 }
 
+const OS_KEY = { windows: 'windows', android: 'android', ios: 'ios', macos: 'macos', linux: 'linux' };
+
+// Tailscale as the account: install it, sign in (Google, GitHub…) and see the devices of the same account. Finding a device
+// here links nothing: a phone still needs the code from this screen and the master password.
+function TailscaleCard() {
+  const t = useT();
+  const [info, setInfo] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const load = () => call('tailscale.status').then(setInfo).catch(() => setInfo({ installed: false, state: 'missing', devices: [] }));
+  useEffect(() => { load(); const id = setInterval(load, busy ? 3000 : 15_000); return () => clearInterval(id); }, [busy]);
+  if (!info) return null;
+  const install = async () => { setBusy(true); try { await act(call('installer.start', { ids: ['tailscale'] }), t('link.ts.installing')); } finally { setTimeout(() => setBusy(false), 60_000); } };
+  const login = async () => {
+    setBusy(true);
+    try {
+      const r = await call('tailscale.login');
+      if (r?.url) await bridge.openExternal(r.url); else if (r?.missing) notifyError(new Error(t('link.ts.notInstalled')));
+    } catch (e) { notifyError(e); } finally { setTimeout(() => setBusy(false), 60_000); }
+  };
+  const running = info.state === 'running';
+  const note = !info.installed ? t('link.ts.notInstalled') : running ? t('link.ts.account', { account: info.account ?? info.tailnet ?? '' }) : info.state === 'stopped' ? t('link.ts.stopped') : t('link.ts.needsLogin');
+  return (
+    <Block title={t('link.ts.title')} count={running ? info.devices.length : undefined} note={note} data-testid="link-tailscale">
+      <Panel>
+        {!info.installed ? (
+          <Stack><Button size="sm" onClick={install} disabled={busy} data-testid="ts-install"><Download />{t('link.ts.install')}</Button><Hint>{t('link.ts.installHint')}</Hint></Stack>
+        ) : !running ? (
+          <Stack><Button size="sm" onClick={login} disabled={busy} data-testid="ts-login"><LogIn />{info.state === 'stopped' ? t('link.ts.connect') : t('link.ts.login')}</Button><Hint>{info.state === 'stopped' ? t('link.ts.connectHint') : t('link.ts.loginHint')}</Hint></Stack>
+        ) : (
+          <>
+            {info.self ? <Stack><Hint data-testid="ts-self">{t('link.ts.self', { name: info.self.dns ?? info.self.name })}</Hint></Stack> : null}
+            {!info.devices.length ? <Stack><Hint>{t('link.ts.noDevices')}</Hint></Stack> : info.devices.map((d) => (
+              <ListRow key={d.dns ?? d.name} className="border-border rounded-none not-first:border-t" data-testid="ts-device" leading={d.os === 'android' || d.os === 'ios' ? <Smartphone className="text-muted-foreground size-4 shrink-0" /> : <Monitor className="text-muted-foreground size-4 shrink-0" />}
+                title={d.name}
+                meta={[OS_KEY[d.os] ? t(`link.ts.os.${OS_KEY[d.os]}`) : null, d.online ? t('link.onNow') : d.lastSeen ? t('link.seen', { when: ago(d.lastSeen) }) : t('link.never')].filter(Boolean).join(' · ')}
+                trailing={<div className="flex items-center gap-1.5">{d.orbDevice ? <Badge variant="success" data-testid="ts-linked">{t('link.ts.linked')}</Badge> : null}<Badge variant={d.online ? 'success' : 'secondary'}>{d.online ? t('link.online') : t('link.offline')}</Badge></div>} />
+            ))}
+          </>
+        )}
+      </Panel>
+    </Block>
+  );
+}
+
 function DevicesCard({ devices, reload, onPair }) {
   const t = useT();
   const rename = (d) => form(t('link.renameTitle'), { initial: { name: d.name }, body: (v, set) => <Input autoFocus value={v.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} />, ok: t('link.save'), onOk: async (v) => { await call('link.rename', { id: d.id, name: v.name.trim() || d.name }); reload(); return true; } });
+  // The phones that may approve sensitive actions with their fingerprint (id -> true); this PC's window only.
+  const [approving, setApproving] = useState({});
+  const loadApproving = () => { if (!bridge.mobile) call('approve.devices').then((r) => setApproving(Object.fromEntries((r?.phones ?? []).map((p) => [p.id, p.registered])))).catch(quiet); };
+  useEffect(loadApproving, [devices]);
+  const removePhone = async (d) => {
+    const unlock = await unlockCore('unlink'); if (!unlock) return;
+    await act(call('approve.unregister', { id: d.id, unlock }), t('approve.removed')); loadApproving();
+  };
   const revoke = async (d) => {
     if (!(await confirm(t('link.revokeTitle', { name: d.name }), t('link.revokeBody'), { ok: t('link.revoke'), danger: true }))) return;
     const unlock = await unlockCore('unlink'); if (!unlock) return;
@@ -175,6 +321,9 @@ function DevicesCard({ devices, reload, onPair }) {
                     <DropdownMenuTrigger asChild><Button size="icon-xs" variant="ghost" aria-label={t('settings.moreOptions')} title={t('settings.moreOptions')} data-testid="link-menu"><Ellipsis /></Button></DropdownMenuTrigger>
                     <DropdownMenuContent>
                       <DropdownMenuItem onSelect={() => rename(d)} data-testid="link-rename"><Pencil />{t('link.rename')}</DropdownMenuItem>
+                      {d.kind === 'phone' && !bridge.mobile ? (approving[d.id]
+                        ? <DropdownMenuItem onSelect={() => removePhone(d)} data-testid="approve-remove"><Smartphone />{t('approve.remove')}</DropdownMenuItem>
+                        : <DropdownMenuItem onSelect={() => allowPhone(d, { reload: loadApproving })} data-testid="approve-allow"><Smartphone />{t('approve.allow', { name: d.name })}</DropdownMenuItem>) : null}
                       <DropdownMenuItem variant="destructive" onSelect={() => revoke(d)} data-testid="link-revoke"><Trash2 />{t('link.revoke')}</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -222,7 +371,9 @@ export function MagicLinkPanel({ grouped = false, phoneAccess = null }) {
     <div className="grid gap-4 [&>*]:min-w-0" data-testid="magic-link">
       <SubSection id="dispositivos" title={title('dispositivos')}>
         <PairCard device={device} pair={pair} onPair={ask} />
+        <LinkCodeCard />
         <DevicesCard devices={devices} reload={load} onPair={ask} />
+        <TailscaleCard />
         {/* phoneAccess draws «Acceso desde otros dispositivos» and puts the pairing options inside its «Más opciones» */}
         {phoneAccess ? phoneAccess(more) : <MoreOptions testid="link-more-options">{more}</MoreOptions>}
       </SubSection>

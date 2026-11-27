@@ -1,11 +1,11 @@
 // Create / link / clone a project, and the project control under the assistant's message box.
 import { FolderOpen, FolderPlus, FolderX, ChevronsUpDown, Check, Folder } from 'lucide-react';
 import { notifyOk } from '@/lib/notify.js';
-import { form } from './dialogs.jsx';
+import { form, pickProject } from './dialogs.jsx';
 import { Field, Input, Textarea } from './ui/basic.jsx';
 import { Button } from './ui/button.jsx';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel, Select, Switch } from './ui/overlay.jsx';
-import { call, getState, act, bridge, useStore, refresh } from '@/lib/store.js';
+import { call, getState, act, bridge, useStore, refresh, newChat } from '@/lib/store.js';
 import { baseName } from '@/lib/utils.js';
 import { GithubIcon } from '@/components/agent-icon.jsx';
 import { t, useT } from '@/lib/i18n.js';
@@ -50,6 +50,11 @@ const TemplateField = ({ v, set }) => (
 );
 const folderHint = (v) => (v.template === false ? t('comp.projects.emptyFolderHint', { path: folderOf(v) }) : v.category === MULTI ? t('comp.projects.multiFolderHint', { path: folderOf(v), list: [...v.platforms, SHARED_DIR].join(', ') }) : t('comp.projects.folderHint', { path: folderOf(v) }));
 
+// «New chat»: choose where (one dialog, keys included), then open the empty chat there.
+export async function startChatFlow() {
+  const r = await pickProject();
+  if (r) await newChat(r.project);
+}
 export async function createProjectFlow() {
   const p = await form(t('comp.projects.newTitle'), {
     initial: { name: '', notes: '', category: DEFAULT_CATEGORY, platforms: ['android', 'web'], template: true },

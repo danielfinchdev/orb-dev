@@ -1,6 +1,8 @@
 // Pure helpers for the Activity tab: the two shapes the engine answers with, the filters it understands and the
 // capability probes. Kept free of React so they can be tested on their own.
 
+import { toIso, addDays } from './date-field.js';
+
 export const SOURCES = ['orb', 'subagentes', 'usuario', 'app'];
 export const LEVELS = ['info', 'warn', 'error'];
 export const PAGE = 100;
@@ -69,3 +71,51 @@ export function previewLines(text, shown = 6) {
   const body = lines.slice(lines.findIndex((l) => l === '') + 1);
   return { head: body.slice(0, shown), more: Math.max(0, body.length - shown), total: body.length };
 }
+
+// The quick tabs of the Activity tab. «agentes» is the source the engine calls «subagentes»; «problemas» is the warning
+// level, which the engine reads as «warnings and errors».
+export const TABS = ['todo', 'tu', 'agentes', 'problemas'];
+export const RANGES = ['0', '7', '30', 'all', 'custom'];
+export const DEFAULT_RANGE = '7';
+export const EMPTY_VIEW = Object.freeze({ tab: 'todo', project: '', range: DEFAULT_RANGE, from: '', to: '', q: '' });
+
+const TAB_FILTERS = { todo: { sources: [], level: 'info' }, tu: { sources: ['usuario'], level: 'info' }, agentes: { sources: ['subagentes'], level: 'info' }, problemas: { sources: [], level: 'warn' } };
+
+// The days a range shows, as local 'YYYY-MM-DD' bounds (an empty one is open). «Hoy» is today; «7 días» includes today.
+export function rangeDates(range, custom = {}, now = new Date()) {
+  if (range === 'custom') return { from: custom.from || '', to: custom.to || '' };
+  if (range === 'all') return { from: '', to: '' };
+  const days = Number(range);
+  const today = toIso(now);
+  return { from: days > 0 ? addDays(today, -(days - 1)) : today, to: '' };
+}
+
+// The view of the Activity tab (tab, project, range, text) → the filters the engine query understands.
+export function resolveFilters(view, now = new Date()) {
+  const { sources, level } = TAB_FILTERS[view.tab] ?? TAB_FILTERS.todo;
+  const { from, to } = rangeDates(view.range, view, now);
+  return { sources, level, project: view.project || '', from, to, q: view.q ?? '' };
+}
+
+// The filters on show as removable labels (the tab has its own control and is not one of them).
+export function activeChips(view) {
+  const chips = [];
+  if (view.project) chips.push({ key: 'project', value: view.project });
+  if (view.range !== DEFAULT_RANGE) chips.push({ key: 'range', value: view.range });
+  if (view.q?.trim()) chips.push({ key: 'q', value: view.q.trim() });
+  return chips;
+}
+export const clearChip = (view, key) => ({ ...view, ...(key === 'project' ? { project: '' } : key === 'range' ? { range: DEFAULT_RANGE, from: '', to: '' } : { q: '' }) });
+
+// What counts as «technical» (hidden until «Ver detalles técnicos»): the plain lines Orb's own logs write for developers.
+// Only an info line of Orb's or the app's own log qualifies, so a warning or an error is never hidden:
+//  - the lock-screen notices («pantalla de bloqueo (sin usar)»);
+//  - the start-up line that lists where each agent is installed («agentes: claude=C:\...\claude.exe · codex=no»);
+//  - any other line that is just a program path.
+const TECH_LINE = [/^pantalla de bloqueo\b/i, /^agentes:\s.*=/i, /^(?:[a-z]:|\/)\S+\.(?:exe|cmd|bat|js|mjs)$/i];
+export function isTechnical(item) {
+  if (!item || item.level !== 'info' || (item.source !== 'orb' && item.source !== 'app')) return false;
+  const text = String(item.text ?? '').trim();
+  return TECH_LINE.some((re) => re.test(text));
+}
+export const visibleLines = (items, showTechnical) => (showTechnical ? items : items.filter((i) => !isTechnical(i)));

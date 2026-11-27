@@ -82,9 +82,9 @@ test('la lista agrupada: fijados arriba sin repetirse, un grupo por proyecto (Si
   assert.deepEqual(g.pinned.map((x) => x.id), [6, 5], 'en su orden');
   assert.deepEqual(g.groups.map((x) => x.project), ['tienda', 'mi-web', null], 'el más reciente primero; sin proyecto al final');
   assert.deepEqual(g.groups[1].items.map((x) => x.id), [8, 1], 'sin el fijado ni el completado');
-  assert.equal(g.groups[1].hidden, 1); assert.equal(g.hidden, 1);
+  assert.equal(g.hidden, 1); assert.deepEqual(g.completed.map((x) => [x.project, x.items.map((y) => y.id)]), [['mi-web', [4]]], 'lo completado, aparte y por proyecto');
   assert.equal(g.groups[1].unread, 2); assert.equal(g.groups[1].waiting, 1); assert.equal(g.groups[0].working, 1);
-  assert.deepEqual(M.groupOrb(items, { showDone: true }).groups[1].items.map((x) => x.id), [8, 1, 4], 'con los completados');
+  assert.deepEqual(M.groupOrb(items, { linger: new Set(['conversation:4']) }).groups[1].items.map((x) => x.id), [8, 1, 4], 'el recién completado se queda donde estaba');
   assert.deepEqual(M.groupOrb(items, { filter: { state: 'attention', agent: 'all' } }).groups.flatMap((x) => x.items.map((y) => y.id)), [8]);
   assert.deepEqual(M.groupOrb(items, { filter: { state: 'done', agent: 'all' } }).groups.flatMap((x) => x.items.map((y) => y.id)), [4]);
   assert.deepEqual(M.groupOrb(items, { filter: { state: 'all', agent: 'codex' } }).groups.flatMap((x) => x.items.map((y) => y.id)), [7]);

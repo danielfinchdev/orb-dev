@@ -46,24 +46,27 @@ export async function until(fn, what, ms = 15000) {
 }
 
 // The engine in its own process, as the app runs it: call(method, params) → result; events are collected.
-export async function startEngine(home, { env = {}, secret, screenLocked } = {}) {
+// userData: the app's data folder (the saved location, the copies of the keys), as the app tells it. host(method, params): answers the
+// engine's calls to the app (the Recycle Bin, whether an uninstaller is there); without it the engine gets no answer.
+export async function startEngine(home, { env = {}, secret, screenLocked, userData, host } = {}) {
   const child = fork(path.join(ROOT, 'src', 'engine', 'engine.mjs'), [], { stdio: ['ignore', 'inherit', 'inherit', 'ipc'], env: { ...process.env, ...env } });
   let n = 0; const pending = new Map(); const events = [];
   child.on('message', (m) => {
     if (m.type === 'reply') { const p = pending.get(m.id); pending.delete(m.id); if (p) (m.ok ? p.resolve(m.result) : p.reject(new Error(m.error))); }
     if (m.type === 'event') events.push(m);
+    if (m.type === 'host' && host) Promise.resolve().then(() => host(m.method, m.params)).then((result) => child.send({ type: 'hostReply', id: m.id, ok: true, result }), (error) => child.send({ type: 'hostReply', id: m.id, ok: false, error: error.message }));
   });
   const exited = new Promise((r) => child.once('exit', r));
   await new Promise((resolve, reject) => {
     // Events may come before 'started' (e.g. a task that continues after a restart): wait for that message only.
     const onStart = (m) => { if (m?.type !== 'started') return; child.off('message', onStart); if (m.ok) resolve(); else reject(new Error(m.error)); };
     child.on('message', onStart);
-    child.send({ type: 'start', home, version: 'test', secret, ...(screenLocked ? { screenLocked: true } : {}) });
+    child.send({ type: 'start', home, version: 'test', secret, ...(userData ? { userData } : {}), ...(screenLocked ? { screenLocked: true } : {}) });
   });
   const call = (method, params = {}) => new Promise((resolve, reject) => { const id = ++n; pending.set(id, { resolve, reject }); child.send({ type: 'call', id, method, params }); });
   const taskDone = (id, ms = 20000) => until(async () => { const x = await call('tasks.get', { id }); return !['queued', 'running'].includes(x.status) && x.pid == null && x; }, `tarea #${id}`, ms);
   return {
-    child, call, events, taskDone,
+    child, call, events, taskDone, exited,
     // A clean stop (shutdown) or a crash (kill): both wait until the process is gone.
     stop: async () => { try { child.send({ type: 'shutdown' }); } catch { /* gone */ } await Promise.race([exited, wait(5000)]); },
     kill: async () => { child.kill('SIGKILL'); await exited; }

@@ -10,7 +10,7 @@ object DirectTexts {
     const val STOP = "Parar"
     const val MORE_OPTIONS = "Más opciones"
     const val MORE_BUTTON = "Más acciones del chat"
-    const val ONLY_ON_PC = "Acceso total, Usar mi móvil, secretos y terminal integrado: solo en el PC."
+    const val ONLY_ON_PC = "Acceso total, Usar mi móvil, bóveda y terminal: solo en el PC."
     const val MODEL = "Modelo"
     const val PERMISSIONS = "Permisos"
 
@@ -32,7 +32,7 @@ object DirectTexts {
     const val PERMISSION_CARD = "Permiso"
     const val PENDING_BADGE = "Pendiente"
     const val PERMIT_ALWAYS_SHORT = "Siempre"
-    const val PERMIT_ALWAYS_SCOPE = "«Siempre» lo permite aquí, en este chat; no vale para otros."
+    const val PERMIT_ALWAYS_SCOPE = "«Siempre» vale solo en este chat."
 
     const val STALLED_TITLE = "Sesión parada"
     const val STALLED_FORK_HINT = " Puedes reanudarla donde iba o bifurcar desde un mensaje."
@@ -41,9 +41,9 @@ object DirectTexts {
     const val WORKING_PLACEHOLDER = "Corrige o añade algo…"
 
     const val MESSAGE_SHEET = "Este mensaje"
-    const val FORK_FROM_NOTE = "Copia la conversación hasta este mensaje, sin los archivos. El chat nuevo arranca con un resumen de lo anterior, no con la memoria del agente."
+    const val FORK_FROM_NOTE = "Copia la conversación hasta este mensaje, sin archivos. El chat nuevo empieza con un resumen."
     const val FORK_ASKING = "Preguntando al PC…"
-    const val FORK_FROM_OLD_PC = "Este PC no puede bifurcar desde un mensaje: actualiza Orb en el PC."
+    const val FORK_FROM_OLD_PC = "Actualiza Orb en el PC para bifurcar desde un mensaje."
     const val FORKED_FROM = "Chat bifurcado en el PC desde ese mensaje. El original se conserva."
 
     const val STEER_SENT = "Corrección enviada"
@@ -66,5 +66,5 @@ object DirectTexts {
 
     const val RENAME_FIELD = "Título"
     const val PERMISSION_LABEL = "Permisos del agente"
-    const val NEEDS_PC_SHEET = "Sin conexión con el PC: las acciones se hacen cuando vuelva."
+    const val NEEDS_PC_SHEET = "Sin conexión con el PC. Las acciones se harán cuando vuelva."
 }

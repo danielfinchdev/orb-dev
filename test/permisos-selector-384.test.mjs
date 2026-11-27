@@ -27,5 +27,5 @@ test('the callers keep the phone rule and the full-access flow', () => {
   const session = readFileSync(join(import.meta.dirname, '..', 'src', 'ui', 'views', 'session.jsx'), 'utf8');
   assert.match(session, /disabled=\{bridge\.mobile && s\.permission === 'total'\}/);
   assert.match(session, /\(!bridge\.mobile \|\| o\.value !== 'total'\)/);
-  assert.match(session, /unlockCore\('fullAccess'\)/);
+  assert.match(session, /unlockCore\('fullAccess', \{ request: \{ method: 'sessions\.grantTotal'/);
 });

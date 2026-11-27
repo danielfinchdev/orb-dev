@@ -2,7 +2,7 @@
 // files appear as the agent works, risky actions wait for a click (approval cards), messages written meanwhile correct the
 // agent on the fly or wait in a queue, and the context meter shows how full the conversation is. Task runs open here too.
 import { lazy, memo, Suspense, useEffect, useMemo, useState } from 'react';
-import { Info, PanelRight, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, SquareTerminal } from 'lucide-react';
+import { Info, PanelRight, FolderOpen, Archive, Trash2, Pencil, Terminal, ChevronRight, ChevronUp, FileText, Search, Globe, Wrench, FilePlus2, FileEdit, FileMinus2, ImageIcon, Film, Music, FileArchive, File as FileIcon, FileCode, X, ClipboardCheck, CircleAlert, ShieldAlert, Check, CheckCheck, GitFork, Play, Bot, ListOrdered, ArrowUp as ArrowUpIcon, ArrowDown, CornerDownRight, Gamepad2, Smartphone, Shuffle, SquareTerminal, FolderOutput } from 'lucide-react';
 import { unlockCore } from '@/lib/core-access.js';
 import { notifyError, notifyOk } from '@/lib/notify.js';
 import { TypingMarkdown, TypedMarkdown } from '@/components/markdown.jsx';
@@ -32,8 +32,10 @@ import { takePoints, onPoints } from '@/lib/browser-points.js';
 import { TerminalPanel } from '@/components/terminal-panel.jsx';
 import { onTerminalPaste } from '@/lib/terminal-paste.js';
 import { NotificationBell } from '@/components/notification-center.jsx';
-import { useCatalog, modelsOf, modelLabel, AgentChip } from '@/components/brain-picker.jsx';
+import { useCatalog, modelsOf, modelLabel, AgentChip, AUTO } from '@/components/brain-picker.jsx';
+import { AccountActions } from '@/components/account-notice.jsx';
 import { WorkspacePills } from '@/components/workspace-pills.jsx';
+import { CopyBar, CopyAskCards, MoveToCopyDialog, MoveToCopyButton, askMoveToCopy, useCopyState } from '@/components/chat-copy.jsx';
 import { stepText, bareTool } from '@/components/chat-live.jsx';
 import { readableInput, readableCommand } from '@/lib/tools.js';
 import { GeneratedImage, openImage } from '@/components/image-viewer.jsx';
@@ -46,7 +48,7 @@ import { AGENT, PERMISSION, REASONING, DECISION, CAN_STEER as AGENT_CAN_STEER, C
 import { baseName, cn } from '@/lib/utils.js';
 import { useT, t, useLocale, currentLocale } from '@/lib/i18n.js';
 import { sameBlock } from '@/lib/memo.js';
-import { toBlocks, subagentState } from '@/lib/session-blocks.js';
+import { toBlocks, dropRepeatedAgent, subagentState } from '@/lib/session-blocks.js';
 import { summaryText } from '@/lib/tool-summary.js';
 import { kindOf, playableType } from '../../shared/attach-kind.mjs';
 import { canCapture, captureFrame } from '@/lib/window-capture.js';
@@ -356,6 +358,7 @@ export function SessionView({ route }) {
   const [items, setItems] = useState([]);
   const [more, setMore] = useState(false);
   const [queue, setQueue] = useState([]);
+  const [acctHold, setAcctHold] = useState(null);
   const draft = useDraft();
   // text sent here by «Añadir al chat» (a selected text)
   useAddToChat((text) => draft.set((prev) => appendToBox(prev, text)));
@@ -413,10 +416,14 @@ export function SessionView({ route }) {
     });
     const offReset = bridge.on('session:reset', (e) => { if (e.id === route.id) call('sessions.items', { id: route.id, limit: PAGE }).then((r) => { setItems(r); setMore(r.length >= PAGE); }).catch(quiet); });
     const offQueue = bridge.on('session:queue', (q) => { if (q.id === route.id) setQueue(q.queue); });
-    return () => { alive = false; offItem(); offReset(); offQueue(); };
+    // a fixed account that cannot take the waiting message: the notice keeps its buttons until the chat moves on
+    const offAccount = bridge.on('session:account', (e) => { if (String(e.id) === String(route.id)) setAcctHold(e.problem ? { problem: e.problem, waiting: Boolean(e.waiting) } : null); });
+    return () => { alive = false; offItem(); offReset(); offQueue(); offAccount(); setAcctHold(null); };
   }, [route.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // coming back to a chat that is still held by its account: the stored problem brings the notice (and its buttons) back
+  useEffect(() => { setAcctHold((prev) => (s?.accountProblem ? prev ?? { problem: s.accountProblem, waiting: false } : null)); }, [route.id, s?.accountProblem?.kind, s?.accountProblem?.account]); // eslint-disable-line react-hooks/exhaustive-deps
   const tb = useT(); // H4a B2: «Resultado» in the language on screen
-  const blocks = useMemo(() => toBlocks(items, tb), [items, tb]);
+  const blocks = useMemo(() => dropRepeatedAgent(toBlocks(items, tb)), [items, tb]);
   // what the user sent and the engine has not saved yet shows at once (lib/store.js › addPending).
   const pending = usePending(`session:${route.id}`);
   const unsaved = pendingShown(pending, items.filter((it) => it.role === 'user' && it.kind === 'text').map((it) => ({ id: it.id, text: userText(it) })));
@@ -432,6 +439,7 @@ export function SessionView({ route }) {
   const turnRunning = s?.status === 'running';
   useEffect(() => { if (turnRunning) setSuggestion(''); }, [turnRunning]);
   const dropSuggestion = () => { setSuggestion(''); call('sessions.suggestCancel', { id: route.id }).catch(quiet); };
+  const [copyState] = useCopyState(route.id, `${s?.cwd}|${s?.updated_at}`);
   if (!s) return <Empty title={t('session.gone')} className="flex-1" />;
   const task = s.task_id ? tasks.find((x) => x.id === s.task_id) : null;
   const running = s.status === 'running';
@@ -539,7 +547,7 @@ export function SessionView({ route }) {
         <DropdownMenu modal={false}>
           <BubbleTip title={t('chats.more')}><DropdownMenuTrigger asChild><MoreButton label={t('chats.more')} data-testid="session-more" /></DropdownMenuTrigger></BubbleTip>
           <DropdownMenuContent align="end" className="w-[250px]">
-            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} /><DropdownMenuSeparator /></> : null}
+            {s.kind === 'chat' && s.project && fullPc() ? <><CommitMenuItem onOpen={() => setCommitOpen(true)} />{copyState.where === 'local' ? <DropdownMenuItem onSelect={() => (running ? act(call('copy.wait', { id: s.id })) : askMoveToCopy(s.id))} data-testid="copy-move-menu"><FolderOutput />{running ? t('copy.afterTurn') : t('copy.menuMove')}</DropdownMenuItem> : null}<DropdownMenuSeparator /></> : null}
             {bridge.mobile ? null : <DropdownMenuItem onSelect={() => act(bridge.openPath(s.cwd))} data-testid="open-folder"><FolderOpen />{t('session.openFolder')}</DropdownMenuItem>}
             {fullPc() ? <DropdownMenuItem onSelect={() => setTerminal(!terminal)} data-testid="session-terminal"><SquareTerminal />{terminal ? t('session.menu.terminalHide') : t('session.menu.terminalShow')}</DropdownMenuItem> : null}
             <DropdownMenuItem onSelect={() => showDetails(s, task)} data-testid="details"><Info />{t('session.detailsShort')}</DropdownMenuItem>
@@ -572,6 +580,12 @@ export function SessionView({ route }) {
               <Button size="sm" onClick={() => act(call('sessions.resume', { id: s.id }))}><Play />{t('session.continue')}</Button>
             </div>
           ) : null}
+          {acctHold && !running ? (
+            <div className="bg-muted/70 text-muted-foreground flex flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-xl px-3.5 py-2 text-center text-control" data-testid="session-account-notice" data-kind={acctHold.problem.kind}>
+              <AccountActions problem={acctHold.problem} hold={{ account: acctHold.problem.account, kind: acctHold.problem.kind, waiting: acctHold.waiting }}
+                onWait={() => act(call('sessions.holdWait', { id: s.id }))} onUse={(account) => act(call('sessions.update', { id: s.id, account })).then(() => setAcctHold(null))} onAuto={() => act(call('sessions.update', { id: s.id, account: AUTO })).then(() => setAcctHold(null))} />
+            </div>
+          ) : null}
         </div>
       </div>
       <ConversationTrail scrollRef={trail.node} />
@@ -599,6 +613,7 @@ export function SessionView({ route }) {
       {/* a secret the agent asked for, typed only here (never in the chat). */}
       <SecretCards sessionId={s.id} />
       <PrCards sessionId={s.id} />
+      {s.kind === 'chat' && s.project && fullPc() ? <><CopyAskCards sessionId={s.id} /><CopyBar s={s} running={running} onChanged={refresh} /><MoveToCopyDialog sessionId={s.id} onMoved={refresh} /></> : null}
       {fullPc() ? <HtmlPages sessionId={s.id} /> : null}
       {terminal && fullPc() ? <TerminalPanel dir={s.cwd} draft={termDraft} onDraftTaken={() => setTermDraft('')} onClose={() => setTerminal(false)} /> : null}
       {pendingComments.length ? <div className="text-muted-foreground mx-auto w-full max-w-[calc(var(--chat-max-width)+2.5rem)] shrink-0 px-5 pb-1.5 text-xs" data-testid="pending-comments">{t('turns.pending', { n: pendingComments.length })}</div> : null}
@@ -609,6 +624,7 @@ export function SessionView({ route }) {
         above={s.kind === 'chat' && ((s.project && fullPc()) || compactable) ? <>
           {/* where this chat works (Local or its worktree and the branch it started from; fixed once started) and «Compactar»: in a project's chat on the PC both are always there («Compactar» disabled, with its reason, until the context is full). */}
           {s.project && fullPc() ? <WorkspacePills project={s.project} chat={s.id} branch={s.branch ?? ''} value={{ mode: 'local', base: '' }} onChange={() => {}} /> : null}
+          {s.kind === 'chat' && s.project && fullPc() ? <MoveToCopyButton s={s} running={running} /> : null}
           {s.project && fullPc()
             ? <span className="ml-auto"><CompactButton onCompact={compact} busy={compacting} reason={compactable ? null : CAN_COMPACT[s.agent] !== true ? t('msg.sessions.cannotCompact', { label: AGENT[s.agent] }) : running ? t('msg.orch.compactBusy') : t('compact.noRoom')} /></span>
             : <ContextSlot className="ml-auto" items={[compactable ? { key: 'compact', node: <CompactButton onCompact={compact} busy={compacting} /> } : null]} />}
@@ -623,15 +639,15 @@ export function SessionView({ route }) {
                 Orb locks; taken back, the chat returns to its permission before, then takes the one chosen. */}
             {/* «Auto» / «Preguntar» at one click, the other levels and «Usar mi móvil Android» under «Más opciones» (the phone may switch between levels, never to «total», and has no switch for its phone). */}
             {s.project ? <AutonomySwitch value={s.permission} testid="session-permission" disabled={bridge.mobile && s.permission === 'total'} more={options(PERMISSION).filter((o) => o.value !== 'auto' && o.value !== 'editar' && (!bridge.mobile || o.value !== 'total'))} extra={androidRow} request={permAsk} onChange={async (permission) => {
-              if (permission === 'total') { const unlock = await unlockCore('fullAccess'); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
+              if (permission === 'total') { const unlock = await unlockCore('fullAccess', { request: { method: 'sessions.grantTotal', params: { id: s.id } } }); if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged')); return; }
               if (s.permission === 'total') { const back = await act(call('sessions.revokeGrant', { id: s.id, grant: 'total' })); if (!back || back.permission === permission) return; }
               act(call('sessions.update', { id: s.id, permission }), permission === 'auto' ? t('session.autoOn') : permission === 'editar' ? t('session.askOn') : t('session.permissionsChanged'));
             }} />
               /* without a project, «Solo lectura» or «Acceso total al PC» (the master password every time; it goes
                  when Orb locks). Never from the phone. */
-              : <AutonomySwitch main={[]} value={s.permission === 'total' ? 'total' : 'leer'} testid="session-permission" disabled={bridge.mobile} more={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} extra={androidRow} request={permAsk} onChange={async (permission) => {
+              : <AutonomySwitch main={['leer']} value={s.permission === 'total' ? 'total' : 'leer'} testid="session-permission" disabled={bridge.mobile} more={[{ value: 'leer', label: PERMISSION.leer }, { value: 'total', label: t('session.fullPc') }]} extra={androidRow} request={permAsk} onChange={async (permission) => {
                 if (permission !== 'total') { act(call('sessions.revokeGrant', { id: s.id, grant: 'total' }), t('session.permissionsChanged')); return; }
-                const unlock = await unlockCore('fullAccess');
+                const unlock = await unlockCore('fullAccess', { request: { method: 'sessions.grantTotal', params: { id: s.id } } });
                 if (unlock) act(call('sessions.grantTotal', { id: s.id, unlock }), t('session.permissionsChanged'));
               }} />}
             {s.permission === 'total' ? <Tip label={t('session.fullPcTip')}><span tabIndex={0} className="inline-flex h-[var(--ctl)] shrink-0 items-center gap-1.5 rounded-[var(--r-ctl)] bg-warning-soft px-2 text-control whitespace-nowrap text-warning-ink" data-testid="session-fullpc"><ShieldAlert className="size-4" />{t('session.fullPcChip')}</span></Tip> : null}
@@ -642,7 +658,7 @@ export function SessionView({ route }) {
           {s.context ? <span className="text-muted-foreground text-xs"><ContextMeter context={s.context} /></span> : null}
           {s.kind === 'chat' ? (<>
             {/* one chip for the agent, its model and its reasoning; its menu lists the models, the levels and «Guía de modelos». */}
-            <AgentChip catalog={catalog} agent={s.agent} account={s.account} models={models} model={selectedModel} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
+            <AgentChip catalog={catalog} agent={s.agent} account={s.account_fixed && s.account ? s.account : AUTO} live={s.account ?? null} onAccount={(account) => act(call('sessions.update', { id: s.id, account }))} models={models} model={selectedModel} modelName={models.length ? modelName(s.model || models[0].value) : ''} reasoning={s.reasoning ?? 'medium'}
               onModel={(model) => act(call('sessions.update', { id: s.id, model }), t('session.modelSet', { model: modelName(model) }))} onReasoning={(reasoning) => act(call('sessions.update', { id: s.id, reasoning }))} />
           </>) : null}
         </>} />

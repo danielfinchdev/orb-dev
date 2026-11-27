@@ -213,6 +213,17 @@ class NotesSyncTest {
         assertEquals(listOf(9_000_200L, 9_000_100L, 9_000_000L), feed.rows.value.map { it.notice.at })
     }
 
+    @Test fun aResyncEventReadsTheListAgain() = runTest(UnconfinedTestDispatcher()) {
+        val feed = NotesFeed(store, backgroundScope, nowMs = { now })
+        val asked = ArrayList<Long?>()
+        val sync = sync(feed, { Result.success(list(9_000_100)) }, asked)
+        onNoteEvent(dev.orb.app.link.net.LinkEvent("board:changed", kotlinx.serialization.json.JsonNull), feed, sync) { now }
+        assertEquals(0, asked.size)
+        onNoteEvent(dev.orb.app.link.net.LinkEvent(dev.orb.app.link.net.LinkEvent.RESYNC, kotlinx.serialization.json.JsonNull), feed, sync) { now }
+        assertEquals(1, asked.size)
+        assertEquals(1, feed.rows.value.size)
+    }
+
     @Test fun reconnectingDoesNotDuplicateWhatWasAlreadyThere() = runTest(UnconfinedTestDispatcher()) {
         val feed = NotesFeed(store, backgroundScope, nowMs = { now })
         val sync = sync(feed, { Result.success(list(9_000_100, 9_000_000)) })

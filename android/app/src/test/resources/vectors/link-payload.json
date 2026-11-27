@@ -1,6 +1,6 @@
 {
   "generatedBy": "scripts/android-vectors.mjs",
-  "source": "2cb66fb77234a5c138faed66e846e403fed47d32f889346a9265a952fbc68a8d",
+  "source": "fc840b8307dec628d0a1f88fd59d50fb21bb858b5bda54569d08b15e66ff638a",
   "constants": {
     "DEFAULT_PORT": "3131",
     "PROTOCOL": 4,
@@ -115,6 +115,54 @@
         "name": null,
         "role": null,
         "via": "qr"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/#enlace=AbCdEfGhIjKlMnOpQrStUv&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw&v=4&n=Casa",
+      "value": {
+        "v": 4,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "AbCdEfGhIjKlMnOpQrStUv",
+        "name": "Casa",
+        "role": null,
+        "via": "link"
+      }
+    },
+    {
+      "input": "http://192.168.1.2:3131/#enlace=corto&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "throws": true,
+      "message": "app.linkBadQr",
+      "key": "app.linkBadQr"
+    },
+    {
+      "input": "http://192.168.1.2:3131/#enlace=AbCdEfGhIjKlMnOpQrStUv&vincular=zzz&pc=B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+      "value": {
+        "v": 1,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "AbCdEfGhIjKlMnOpQrStUv",
+        "name": null,
+        "role": null,
+        "via": "link"
+      }
+    },
+    {
+      "input": "{\"v\":4,\"urls\":[\"http://192.168.1.2:3131\"],\"pc\":\"B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw\",\"link\":\"AbCdEfGhIjKlMnOpQrStUv\",\"name\":\"Casa\"}",
+      "value": {
+        "v": 4,
+        "urls": [
+          "http://192.168.1.2:3131"
+        ],
+        "pc": "B6N8vBQgk8i3VdwbEOhstCY3StFqqFPtC9_AsrhtHHw",
+        "code": "AbCdEfGhIjKlMnOpQrStUv",
+        "name": "Casa",
+        "role": null,
+        "via": "link"
       }
     },
     {
@@ -1449,6 +1497,13 @@
         "code": null
       },
       "value": "corto:"
+    },
+    {
+      "input": {
+        "via": "link",
+        "code": "AbCdEfGhIjKlMnOpQrStUv"
+      },
+      "value": "AbCdEfGhIjKlMnOpQrStUv"
     }
   ],
   "normalCode": [

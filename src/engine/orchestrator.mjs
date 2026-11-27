@@ -18,10 +18,11 @@ import { slashCommand } from '../shared/slash.mjs';
 import { mcpServersOf } from './sessions.mjs';
 import { placeAttachments, prepareAttachments } from './host/attachments.mjs';
 import { agentAuth } from '../domain/security/agent-auth.mjs';
-import { accountEnv } from '../domain/usage/accounts.mjs';
+import { accountEnv, brainAccount, configuredAccount } from '../domain/usage/accounts.mjs';
+import { checkIdentity } from './identity.mjs';
 import { briefing } from '../domain/journal/journal.mjs';
 import { rememberModels } from './usage/catalog.mjs';
-import { recordRate, pickAccount, recordSpend, usageBrake } from '../domain/usage/budget.mjs';
+import { recordRate, resolveAccount, recordSpend, usageBrake, accountProblemText, accountSwitchText } from '../domain/usage/budget.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { persona } from './orchestrator-persona.mjs';
 
@@ -108,10 +109,13 @@ class Lane {
     this.orch = orch; this.id = id;
     this.queue = []; this.busy = false; this.partial = ''; this.said = []; this.tools = []; this.generation = 0; this.inflight = null; this.current = null;
     this.live = null; this.liveKey = ''; this.since = null; this.usedAt = Date.now();
+    // the user's message waits here when the chat's fixed account cannot take it (a problem, told once in the chat), and the
+    // brain change (another agent or account) asked for while a turn was running, applied when that turn ends.
+    this.hold = null; this.holdTimer = null; this.pending = orch.board.settingJson(`pending_brain:${id}`) ?? null;
   }
   get board() { return this.orch.board; }
   conv() { return this.board.conversation(this.id); }
-  state() { return { conversation: this.id, busy: this.busy, since: this.busy ? this.since : null, partial: this.partial, tools: this.tools, queued: this.queue.length, waiting: !this.busy && this.queue.length > 0, context: this.conv()?.context ?? null }; }
+  state() { return { conversation: this.id, busy: this.busy, since: this.busy ? this.since : null, partial: this.partial, tools: this.tools, queued: this.queue.length, waiting: !this.busy && this.queue.length > 0, context: this.conv()?.context ?? null, hold: this.hold ? { kind: this.hold.kind, account: this.hold.account, until: this.hold.until ?? null, other: this.hold.other ?? null, waiting: Boolean(this.holdTimer) } : null, pending: this.pending ? { account: this.pending.account ?? null, fixed: Boolean(this.pending.account_fixed), agent: this.pending.agent ?? null } : null }; }
   // the state that ends a turn carries the line it wrote (answer), so the window swaps the streamed text for it in
   // the same frame instead of showing nothing until it reads the conversation again.
   push() {
@@ -142,14 +146,24 @@ class Lane {
       let live = null;
       try { this.ensureLive(); live = this.live; } catch { live = null; }
       if (typeof live?.compact === 'function') {
+        const who = await this.checkLive(live);
+        if (who.block) { this.closeLive(); throw new Error(who.text); }
         const r = await live.compact({ instructions: COMPACT_FOCUS }).catch((error) => ({ ok: false, error: error.message }));
         if (r?.ok) how = 'compacted'; else this.orch.log(`compactar la conversación ${this.id}: ${r?.error ?? 'sin respuesta'}`);
       }
       if (how !== 'compacted') this.forget();
-    } finally { this.busy = false; this.partial = ''; this.tools = []; this.usedAt = Date.now(); this.push(); }
+    } finally { this.busy = false; this.partial = ''; this.tools = []; this.usedAt = Date.now(); this.applyPending(); this.push(); }
     this.say('system', tr(how === 'compacted' ? 'msg.orch.compacted' : 'msg.orch.compactRenewed'), { kind: 'compacted' });
     if (!this.orch.closing) { this.next(); this.orch.kick(); }
     return { ok: true, how };
+  }
+  // Who the process is signed in as, once per process (a message and «Compactar» both start one). A block is said in the chat.
+  async checkLive(live) {
+    if (this.identityLive === live) return { block: false };
+    const who = await checkIdentity({ acc: { id: this.liveAccount, agent: this.liveAgent }, live, fixed: Boolean(this.conv()?.account_fixed), emit: (event, payload) => this.orch.emit(event, payload) });
+    for (const note of who.notes) this.say('system', note);
+    if (who.block) this.say('system', who.text); else this.identityLive = live;
+    return who;
   }
   forget() { this.closeLive(); this.board.updateConversation(this.id, { session_id: null, turns: 0, context: null }); }
   // «/clear»: the coordinator starts a new conversation of its agent in this same chat (the lines stay).
@@ -215,7 +229,7 @@ class Lane {
   // (sending it now would find the agent still busy). A turn that does not end goes with its process (resume keeps the
   // conversation).
   stop({ quiet = false } = {}) {
-    if (!this.busy) { this.queue = this.queue.filter((q) => q.internal); this.push(); return; }
+    if (!this.busy) { this.queue = this.queue.filter((q) => q.internal); if (!this.queue.length && this.hold) this.clearHold(); this.push(); return; }
     // What the user had queued goes; the engine's own notices (the report of finished tasks…) still come after.
     this.generation++; this.queue = this.queue.filter((q) => q.internal);
     this.requeueCurrent();
@@ -287,12 +301,21 @@ class Lane {
   }
 
   next() {
+    if (!this.queue.length && this.hold) this.clearHold(); // what it waited for is gone
     if (this.busy || this.inflight || !this.queue.length) return;
     // A trashed chat never starts a turn: what reaches it (a task report, a notice) waits here and in
     // orchestrator_pending, and conversations.restore calls kick() to answer it. Purging drops both.
     if (this.conv()?.trashed_at) return;
     // several conversations at once, up to a limit: the others wait their turn (the window says so).
     if (this.orch.busyCount() >= this.orch.maxBusy) { this.push(); return; }
+    this.applyPending(); // a change asked for during the last turn (also one saved before Orb restarted) goes before the account is settled
+    // The account this turn runs on: a fixed chat never moves (its message waits and the chat says why); an automatic one
+    // may move to another account of its agent, here, with the chat at rest.
+    const conv = this.conv();
+    const res = conv ? this.resolve(conv) : null;
+    if (res?.problem) { if (!this.holdOn(res.problem)) this.next(); return; }
+    if (this.hold) this.clearHold();
+    if (res?.acc) this.adopt(conv, res);
     // the message leaves the queue before the window hears «busy»: otherwise «1 en cola» would flash for the very message
     // being answered.
     const item = this.queue.shift();
@@ -323,7 +346,7 @@ class Lane {
       else if (item.internal && !this.orch.closing && !item.requeued) this.orch.keep(item, false);
       if (this.inflight === run) { this.inflight = null; this.current = null; }
       this.usedAt = Date.now();
-      if (!this.orch.closing) { this.next(); this.orch.kick(); }
+      if (!this.orch.closing) { this.applyPending(); this.next(); this.orch.kick(); }
     });
     this.inflight = run;
   }
@@ -332,14 +355,93 @@ class Lane {
   // process (the conversation itself continues with resume). The assistant only coordinates: it works in its own folder.
   // The account the conversation spends (its own, else the agent's first one).
   account(c) {
-    const o = ctx.config.orchestrator ?? {};
-    const agent = c.agent || o.agent || 'claude';
-    return pickAccount(this.board, { agent, preferred: c.account }) ?? { id: agent, agent };
+    const agent = c.agent || (ctx.config.orchestrator ?? {}).agent || 'claude';
+    return this.resolve(c).acc ?? { id: agent, agent };
+  }
+  // → { acc, problem, switched } (resolveAccount). A chat made before accounts were chosen has the main account's
+  // conversation when it already talked, so it is not moved by a first choice.
+  resolve(c) {
+    const agent = c.agent || (ctx.config.orchestrator ?? {}).agent || 'claude';
+    return resolveAccount(this.board, { agent, account: c.account ?? (c.session_id ? agent : null), fixed: Boolean(c.account_fixed), model: c.model || null });
+  }
+  // Keeps the account the turn will use in the chat; when an automatic chat moved, it starts afresh on the new account
+  // (the agent's own conversation lives in the other account's folder) and the chat says so.
+  adopt(c, res) {
+    if (!res.acc || res.acc.id === c.account) return;
+    this.board.updateConversation(this.id, { account: res.acc.id });
+    if (!res.switched) return;
+    const text = accountSwitchText(res.switched, res.acc);
+    if (c.session_id) this.forget();
+    this.say('system', c.session_id ? `${text} ${tr('msg.acct.switchedFresh', { to: res.acc.label ?? res.acc.id })}` : text, { kind: 'account', switched: { from: res.switched.from, to: res.acc.id } });
+  }
+  // A fixed chat's account cannot take the message: it stays queued, once told. An engine notice gets no turn (as with the
+  // brake). -> true when the message waits, false when a notice was given up (the next one is looked at).
+  holdOn(problem) {
+    const head = this.queue[0];
+    if (head?.internal) { this.queue.shift(); this.giveUp(head, { reason: accountProblemText(problem) }); this.push(); return false; }
+    const sig = `${problem.kind}:${problem.account}:${Math.round((problem.until ?? 0) / 600_000)}:${problem.other ?? ''}`;
+    if (this.hold?.sig !== sig) {
+      if (this.holdTimer) { clearTimeout(this.holdTimer); this.holdTimer = null; }
+      this.hold = { ...problem, sig };
+      this.say('system', accountProblemText(problem), { kind: 'account', problem });
+    }
+    this.push();
+    return true;
+  }
+  clearHold() { if (this.holdTimer) clearTimeout(this.holdTimer); this.holdTimer = null; this.hold = null; this.push(); }
+  // «Esperar»: the message goes by itself when the account's limit ends.
+  waitForHold() {
+    if (!this.hold) throw new Error(tr('msg.api.holdNone'));
+    if (this.holdTimer) clearTimeout(this.holdTimer);
+    const ms = this.hold.until ? Math.max(1000, this.hold.until - Date.now() + 5000) : 60_000;
+    this.holdTimer = setTimeout(() => { this.holdTimer = null; if (!this.orch.closing) { this.hold = null; this.next(); } }, Math.min(ms, 2_147_000_000));
+    this.holdTimer.unref?.();
+    this.push();
+  }
+  // Whether these columns move the conversation to another agent or account (then its own session cannot be resumed).
+  moves(fields) {
+    const c = this.conv();
+    return Boolean(c) && (('agent' in fields && (fields.agent || 'claude') !== c.agent) || ('account' in fields && (fields.account ?? null) !== c.account));
+  }
+  // A brain change that touches the process (another agent or account): now when the chat rests, else when the turn ends:
+  // the process of a turn in progress is never closed from under it. What waits is replaced by a change of agent and merged
+  // with one of account only; a change made now drops what waited.
+  change(fields) {
+    if (this.busy || this.inflight) {
+      this.pending = 'agent' in fields ? { ...fields } : { ...(this.pending ?? {}), ...fields };
+      // «automática» keeps the account in use: a waiting choice of another account is dropped, not made automatic
+      if (!('account' in fields) && fields.account_fixed === 0) delete this.pending.account;
+      this.board.settingJson(`pending_brain:${this.id}`, this.pending);
+      this.push();
+      return { deferred: true };
+    }
+    this.pending = null; this.board.settingJson(`pending_brain:${this.id}`, null);
+    const moves = this.moves(fields);
+    this.board.updateConversation(this.id, fields);
+    if (moves) this.forget();
+    this.clearHold();
+    this.next();
+    return { deferred: false };
+  }
+  applyPending() {
+    if (this.busy || this.inflight) return;
+    if (!this.pending) this.pending = this.board.settingJson(`pending_brain:${this.id}`) ?? null;
+    if (!this.pending) return;
+    const fields = this.pending; this.pending = null;
+    this.board.settingJson(`pending_brain:${this.id}`, null);
+    if (!this.board.conversation(this.id)) return;
+    const moves = this.moves(fields);
+    this.board.updateConversation(this.id, fields);
+    if (moves) this.forget();
+    if (this.hold) this.clearHold();
   }
   ensureLive() {
     const c = this.conv(); const o = ctx.config.orchestrator ?? {};
     const agent = c.agent || o.agent || 'claude';
-    const acc = this.account(c);
+    // The account is settled here, before the process is reused: a process of another account is never kept.
+    const res = this.resolve(c);
+    if (res.problem) throw new Error(accountProblemText(res.problem));
+    const acc = res.acc ?? { id: agent, agent };
     const isClaude = agent === 'claude';
     const cwd = assistantDir();
     const visible = this.board.projects();
@@ -474,6 +576,13 @@ class Lane {
     const prepared = attachments.length ? await prepareAttachments(attachments, { nativeImages: adapter(this.liveAgent).caps?.images === true, log: (m) => this.orch.log(m) }) : null;
     if (generation !== this.generation || this.orch.closing) return undefined;
     const live = this.live; const run = this.inflight;
+    // A new process says who it is signed in as before its first message: another login holds the message back.
+    const who = await this.checkLive(live);
+    if (generation !== this.generation || this.orch.closing) return undefined;
+    if (who.block) {
+      if (fresh) this.forget(); else this.closeLive();
+      this.busy = false; this.push(); return { ok: false };
+    }
     const timer = setTimeout(() => {
       this.say('system', tr('msg.orch.timeLimit'), { kind: 'turn-stopped', cause: 'time' }); Promise.resolve().then(() => live?.interrupt()).catch(() => {});
       setTimeout(() => { if (this.inflight === run && this.live === live) this.closeLive(); }, STOP_GRACE_MS).unref?.();
@@ -526,7 +635,7 @@ export class Orchestrator {
   constructor(board, { emit = () => {}, log = () => {}, title = null } = {}) {
     this.board = board; this.emit = emit; this.log = log; this.title = title;
     this.lanes = new Map(); this.closing = false;
-    this.sweeper = setInterval(() => this.closeIdle(), 60_000); this.sweeper.unref?.();
+    this.sweeper = setInterval(() => { try { this.closeIdle(); } catch (error) { this.log(`limpieza del asistente: ${error.message}`); } }, 60_000); this.sweeper.unref?.();
   }
 
   get logFile() { return path.join(ctx.paths.runs, 'asistente.log'); }
@@ -553,14 +662,14 @@ export class Orchestrator {
     // Without a model of its own, the one the agent says it uses by default (Codex: GPT-6-Luna…), named.
     const known = [...(agent === 'claude' ? o.models ?? [] : []), ...(this.board.settingJson(`models:${agent}`) ?? [])];
     const model = known.find((m) => m.id === modelId) ?? (modelId ? null : known.find((m) => m.default));
-    return { conversation: c?.id ?? null, agent, agentLabel: AGENT_LABELS[agent] ?? agent, account: (c ? c.account : o.account) || agent, model: modelId, modelLabel: model?.label ?? (modelId || tr('msg.orch.defaultModel')), models: o.models ?? [], reasoning: (c ? c.reasoning : o.reasoning) ?? 'medium', orchestrate: o.orchestrate !== false, turns: c?.turns ?? 0, maxTurns: o.maxTurns ?? 60, context: c?.context ?? null };
+    return { conversation: c?.id ?? null, agent, agentLabel: AGENT_LABELS[agent] ?? agent, account: (c ? c.account : configuredAccount(o, agent) !== 'auto' ? o.account : null) || agent, accountFixed: c ? Boolean(c.account_fixed && c.account) : configuredAccount(o, agent) !== 'auto', pending: c ? this.board.settingJson(`pending_brain:${c.id}`) : null, model: modelId, modelLabel: model?.label ?? (modelId || tr('msg.orch.defaultModel')), models: o.models ?? [], reasoning: (c ? c.reasoning : o.reasoning) ?? 'medium', orchestrate: o.orchestrate !== false, turns: c?.turns ?? 0, maxTurns: o.maxTurns ?? 60, context: c?.context ?? null };
   }
 
   // A new conversation, on its first message: the brain chosen for new ones and the working folder (or the one given).
   startConversation({ text = '', project } = {}) {
     const o = brainOf();
     const name = project === undefined ? this.board.activeProject()?.name ?? null : project;
-    return this.board.createConversation({ title: titleFrom(text) || tr('msg.board.newConversation'), project: name, agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium' });
+    return this.board.createConversation({ title: titleFrom(text) || tr('msg.board.newConversation'), project: name, agent: o.agent || 'claude', ...brainAccount(configuredAccount(o, o.agent || 'claude'), o.agent || 'claude'), model: o.model || null, reasoning: o.reasoning || 'medium' });
   }
 
   // A message of the user: in its conversation (a new one when none is given). → { conversation }
@@ -674,7 +783,7 @@ export class Orchestrator {
     if (found) return found;
     const o = brainOf();
     const c = this.board.createConversation({ title: project ? tr('msg.orch.workOf', { project }) : tr('msg.board.newConversation'), project: project && this.board.project(project) ? project : null,
-      agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium' });
+      agent: o.agent || 'claude', ...brainAccount(configuredAccount(o, o.agent || 'claude'), o.agent || 'claude'), model: o.model || null, reasoning: o.reasoning || 'medium' });
     this.board.updateConversation(c.id, { titled: true });
     return c.id;
   }
@@ -708,8 +817,27 @@ export class Orchestrator {
   kick() { for (const l of this.lanes.values()) { if (this.busyCount() >= this.maxBusy) return; if (!l.busy && !l.inflight && l.queue.length) l.next(); } }
   stop(id) { this.lanes.get(Number(id))?.stop(); }
   compact(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).compact(); }
-  stopAll() { for (const l of this.lanes.values()) l.stop({ quiet: true }); }
+  stopAll() { clearInterval(this.sweeper); for (const l of this.lanes.values()) l.stop({ quiet: true }); }
   forget(id) { this.lane(id).forget(); }
+  // Another agent or account for a conversation (`fields` are its columns): at once when it rests, else after its turn.
+  // -> { deferred }
+  setBrain(id, fields) { return this.lane(id).change(fields); }
+  // «Esperar» on a fixed chat that is held by its account's limit.
+  waitForAccount(id) { this.lane(id).waitForHold(); return { ok: true }; }
+  // Whether anything of this account is going on in a conversation: 'busy' (a turn or a process of its own in use), 'queued'
+  // (messages waiting for it) or null. Removing or closing the account is refused meanwhile.
+  workingOn(accountId) {
+    let queued = false;
+    for (const l of this.lanes.values()) {
+      const mine = l.liveAccount === accountId || this.board.conversation(l.id)?.account === accountId;
+      if (!mine) continue;
+      if (l.busy || l.inflight || l.current) return 'busy';
+      if (l.queue.length) queued = true;
+    }
+    if (queued) return 'queued';
+    // a change to this account that waits for the end of a turn (also one saved before Orb restarted)
+    return this.board.all("SELECT value FROM settings WHERE key LIKE 'pending_brain:%'").some((r) => { try { return JSON.parse(r.value)?.account === accountId; } catch { return false; } }) ? 'pending' : null;
+  }
   clear(id) { if (!this.board.conversation(id)) throw new Error(tr('msg.board.noConversation')); return this.lane(id).clear(); }
   closeLive() { for (const l of this.lanes.values()) l.closeLive(); }
   // The assistant's processes on this account: false, and nothing closed, if one of its conversations is working; otherwise

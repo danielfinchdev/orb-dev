@@ -159,24 +159,31 @@ try {
   await win.waitForSelector('[data-testid=task-detail] >> text=Deshacer esta tarea');
   await win.waitForTimeout(300);
   await shot('04-tareas');
-  await win.getByRole('button', { name: 'Deshacer esta tarea' }).click();
-  await dialogButton('Deshacer').click();
-  await until(() => !fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt')), 'deshacer');
+  // The tasks just created in that project (the push and the payment) may still be closing in the same folder: «Deshacer» is
+  // refused while something works in it (by design), so wait for them and click again if the engine still says it is busy.
+  await until(async () => (await call('tasks.list')).filter((t) => t.id !== task.id && t.project === 'webviaproject' && t.agent === 'codex').every((t) => !['queued', 'waiting', 'running'].includes(t.status)), 'tareas del proyecto asentadas');
+  const gone = () => !fs.existsSync(path.join(home, 'web', 'webviaproject', 'hecho-por-claude.txt'));
+  for (let i = 0; !gone() && i < 5; i++) {
+    await win.getByRole('button', { name: 'Deshacer esta tarea' }).click();
+    await dialogButton('Deshacer').click();
+    for (let j = 0; j < 15 && !gone(); j++) await win.waitForTimeout(200);
+  }
+  await until(gone, 'deshacer');
 
   // ---- direct conversation with Codex
   step = 'conversación directa';
-  // 3.0: «Nuevo chat» opens a clean conversation with the assistant, no pop-up (clicked twice: still one view).
+  // 3.0: «Nuevo chat» opens a clean conversation with the assistant, no pop-up (clicked twice: still one view). The picker asks where: the project, so the agent works in its folder.
   // 3.6: from the «+» of the chat list.
   // The menu animates in (and may close on a late re-render on slow CI screens): reopen and retry.
   const newChat = async () => {
     for (let i = 0; ; i++) {
       try {
-        if (!(await win.locator('[data-testid=new-conversation]').isVisible())) await win.click('[data-testid=chats-new]');
-        await win.click('[data-testid=new-conversation]', { timeout: 5000 });
+        if (!(await win.locator('[data-testid=new-chat-project-webviaproject]').isVisible())) await win.click('[data-testid=chats-new]');
+        await win.click('[data-testid=new-chat-project-webviaproject]', { timeout: 5000 });
         break;
       } catch (e) { if (i >= 3) throw e; await win.keyboard.press('Escape'); await win.waitForTimeout(300); }
     }
-    await win.locator('[data-testid=new-conversation]').waitFor({ state: 'detached' });
+    await win.locator('[data-testid=new-chat-project-webviaproject]').waitFor({ state: 'detached' });
     await win.waitForTimeout(200);
   };
   await newChat();
@@ -234,7 +241,7 @@ try {
 
   // ---- other views
   step = 'otras vistas';
-  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'webviaproject'], ['nav-agents', '07-agentes', 'Agentes nativos'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Creaste la tarea'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
+  for (const [nav, name, wait] of [['nav-projects', '06-proyectos', 'webviaproject'], ['nav-agents', '07-agentes', 'Agentes y cuentas'], ['nav-memories', '08-bitacoras', 'Solo lectura'], ['memories-activity', '09-actividad', 'Creaste la tarea'], ['nav-tutorials', '08b-tutoriales', 'Preguntas frecuentes']]) {
     await win.click(`[data-testid=${nav}]`);
     await win.waitForSelector(`text=${wait}`);
     await win.waitForTimeout(400);
@@ -262,7 +269,7 @@ try {
   await win.waitForTimeout(400);
   await shot('10-ajustes');
   // 3.6: six sections; some of the old ones are now a part of one (clicked under its name in the menu).
-  const PARTS = { apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'], experto: ['avanzado', 'experto'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
+  const PARTS = { actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'], experto: ['avanzado', 'experto'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
   const section = async (name) => {
     const [id, part] = PARTS[name] ?? [name];
     await win.click(`[data-testid=settings-nav-${id}]`);
@@ -275,13 +282,13 @@ try {
   await win.locator('[data-testid=settings-about]', { hasText: '@danielfinchdev' }).waitFor();
   await win.locator('[data-testid=settings-about]', { hasText: /Instalada: \d+\.\d+\.\d+/ }).waitFor();
   // 3.8: «Datos» has the master password's card (change it, «He olvidado la contraseña»).
-  await section('datos');
+  await section('permisos');
   await win.locator('[data-testid=master-card] [data-testid=master-change]').waitFor();
   await win.waitForTimeout(300);
   await shot('10j-ajustes-datos');
   // 3.8: one person per Orb: no Usuarios, PIN nor admin anywhere in Ajustes.
   for (const id of ['usuarios', 'personas', 'conexiones', 'servidor']) assert.equal(await win.locator(`[data-testid=settings-nav-${id}]`).count(), 0, `sin la sección ${id}`);
-  await section('general');
+  await section('apariencia');
   await win.locator('[data-testid=skin-picker]').waitFor();
   await shot('10e-ajustes-apariencia');
   // A visual theme applies at once to the whole app; the professional one has no robot.
@@ -511,7 +518,7 @@ try {
   // The pill says who answers (assistant and model); the pickers for model and folder live in the composer, not in the bar.
   assert.match(await win.locator('[data-testid=orb-chat-head]').innerText(), /Orbe · Opus/, 'la píldora dice quién responde');
   assert.equal(await win.locator('main header [data-testid=brain-picker], main header [data-testid=project-picker]').count(), 0, 'el modelo y la carpeta se eligen en el compositor');
-  await win.hover('[data-testid=bar-pause]');
+  await win.hover('[data-testid=orb-chat-more]');
   // The bubble that is open (another one may still be closing for a moment: seen on the CI's Linux machine).
   await win.locator('[data-testid=bubble-tip]:not([data-state=closed])').first().waitFor();
   await shot('11b-barra-globo');

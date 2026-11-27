@@ -453,13 +453,250 @@ Function OrbRemoveElectron
   Pop $0
 FunctionEnd
 
+; ---- «Desinstalar Orb» (Ajustes › Datos) and the question on reinstalling (src/engine/previous.mjs)
+; The app deletes the data itself and then starts this uninstaller with /P /ORBPURGE=<code>. The code is the one-use code of
+; %APPDATA%\Orb.dev\desinstalado.json (compact JSON written by src/engine/api/uninstall.mjs › markText): 32 hex characters
+; and an expiry in ms, one hour after it was made. Only with it, and never in an update ($UpdateMode = 1), the folders of the
+; app's own data are purged: %APPDATA%\Orb.dev (never its claves folder, and its saved location and mark stay when the mark says anything was kept) and
+; %LOCALAPPDATA%\dev.orb.app (the web view's profile, unless the minigames were kept). Nothing else is ever deleted here: not
+; the workspace, not the projects, not the backups. An uninstall from Windows' Settings leaves a mark with no code (so the
+; next install asks what to do with the data) and deletes nothing.
+; ORB_LOCAL_DIR and ORB_UPDATE_VAR may be defined before this file (the tests do, with temporary folders and their own variable).
+!ifndef ORB_LOCAL_DIR
+  !define ORB_LOCAL_DIR "$LOCALAPPDATA\dev.orb.app"
+!endif
+!ifndef ORB_UPDATE_VAR
+  !define ORB_UPDATE_VAR $UpdateMode ; Tauri's template sets it to 1 when the installer or uninstaller runs for an update
+!endif
+
+Var OrbHadMark ; installer: 1 when desinstalado.json was already there when this run began
+Var OrbKept ; uninstaller: 1 when the mark says anything was kept (the saved location and the mark stay)
+Var OrbKeepGames ; uninstaller: 1 when the mark says the minigames were kept
+
+; $R0 = the code after /ORBPURGE= in the command line, only if it is 32 characters of 0-9a-f; else "".
+Function un.OrbPurgeCode
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  StrCpy $R0 ""
+  ${un.GetParameters} $0
+  ClearErrors
+  ${un.GetOptions} $0 "/ORBPURGE=" $1
+  ${IfNot} ${Errors}
+    StrLen $2 $1
+    ${If} $2 == 32
+      StrCpy $4 0
+      ${Do}
+        StrCpy $3 $1 1 $4
+        StrCpy $5 0
+        ${Do}
+          StrCpy $2 "0123456789abcdef" 1 $5
+          ${If} $2 == $3 ; compared as text: the same character in any case
+            ${ExitDo}
+          ${EndIf}
+          IntOp $5 $5 + 1
+        ${LoopUntil} $5 == 16
+        ${If} $5 == 16
+          ${ExitDo}
+        ${EndIf}
+        IntOp $4 $4 + 1
+      ${LoopUntil} $4 == 32
+      ${If} $4 == 32
+        StrCpy $R0 $1
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
+; $R0 = 1 when the mark (the file the app wrote) holds the code in $R0 (compared in the same case) and its expiry has not
+; passed; also sets $OrbKept and $OrbKeepGames from it. Any doubt: 0.
+Function un.OrbPurgeAllowed
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  StrCpy $1 $R0 ; the code asked
+  StrCpy $R0 0
+  StrCpy $OrbKept 1 ; unreadable: keep what could hold keys
+  StrCpy $OrbKeepGames 1
+  ClearErrors
+  FileOpen $0 "${ORB_DATA_DIR}\desinstalado.json" r
+  ${IfNot} ${Errors}
+    FileRead $0 $2 4000
+    FileClose $0
+    ClearErrors
+    ${un.WordFind} $2 '"code":"' "E+1}" $3
+    ${IfNot} ${Errors}
+      StrCpy $3 $3 32
+      ${If} $3 == $1
+        ; the expiry: digits up to the closing brace, in milliseconds since 1970
+        ClearErrors
+        ${un.WordFind} $2 '"expires":' "E+1}" $3
+        ${IfNot} ${Errors}
+          ${un.WordFind} $3 "}" "+1" $3
+          System::Call 'kernel32::GetSystemTimeAsFileTime(*l .r0)'
+          System::Int64Op $0 - 116444736000000000
+          Pop $0
+          System::Int64Op $0 / 10000
+          Pop $0
+          System::Int64Op $3 > $0
+          Pop $0
+          ${If} $0 == 1
+            StrCpy $R0 1
+            StrCpy $OrbKept 0
+            StrCpy $OrbKeepGames 0
+            ${un.WordFind} $2 '"kept":true' "E+1}" $3
+            ${IfNot} ${Errors}
+              StrCpy $OrbKept 1
+            ${EndIf}
+            ClearErrors
+            ${un.WordFind} $2 '"games":true' "E+1}" $3
+            ${IfNot} ${Errors}
+              StrCpy $OrbKeepGames 1
+            ${EndIf}
+          ${EndIf}
+        ${EndIf}
+      ${EndIf}
+    ${EndIf}
+  ${EndIf}
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
+
+; Removes the entry in $R0: a file, a folder with all it holds (walked here, entry by entry), or a link. A link or a junction is
+; removed as itself and never entered: the reparse-point attribute is checked on every entry (RMDir /r would follow it).
+Function un.OrbRemoveEntry
+  Push $0
+  Push $1
+  Push $3
+  System::Call 'kernel32::GetFileAttributesW(w R0)i.r0'
+  IntOp $1 $0 & 0x400
+  ${If} $0 == -1
+    ; not there
+  ${ElseIf} $1 != 0
+    RMDir "$R0" ; a junction or a folder link goes alone
+    Delete "$R0"
+  ${ElseIf} ${FileExists} "$R0\*.*"
+    StrCpy $3 $R0
+    FindFirst $0 $1 "$3\*"
+    ${DoUntil} $1 == ""
+      ${If} $1 != "."
+      ${AndIf} $1 != ".."
+        StrCpy $R0 "$3\$1"
+        Call un.OrbRemoveEntry
+      ${EndIf}
+      FindNext $0 $1
+    ${Loop}
+    FindClose $0
+    RMDir "$3"
+  ${Else}
+    Delete "$R0"
+  ${EndIf}
+  Pop $3
+  Pop $1
+  Pop $0
+FunctionEnd
+
+; The purge itself: only the two folders named above, and only what the mark allows.
+Function un.OrbPurge
+  Push $0
+  Push $1
+  Push $R0
+  ; Every entry of the app's data folder but the folder of the keys (claves: the app already removed this workspace's keys
+  ; and vault copy, and the other workspaces' are not ours to delete) and, when anything was kept, the saved location and
+  ; the mark (they are what makes the next install ask about the data).
+  FindFirst $0 $1 "${ORB_DATA_DIR}\*"
+  ${DoUntil} $1 == ""
+    ${If} $1 != "."
+    ${AndIf} $1 != ".."
+    ${AndIf} $1 != "claves"
+      ${If} $OrbKept == 1
+      ${AndIf} $1 == "ubicacion.json"
+        ; kept
+      ${ElseIf} $OrbKept == 1
+      ${AndIf} $1 == "desinstalado.json"
+        ; kept
+      ${Else}
+        StrCpy $R0 "${ORB_DATA_DIR}\$1"
+        Call un.OrbRemoveEntry
+      ${EndIf}
+    ${EndIf}
+    FindNext $0 $1
+  ${Loop}
+  FindClose $0
+  RMDir "${ORB_DATA_DIR}\claves" ; only if it is empty
+  RMDir "${ORB_DATA_DIR}" ; and this one
+  ${If} $OrbKeepGames != 1
+    StrCpy $R0 "${ORB_LOCAL_DIR}"
+    Call un.OrbRemoveEntry
+  ${EndIf}
+  Pop $R0
+  Pop $1
+  Pop $0
+FunctionEnd
+
+!macro NSIS_HOOK_PREUNINSTALL
+  Push $R0
+  Push $9
+  Call un.OrbPurgeCode
+  ; Uninstalled from Windows (no /ORBPURGE) and not an update: a mark with no code, so the next install asks about the data.
+  ; An existing mark (one the app wrote, with its code) is never overwritten.
+  ${If} ${ORB_UPDATE_VAR} != 1
+  ${AndIf} $R0 == ""
+  ${AndIfNot} ${FileExists} "${ORB_DATA_DIR}\desinstalado.json"
+    CreateDirectory "${ORB_DATA_DIR}"
+    ClearErrors
+    FileOpen $9 "${ORB_DATA_DIR}\desinstalado.json" w
+    ${IfNot} ${Errors}
+      FileWrite $9 '{"v":1,"mode":"windows","kept":true,"games":true,"code":"","expires":0}'
+      FileClose $9
+    ${EndIf}
+  ${EndIf}
+  Pop $9
+  Pop $R0
+!macroend
+
+!macro NSIS_HOOK_POSTUNINSTALL
+  Push $R0
+  Call un.OrbPurgeCode
+  ${If} $R0 != ""
+  ${AndIf} ${ORB_UPDATE_VAR} != 1
+    Call un.OrbPurgeAllowed
+    ${If} $R0 == 1
+      Call un.OrbPurge
+    ${EndIf}
+  ${EndIf}
+  Pop $R0
+!macroend
+
 !macro NSIS_HOOK_PREINSTALL
+  ; a mark that is already there is the user's from an earlier uninstall; one that is not is never kept (POSTINSTALL)
+  StrCpy $OrbHadMark 0
+  ${If} ${FileExists} "${ORB_DATA_DIR}\desinstalado.json"
+    StrCpy $OrbHadMark 1
+  ${EndIf}
   Call OrbRemoveElectron
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
   Push $0
   Push $1
+  ; a mark written during this very run (the old version's uninstaller, run by this installer) is not the user's: it goes
+  ${If} $OrbHadMark != 1
+  ${AndIf} ${FileExists} "${ORB_DATA_DIR}\desinstalado.json"
+    Delete "${ORB_DATA_DIR}\desinstalado.json"
+  ${EndIf}
   ${GetParameters} $0
   ClearErrors
   ${GetOptions} $0 "--updated" $1

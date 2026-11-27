@@ -16,6 +16,7 @@ export default {
   'msg.undo.rerunSinceUndo': 'la tarea se ha vuelto a ejecutar desde que abriste «Deshacer»; ábrela de nuevo para revisarla',
   'msg.undo.joinedByHand': 'esta tarea se unió a mano en el PC; deshazla desde el PC',
   'msg.undo.noFinalState': 'el PC no guardó el estado final de esta tarea; deshacerla devolvería toda su carpeta a como estaba antes, también lo que se cambió después. Hazlo desde el PC si de verdad quieres eso',
+  'msg.undo.previewStale': 'los archivos han cambiado desde que se calculó la vista previa; ábrela de nuevo antes de deshacer',
   'msg.accept.rerunSinceSeen': 'la tarea se ha vuelto a ejecutar desde que la viste; ábrela de nuevo para revisarla',
   'msg.accept.held': 'la tarea está retenida por la guardia; revisa sus cambios en el PC antes de aceptarla',
   'msg.accept.statusChanged': 'la tarea ya no se puede aceptar: su estado ha cambiado; ábrela de nuevo'

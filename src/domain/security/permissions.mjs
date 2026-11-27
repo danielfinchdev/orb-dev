@@ -22,9 +22,9 @@ export const METHODS = Object.freeze({
   // the app and its settings
   'app.state': 'remote', 'app.migrationState': 'pc', 'app.migrationRetry': 'pc', 'app.coreState': 'pc', 'app.coreRepair': 'pc', 'app.layoutPlan': 'pc', 'app.layoutApply': 'pc', 'config.save': 'pc', 'sidebar.complete': 'remote', 'control.pause': 'remote', 'control.resume': 'remote',
   // this PC's tools, in the engine (src/engine/api/app.mjs)
-  'keys.get': 'pc', 'keys.save': 'pc', 'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.openFileIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc', 'app.updateFound': 'pc',
-  'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc', 'installer.devTools': 'pc',
-  'activity.list': 'remote', 'activity.report': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
+  'keys.get': 'pc', 'keys.save': 'pc', 'app.openTerminal': 'pc', 'app.editors': 'pc', 'app.openIn': 'pc', 'app.openFileIn': 'pc', 'app.runAction': 'pc', 'app.feedbackSend': 'pc', 'app.moreApps': 'pc', 'app.dictationEngines': 'pc', 'dictation.transcribe': 'pc', 'app.updateFound': 'pc',
+  'system.check': 'pc', 'installer.check': 'pc', 'installer.progress': 'pc', 'installer.start': 'pc', 'installer.updates': 'pc', 'installer.suggest': 'pc', 'installer.devTools': 'pc',
+  'activity.list': 'remote', 'activity.report': 'remote', 'usage.get': 'remote', 'usage.now': 'remote', 'usage.refresh': 'remote', 'usage.history': 'remote', 'usage.records': 'remote', 'models.guide': 'remote', 'models.catalog': 'remote',
   'mentions.options': 'remote', 'approvals.list': 'remote',
   // this PC's tools
   'android.status': 'pc', 'android.install': 'pc',
@@ -39,7 +39,7 @@ export const METHODS = Object.freeze({
   'images.read': 'pc', 'images.mark': 'pc', 'images.save': 'pc', 'attachments.read': 'pc',
   // conversations with the assistant
   'conversations.list': 'remote', 'conversations.search': 'remote', 'conversations.update': 'remote', 'conversations.remove': 'pc', 'conversations.trash': 'remote', 'conversations.restore': 'remote',
-  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.queue': 'remote', 'chat.editQueued': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
+  'chat.list': 'remote', 'chat.pin': 'remote', 'chat.pinned': 'remote', 'chat.notes': 'remote', 'chat.send': 'remote', 'chat.queue': 'remote', 'chat.editQueued': 'remote', 'chat.stop': 'remote', 'chat.compact': 'remote', 'chat.holdWait': 'remote', 'chat.answer': 'remote', 'chat.accept': 'remote',
   'chat.settings': 'remote',
   // projects
   'projects.list': 'remote', 'projects.icons': 'remote', 'projects.create': 'remote', 'projects.import': 'pc', 'projects.clone': 'pc',
@@ -52,12 +52,12 @@ export const METHODS = Object.freeze({
   'logs.list': 'remote', 'logs.read': 'remote',
   // tasks
   'tasks.list': 'remote', 'tasks.live': 'remote', 'tasks.get': 'remote', 'tasks.create': 'remote', 'tasks.approve': 'remote',
-  'tasks.retry': 'remote', 'tasks.cancel': 'remote', 'tasks.reassign': 'remote', 'tasks.followup': 'remote', 'tasks.undo': 'remote', 'tasks.diff': 'remote', 'sessions.turns': 'remote', 'sessions.turnDiff': 'remote',
-  'tasks.launchAnyway': 'remote', 'tasks.search': 'remote', 'tasks.accept': 'remote', 'tasks.review': 'remote', 'tasks.discardBranch': 'pc',
+  'tasks.retry': 'remote', 'tasks.cancel': 'remote', 'tasks.reassign': 'remote', 'tasks.followup': 'remote', 'tasks.undo': 'remote', 'tasks.undoPreview': 'pc', 'tasks.diff': 'remote', 'sessions.turns': 'remote', 'sessions.turnDiff': 'remote',
+  'tasks.launchAnyway': 'remote', 'tasks.search': 'remote', 'tasks.accept': 'remote', 'tasks.review': 'remote', 'tasks.discardBranch': 'pc', 'tasks.undoJoin': 'remote', 'tasks.retryJoin': 'remote',
   // direct conversations with an agent and the tasks' sessions
   'sessions.list': 'remote', 'sessions.create': 'remote', 'sessions.items': 'remote', 'sessions.send': 'remote', 'sessions.queue': 'remote',
   'sessions.editQueued': 'remote', 'sessions.approve': 'remote', 'sessions.resume': 'remote', 'sessions.fork': 'remote', 'sessions.handoff': 'remote', 'sessions.edit': 'remote', 'sessions.rewindInfo': 'remote', 'sessions.editRewind': 'pc', 'sessions.rewindUndo': 'pc', 'sessions.settle': 'remote',
-  'sessions.stop': 'remote', 'sessions.subagent': 'remote', 'sessions.sideAsk': 'pc', 'sessions.sides': 'remote', 'sessions.sideClose': 'remote', 'sessions.suggestCancel': 'remote', 'sessions.modes': 'remote', 'sessions.goal': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.remove': 'pc', 'worktrees.branches': 'remote', 'worktrees.status': 'pc', 'worktrees.list': 'pc', 'worktrees.discard': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
+  'sessions.stop': 'remote', 'sessions.subagent': 'remote', 'sessions.sideAsk': 'pc', 'sessions.sides': 'remote', 'sessions.sideClose': 'remote', 'sessions.suggestCancel': 'remote', 'sessions.modes': 'remote', 'sessions.goal': 'remote', 'sessions.compact': 'remote', 'sessions.update': 'remote', 'sessions.holdWait': 'remote', 'sessions.remove': 'pc', 'worktrees.branches': 'remote', 'worktrees.status': 'pc', 'worktrees.list': 'pc', 'worktrees.discard': 'pc', 'sessions.trash': 'remote', 'sessions.restore': 'remote', 'trash.list': 'remote',
   // «Auto» / «Preguntar» for everything (Ajustes › Agentes and the assistant's chat), also from the phone
   'permissions.setMode': 'remote',
   // «Acceso total al PC» and «Usar mi móvil Android» (src/engine/security/grants.mjs): given and taken back only here
@@ -71,15 +71,24 @@ export const METHODS = Object.freeze({
   // phone access and Magic Link
   'remote.status': 'pc', 'remote.enable': 'pc', 'remote.configure': 'pc', 'remote.pair': 'pc', 'remote.revoke': 'pc',
   'pc.screenshot': 'remote',
-  'link.qr': 'pc', 'link.devices': 'pc', 'link.revoke': 'pc', 'link.rename': 'pc',
+  'tailscale.status': 'pc', 'tailscale.login': 'pc', 'link.qr': 'pc', 'link.devices': 'pc', 'link.revoke': 'pc', 'link.rename': 'pc',
   // agents and their accounts
   'agents.status': 'remote', 'agents.check': 'pc', 'agents.login': 'pc', 'agents.loginCode': 'pc', 'agents.loginCancel': 'pc',
   'agents.loginState': 'pc', 'agents.install': 'pc', 'agents.installState': 'pc',
-  'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc', 'accounts.logout': 'pc', 'agents.checkUpdates': 'pc',
+  'accounts.add': 'pc', 'accounts.scan': 'pc', 'accounts.update': 'pc', 'accounts.rememberIdentity': 'pc', 'accounts.identityFound': 'pc', 'accounts.remove': 'pc', 'accounts.clearCooldown': 'pc', 'accounts.logout': 'pc', 'agents.checkUpdates': 'pc',
   // backups
   'backup.status': 'pc', 'backup.list': 'pc', 'backup.now': 'pc', 'backup.verify': 'pc', 'backup.restore': 'pc', 'backup.recovery': 'pc', 'backup.previousKey': 'pc', 'backup.newKey': 'pc', 'backup.cancelKey': 'pc', 'legacy.status': 'pc', 'legacy.delete': 'pc',
+  // «Restablecer» and «Desinstalar» (the plan and the run) and the data kept aside by «Empezar de cero» (src/engine/api/uninstall.mjs)
+  'uninstall.plan': 'pc', 'uninstall.run': 'pc', 'uninstall.resume': 'pc', 'uninstall.restart': 'pc', 'uninstall.pending': 'pc', 'uninstall.discard': 'pc', 'previous.list': 'pc', 'previous.delete': 'pc',
   // the master password and the connectors' keys
   'master.state': 'pc', 'master.create': 'pc', 'master.unlock': 'pc', 'master.lock': 'pc', 'master.check': 'pc', 'master.change': 'pc', 'master.forgot': 'pc', 'master.reset': 'pc',
+  'master.helloState': 'pc', 'master.helloEnable': 'pc', 'master.unlockHello': 'pc', 'master.helloDisable': 'pc',
+  // a phone's fingerprint approves sensitive actions (src/engine/api/master.mjs): this PC registers it, asks and waits; the phone only answers
+  // linking a phone without the master password (src-tauri/vault/src/link.rs): this PC's window makes the code and answers the question
+  'link.codeNew': 'pc', 'link.codeAnswer': 'pc', 'link.codeWaiting': 'pc', 'link.codeCancel': 'pc',
+  'approve.devices': 'pc', 'approve.register': 'pc', 'approve.unregister': 'pc', 'approve.request': 'pc', 'approve.poll': 'pc',
+  'approve.enroll': 'remote', 'approve.respond': 'remote',
+  'master.rebuildStart': 'pc', 'master.rebuildPoll': 'pc', 'master.rebuildFinish': 'pc',
   'secrets.connector': 'pc', 'secrets.saveConnector': 'pc',
   // the agents' own API keys (Grok, Devin, Droid): the state says only which are saved, saving needs the unlock
   'agentKeys.state': 'pc', 'agentKeys.save': 'pc',
@@ -87,6 +96,9 @@ export const METHODS = Object.freeze({
   'secrets.pending': 'pc', 'secrets.answer': 'pc', 'secrets.decline': 'pc',
   // a merge an agent asked for, confirmed only on this PC's card (src/engine/host/pr-tools.mjs)
   'prConfirm.pending': 'pc', 'prConfirm.answer': 'pc', 'prConfirm.decline': 'pc',
+  // a chat's own copy in the middle of a conversation, and the agent's proposal for it (src/engine/chat-copy.mjs, host/copy-proposal.mjs)
+  'copy.state': 'pc', 'copy.preview': 'pc', 'copy.toCopy': 'pc', 'copy.wait': 'pc', 'copy.cancelWait': 'pc', 'copy.merge': 'pc', 'copy.undoMerge': 'pc', 'copy.resolve': 'pc', 'copy.discard': 'pc',
+  'copyAsk.pending': 'pc', 'copyAsk.answer': 'pc', 'copyAsk.decline': 'pc',
   // the HTML pages of the chats: only this PC's window may list them, close them or give them internet (src/engine/host/html-pages.mjs)
   // agents outside Orb that create tasks through a loopback MCP server (src/engine/api/mcp-ext.mjs)
   'mcpExt.state': 'pc', 'mcpExt.setEnabled': 'pc', 'mcpExt.createToken': 'pc', 'mcpExt.setProjects': 'pc', 'mcpExt.revoke': 'pc', 'mcpExt.remove': 'pc',
@@ -108,16 +120,17 @@ export const METHODS = Object.freeze({
 export const REMOTE_METHODS = Object.freeze(new Set(Object.keys(METHODS).filter((m) => METHODS[m] === 'remote')));
 
 // what this PC's window may only do right after the master password (a token of 5 minutes, src/engine/api/master.mjs):
-// restoring a backup, checking one or making a new recovery code (the code opens the backups, and a check would try codes),
+// restoring a backup and checking one (a check would try codes),
 // deleting the data of Orb 3.7, unlinking a phone, seeing or changing a connector's keys, opening core (the app asks
 // master.check) and, in config.save, choosing where the backups go, writing a connector's keys in clear, changing a
 // connector that has keys (its command, its arguments, its name, removing it or one of its keys) and taking a path off
 // «Cosas que nadie toca», deleting a project (its folder; every time, see FRESH_UNLOCK) and removing a skill or an MCP server from core (or a
 // connector). current: the settings now (the engine's), to compare
-// with. Changing the password asks for the current one instead.
+// with. Changing the password asks for the current one instead, and so does making a new recovery code (backup.recovery: the
+// password or the current code, checked in the vault; a token is no proof there).
 // pairing a phone or starting an emulator (the agents may then reach it), and giving a chat «Acceso total al PC» or the
 // phone (the usual 5-minute unlock, not the password every time: see below).
-export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.recovery', 'backup.previousKey', 'backup.newKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
+export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.verify', 'backup.previousKey', 'backup.newKey', 'legacy.delete', 'link.revoke', 'remote.revoke', 'approve.unregister', 'master.check', 'secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'projects.deleteCheck', 'extensions.remove',
   'android.pairStart', 'android.pairCode', 'android.emulatorStart', 'sessions.grantTotal', 'sessions.grantAndroid', 'mcpExt.createToken', 'mcpExt.setProjects',
   // rules: your own are edited with the usual unlock; pausing or deleting a shipped one (rules.pause / rules.delete,
   // see freshPurpose) and everything about the rails asks for the password every time
@@ -131,13 +144,41 @@ export const UNLOCK_METHODS = Object.freeze(new Set(['backup.restore', 'backup.v
 // the password every time; they still go when Orb locks (src/engine/security/grants.mjs).
 // rails: any change to the limits (rails.set, rails.restore, or `rails` inside config.save); ruleSeed: putting the shipped
 // rules back, and pausing or deleting one of them (those two only for a shipped rule: see freshPurpose).
+// Asked for a recent unlock only when the vault has a master password: a reset is also the way out of a vault that cannot be opened.
+export const UNLOCK_IF_MASTER = Object.freeze(new Set(['uninstall.plan', 'uninstall.run', 'uninstall.resume', 'uninstall.discard', 'previous.delete']));
 export const FRESH_UNLOCK = Object.freeze({ 'projects.deleteCheck': 'deleteProject', 'rails.set': 'rails', 'rails.restore': 'rails', 'rules.restoreDefaults': 'ruleSeed', 'backup.newKey': 'newKey' });
 export const RULE_PURPOSE = 'ruleSeed';
 export const RAILS_PURPOSE = 'rails';
 // a secret an agent asked for, saved in the vault or taken from it, asks every time too (its
 // token is for that one action); the purpose depends on what the card does.
 export const SECRET_PURPOSES = Object.freeze({ save: 'secretSave', saved: 'secretSaved' });
-export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES)])]);
+// The one-use token that turns Windows Hello on (the vault takes it only when it was made with the password).
+export const HELLO_ENABLE_PURPOSE = 'hello.enable';
+// The one-use token that registers a phone to approve (the vault takes it only when it was made with the password).
+export const APPROVE_REGISTER_PURPOSE = 'approve.register';
+// The one-use token (Hello's or the password's) that makes a code to link a phone without the master password (src-tauri/vault/src/link.rs).
+export const LINK_CODE_PURPOSE = 'linkCode';
+// The purpose of the Hello step of «Lo he olvidado todo» (src-tauri/vault/src/hello.rs › REBUILD): its token is good for nothing else.
+export const REBUILD_PURPOSE = 'rebuild-master';
+export const FRESH_PURPOSES = Object.freeze([...new Set([...Object.values(FRESH_UNLOCK), ...Object.values(SECRET_PURPOSES), HELLO_ENABLE_PURPOSE, APPROVE_REGISTER_PURPOSE, LINK_CODE_PURPOSE])]);
+// Two strengths of token (the vault keeps the strength inside each one): the password's opens everything above; Windows Hello's
+// is only a proof of presence, so it opens none of what shows, saves or hands out a secret, nor a restore of the copies (a
+// copy brings the secrets of another PC). Those ask for the password, or for the phone's approval (a one-use token of that
+// strength is the only other proof they will take; src/engine/api/master.mjs › checkUnlock is where it plugs in).
+export const SECRET_METHODS = Object.freeze(new Set(['secrets.connector', 'secrets.saveConnector', 'agentKeys.save', 'mcpExt.createToken', 'sessions.grantTotal', 'backup.restore',
+  // widening what an outside agent's token reaches is nearly what creating one gives
+  'mcpExt.setProjects']));
+// What changes the keys' own state asks for the password too, always: Hello neither makes a new key nor proves who forgot it.
+export const PASSWORD_ONLY_METHODS = Object.freeze(new Set([...SECRET_METHODS, 'backup.newKey']));
+// What a linked phone's fingerprint may approve: a call that needs the password and is not a new key's (that one is the password's
+// alone). `purpose` is the call's own «ask every time» purpose: only the secrets' own (a card an agent asked) is open to the phone.
+export function mobileMayApprove(method, params, current = {}) {
+  if (method === 'backup.newKey' || !needsPassword(method, params, current)) return false;
+  const purpose = freshPurpose(method, params, { current });
+  return purpose === null || Object.values(SECRET_PURPOSES).includes(purpose);
+}
+// The purposes whose token Hello may make: every action that asks every time, except the secrets' and the new key's.
+export const HELLO_PURPOSES = Object.freeze([...Object.values(FRESH_UNLOCK).filter((p) => p !== FRESH_UNLOCK['backup.newKey']), LINK_CODE_PURPOSE]);
 // Calls whose purpose depends on the rule they name: the caller (master.mjs) reads the rule and says if it is a shipped one.
 export const RULE_TARGET_METHODS = Object.freeze(new Set(['rules.pause', 'rules.delete', 'rules.save']));
 // The purpose a guarded call's token must carry (an action that asks every time), or null (the usual 5-minute token).
@@ -150,8 +191,21 @@ export function freshPurpose(method, params, facts = {}) {
   if (RULE_TARGET_METHODS.has(method)) return facts.seedRule === true ? RULE_PURPOSE : null;
   return FRESH_UNLOCK[method] ?? null;
 }
+// Whether this call may be answered only by a password-strength token: a secret is shown, saved or given away, or a
+// connector that has keys is changed (the touchesKeys case), or a connector's keys are written in clear.
+export function needsPassword(method, params, current = {}) {
+  if (PASSWORD_ONLY_METHODS.has(method)) return true;
+  if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
+  if (method !== 'config.save') return false;
+  const servers = params?.patch?.mcpServers;
+  return Array.isArray(servers) && writesKeys(current, servers);
+}
+function writesKeys(current, servers) {
+  if (servers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)))) return true;
+  return touchesKeys(current?.mcpServers ?? [], servers);
+}
 export function needsUnlock(method, params, current = {}) {
-  if (UNLOCK_METHODS.has(method)) return true;
+  if (UNLOCK_METHODS.has(method) || UNLOCK_IF_MASTER.has(method)) return true;
   // a secret for an agent saved in the vault, or taken from it.
   if (method === 'secrets.answer') return params?.save === true || params?.saved === true;
   // switching the MCP server for outside agents on asks; switching it off (taking access back) needs nothing
@@ -162,9 +216,7 @@ export function needsUnlock(method, params, current = {}) {
   if (railValuesChange(patch, current)) return true;
   if (patch.backup && typeof patch.backup === 'object' && Object.hasOwn(patch.backup, 'folder')) return true;
   if (Array.isArray(patch.protected) && (current?.protected ?? []).some((x) => !patch.protected.includes(x))) return true;
-  if (!Array.isArray(patch.mcpServers)) return false;
-  if (patch.mcpServers.some((s) => s?.env && typeof s.env === 'object' && Object.values(s.env).some((v) => !isRef(v)))) return true;
-  return touchesKeys(current?.mcpServers ?? [], patch.mcpServers);
+  return Array.isArray(patch.mcpServers) && writesKeys(current, patch.mcpServers);
 }
 
 // A refused call: 403, with a message the user may read.
@@ -220,3 +272,5 @@ export function mustOwnTask(board, who, id) {
   if (!ownsTask(board, who, id)) throw Object.assign(new Error(tr('msg.authz.notYourTask', { id })), { userFacing: true });
   return true;
 }
+// The vault's own entries that a data key authenticates and a new one never carries over (Hello's public key and the phones' approval keys).
+export const HELLO_ID_PREFIXES = Object.freeze(['master/hello', 'master/approve']);

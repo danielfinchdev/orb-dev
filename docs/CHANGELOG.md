@@ -1,15 +1,145 @@
 ## Download
 
-### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.8/Orb-3.8.8-instalador.exe)
+### [Descargar para Windows](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.12/Orb-3.8.12-instalador.exe)
 
-`Orb-3.8.8-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
+`Orb-3.8.12-instalador.exe`: installs for your user, without administrator rights, and updates itself. Windows 10/11.
 It needs Microsoft Edge WebView2, which Windows 11 and an up-to-date Windows 10 already have (if it is missing, the
 installer gets it). Since it isn't signed yet, SmartScreen warns you the first time: "More info" → "Run anyway".
 
-### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.8/Orb-3.8.8-android.apk)
+### [Descargar para Android](https://github.com/danielfinchdev/orb-dev/releases/download/v3.8.12/Orb-3.8.12-android.apk)
 
-`Orb-3.8.8-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
+`Orb-3.8.12-android.apk`: the native app. Open it on the phone to install it (or on top of an earlier Orb for Android:
 the link with your PC is kept). How to install and link it: [`docs/ANDROID.md`](docs/ANDROID.md).
+
+## What's new in 3.8.12
+
+### Added
+
+- **Uninstall and reset from Settings › Data.** Tick what to keep (chats, settings, journals, phone link, vault,
+  backups, mini-games, projects) or use a shortcut ("Keep everything", "Keep only projects", "Delete everything").
+  Orb shows the reviewed plan with sizes before deleting anything, sends project folders it created to the Recycle Bin
+  and never touches the backup folder you chose. A signed journal lets a cut-short deletion finish or report at the next
+  start, and the installer only purges data when Orb asks for it, never on an update.
+- **Ask before adopting old data.** After a reinstall Orb asks whether to recover your earlier chats and settings or
+  start from scratch; starting from scratch keeps the old data aside instead of deleting it.
+- **Optional uninstall survey.** Say why you leave in one line; it opens a prefilled GitHub issue that you send
+  yourself.
+- **Move a chat to a separate copy in the middle of a conversation, and back.** From the menu, Ctrl+K or the agent's
+  own proposal card. Orb takes a photo of the folder before every turn so it knows which files belong to the chat, shows
+  what it will carry, leaves your own changes where they are, and the agent continues the same conversation. Joining the
+  copy back has its own undo.
+- **Configurable dictation.** Choose Windows voice typing, Handy or a local Whisper for the microphone button; a missing
+  engine falls back to Windows.
+- **Rewritten Android texts and tutorials.** The phone app follows the same style guide as the desktop, and the desktop
+  now has 24 guides covering what was added since 3.8.8.
+- **Folders created by Orb are marked**, so uninstalling only offers to delete those.
+
+### Fixed
+
+- A stopped delete no longer restores what it had already deleted, and it is asked about before the welcome instead of
+  looping.
+- A move to a copy refuses to start while an earlier one is unresolved, and undoing one keeps your edits and the chat's
+  work.
+- Dictation detects engines by file only and skips `cmd` and `bat` shims.
+- The ready timer of a move to a copy stops when the chat list opens.
+- Android calls the journals "Bitácoras", like the desktop.
+
+## What's new in 3.8.11
+
+### Added
+
+- **Rewritten interface texts.** Every label, message and help text follows one style guide, so wording is consistent
+  across the app.
+- **Settings in ten tabs.** Changes are saved as soon as you leave a field, with a "Saved" mark. The Appearance tab
+  adds four new typefaces.
+- **A redesigned Agents page.** Your agents are listed in collapsible cards with their tools folded away, and a gallery
+  lets you add more.
+- **One-click developer tools.** Install common programming tools from a fixed list through winget, and check for
+  updates when you ask.
+- **A fuller Usage tab.** Filters, a line chart, a limits view, a table of what spent the most and CSV export.
+- **One search in the Journal**, and quick filters in Activity (All, You, Agents, Problems).
+
+### Changed
+
+- "God mode" is now "Expert mode", "Logs" is now "Journal" and "rails" are now "Protections".
+
+### Fixed
+
+- The endurance test no longer loses or duplicates events during long runs.
+
+## What's new in 3.8.10
+
+### Added
+
+- **Several accounts of the same agent.** Use more than one Claude or Codex account. Each chat either keeps a
+  fixed account or lets Orb choose one automatically; Orb tells you when it switches or holds a message. Every account
+  has its own mark and colour in the chat box, the lists and the tasks. Before each turn Orb checks that the signed-in
+  identity is the one you picked, and Usage shows each account on its own. Android shows the account mark too.
+- **Windows Hello unlock.** Unlock Orb with Windows Hello instead of typing the master password, in the lock screen and
+  in protected dialogs. Hello never opens agent secrets on its own: those still need the password or your phone.
+- **Recovery code.** Orb can generate a recovery code that also opens your data on a new PC.
+- **Approve sensitive PC actions with your phone's fingerprint.** Saving keys, connectors, restoring a backup, full
+  access and answers that carry a secret can be approved from the phone.
+- **"I forgot everything" recovery.** Confirm with Windows Hello and your phone, then set a new password and a new code.
+- **Link a phone without the master password.** A one-time code (typed or from a QR) links a new phone; the PC shows its
+  fingerprint and asks you to confirm the phone's name.
+- **Android app lock bound to a Keystore key.** On Android 11 and later the lock opens only through a key kept in the
+  phone's secure hardware, with your fingerprint, face or screen lock.
+- **Tailscale in Settings › Devices.** A new card installs and signs in to Tailscale and lists the devices on your
+  tailnet. On Android, "Find my PC on Tailscale" fills in the address once you type the PC's name.
+- **Real reasoning levels for each model**, from the agent itself (Claude Low to Max, Codex Minimal to Extra high), and an
+  option in Settings to hide "Recommended" and the model guide in the picker.
+- **New chat in one click**, plus a search row in the sidebar. "New chat" and Ctrl+K open a project picker with search,
+  arrows and Enter.
+- **Undo shows what will happen.** The dialog lists how each file ends up, with a diff per file, and refuses to run if
+  anything has changed since.
+
+### Changed
+
+- The option you chose is highlighted in menus, lists and sheets, on the PC, the phone web and Android.
+- The mobile web app resumes the live stream and resends lost requests like the Android app does.
+
+### Fixed
+
+- Codex recovers from a lost thread instead of failing the identity check.
+- A chat that switches account keeps its context.
+- A newly linked phone never receives events from before it was linked.
+- Going back to 3.8.9 keeps your settings readable, also with the new reasoning levels.
+
+### Security
+
+- Fixes from an internal security review: stricter checks around recovery codes, backup phrases and approvals, no secret
+  phrase sent to the phone, undo no longer overwrites a file changed meanwhile, and a limit on link-code attempts per
+  address.
+
+## What's new in 3.8.9
+
+**A phone link that mends itself.** If the connection between the phone and the PC drops, it comes back on its own, also
+when Tailscale starts late or after the PC wakes from sleep, and the phone says what is wrong after 30 seconds instead
+of staying silent. "This phone" and Settings › Devices show how each way in (Wi-Fi, Tailscale) is doing and when it last worked.
+Messages are neither lost nor sent twice when the link comes back: the phone resumes the live stream where it stopped
+and an answer that got lost is asked for again, not repeated.
+
+**Safer by default.** Windsurf and Zed are only opened when they carry their own publisher's signature. Undo works on
+tasks that were launched again. A scheduled task that was never approved needs what you saw to run, and "accept" only
+takes the point and the run the report shows. A hand-over that stopped half-way shows what is left, and can be undone
+or tried again from the PC and from the phone. A fake PC on the same Wi-Fi can no longer unlink the phone or move its
+clock.
+
+**Android.** The line that shows the agent is writing no longer overlaps the finished answer, the text box sits right
+above the keyboard, the icons of the system bar are readable in the light theme, and the app declares the local network
+permission that Android 16 brings.
+
+**Starts lighter.** Orb shows its window only once the interface is drawn, so there is no black window, and it loads
+the English texts only when they are used. It reaches the main screen about a tenth of a second sooner than 3.8.7.
+
+**Smaller fixes in the app.** Tetris keeps a held direction moving while a piece turns. Places that do not fit go
+behind the "more" button, and the places row has an even gap. Menu separators, repeated titles and the "Worktree"
+tip are tidied up, and the chat title stays centred. The theme thumbnails are back in Settings, and "More options"
+appears once in General. Mini-games are larger and the game is the main thing in each window, also full screen. The
+Orchestrator icon is back in the composer, a new chat has the full permissions menu, completed chats are kept in one
+place and fade out, the agent line shows only where agent or model change, and the pause-all button appears only
+when several agents are working. Everywhere the app says "agent" instead of "brain".
 
 ## What's new in 3.8.8
 

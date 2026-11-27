@@ -8,7 +8,7 @@ object UsageTexts {
     const val RETRY = "Reintentar"
     const val UPDATE = "Actualizar"
     const val UPDATING = "Actualizando…"
-    const val ACTION_OFFLINE = "Sin conexión con el PC: no se ha cambiado nada."
+    const val ACTION_OFFLINE = "Sin conexión con el PC. No se ha cambiado nada."
     const val ACTION_FAILED = "No se pudo hacer en el PC"
     const val UPDATED = "Uso actualizado"
 
@@ -44,7 +44,7 @@ object UsageTexts {
     fun nearLimit(fraction: Double) = percent(fraction) >= Math.round(NEAR_LIMIT_AT * 100)
     fun percentText(fraction: Double) = "${percent(fraction)} %"
     fun barLabel(title: String, value: String) = "$title: $value"
-    fun tasksWindow(hours: Int?) = if (hours == null) TASKS_USED else "$TASKS_USED · ventana de $hours h"
+    fun tasksWindow(hours: Int?) = if (hours == null) TASKS_USED else "$TASKS_USED · límite de $hours h"
     fun periodTotal(n: Int, cost: String, tokens: String) = "Total de $n días: $cost · $tokens tokens"
 
     const val NO_LIMITS = "Los límites aparecerán cuando los agentes respondan."
@@ -66,7 +66,7 @@ object UsageTexts {
 
     const val AGENTS = "Agentes"
     const val INSTALLED = "Instalado"
-    const val NOT_INSTALLED = "No instalado"
+    const val NOT_INSTALLED = "Instalar en el PC"
     const val LOGGED_IN = "Sesión iniciada"
     const val NO_LOGIN = "Sin sesión"
     const val UNKNOWN_LOGIN = "Sesión sin comprobar"
@@ -97,7 +97,7 @@ object UsageTexts {
     /** `five_hour`, `seven_day_opus`, `300min`… in words. */
     fun windowLabel(w: String): String {
         val model = Regex("seven_day_(\\w+)").find(w)?.groupValues?.get(1)
-        if (Regex("five_hour|^300min$|^5h$").containsMatchIn(w)) return "Límite de sesión"
+        if (Regex("five_hour|^300min$|^5h$").containsMatchIn(w)) return "Límite de 5 horas"
         if (model != null) return "Semanal · " + model.replaceFirstChar { it.uppercase() }
         if (Regex("seven_day|^10080min$").containsMatchIn(w)) return "Semanal · todos los modelos"
         val min = Regex("^(\\d+)min$").find(w)?.groupValues?.get(1)?.toIntOrNull()
@@ -141,7 +141,7 @@ object UsageTexts {
         val within = reset - nowMs < 86_400_000
         val at = java.text.SimpleDateFormat(if (within) "HH:mm" else "EEE HH:mm", es).apply { timeZone = zone }.format(java.util.Date(reset))
         val length = windowMinutes(next.window)?.let { " de " + span(it) }.orEmpty()
-        return "Esta ventana$length · vuelve $at"
+        return "Límite$length · vuelve $at"
     }
 
     /** «Hoy», «Ayer», «Anteayer», then «12 nov»; [day] is the PC's `yyyy-mm-dd`. */

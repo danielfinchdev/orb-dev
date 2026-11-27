@@ -5,28 +5,54 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig, checkAccountHome } from '../../platform/config.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
-import { MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, logoutKind, closeAccountSession } from '../../domain/usage/accounts.mjs';
+import { configuredAccount, MULTI, newAccountId, findAccountFolders, accountsOf, accountDir, logoutKind, closeAccountSession } from '../../domain/usage/accounts.mjs';
 import { devToolsReport } from '../../platform/dev-tools.mjs';
 import { PACKAGES, updateInfo, checkUpdates } from '../usage/versions.mjs';
 import { accountInfo as codexAccountInfo } from '../../agents/codex.mjs';
-import { clearCooldown, pickAccount } from '../../domain/usage/budget.mjs';
+import { clearCooldown } from '../../domain/usage/budget.mjs';
 import { oneLine } from '../../shared/text.mjs';
-import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable } from '../../agents/index.mjs';
+import { statusAll, status as agentStatus, openLogin, startAccountLogin, forgetInstalled, executable, accountIdentity } from '../../agents/index.mjs';
+import { identityState, duplicatesOf, learnIdentity, rememberIdentity, foundHint } from '../identity.mjs';
 import { sendCode as loginSendCode, cancelLogin, loginInfo, allLogins } from '../../agents/login.mjs';
 import { translate } from '../../shared/i18n.mjs';
 import { refreshModels, refreshAllModels } from '../usage/catalog.mjs';
 import { fail, str, oneOf } from './common.mjs';
+import { ACCOUNT_COLORS, TAG_RE, markOf } from '../../shared/account-marks.mjs';
+
+// tag/color of «accounts.update»: an empty value goes back to the default one.
+function markPatch(tag, color) {
+  const out = {};
+  if (tag !== undefined) {
+    const t = String(tag ?? '').trim();
+    if (t && !TAG_RE.test(t)) fail(tr('msg.api.accountTag'));
+    out.tag = t ? t.toUpperCase() : undefined;
+  }
+  if (color !== undefined) {
+    if (color && !ACCOUNT_COLORS.includes(color)) fail(tr('msg.api.accountTag'));
+    out.color = color || undefined;
+  }
+  return out;
+}
 
 // the installer is loaded the first time an install is asked for (not at the engine's start).
 let installerModule = null;
 const inst = () => (installerModule ??= import('../host/installer.mjs').catch((error) => { installerModule = null; throw error; }));
 
 export function accountMethods({ board, emit, log, sessions, orchestrator }) {
+  // An account with a turn in progress, or messages waiting for it, in any chat is neither removed nor signed out: the
+  // turn would lose its login, and the waiting message would find no account.
+  const busyOrQueued = (id) => {
+    const state = [orchestrator?.workingOn?.(id), sessions?.workingOn?.(id)];
+    if (state.includes('busy')) fail(tr('msg.api.accountBusy'));
+    if (state.includes('queued')) fail(tr('msg.api.accountQueued'));
+    if (state.includes('pending')) fail(tr('msg.api.accountPending'));
+  };
   // What the window needs besides the agent's state: whether Orb can close each account's session (logout: 'orb' = it can,
   // 'tool' = only the agent's own command can, absent = no session to close) and what the last update check found.
   const decorate = (a) => {
     const update = updateInfo(board, a.id, a.version);
-    return { ...a, accounts: a.accounts?.map((acc) => { const logout = logoutKind(acc); return logout ? { ...acc, logout } : acc; }), ...(update ? { update } : {}) };
+    const state = (acc) => { const identity = identityState(acc.id); const sameAs = duplicatesOf(acc.id); const foundHere = foundHint(acc.id); return { ...(foundHere ? { foundHint: foundHere } : {}), ...(identity ? { identity: identity.state, ...(identity.viaKey ? { viaKey: true } : {}) } : {}), ...(sameAs.length ? { sameAs } : {}) }; };
+    return { ...a, accounts: a.accounts?.map((acc, i) => { const logout = logoutKind(acc); return { ...acc, ...markOf(acc, i), ...state(acc), ...(logout ? { logout } : {}) }; }), ...(update ? { update } : {}) };
   };
   return {
     // «Comprobar» / «Comprobar todo» also ask the agents again for their models (in the background).
@@ -62,6 +88,8 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
         r = await startAccountLogin(acc, { mode: how, emit, onEnd: (l) => {
           if (l.state !== 'hecho') return;
           liftPause(); forgetInstalled();
+          // who signed in is asked to the agent (no turn) and saved; the same login in two accounts is told once
+          learnIdentity(acc, accountIdentity, emit).then((same) => { if (same?.length) board.notice(tr('msg.acct.duplicate', { a: ctx.config.accounts.find((x) => x.id === acc)?.label ?? acc, b: same.map((i) => ctx.config.accounts.find((x) => x.id === i)?.label ?? i).join(', ') }), 'info'); }).catch(() => {});
           const agentId = ctx.config.accounts.find((a) => a.id === acc)?.agent;
           if (agentId) refreshModels(board, agentId, { force: true, log });
           if (!process.env.ORB_FAKE_AGENTS) import('../usage/plans.mjs').then(({ refreshPlans }) => refreshPlans(board, { force: true, log })).catch(() => {});
@@ -125,9 +153,13 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
       found.forEach((f, i) => { const info = theirs[i]; if (info?.who && seen.has(info.who)) return; if (info?.who) seen.add(info.who); out.push({ ...f, plan: info?.plan ?? null, checked: Boolean(info?.who) }); });
       return out;
     },
-    'accounts.update': ({ id, label, enabled }) => {
+    // «Es correcta, recordar esta»: takes the login the folder holds now as the account's own (this PC only).
+    // the masked hint of the other login found, to show what «recordar esta» would adopt (this PC only)
+    'accounts.identityFound': ({ id }) => ({ hint: foundHint(str(id, 'cuenta', 40)) }),
+    'accounts.rememberIdentity': ({ id }) => { const ok = rememberIdentity(str(id, 'cuenta', 40), emit); if (!ok) fail(tr('msg.api.noIdentity')); return true; },
+    'accounts.update': ({ id, label, enabled, tag, color }) => {
       const acc = ctx.config.accounts.find((a) => a.id === str(id, 'cuenta', 40)) ?? fail(tr('msg.api.noAccount'));
-      const next = ctx.config.accounts.map((a) => (a.id === acc.id ? { ...a, ...(label !== undefined ? { label: oneLine(str(label, 'nombre', 60), 60) } : {}), ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}) } : a));
+      const next = ctx.config.accounts.map((a) => (a.id === acc.id ? { ...a, ...(label !== undefined ? { label: oneLine(str(label, 'nombre', 60), 60) } : {}), ...(enabled !== undefined ? { enabled: Boolean(enabled) } : {}), ...markPatch(tag, color) } : a));
       const c = saveConfig({ accounts: next }); emit('config:changed', c); return true;
     },
     'accounts.remove': ({ id }) => {
@@ -135,7 +167,8 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
       if (acc.id === acc.agent) fail(tr('msg.api.mainAccount'));
       if (board.one("SELECT COUNT(*) AS n FROM tasks WHERE status = 'running' AND run_account = ?", acc.id).n) fail(tr('msg.api.accountRunning'));
       if (board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running' AND account = ?", acc.id).n) fail(tr('msg.api.accountBusy'));
-      if (ctx.config.orchestrator.account === acc.id) fail(tr('msg.api.accountAssistant'));
+      if (configuredAccount(ctx.config.orchestrator, ctx.config.orchestrator.agent || 'claude') === acc.id) fail(tr('msg.api.accountAssistant'));
+      busyOrQueued(acc.id);
       // The folder (and its login) stays on disk: removing an account from the app never signs anyone out.
       const c = saveConfig({ accounts: ctx.config.accounts.filter((a) => a.id !== acc.id) }); emit('config:changed', c);
       return true;
@@ -151,7 +184,9 @@ export function accountMethods({ board, emit, log, sessions, orchestrator }) {
       if (board.one("SELECT COUNT(*) AS n FROM sessions WHERE status = 'running' AND account = ?", acc.id).n) fail(tr('msg.api.accountBusy'));
       // The assistant: the account it really uses now (the process it has open, else the one it would be given).
       const o = ctx.config.orchestrator ?? {};
-      if (o.account === acc.id || pickAccount(board, { agent: o.agent || 'claude', preferred: o.account || null })?.id === acc.id) fail(tr('msg.api.accountAssistant'));
+      // Only a fixed choice names the account; an automatic one is covered by the turn, queue and process checks below.
+      if (configuredAccount(o, o.agent || 'claude') === acc.id) fail(tr('msg.api.accountAssistant'));
+      busyOrQueued(acc.id);
       // Any process still open on the account (also chats at rest, which stay open up to 20 minutes, and side chats) keeps
       // reading its login: a turn in progress stops this; resting ones are closed first.
       if (orchestrator?.releaseAccount && !orchestrator.releaseAccount(acc.id)) fail(tr('msg.api.accountOpenChat'));

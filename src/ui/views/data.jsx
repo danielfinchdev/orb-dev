@@ -1,7 +1,7 @@
 // Ajustes › Datos (the owner, on this PC): encrypted backups (every day at 03:00, or now), the recovery code that
 // opens them on another PC, restoring one, and moving this Orb to another PC. src/engine/api/data.mjs does the work.
 import { useEffect, useState } from 'react';
-import { KeyRound, LoaderCircle, Copy, FolderOpen, Archive, Trash2, Upload, Undo2 } from 'lucide-react';
+import { KeyRound, LoaderCircle, FolderOpen, Archive, Trash2, Upload, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button.jsx';
 import { Badge, Field, Input } from '@/components/ui/basic.jsx';
 import { ListRow } from '@/components/ui/primitives.jsx';
@@ -9,11 +9,12 @@ import { form, confirm } from '@/components/dialogs.jsx';
 import { call, act, bridge, useStore, getState, setState, openSettings } from '@/lib/store.js';
 import { notify, notifyOk } from '@/lib/notify.js';
 import { unlockCore } from '@/lib/core-access.js';
-import { MasterCard } from '@/views/master.jsx';
+import { newRecoveryCode } from '@/views/recovery.jsx';
 import { askNewSecret } from '@/components/new-secret.jsx';
 import { TrashCard } from './settings/trash.jsx';
+import { PreviousBlock, UninstallBlock } from './uninstall.jsx';
 import { WorktreesCard } from './settings/worktrees.jsx';
-import { Block, Panel, Setting, MoreOptions } from './settings/rows.jsx';
+import { Block, Panel, Setting } from './settings/rows.jsx';
 import { useT, useLocale, t as tNow } from '@/lib/i18n.js';
 import { AUTHOR } from '../../shared/product.mjs';
 import { quiet } from '@/lib/quiet.js';
@@ -21,27 +22,6 @@ import { quiet } from '@/lib/quiet.js';
 // the details of going back to the previous key (what stops working, recovery codes), in the README.
 const KEY_DOCS = `https://github.com/${AUTHOR.repo}#going-back-to-the-previous-key`;
 const size = (b) => (b >= 1e9 ? `${(b / 1e9).toFixed(1)} GB` : b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1e3))} KB`);
-
-// The recovery code: made here and shown once, to write down (copies made from then on open with it on another PC).
-// after the master password (the code opens the backups and «He olvidado la contraseña»).
-export async function newRecoveryCode() {
-  const unlock = await unlockCore('recovery');
-  if (!unlock) return null;
-  const r = await act(call('backup.recovery', { unlock }));
-  if (!r?.code) return null;
-  await form(tNow('datos.codeTitle'), {
-    description: tNow('datos.codeDesc'),
-    initial: {},
-    body: () => (
-      <div className="grid gap-2">
-        <div className="bg-muted rounded-lg px-3 py-3 text-center font-mono text-lg font-semibold tracking-wider break-all select-all" data-testid="recovery-code">{r.code}</div>
-        {navigator.clipboard ? <Button type="button" size="sm" variant="ghost" className="w-fit" onClick={() => navigator.clipboard.writeText(r.code).then(() => notifyOk(tNow('datos.copied'))).catch(quiet)}><Copy />{tNow('datos.copy')}</Button> : null}
-      </div>
-    ),
-    ok: tNow('datos.codeKept')
-  });
-  return r;
-}
 
 // This PC's key (on the PC only): the way back to the previous key (and back to the new one) when there is one, and
 // «Empezar con una clave nueva», asked with the master password every time. Own call, so it shows even when the backups' status fails.
@@ -108,16 +88,26 @@ function BackupsCard() {
   const when = (iso) => (iso ? new Date(iso).toLocaleString(locale, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
   const now = async () => { setBusy(true); const r = await act(call('backup.now', {}), t('datos.made')); setBusy(false); if (r) load(); };
   const restore = async (b) => {
-    const unlock = await unlockCore('restore');
-    if (!unlock) return;
     const r = await form(t('datos.restoreTitle'), {
       description: t('datos.restoreDesc', { when: when(b.created) }),
-      initial: { passphrase: '' },
-      body: (v, set) => <Field label={t('datos.restorePass')} hint={t('datos.restorePassHint')}><Input type="password" autoComplete="off" value={v.passphrase} onChange={(e) => set({ passphrase: e.target.value })} /></Field>,
+      initial: { passphrase: '', password: '' },
+      body: (v, set) => (<>
+        <Field label={t('datos.restorePass')} hint={t('datos.restorePassHint')}><Input type="password" autoComplete="off" value={v.passphrase} onChange={(e) => set({ passphrase: e.target.value })} data-testid="restore-code" /></Field>
+        <Field label={t('datos.restoreMaster')} hint={t('datos.restoreMasterHint')}><Input type="password" autoComplete="current-password" value={v.password} onChange={(e) => set({ password: e.target.value })} data-testid="restore-password" /></Field>
+      </>),
       ok: t('datos.restore'),
-      onOk: async (v) => { await call('backup.verify', { file: b.name, passphrase: v.passphrase || null, unlock }); return call('backup.restore', { file: b.name, passphrase: v.passphrase || null, unlock }); }
+      // The password or the phone's approval comes after the form: the phone approves exactly this restore.
+      onOk: async (v) => {
+        const params = { file: b.name, passphrase: v.passphrase || null, password: v.password || undefined };
+        const info = {};
+        const unlock = await unlockCore('restore', { request: { method: 'backup.restore', params }, info });
+        if (!unlock) return false;
+        // A phone's token is for the restore alone, so the check beforehand (a password's token) is skipped; the restore checks the copy too.
+        if (!info.mobile) await call('backup.verify', { file: b.name, passphrase: v.passphrase || null, unlock });
+        return call('backup.restore', { ...params, unlock });
+      }
     });
-    if (r) notifyOk(t('datos.restoreReady'), { ms: 10000 });
+    if (r) notifyOk(`${t(r.secretsKept ? 'datos.restoreKept' : 'datos.restoreReady')}${r.turnedOff ? ` ${t('datos.restoreHelloOff')}` : ''}`, { ms: 10000 });
   };
   // where the copies go: outside Orb's folder by default; another folder (never inside core) or back to the default.
   const setFolder = async (folder) => { const unlock = await unlockCore('backupFolder'); if (!unlock) return; if (await act(call('config.save', { patch: { backup: { folder } }, unlock }), t('datos.folderChanged'))) load(); };
@@ -208,7 +198,9 @@ function CoreCard() {
   );
 }
 
-export function DataCards() { return <><MasterCard /><KeyCard /><LegacyCard /><BackupsCard /><CoreCard /><MoreOptions testid="more-options-datos"><TrashCard /><WorktreesCard /></MoreOptions></>; }
+// The master password is in Permisos y seguridad; here, the copies, the key of this PC and what Orb keeps of its own.
+// «Datos de antes» and «Restablecer y desinstalar» close the tab.
+export function DataCards() { return <><BackupsCard /><KeyCard /><LegacyCard /><TrashCard /><WorktreesCard /><CoreCard /><PreviousBlock /><UninstallBlock /></>; }
 
 // backups are on from the first day, sealed with this PC's key. A few days later, once, a quiet suggestion to make
 // the recovery code (Ajustes › Datos), so a copy also opens on another PC. Never on a phone.

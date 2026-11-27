@@ -44,10 +44,10 @@ export function executable(agent) {
 }
 
 // Runs a short command and returns its output (never throws; resolves with { ok, out }).
-export function quickRun(cmd, args, { timeoutMs = 15000, env } = {}) {
+export function quickRun(cmd, args, { timeoutMs = 15000, env, maxOut = 2000 } = {}) {
   return new Promise((resolve) => {
     let out = ''; let done = false;
-    const finish = (ok) => { if (!done) { done = true; resolve({ ok, out: out.trim().slice(0, 2000) }); } };
+    const finish = (ok) => { if (!done) { done = true; resolve({ ok, out: out.trim().slice(0, maxOut) }); } };
     let child;
     try { child = spawn(cmd, args, { windowsHide: true, env: env ?? cleanEnv(), stdio: ['ignore', 'pipe', 'pipe'] }); } catch (error) { out = error.message; return finish(false); }
     child.stdout.on('data', (c) => { out += c; }); child.stderr.on('data', (c) => { out += c; });
@@ -68,6 +68,17 @@ export async function discoverModels(agent, accountId = null) {
     const acc = (accountId && account(accountId)?.agent === agent ? account(accountId) : null) ?? defaultAccount(agent);
     const list = await a.discoverModels(exe, cfg, acc ? accountEnv(acc) : {});
     return Array.isArray(list) && list.length ? list : null;
+  } catch { return null; }
+}
+
+// Who an account's folder is signed in as ({ who, hint, viaKey, external, plan } or null), asked to the agent itself; no turn,
+// no plan spent. Cursor and the ACP agents have no way to say, and have one account.
+export async function accountIdentity(accountId) {
+  try {
+    const acc = account(accountId); if (!acc) return null;
+    const a = adapter(acc.agent); if (typeof a.accountIdentity !== 'function') return null;
+    const exe = a.detect(ctx.config.agents[acc.agent] ?? {}); if (!exe) return null;
+    return (await a.accountIdentity(exe, accountEnv(acc), { dir: accountDir(acc) })) ?? null;
   } catch { return null; }
 }
 

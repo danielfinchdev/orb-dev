@@ -8,6 +8,7 @@ export default {
   'orbchats.activity': 'All activity',
   'orbchats.activityTip': 'Logbooks › Activity',
   'orbchats.doneCount': 'Completed · {n}',
+  'orbchats.undoDone': 'Undo',
   'orbchats.places': 'More places in Orb',
   'orbchats.noProject': 'No project',
   'orbchats.empty': 'No chats yet. Start one with «New chat».',
@@ -109,7 +110,7 @@ export default {
   'orbchats.orchestratorTip': 'In a chat with {name}, {name} shares the work among the agents. To talk to an agent directly, start a new chat with the orchestrator off.',
   'orbchats.tasks': 'Tasks of this chat',
   'orbchats.noTasks': 'This chat has not created any tasks yet.',
-  'orbchats.compact': 'Compact the conversation',
+  'orbchats.compact': 'Compact the chat',
   'orbchats.export': 'Export chat',
   'orbchats.exported': 'Chat exported',
   'orbchats.exportYou': 'You',
@@ -121,6 +122,10 @@ export default {
   'orbchats.pBoard': 'Whiteboard',
   'orbchats.pLog': 'Log',
   'orbchats.pSettings': 'Project settings',
-  'orbchats.pGod': 'Open in God mode',
-  'orbchats.pNoPath': 'No folder'
+  'orbchats.pGod': 'Open in expert mode',
+  'orbchats.pNoPath': 'No folder',
+  'newchat.project': 'New project',
+  'newchat.hint': 'Choose where to start',
+  'newchat.pickHint': "Pick the chat's project, or start without one. Ctrl+1, Ctrl+2… pick directly.",
+  'newchat.search': 'Search projects'
 };

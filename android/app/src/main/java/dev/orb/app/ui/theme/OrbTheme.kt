@@ -12,6 +12,7 @@ fun OrbTheme(palette: OrbPaletteChoice, dark: Boolean, content: @Composable () -
     val scheme = remember(p, dark) { colorSchemeFor(p, dark) }
     val orb = remember(p) { orbColorsFor(p) }
     // Colours switch at once: Grafito has no decorative motion, so there is no cross-fade between palettes.
+    SystemBarIcons(dark)
     CompositionLocalProvider(LocalOrbColors provides orb) {
         MaterialTheme(colorScheme = scheme, typography = orbTypography(), shapes = orbShapes(), content = content)
     }

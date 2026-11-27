@@ -80,7 +80,7 @@ class UpdateViewTest {
         val permissions = Regex("""<uses-permission android:name="([^"]+)"""").findAll(manifest).map { it.groupValues[1] }.toSet()
         assertEquals(
             setOf(
-                "android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS", "android.permission.ACCESS_NETWORK_STATE",
+                "android.permission.INTERNET", "android.permission.POST_NOTIFICATIONS", "android.permission.ACCESS_NETWORK_STATE", "android.permission.ACCESS_LOCAL_NETWORK",
                 "android.permission.FOREGROUND_SERVICE", "android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING",
                 "android.permission.RECEIVE_BOOT_COMPLETED", "android.permission.CAMERA",
             ),
@@ -171,7 +171,7 @@ class UpdateScreenTest {
     @Test fun withoutALinkItDoesNotGuess() {
         connection.value = ConnectionState.Offline(null, null)
         show()
-        rule.onNodeWithText("No puedo comprobarlo ahora").assertIsDisplayed()
+        rule.onNodeWithText("No se puede comprobar ahora").assertIsDisplayed()
         rule.onNodeWithText("Reintentar").performClick()
         assertEquals(1, retries)
     }

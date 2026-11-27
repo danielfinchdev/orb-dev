@@ -4,16 +4,16 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
-import { accountsOf, accountLabel } from '../../domain/usage/accounts.mjs';
+import { accountsOf, accountLabel, requireBrainAccount } from '../../domain/usage/accounts.mjs';
 import { slashCommand, modeCommand } from '../../shared/slash.mjs';
 import { startGoal, stopGoal, resumeGoal, clearGoal, planTurn, debugMode, goalOf, debugOn } from '../modes.mjs';
-import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
+import { listSchedules, createSchedule, updateSchedule, removeSchedule, runSchedule, getSchedule, scheduleHash, describe as describeSchedule, EVERY } from '../../domain/schedules/schedules.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { PERMISSIONS } from '../sessions.mjs';
 import { globalAutonomy, permissionOfAutonomy, AUTONOMY } from '../../domain/security/guard.mjs';
 import { checkDevTools } from '../../platform/dev-tools.mjs';
 import { expandMentions, mentionOptions } from '../mentions.mjs';
-import { modelCatalog, REASONING_LEVELS, levelsOf } from '../usage/catalog.mjs';
+import { modelCatalog, REASONING_LEVELS, levelsOf, nearestLevel } from '../usage/catalog.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { autoTitle } from '../titles.mjs';
 import { diffBetween, fileBetween, statBetweenAsync } from '../../domain/tasks/checkpoints.mjs';
@@ -21,7 +21,7 @@ import { listTurns, turnDiff, commentsBlock } from '../../domain/conversations/t
 import { editMessage, undoRewind, rewindInfo } from '../edit-message.mjs';
 import { fail, str, int, oneOf, images, DECISION } from './common.mjs';
 import { createDedupe, conversationKey } from './dedupe.mjs';
-import { abandonSettled, joinAbandoned, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
+import { abandonSettled, joinAbandoned, partialJoin, joinedByHand, lastLaunchId, runIdentifier, runOfAfter } from '../scheduler/run-id.mjs';
 import { cachedBranch, cachedPr, liveBranch } from '../host/pr-cache.mjs';
 
 // Folders compared as the engine writes them: either separator, any case, no trailing separator.
@@ -55,6 +55,25 @@ function assertPointCurrent(board, taskId, { files = true } = {}) {
   if (Number.isInteger(run)) { if (run !== current && !abandonSettled(board, taskId)) fail(tr('msg.undo.runNotReady')); return; }
   if (!cp?.after || !current || !files) return;
   if (runOfAfter(board, taskId, cp, current) == null) fail(tr('msg.undo.runUnknown'));
+}
+// Where a join of this task's copy stands, for the phone and the window: 'byhand' (a task joins it in the folder now),
+// 'partial' (that task failed or was cancelled; joinWrote says whether it left files in the folder).
+// What a save returns carries the fingerprint of what it stored, so a caller can keep it for a later run or approval.
+const withHash = (s) => ({ ...s, previewHash: scheduleHash(s) });
+function guardJoinUndo(board, taskId, checkpoint = null) {
+  const partial = partialJoin(board, taskId) ?? fail(tr('msg.scheduler.noPartialJoin'));
+  if (checkpoint != null && checkpoint !== checkpointIdOf(board, taskId)) fail(tr('msg.accept.rerunSinceSeen'));
+  if (!board.settingJson(`checkpoint:${partial.by}`)?.before) return;
+  if (finalPhotoOf(board, partial.by) === false) fail(tr('msg.undo.noFinalState'));
+  assertPointCurrent(board, partial.by);
+}
+function joinStateOf(board, taskId) {
+  if (joinAbandoned(board, taskId)) {
+    const partial = partialJoin(board, taskId);
+    const stored = board.settingJson(`joinpartial:${taskId}`);
+    return { joinState: 'partial', joinTask: stored?.by ?? null, joinWrote: Boolean(partial && board.settingJson(`checkpoint:${partial.by}`)?.before), joinSettleable: Boolean(partial) };
+  }
+  return board.settingJson(`integrate:${taskId}`)?.by ? { joinState: 'byhand', joinTask: board.settingJson(`integrate:${taskId}`).by } : { joinState: null };
 }
 export function workMethods({ trash, project, cut, accept, taskRejected, modelLabelOf, grants, board, sessions, scheduler, chatTrees, log }) {
   const runMode = (s, { name, args }) => {
@@ -108,7 +127,7 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const who = d.assigned_to ?? d.agent; const acc = d.run_account ?? d.account ?? null;
       const now = board.projectPathNow(d) ?? null;
       const folderMoved = Boolean(now) && Boolean(d.project_path) && sameFolder(now, d.project_path) === false;
-      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
+      return { ...d, folderMoved, folderOutside: outsideHome(now), checkpointId: checkpointIdOf(board, d.id), ...joinStateOf(board, d.id), finalPhoto: finalPhotoOf(board, d.id), waiting: board.waitReason(d), held: board.heldInfo(d), accepted: board.isAccepted(d.id), previewHash: board.previewHash(d), folderNow: board.projectPathNow(d) ?? null, approval: board.approvalInfo(d), hasCheckpoint: Boolean(board.settingJson(`checkpoint:${d.id}`)?.before), review: board.settingJson(`review:${d.id}`), children,
         undone: board.settingJson(`undone:${d.id}`), modelLabel: d.model ? modelLabelOf(who, acc ?? who, d.model) : null, accountLabel: acc && accountsOf(who).length > 1 ? accountLabel(acc) : null };
     },
     'tasks.create': (p) => board.createTask({
@@ -128,7 +147,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
     'tasks.reassign': ({ id, agent, model, reasoning }) => board.reassign(int(id, 'tarea'), { agent: oneOf(agent, [...AGENT_IDS, 'any'], 'agente'), model: str(model, 'modelo', 80, { optional: true }) || null, reasoning: oneOf(reasoning, ['low', 'medium', 'high'], 'razonamiento') }, 'usuario'),
     'tasks.followup': ({ id, text, images: files }) => scheduler.followup(int(id, 'tarea'), str(text, 'mensaje', 20000), images(files)),
     // checkpoint (optional): the checkpointId tasks.get showed. If the task ran again meanwhile it no longer matches and nothing is undone.
-    'tasks.undo': ({ id, checkpoint }, principal) => {
+    // hash (optional): the fingerprint of the preview the PC's window showed (tasks.undoPreview); if the plan changed, nothing is undone.
+    'tasks.undo': ({ id, checkpoint, hash }, principal) => {
       const tid = int(id, 'tarea');
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.undo.rerunSinceUndo'));
       // Every caller but the PC's window gets the guards, with or without the checkpointId: the web UI opened on a phone or in
@@ -140,7 +160,13 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
         if (finalPhotoOf(board, tid) === false) fail(tr('msg.undo.noFinalState'));
         assertPointCurrent(board, tid);
       }
-      return scheduler.undo(tid);
+      return scheduler.undo(tid, hash === undefined ? {} : { hash: str(hash, 'huella', 64) });
+    },
+    // What «Deshacer» would do, read only, for the PC's window: every file's final state and the diff of those it changes.
+    // Its `hash` goes back with tasks.undo, which recomputes the same plan before writing anything.
+    'tasks.undoPreview': async ({ id }, principal) => {
+      if (principal && principal.channel !== 'desktop') fail(tr('msg.remote.pcOnly'));
+      return scheduler.undoPreview(int(id, 'tarea'));
     },
     // what a finished task changed, with each file's diff (read only, against its undo checkpoint: «Deshacer» works
     // the same). Nothing to show while it runs, after it was undone, or without git (a copy checkpoint).
@@ -201,7 +227,8 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       const remote = principal?.channel !== 'desktop';
       if (checkpoint != null && checkpoint !== checkpointIdOf(board, tid)) fail(tr('msg.accept.rerunSinceSeen'));
       if ((checkpoint != null || remote) && joinAbandoned(board, tid)) fail(tr('msg.undo.joinUnfinished'));
-      if (checkpoint != null && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
+      // Also without a checkpointId: a web page or an older phone sends none and must not accept a point of an earlier run.
+      if ((checkpoint != null || remote) && !joinedByHand(board, tid)) assertPointCurrent(board, tid, { files: false });
       if (remote && checkpoint == null && board.heldInfo(board.task(tid))) fail(tr('msg.accept.held'));
       if (unheld === true) {
         const t = board.task(tid) ?? fail(tr('msg.api.noTaskThat'));
@@ -212,6 +239,12 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       return accept([tid]);
     },
     'tasks.discardBranch': ({ id }) => scheduler.discardBranch(int(id, 'tarea')),
+    // A hand join left half-done (tasks.get › joinState 'partial'): put the folder back as it was before it, and optionally try again.
+    // They undo the join task's own writes, so they get the guards of a remote «tasks.undo» on that task.
+    // An optional `checkpoint` (the checkpointId the caller saw) is refused when the task has run again since, as in tasks.accept;
+    // without it they behave as before. It only adds a check: every guard of guardJoinUndo still applies.
+    'tasks.undoJoin': ({ id, checkpoint }) => { const tid = int(id, 'tarea'); guardJoinUndo(board, tid, checkpoint); return scheduler.settleJoin(tid); },
+    'tasks.retryJoin': ({ id, checkpoint }) => { const tid = int(id, 'tarea'); guardJoinUndo(board, tid, checkpoint); return scheduler.settleJoin(tid, { retry: true }); },
 
     // «/goal», «/plan», «/review» and «/debug» (modes.mjs): none of them changes the chat's permission.
     'sessions.modes': ({ id }) => { const sid = str(id, 'conversación', 64); sessions.must(sid); return { goal: goalOf(board, sid), debug: debugOn(board, sid) }; },
@@ -251,7 +284,10 @@ export function workMethods({ trash, project, cut, accept, taskRejected, modelLa
       // «Local» (the project's folder) or «Worktree» (its own git worktree and branch, made below); it changes where the chat works, never what it may do.
       const where = oneOf(p.workspace, ['local', 'worktree'], 'espacio', 'local');
       if (where === 'worktree' && !proj) fail(tr('msg.chatWt.needsProject'));
-      const created = sessions.create({ kind: 'chat', agent: oneOf(p.agent, AGENT_IDS, 'agente'), account: str(p.account, 'cuenta', 40, { optional: true }) || null, model: str(p.model, 'modelo', 80, { optional: true }) || null,
+      const agent = oneOf(p.agent, AGENT_IDS, 'agente');
+      // 'auto' (or none): the chat follows the agent's accounts; an id: only that one (it must exist and be signed in).
+      const pick = requireBrainAccount(str(p.account, 'cuenta', 40, { optional: true }) || 'auto', agent);
+      const created = sessions.create({ kind: 'chat', agent, account: pick.account, model: str(p.model, 'modelo', 80, { optional: true }) || null,
         reasoning: oneOf(p.reasoning, REASONING_LEVELS, 'razonamiento', 'medium'), permission: proj ? oneOf(p.permission, PERMISSIONS.filter((x) => x !== 'total'), 'permiso', permissionOfAutonomy(globalAutonomy())) : 'leer',
         project: proj?.name ?? null, cwd, title: str(p.title, 'título', 80, { optional: true }) || tr('msg.api.chatWith', { agent: p.agent }) });
       if (where === 'worktree') {
@@ -325,22 +361,30 @@ ${block}` : ''}` });
     'sessions.settle': ({ id, settled }) => sessions.update(sessions.must(str(id, 'conversación', 64)).id, { settled: settled !== false }),
     'approvals.list': () => sessions.allPendingApprovals(),
     'mentions.options': () => mentionOptions(board, sessions),
-    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }) })),
+    'schedules.list': () => listSchedules(board).map((s) => ({ ...s, when: describeSchedule({ ...s, hours: s.at_time }), previewHash: scheduleHash(s) })),
     // only this PC's window may loosen the permission level of a schedule (src/domain/schedules/schedules.mjs, clampAutonomy)
-    'schedules.create': (p, principal) => createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
+    'schedules.create': (p, principal) => withHash(createSchedule(board, { project: project(p.project).name, title: str(p.title, 'título', 120), description: str(p.description, 'descripción', 8000), agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente', 'any'), model: str(p.model, 'modelo', 80, { optional: true }) || null,
       readonly: Boolean(p.readonly), every: oneOf(p.every, EVERY, 'frecuencia'), at_time: str(p.at_time, 'hora', 16, { optional: true }) || '09:00', weekdays: Array.isArray(p.weekdays) ? p.weekdays.map(Number) : [], hours: Number(p.hours) || 6, same_chat: p.same_chat === true,
-      month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' }),
+      month_day: p.month_day == null ? undefined : Number(p.month_day), tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null, autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', undefined), notify_mobile: p.notify_mobile !== false }, 'usuario', { desktop: principal?.channel === 'desktop' })),
     // every field create takes may change, checked the same way; absent = unchanged
-    'schedules.update': (p, principal) => updateSchedule(board, int(p.id, 'programada'), {
-      enabled: p.enabled, approved: p.approve === true, title: p.title, description: p.description,
+    'schedules.update': (p, principal) => withHash(updateSchedule(board, int(p.id, 'programada'), {
+      enabled: p.enabled, approved: p.approve === true, hash: p.hash, title: p.title, description: p.description,
       ...(p.project != null ? { project: project(p.project).name } : {}), ...(p.agent != null ? { agent: oneOf(p.agent, [...AGENT_IDS, 'any'], 'agente') } : {}), ...(p.model !== undefined ? { model: str(p.model, 'modelo', 80, { optional: true }) || null } : {}),
       ...(p.readonly !== undefined ? { readonly: p.readonly === true } : {}), ...(p.every != null ? { every: oneOf(p.every, EVERY, 'frecuencia') } : {}), ...(p.at_time != null ? { at_time: str(p.at_time, 'hora', 16) } : {}),
       ...(p.hours != null ? { hours: Number(p.hours) || 6 } : {}), ...(Array.isArray(p.weekdays) ? { weekdays: p.weekdays.map(Number) } : {}), ...(p.month_day != null ? { month_day: Number(p.month_day) } : {}),
       ...(p.tz !== undefined ? { tz: str(p.tz, 'zona horaria', 64, { optional: true }) || null } : {}), ...(p.same_chat !== undefined ? { same_chat: p.same_chat === true } : {}), ...(p.notify_mobile !== undefined ? { notify_mobile: p.notify_mobile === true } : {}),
       ...(p.autonomy !== undefined ? { autonomy: oneOf(p.autonomy, AUTONOMY, 'permiso', null) } : {})
-    }, { desktop: principal?.channel === 'desktop' }),
+    }, { desktop: principal?.channel === 'desktop' })),
     'schedules.remove': ({ id }) => removeSchedule(board, int(id, 'programada')),
-    'schedules.run': ({ id }) => runSchedule(board, getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled')), 'usuario'),
+    // An unapproved schedule runs only with the fingerprint of what was seen, as approving it does.
+    'schedules.run': ({ id, hash }) => {
+      const s = getSchedule(board, int(id, 'programada')) ?? fail(tr('msg.api.noScheduled'));
+      if (!s.approved) {
+        if (typeof hash !== 'string' || !hash) fail(tr('msg.schedules.needsHash'));
+        if (hash !== scheduleHash(s)) fail(tr('msg.schedules.changedSince'));
+      }
+      return runSchedule(board, s, 'usuario');
+    },
     'tasks.review': ({ id, agent, focus }) => scheduler.createReview(board.task(int(id, 'tarea')) ?? fail(tr('msg.api.noTaskThat')), { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.review': ({ name, agent, focus }) => scheduler.reviewProject(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null), focus: str(focus, 'foco', 500, { optional: true }) }),
     'projects.securityReview': ({ name, agent }) => scheduler.securityReview(project(name).name, { actor: 'usuario', agent: oneOf(agent, AGENT_IDS, 'agente', null) }),
@@ -355,7 +399,7 @@ ${block}` : ''}` });
     'sessions.sides': ({ id }) => sessions.side.list(str(id, 'conversación', 64)),
     'sessions.sideClose': ({ side }) => sessions.side.close(str(side, 'lateral', 64)),
     'sessions.stop': ({ id }) => { const s = sessions.must(str(id, 'conversación', 64)); if (s.kind === 'task') return scheduler.cancel(s.task_id, 'usuario'); return sessions.stop(s.id); },
-    'sessions.update': async ({ id, title, model, reasoning, permission, archived }) => {
+    'sessions.update': async ({ id, title, model, reasoning, permission, archived, account }) => {
       const s = sessions.must(str(id, 'conversación', 64));
       // a chat taken out of the archive gets back the worktree that was removed when it was archived
       // (if it cannot be brought back the chat still comes out, and the user is told)
@@ -365,17 +409,32 @@ ${block}` : ''}` });
       if (title !== undefined) fields.title = oneLine(str(title, 'título', 80), 80);
       if (model !== undefined) fields.model = str(model, 'modelo', 80, { optional: true }) || null;
       if (reasoning !== undefined) fields.reasoning = oneOf(reasoning, REASONING_LEVELS, 'razonamiento');
-      // «Extra» only with a model that takes it (the conversation's, or the one chosen now).
-      if ((fields.reasoning ?? s.reasoning) === 'xhigh' && (reasoning !== undefined || model !== undefined) && !levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account).includes('xhigh')) {
-        if (reasoning === 'xhigh') fail(tr('msg.api.reasoningUnavailable'));
-        fields.reasoning = 'high';
+      // Only a level the model takes (the conversation's, or the one chosen now): one asked for now that it lacks is
+      // refused; a saved one the new model lacks drops to the closest it takes.
+      if (reasoning !== undefined || model !== undefined) {
+        const takes = levelsOf(modelCatalog(board), s.agent, fields.model !== undefined ? fields.model : s.model, s.account);
+        const now = fields.reasoning ?? s.reasoning;
+        if (takes.length && !takes.includes(now)) {
+          if (reasoning !== undefined) fail(tr('msg.api.reasoningUnavailable'));
+          fields.reasoning = nearestLevel(now, takes);
+        }
       }
       // into or out of «total» only through grants.mjs (password, audit log, lock).
       if (permission !== undefined && (permission === 'total' || s.permission === 'total') && permission !== s.permission) fail(tr('msg.grants.totalNeedsPassword'));
       if (permission !== undefined) { fields.permission = oneOf(permission, PERMISSIONS, 'permiso'); if (!s.project && fields.permission !== 'leer') fail(tr('msg.api.readOnlyNoProject2')); }
       if (archived !== undefined) fields.archived = Boolean(archived);
+      // The account of a chat (also from a phone): 'auto' leaves the one in use and lets it move between turns; an id fixes it.
+      // With a turn running it waits for the end of that turn.
+      if (account !== undefined) {
+        if (s.kind === 'task') fail(tr('msg.api.taskModelFromTask'));
+        const pick = requireBrainAccount(str(account, 'cuenta', 40, { optional: true }) || 'auto', s.agent);
+        fields.account_fixed = pick.account_fixed;
+        if (pick.account) fields.account = pick.account;
+      }
       return sessions.update(s.id, fields);
     },
+    // «Esperar» on a chat whose fixed account is at its limit: what it held goes when the limit ends.
+    'sessions.holdWait': ({ id }) => sessions.holdWait(str(id, 'conversación', 64)),
     'sessions.remove': ({ id }) => sessions.remove(str(id, 'conversación', 64)),
     // the worktrees of direct chats (src/engine/chat-worktrees.mjs)
     'worktrees.branches': ({ project: name }) => chatTrees.branches(project(name).path),

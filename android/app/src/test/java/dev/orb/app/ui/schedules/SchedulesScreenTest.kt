@@ -97,7 +97,7 @@ class SchedulesScreenTest {
         rule.onNodeWithText("Próxima: lun 16, 9:00 (Madrid)").assertIsDisplayed()
         rule.onNodeWithText("Cada día a las 23:30 · app-movil").assertIsDisplayed()
         rule.onNodeWithText("Última: ayer, bien").assertIsDisplayed()
-        rule.onNodeWithText("Mantén pulsada una para «Ejecutar ahora». Borrarla: en el PC.").assertExists()
+        rule.onNodeWithText("Mantén pulsada una para «Ejecutar ahora». Para borrarla, usa el PC.").assertExists()
     }
 
     @Test fun aPausedScheduleHasNoNextRunAndSaysItIsPaused() {
@@ -174,7 +174,7 @@ class SchedulesScreenTest {
         rule.onNodeWithText("Ejecutar ahora").assertIsDisplayed()
         rule.onNodeWithText("Editar").assertIsDisplayed()
         rule.onNodeWithText("Desactivar").assertIsDisplayed()
-        rule.onNodeWithText("Borrarla: en el PC.").assertIsDisplayed()
+        rule.onNodeWithText("Para borrarla, usa el PC.").assertIsDisplayed()
     }
 
     @Test fun theRowsHaveNoMoreButtonAndTheLongPressActionIsOfferedToAScreenReader() {
@@ -297,7 +297,7 @@ class SchedulesScreenTest {
         openRowSheet()
         rule.onNodeWithText("Revisar y aprobar…").performClick()
         rule.waitForIdle()
-        rule.onNodeWithText("No se pudo leer del PC. No se aprueba nada sin verlo entero.").assertIsDisplayed()
+        rule.onNodeWithText("No se pudo leer del PC. Sin verla entera, no se aprueba.").assertIsDisplayed()
         button("Aprobar").assertIsNotEnabled()
         button("Cancelar").performClick()
         rule.waitForIdle()
@@ -359,7 +359,7 @@ class SchedulesScreenTest {
         rule.onNodeWithText("Hora").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Elige la hora").assertIsDisplayed()
-        button("Aceptar").performClick()
+        button("Elegir").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("9:00").assertExists()
     }
@@ -473,7 +473,7 @@ class SchedulesScreenTest {
         rule.waitForIdle()
         openMore()
         rule.waitForIdle()
-        rule.onNodeWithText("Esta tarea se repite de una forma que solo se cambia en el PC: aquí se deja como está.").assertExists()
+        rule.onNodeWithText("Esta tarea se repite de una forma que solo se cambia en el PC.").assertExists()
         field("Nombre de la tarea").performTextReplacement("Revisar dependencias!")
         button("Guardar").performClick()
         rule.waitForIdle()
@@ -505,7 +505,7 @@ class SchedulesScreenTest {
         rule.waitForIdle()
         openMore()
         rule.waitForIdle()
-        assertEquals(2, rule.onAllNodesWithText("Quitarlo, solo en el PC.").fetchSemanticsNodes().size)
+        assertEquals(2, rule.onAllNodesWithText("Solo se quita en el PC.").fetchSemanticsNodes().size)
         rule.onNode(hasContentDescription("Solo lectura") and isToggleable()).assertIsNotEnabled()
         rule.onNode(hasContentDescription("Pedir permiso siempre") and isToggleable()).assertIsNotEnabled()
     }

@@ -1,8 +1,7 @@
-// Settings: the assistant, its brain, how tasks run, usage caps, skills and MCP servers and the assistant's folder.
-// Eight sections — General, Magic Link (Dispositivos), Agentes y uso, Permisos, Skills y MCP, Datos, Avanzado and
-// Acerca de.
+// Settings, in ten sections: General, Apariencia, Agentes y cuentas, Permisos y seguridad, Dispositivos, Extensiones,
+// Atajos de teclado, Datos, Avanzado and Acerca de. Every setting saves as it changes (the header says «Guardado»).
 import { useEffect, useState } from 'react';
-import { Database, SlidersHorizontal, Settings, Smartphone, Bot, Info, Puzzle, ShieldCheck } from 'lucide-react';
+import { Database, SlidersHorizontal, Settings, Smartphone, Bot, Info, Puzzle, ShieldCheck, Palette, Keyboard } from 'lucide-react';
 import { ToolIcon } from '@/components/agent-icon.jsx';
 import { PRODUCT, AUTHOR } from '../../../shared/product.mjs';
 import { Dialog, DialogContent, DialogTitle, BubbleTip, Tabs, TabsList, TabsTrigger } from '@/components/ui/overlay.jsx';
@@ -12,10 +11,11 @@ import { t, useT } from '@/lib/i18n.js';
 import { MagicLinkPanel, SubSection } from '../magic-link.jsx';
 import { DataCards } from '../data.jsx';
 import { ExtensionsPanel } from '../extensions.jsx';
-import { Block, MoreOptions } from './rows.jsx';
-import { TabsCard, ShortcutsCard } from './shortcuts.jsx';
-import { AssistantCard, AppearanceCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, InterfaceCard, ZoomFineCard, ExpertCard, ExpertPanelsCard } from './general.jsx';
-import { AndroidCard, MobileCard, BrowserCard, LiveWindowCard } from './devices.jsx';
+import { Block, SavedNotice } from './rows.jsx';
+import { ShortcutsCard } from './shortcuts.jsx';
+import { MasterCard } from '../master.jsx';
+import { AssistantCard, ThemeCard, FontCard, SizeCard, ChatsLookCard, SoundCard, MusicCard, ChatCard, PermissionsCard, ApprovalWaitCard, TasksCard, FolderCard, ProtectedCard, ProjectScriptsCard, TerminalCard, DictationCard, GitCard, ExpertCard } from './general.jsx';
+import { AndroidCard, MobileCard, BrowserCard } from './devices.jsx';
 import { McpExtCard } from './mcp-ext.jsx';
 import { UsageAccounts, BrakesCard, BrakeRails } from './usage-tab.jsx';
 // «Este móvil», the phone's screen of its own (main.jsx loads it from here, with the dialog).
@@ -41,29 +41,31 @@ function AgentsTabs({ c }) {
   );
 }
 
-// Ajustes is a window over the app: eight sections on the left. groups: the parts of a section, each
+// Ajustes is a window over the app: ten sections on the left. groups: the parts of a section, each
 // with its heading; the active section lists them under its name in the menu, to jump to one.
 const SECTIONS = [
-  { id: 'general', icon: Settings, groups: ['apariencia', 'actualizaciones'],
-    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><InterfaceCard c={c} /><SubSection id="apariencia" title={t('settings.group.apariencia')}><AppearanceCard c={c} /></SubSection><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection><MoreOptions testid="more-options-general"><ZoomFineCard /><TabsCard c={c} /><ShortcutsCard /></MoreOptions></> },
+  { id: 'general', icon: Settings, groups: ['actualizaciones'],
+    cards: (c, app) => <><AssistantCard c={c} /><FolderCard c={c} home={app.home} /><TerminalCard c={c} /><DictationCard c={c} /><GitCard c={c} /><SubSection id="actualizaciones" title={t('settings.group.actualizaciones')}><UpdatesCard /></SubSection></> },
+  { id: 'apariencia', icon: Palette, cards: (c) => <><ThemeCard c={c} /><FontCard c={c} /><SizeCard /><ChatsLookCard c={c} /><SoundCard c={c} /><MusicCard /></> },
+  { id: 'agentes', icon: Bot, cards: (c) => <AgentsTabs c={c} /> },
+  // What the agents may do without asking, how long a question waits, the protected paths and the master password (with Windows Hello).
+  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ApprovalWaitCard c={c} /><ProtectedCard c={c} /><MasterCard /><ProjectScriptsCard /></> },
   // Who can enter this Orb: the linked phones and browsers.
   { id: 'magiclink', icon: Smartphone, groups: ['dispositivos'],
     cards: () => <MagicLinkPanel grouped phoneAccess={(more) => <MobileCard more={more} />} /> },
-  { id: 'agentes', icon: Bot, cards: (c) => <AgentsTabs c={c} /> },
-  // What the agents may do without asking, the protected paths and how long a question waits.
-  { id: 'permisos', icon: ShieldCheck, cards: (c) => <><PermissionsCard c={c} /><ApprovalWaitCard c={c} /><ProtectedCard c={c} /></> },
   // every skill and MCP server of core (src/ui/views/extensions.jsx); this PC only.
   { id: 'extensiones', icon: Puzzle, pcOnly: true, cards: () => <ExtensionsPanel /> },
+  { id: 'atajos', icon: Keyboard, cards: () => <ShortcutsCard /> },
   { id: 'datos', icon: Database, cards: () => <DataCards /> },
   { id: 'avanzado', icon: SlidersHorizontal, groups: () => ['herramientas', ...(fullPc() ? ['experto'] : [])],
     cards: (c) => <><SubSection id="herramientas" title={t('settings.group.herramientas')}><BrowserCard c={c} /></SubSection>
       {fullPc() ? <SubSection id="experto" title={t('settings.group.experto')}><ExpertCard c={c} /></SubSection> : null}
-      <AndroidCard />{bridge.mobile ? null : <MoreOptions testid="more-options-avanzado">{fullPc() ? <ExpertPanelsCard c={c} /> : null}<LiveWindowCard c={c} /><McpExtCard /></MoreOptions>}</> },
+      <AndroidCard />{bridge.mobile ? null : <McpExtCard />}</> },
   { id: 'acerca', icon: Info, groups: ['contribuye', 'apps'],
     cards: (c, app) => <><SubSection id="contribuye" title={t('settings.group.contribuye')}><FeedbackCard /></SubSection><AboutCard version={app.version} /><SupportCard /><SubSection id="apps" title={t('settings.group.apps')}><MoreAppsCard /></SubSection></> }
 ];
-// The names used before the six-section layout (links in tutorials, notices and the sidebar) → [section, part].
-const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], apariencia: ['general', 'apariencia'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
+// The names used before the ten-section layout (links in tutorials, notices and the sidebar) → [section, part].
+const ALIASES = { conexiones: ['magiclink', 'dispositivos'], movil: ['magiclink', 'dispositivos'], dispositivos: ['magiclink'], uso: ['agentes'], teclado: ['atajos'], atajos: ['atajos'], actualizaciones: ['general', 'actualizaciones'], tareas: ['agentes'],
   herramientas: ['avanzado', 'herramientas'], mcp: ['extensiones'], skills: ['extensiones'], experto: ['avanzado', 'experto'], monitor: ['avanzado', 'herramientas'], contribuye: ['acerca', 'contribuye'], apps: ['acerca', 'apps'] };
 function resolveSection(open) {
   if (!open || open === true) return ['general', null];
@@ -101,10 +103,11 @@ export function SettingsDialog() {
   const section = SECTIONS.find((s) => s.id === wanted && (!s.pcOnly || !bridge.mobile)) ?? SECTIONS[0];
   const c = app.config;
   return (
-    <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) closeSettings(); }}>
+    <Dialog open={Boolean(open)} onOpenChange={(o) => { if (!o) { document.activeElement?.blur?.(); closeSettings(); } }}>
       <DialogContent className="flex h-[min(780px,90vh)] w-[min(1080px,94vw)] max-w-none flex-col gap-0 overflow-hidden p-0 sm:max-w-none" data-testid="settings-dialog" aria-describedby={undefined}>
         <div className="border-border flex h-14 shrink-0 items-center border-b pr-14 pl-[18px]">
           <DialogTitle className="text-title font-semibold">{t('settings.title')}</DialogTitle>
+          <SavedNotice />
         </div>
         <div className="flex min-h-0 flex-1">
             <nav className="border-border flex w-[220px] shrink-0 flex-col border-r max-sm:w-16" aria-label={t('settings.title')}>
@@ -135,7 +138,7 @@ export function SettingsDialog() {
             <div key={section.id} className="min-h-0 min-w-0 flex-1 overflow-y-auto [scrollbar-gutter:stable] pt-[18px] pr-[calc(1.5rem-var(--sb-w))] pb-8 pl-6">
               {/* min-w-0 on the blocks: a long one-line text inside (a path, a wide control) must not widen the column in a narrow window */}
               <div className="grid gap-4 [&>*]:min-w-0">
-                <Block title={section.id === 'extensiones' ? t('ext.title') : t(`settings.section.${section.id}`)} note={t(`settings.sectionDesc.${section.id}`)} />
+                <Block title={t(`settings.section.${section.id}`)} note={t(`settings.sectionDesc.${section.id}`)} />
                 {section.cards(c, app)}
               </div>
             </div>

@@ -131,7 +131,7 @@ class OrbeChatScreenTest {
         rule.waitForIdle()
         rule.onNodeWithText("Respondiendo a Orbe").assertIsDisplayed()
         rule.onNode(hasSetTextAction()).performTextInput("En SQLite")
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("answer 3  En SQLite false"))
         assertTrue(b.calls.toString(), b.calls.none { it.startsWith("send ") })
@@ -146,7 +146,7 @@ class OrbeChatScreenTest {
         rule.waitForIdle()
         assertEquals(0, rule.onAllNodesWithText("Respondiendo a Orbe").fetchSemanticsNodes().size)
         rule.onNode(hasSetTextAction()).performTextInput("Otra cosa")
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("send Otra cosa"))
     }
@@ -159,7 +159,7 @@ class OrbeChatScreenTest {
         rule.waitForIdle()
         // Nothing left yet; the box sends the picked options even with no text.
         assertTrue(b.calls.none { it.startsWith("answer") })
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.toString(), b.calls.contains("answer 3 IndexedDB|localStorage - false"))
     }
@@ -178,7 +178,7 @@ class OrbeChatScreenTest {
     @Test fun reportHasAnAcceptButton() {
         val b = FakeOrbeChatBackend(thread + raw(8, "orb", "Informe listo", """{"kind":"report","tasks":[42],"accepted":false}"""))
         screen(b)
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar informe").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.contains("accept 8"))
         rule.onNodeWithText("Aceptado · tareas #42").assertIsDisplayed()
@@ -189,7 +189,7 @@ class OrbeChatScreenTest {
         val vm = screen(b)
         // Idle with nothing typed: there is no stop, and the arrow is off.
         assertEquals(0, rule.onAllNodesWithContentDescription("Parar").fetchSemanticsNodes().size)
-        rule.onNodeWithContentDescription("Enviar").assertIsNotEnabled()
+        rule.onNodeWithContentDescription("Enviar mensaje").assertIsNotEnabled()
         b.events.tryEmit(stateEvent(7, busy = true))
         rule.waitForIdle()
         rule.onNodeWithContentDescription("Parar").performClick()
@@ -198,7 +198,7 @@ class OrbeChatScreenTest {
         // Typing turns it back into Enviar, which queues the message behind the turn.
         rule.onNode(hasSetTextAction()).performTextInput("Otra cosa")
         rule.waitForIdle()
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.contains("send Otra cosa"))
         rule.onNodeWithText("Otra cosa").assertIsDisplayed()
@@ -213,7 +213,7 @@ class OrbeChatScreenTest {
         assertEquals(0, rule.onAllNodesWithText("Preguntar").fetchSemanticsNodes().size)
         rule.onNodeWithContentDescription("Permisos de las tareas: Preguntar").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Preguntar: te pido el OK antes de cada cambio.").fetchSemanticsNodes().size)
-        rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Agente de este chat: Opus · alto").assertIsDisplayed()
         rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsNotEnabled()
         assertTrue(b.brainReads > 0)
     }
@@ -241,7 +241,7 @@ class OrbeChatScreenTest {
 
     @Test fun withoutWhatThePcSaysTheBrainIsNotInvented() {
         screen(FakeOrbeChatBackend(thread))
-        rule.onNodeWithContentDescription("Cerebro de este chat: El del PC").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Agente de este chat: El del PC").assertIsDisplayed()
     }
 
     @Test fun offlineSaysSoAndStillAcceptsText() {
@@ -252,7 +252,7 @@ class OrbeChatScreenTest {
         rule.onNodeWithText("Sin conexión con tu PC. Reintentando…").assertIsDisplayed()
         rule.onNodeWithText("Reconectando…").assertIsDisplayed()
         rule.onNode(hasSetTextAction()).performTextInput("Hazlo")
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Se enviará al volver").assertIsDisplayed()
     }
@@ -287,11 +287,11 @@ class OrbeChatScreenTest {
         b.connectionState.value = ConnectionState.UpdatePc
         rule.waitForIdle()
         rule.onNode(hasSetTextAction()).performTextInput("Hazlo")
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("No saldrá hasta actualizar Orb en el PC").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Se enviará al volver").fetchSemanticsNodes().size)
-        rule.onNodeWithText("Hay que actualizar Orb en tu PC. Lo que escribas se queda en este móvil y no sale hasta entonces.").assertIsDisplayed()
+        rule.onNodeWithText("Actualiza Orb en tu PC. Lo que escribas se queda en este móvil hasta entonces.").assertIsDisplayed()
     }
 
     @Test fun theRunningTaskHasALiveCard() {
@@ -398,7 +398,7 @@ class OrbeChatScreenTest {
         rule.onNodeWithText("3 archivos · +42 −7 · revisada por Claude").assertIsDisplayed()
         rule.onNodeWithText("Cambios").performClick()
         assertEquals(listOf(42L), openedChanges)
-        rule.onNodeWithText("Aceptar").performClick()
+        rule.onNodeWithText("Aceptar cambios").performClick()
         rule.waitForIdle()
         assertTrue(b.calls.contains("taskaccept 42"))
     }
@@ -446,7 +446,7 @@ class OrbeChatScreenTest {
         b.taskDetail = doneTask.copy(undone = true, actions = emptySet())
         screen(b)
         rule.onNodeWithText("Deshecha").assertIsDisplayed()
-        assertEquals(0, rule.onAllNodesWithText("Aceptar").fetchSemanticsNodes().size)
+        assertEquals(0, rule.onAllNodesWithText("Aceptar cambios").fetchSemanticsNodes().size)
     }
 
 

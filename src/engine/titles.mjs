@@ -3,6 +3,7 @@
 // a few seconds. If it cannot, the quick one stays.
 import { ctx } from '../platform/context.mjs';
 import { account, defaultAccount, accountEnv } from '../domain/usage/accounts.mjs';
+import { checkIdentity } from './identity.mjs';
 import { cleanTitle } from '../shared/titles.mjs';
 import { adapter, executable, installed } from '../agents/index.mjs';
 import { chooseModel } from './usage/catalog.mjs';
@@ -26,6 +27,7 @@ export async function autoTitle(board, { agent, account: accountId, text }) {
       ...(agent === 'claude' ? { tools: { allowed: [], disallowed: ['Bash', 'Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'WebFetch', 'WebSearch', 'Task', 'Skill', 'Read', 'Glob', 'Grep'] } } : {}),
       onEvent: () => {}
     });
+    if ((await checkIdentity({ acc, live })).block) return ''; // another login than the account's: nothing is spent
     const result = await Promise.race([live.send({ text: prompt }), new Promise((resolve) => { timer = setTimeout(() => resolve({ isError: true }), TIMEOUT_MS); })]);
     return result?.isError ? '' : cleanTitle(result.final || result.text);
   } catch { return ''; } finally { clearTimeout(timer); try { live?.close(); } catch { /* gone */ } }

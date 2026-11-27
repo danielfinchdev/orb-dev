@@ -5,6 +5,7 @@ import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { titleFrom } from '../../shared/titles.mjs';
 import { migrateTo38 } from './legacy/migrate-38.mjs';
+import { brainAccount, configuredAccount } from '../usage/accounts.mjs';
 
 // node:sqlite may print an ExperimentalWarning; it would pollute the MCP stdout/stderr and the logs.
 const emitWarning = process.emitWarning;
@@ -282,6 +283,8 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   ['tasks', 'autonomy', 'TEXT'], ['tasks', 'user_asked', 'TEXT'],
   // the multiplatform group a project belongs to (tienda-android and tienda-ios share «tienda»).
   ['projects', 'grupo', 'TEXT'],
+  // the token that proves Orb made the folder (its twin is the .orb-creada file: src/domain/projects/created-marks.mjs).
+  ['projects', 'created_by_orb', 'TEXT'],
   // «Usar mi móvil Android», given to a chat with the master password (src/engine/security/grants.mjs).
   ['sessions', 'android', 'INTEGER NOT NULL DEFAULT 0'],
   // when a chat was sent to the trash (null = not in it); nothing moves, the visible lists just skip it (src/engine/api/trash.mjs).
@@ -313,7 +316,10 @@ const ADDED = [['tasks', 'account', 'TEXT'], ['tasks', 'run_account', 'TEXT'], [
   // (none = Ajustes') and whether the phone is told when a run ends (on, as it always was).
   ['schedules', 'tz', 'TEXT'], ['schedules', 'month_day', 'INTEGER'], ['schedules', 'autonomy', 'TEXT'], ['schedules', 'notify_mobile', 'INTEGER NOT NULL DEFAULT 1'],
   // The person's own notes on a chat (shown in its info panel) and the chat lines they pinned (when, null = not pinned).
-  ['conversations', 'notes', 'TEXT'], ['chat', 'pinned_at', 'TEXT']];
+  ['conversations', 'notes', 'TEXT'], ['chat', 'pinned_at', 'TEXT'],
+  // 1 = the chat only ever uses its `account` (fixed); 0 = automatic: `account` is the one in use now and may change to
+  // another of the same agent between turns (src/domain/usage/budget.mjs › resolveAccount).
+  ['conversations', 'account_fixed', 'INTEGER NOT NULL DEFAULT 0'], ['sessions', 'account_fixed', 'INTEGER NOT NULL DEFAULT 0']];
 // (3.6-3.7's person_id columns and chat.uid are no longer added: only a 3.7 database has them, emptied by the 3.8
 // migration (src/domain/data/legacy/migrate-38.mjs) and dropped in 3.9.)
 export function migrate(db) {
@@ -327,7 +333,12 @@ export function migrate(db) {
   }
   for (const [table, column, type] of ADDED) {
     const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
-    if (!has) addColumn(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    if (!has && addColumn(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`) && column === 'account_fixed') {
+      // Chats made before: one on another account than the agent's main one chose it on purpose (fixed); the rest follow
+      // the automatic choice (with a single account it is the same thing). Only when the column is born, so a later
+      // choice of «automática» on a non-main account is never undone.
+      db.exec(`UPDATE ${table} SET account_fixed = 1 WHERE account IS NOT NULL AND account != agent`);
+    }
   }
   // indexes for lookups that run on every refresh of an open task or at start (on columns that may have just been
   // added above, so not in SCHEMA).
@@ -410,8 +421,9 @@ function splitChat(db, get) {
     const at = p.lines.at(-1).at;
     // With the brain configured then (its account and model: the live conversation of the last one continues there).
     const o = ctx.config?.orchestrator ?? {};
-    const { lastInsertRowid } = db.prepare(`INSERT INTO conversations (title, titled, project, agent, account, model, reasoning, status, done_at, created_at, updated_at, session_id, turns)
-      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(title, project, o.agent || 'claude', o.account || null, o.model || null, o.reasoning || 'medium', last ? 'open' : 'done', last ? null : at, from, at,
+    const brain = brainAccount(configuredAccount(o, o.agent || 'claude'), o.agent || 'claude');
+    const { lastInsertRowid } = db.prepare(`INSERT INTO conversations (title, titled, project, agent, account, account_fixed, model, reasoning, status, done_at, created_at, updated_at, session_id, turns)
+      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(title, project, o.agent || 'claude', brain.account, brain.account_fixed, o.model || null, o.reasoning || 'medium', last ? 'open' : 'done', last ? null : at, from, at,
       last ? (get('orchestrator_session') || null) : null, last ? Number(get('orchestrator_turns') ?? 0) : 0);
     const id = Number(lastInsertRowid);
     const ids = p.lines.map((l) => l.id);

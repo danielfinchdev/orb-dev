@@ -220,3 +220,39 @@ from scratch; phones of before 3.8 unlinked once; the guard with environment var
   `newKeyDone` («Orb has started with a new key. The old one is kept…») and `newKeyFailed` join the existing
   `previousOpens`, `previousBack`, `previousNew` and `previousFailed`. A recovery code made with the key that is no longer
   in use stops opening backups (`switchedKey`); a notice (`sys.engine.recoveryOtherKey`) says so.
+
+## A phone's fingerprint approves sensitive actions (3.8.10)
+
+What shows, saves or hands out a secret asks for the password, or for the approval of a registered phone. Code:
+`src-tauri/vault/src/approve.rs` (the checks), `src/domain/security/approve.mjs` (the text both sides agree on),
+`src/engine/api/master.mjs` (`approve.*`, `checkUnlock`) and `android/.../approve/` (the phone).
+
+- **The key.** The phone makes an ECDSA P-256 key in its Keystore that only a strong biometric (class 3, no PIN) can use,
+  and only when this PC registers it (Ajustes › Dispositivos, with the password or code typed there and the phone's name in
+  sight). Registering is a challenge signed with the new key, so the PC knows it is there. The public half is kept in
+  `secretos.json` as `master/approve/<deviceId>`. A new fingerprint kills the key: the phone never makes another by itself.
+- **What is signed.** One challenge per approval, drawn in Rust (nonce of 32 bytes, one use, two minutes), over
+  `len32(field)` + field for: `"orb-approve-v1"`, action, SHA-256 of the parameters' summary, nonce, orbId, deviceId, this PC's
+  public key and the expiry. The phone shows the action from those bytes and checks that the summary it shows hashes to the
+  signed hash. A valid signature spends the challenge and gives a one-use token of `mobile` strength whose purpose is
+  `approve:<action>:<hash>`, so it opens that call with those parameters and nothing else (`check` takes it only by name).
+- **Unlinking** a phone (`link.revoke`, `remote.revoke`, `unlinkAll`), `rotate`, `reset` and `wipe_all` delete its entry.
+- **«Lo he olvidado todo»** (no password, no code): Hello's token with the purpose `rebuild-master`, then the registered
+  phone signs `master.rebuild`, then a new password and a new generated code are made in one request (`rebuildFinish`). The
+  data key stays, so no phone is unlinked. With no registered phone nothing is made.
+
+## Windows Hello, the recovery code and the link code (3.8.10)
+
+- **Windows Hello** (`src-tauri/vault/src/hello.rs`, `windows_hello.rs`, `src/ui/views/hello.jsx`). Hello is a key pair
+  made by Windows (`Orb:<account>`, in the TPM when there is one). The vault keeps only its public half in `master/hello`
+  and asks it to sign a one-use nonce (two minutes); three failures lock it for 30 seconds. A valid signature gives a token
+  weaker than the password's, so Hello opens the lock screen and protected dialogs but never agent secrets: those still
+  need the password, a recovery code or an approval from the phone. `fake_hello.rs` is the test double.
+- **Recovery code** (`code_ops.rs`, `maestra-codigo.json`). A generated code (never a typed phrase) wraps the data key
+  with HKDF over scrypt, with the file header as AAD and the same cost as `maestra.json`. It unlocks the vault on a new PC
+  and is the way back when the password is lost. Regenerating it re-keys by default.
+- **Link code.** A new phone can be linked without the master password: the vault makes an 8-character code and a 128-bit
+  secret for the QR in memory only (new salt per code, five minutes, three failures, one use). The exchange is a PAKE, the
+  PC shows its fingerprint and the name the phone gave and asks you to confirm, and the result never lets the phone
+  approve actions. API: `link.codeNew`, `link.codeAnswer`, `link.codeWaiting`, `link.codeCancel` (`src/engine/api/master.mjs`).
+- Details of the phone approvals and of "I forgot everything" are in the section above.

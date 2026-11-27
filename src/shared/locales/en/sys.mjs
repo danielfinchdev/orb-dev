@@ -172,7 +172,7 @@ export default {
   'sys.logs.viaDirect': 'direct conversation',
   'sys.logs.directTopic': 'Conversation “{title}”',
   'sys.logs.directFiles': 'files changed: {list}.',
-  'sys.logs.directRevert': 'from the project’s git history (God mode › Changes) or by asking the agent in the same conversation',
+  'sys.logs.directRevert': 'from the project’s git history (Expert mode › Changes) or by asking the agent in the same conversation',
   'sys.logs.andMore': ' and {n} more',
   // Start-up
   'sys.engine.notHome': 'not an Orb folder: {home}',
@@ -240,7 +240,7 @@ export default {
   'sys.agents.tool.other': 'Tool',
   'sys.agents.tool.webSearch': 'Web search',
   'sys.agents.tool.imageGen': 'Create image',
-  'sys.agents.tool.subagent': 'Subagent: {tool}',
+  'sys.agents.tool.subagent': 'Support agent: {tool}',
   'sys.agents.tool.action': 'action',
   // Running tasks
   'sys.scheduler.accountOff': 'the account {account} is turned off or no longer exists',

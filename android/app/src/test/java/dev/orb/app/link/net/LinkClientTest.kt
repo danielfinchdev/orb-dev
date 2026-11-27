@@ -130,7 +130,8 @@ class LinkClientTest {
         r.pc.resetAfterReceive += "orb.tail1234.ts.net"
         val c = client(r)
         assertEquals(LinkError.Timeout, c.call("chat.send").error())
-        assertEquals(listOf("orb.tail1234.ts.net"), r.pc.log.map { it.host })
+        // Sent once more to the same address (never another one), then given up.
+        assertEquals(listOf("orb.tail1234.ts.net", "orb.tail1234.ts.net"), r.pc.log.map { it.host })
         assertTrue(c.connection.value is ConnectionState.Offline)
     }
 
@@ -275,8 +276,8 @@ class LinkClientTest {
     }
 
     @Test
-    fun `retry delays grow 3 6 12 24 30 30 seconds`() {
-        assertEquals(listOf(3000L, 6000L, 12000L, 24000L, 30000L, 30000L), (0..5).map { retryDelay(it) })
+    fun `retry delays are 1 2 5 10 30 seconds and then every 30`() {
+        assertEquals(listOf(1000L, 2000L, 5000L, 10000L, 30000L, 30000L, 30000L), (0..6).map { retryDelay(it) })
     }
 
     @Test
@@ -288,17 +289,17 @@ class LinkClientTest {
         runCurrent()
         assertEquals(listOf(0L), r.pc.tries)
         val first = c.connection.value as ConnectionState.Offline
-        assertEquals(r.clock.base + 3000, first.nextRetryAt)
-        advanceTimeBy(105_001)
-        assertEquals(listOf(0L, 3_000L, 9_000L, 21_000L, 45_000L, 75_000L, 105_000L), r.pc.tries.toList())
+        assertEquals(r.clock.base + 1000, first.nextRetryAt)
+        advanceTimeBy(108_001)
+        assertEquals(listOf(0L, 1_000L, 3_000L, 8_000L, 18_000L, 48_000L, 78_000L, 108_000L), r.pc.tries.toList())
 
-        // Back from the background (or «reintentar»): an attempt at once, and the pauses start again at 3 s.
+        // Back from the background («Reintentar ahora»): an attempt at once, and the pauses start again at 1 s.
         r.pc.tries.clear()
         val now = currentTime
         c.resume()
         runCurrent()
         assertEquals(listOf(now), r.pc.tries.toList())
-        advanceTimeBy(3_001)
+        advanceTimeBy(1_001)
         assertEquals(2, r.pc.tries.size)
         c.stop()
     }
@@ -366,7 +367,7 @@ class LinkClientTest {
         c.start()
         runCurrent()
         assertEquals(1, r.pc.eventsRequests.get())
-        advanceTimeBy(3_001)
+        advanceTimeBy(1_001)
         assertEquals("it kept trying", 2, r.pc.eventsRequests.get())
         c.stop()
     }
@@ -380,13 +381,13 @@ class LinkClientTest {
         c.start()
         runCurrent()
         advanceTimeBy(30_000)
-        // 3 s, then 6 s, 12 s... (the clock did not change, so no quick retry): 4 attempts at 0, 3, 9, 21 s
-        assertEquals(4, r.pc.eventsRequests.get())
+        // 1 s, then 2 s, 5 s, 10 s (the clock did not change, so no quick retry): 5 attempts at 0, 1, 3, 8, 18 s
+        assertEquals(5, r.pc.eventsRequests.get())
         c.stop()
     }
 
     @Test
-    fun `a nonce is not re-sent by the http stack after a dropped connection`() = kotlinx.coroutines.runBlocking {
+    fun `a dropped connection is repeated once by the client, never silently by the http stack`() = kotlinx.coroutines.runBlocking {
         val server = okhttp3.mockwebserver.MockWebServer()
         server.enqueue(okhttp3.mockwebserver.MockResponse().setSocketPolicy(okhttp3.mockwebserver.SocketPolicy.DISCONNECT_AFTER_REQUEST))
         server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("{}"))
@@ -396,8 +397,10 @@ class LinkClientTest {
             val r = Rig(listOf(base))
             val c = LinkClient(r.session, okhttp3.OkHttpClient(), r.clock, kotlinx.coroutines.CoroutineScope(Dispatchers.Default))
             val err = c.call("chat.send").error()
-            assertTrue(err is LinkError.Offline || err is LinkError.Timeout)
-            assertEquals("one request, never re-sent with the same nonce", 1, server.requestCount)
+            assertTrue(err.toString(), err is LinkError.Offline || err is LinkError.Timeout || err is LinkError.BadAnswer)
+            // OkHttp's own silent retry is off; the client itself repeats a call once, with the very same nonce and body.
+            assertEquals(2, server.requestCount)
+            assertEquals(server.takeRequest().body.readUtf8(), server.takeRequest().body.readUtf8())
             assertTrue(c.connection.value !is ConnectionState.Unlinked)
         } finally {
             server.shutdown()

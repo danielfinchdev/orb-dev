@@ -12,7 +12,8 @@ import { Button } from './ui/button.jsx';
 import { Badge } from './ui/basic.jsx';
 import { STATUS } from '@/lib/labels.js';
 import { needsApproval } from '@/lib/task-approval.js';
-import { confirm } from './dialogs.jsx';
+import { confirm, form } from './dialogs.jsx';
+import { UndoPreview } from './undo-preview.jsx';
 import { call, act, go, setState } from '@/lib/store.js';
 import { cn, shortPath } from '@/lib/utils.js';
 import { useT, currentLocale } from '@/lib/i18n.js';
@@ -109,8 +110,15 @@ export async function undoTask(t, task, during = (fn) => fn()) {
   try {
     // a row of a list does not carry whether the end photo exists: ask the detail, and fall back to the plain text if it fails
     if (task.finalPhoto === undefined) { try { task = { ...task, finalPhoto: (await call('tasks.get', { id: task.id }))?.finalPhoto }; } catch { /* the dialog keeps its usual text */ } }
-    if (await confirm(t('tasks.undo.title'), undoBody(t, task), { ok: t('tasks.undo.ok'), danger: true, tone: 'primary' })) return await during(() => act(call('tasks.undo', { id: task.id })));
-    return undefined;
+    // The dialog shows how every file will end up (tasks.undoPreview) and the undo carries that preview's fingerprint; an error
+    // (a changed plan, a guard) stays in the dialog. Without a preview the undo goes ahead as before, on the text alone.
+    const done = await form(t('tasks.undo.title'), {
+      description: undoBody(t, task), wide: true, ok: t('tasks.undo.ok'), initial: { loading: true, hash: undefined },
+      body: (_values, set) => <UndoPreview taskId={task.id} set={set} />,
+      okDisabled: (v) => v.loading,
+      onOk: (v) => during(() => call('tasks.undo', { id: task.id, ...(v.hash ? { hash: v.hash } : {}) }))
+    });
+    return done ? done : undefined;
   } finally { undoing.delete(task.id); }
 }
 export const undoHeld = undoTask;

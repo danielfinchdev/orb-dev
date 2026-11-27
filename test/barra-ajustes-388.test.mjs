@@ -20,9 +20,9 @@ test('«Abrir en pestaña nueva» está en el menú de la fila del PC, antes de 
   for (const l of ['es', 'en']) assert.match(read(`src/shared/locales/${l}/orbchats.mjs`), /'orbchats\.openNewTab'/);
 });
 
-test('el menú «+» enseña el atajo de chat nuevo (Ctrl+N; Ctrl+T sigue abriendo pestaña)', () => {
+test('el botón «Nuevo chat» enseña en su globo el atajo de chat nuevo (Ctrl+N; Ctrl+T sigue abriendo pestaña)', () => {
   assert.match(inbox, /useKeys\(\)\.table\.get\('chat\.new'\)/);
-  assert.match(inbox, /data-testid="new-conversation-key"/);
+  assert.match(inbox, /text=\{tabsOn && newKey \? newKey : t\('newchat\.hint'\)\}/);
   assert.match(read('src/shared/keybindings.mjs'), /id: 'tabs\.new'[^\n]*key: 'Ctrl\+T'/);
   assert.match(read('src/shared/keybindings.mjs'), /id: 'chat\.new'.*key: 'Ctrl\+N'/);
   assert.match(read('src/ui/components/chat-tabs.jsx'), /useShortcut\('chat\.new'/);

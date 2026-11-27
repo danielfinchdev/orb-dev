@@ -5,22 +5,25 @@
 // (Codex model/list, the ACP agents' model option).
 // heavy: models that use the quota faster (heavyModels of each agent, or a known heavy family); usage: how much of its
 // window each account has used, as the agent reports it.
-import { ctx } from '../../platform/context.mjs';
+import fs from 'node:fs';
+import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS, AGENT_LABELS } from '../../platform/config-file.mjs';
 import { installed, discoverModels } from '../../agents/index.mjs';
-import { usableAccounts } from '../../domain/usage/accounts.mjs';
-import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits } from '../../domain/usage/budget.mjs';
+import { usableAccounts, accountsOf, signedOut } from '../../domain/usage/accounts.mjs';
+import { markOf } from '../../shared/account-marks.mjs';
+import { usageReport, HEAVY_FAMILY, canLaunch, modelLimits, cooldownUntil } from '../../domain/usage/budget.mjs';
 import { cursorShownName } from '../../agents/cursor.mjs';
 const MODEL_ID = /^[A-Za-z0-9][\w.:\-/[\]=,@]{0,79}$/;
-// the reasoning levels Orb offers (Bajo, Medio, Alto, Extra); Extra only for the models that take it.
-export const REASONING_LEVELS = ['low', 'medium', 'high', 'xhigh'];
-const USUAL_LEVELS = ['low', 'medium', 'high'];
+import { REASONING_LEVELS, USUAL_LEVELS, knownLevels, nearestLevel } from '../../shared/reasoning-levels.mjs';
+export { REASONING_LEVELS, nearestLevel };
 // The levels a model takes, from the catalog (what its agent listed); without a figure, the usual three.
 export function levelsOf(catalog, agent, model, account = null) {
   const a = (catalog ?? []).find((x) => x.id === agent);
   const list = [...((account && a?.accountModels?.[account]) || []), ...(a?.models ?? [])];
   const m = list.find((x) => x.id === (model ?? '')) ?? (model ? null : list.find((x) => x.id === ''));
-  return m?.efforts?.length ? m.efforts : USUAL_LEVELS;
+  if (m?.efforts?.length) return m.efforts;
+  // Cursor picks the effort through the model variant, not through a setting: without a list it offers none.
+  return agent === 'cursor' ? [] : USUAL_LEVELS;
 }
 // the light models (fast and cheap) by their names; heavy ones by HEAVY_FAMILY; everything else is «balanced».
 const LIGHT = /haiku|mini\b|nano|flash|lite\b|small|spark/i;
@@ -49,8 +52,8 @@ export function rememberModels(board, agent, list, account = agent) {
     const item = { id: m.id, label };
     if (m.default && !marked) { item.default = true; marked = true; }
     if (typeof m.resolved === 'string' && m.resolved !== m.id && MODEL_ID.test(m.resolved)) item.resolved = m.resolved;
-    // the reasoning levels the agent says the model takes (only Orb's four).
-    if (Array.isArray(m.efforts)) { const e = REASONING_LEVELS.filter((x) => m.efforts.includes(x)); if (e.length) item.efforts = e; }
+    // the reasoning levels the agent says the model takes (only the ones Orb knows).
+    if (Array.isArray(m.efforts)) { const e = knownLevels(m.efforts); if (e.length) item.efforts = e; }
     clean.push(item);
     if (clean.length >= 40) break;
   }
@@ -125,6 +128,7 @@ export function modelCatalog(board, { discover = false, log } = {}) {
     if (discover && !known.length) refreshModels(board, agent, { log });
     if (agent === 'cursor' && known.length) { try { const seen = cursorSeenNames(board); known = known.map((m) => (seen[m.id] ? { ...m, label: seen[m.id] } : m)); } catch { /* the names of its list */ } }
     const accounts = usableAccounts(agent);
+    const all = accountsOf(agent);
     // another account with its own list (another plan) gets its own models; the others use the agent's.
     const accountModels = {};
     for (const acc of accounts) {
@@ -135,10 +139,25 @@ export function modelCatalog(board, { discover = false, log } = {}) {
     }
     out.push({
       id: agent, label: AGENT_LABELS[agent] ?? agent, defaultModel: cfg.defaultModel || '', strengths: cfg.strengths ?? '',
-      models: withLimits(board, agent, buildModels(agent, cfg, known)), accountModels, accounts: accounts.map((a) => ({ id: a.id, label: a.label, usage: usage[a.id] ?? null }))
+      models: withLimits(board, agent, buildModels(agent, cfg, known)), accountModels, accounts: accounts.map((a) => accountEntry(board, a, usage, all)), unusable: unusableAccounts(agent, accounts, usage, all, board)
     });
   }
   return out;
+}
+
+// An account as the selector shows it: its mark (the colour follows its place among the agent's accounts, so it is the same
+// everywhere), how much of its window is used and until when it is at its limit.
+function accountEntry(board, acc, usage, all) {
+  const until = cooldownUntil(board, acc.id) || null;
+  return { id: acc.id, label: acc.label, ...markOf(acc, all.findIndex((x) => x.id === acc.id)), usage: usage[acc.id] ?? null, ...(until ? { limitedUntil: until } : {}), state: 'ok' };
+}
+
+// The accounts that cannot take work, with the reason, so the selector shows them dimmed instead of hiding them.
+function unusableAccounts(agent, usable, usage, all, board) {
+  return all.filter((a) => !usable.some((u) => u.id === a.id)).map((a) => {
+    const reason = a.enabled === false || !ctx.config.agents[agent]?.enabled ? 'off' : a.home && !fs.existsSync(a.home) ? 'nofolder' : signedOut(a) ? 'nosession' : 'off';
+    return { ...accountEntry(board, a, usage, all), state: reason, reason: tr(`acct.reason.${reason}`) };
+  });
 }
 
 // The models of one list as the selector shows them. Claude: the labelled ids of the assistant's models first (Sonnet 5.5,

@@ -63,7 +63,7 @@ class PendingRowTest {
 
     @Test fun anUnlinkedPhoneSaysThePendingMessageWillNotLeave() {
         show(PendingState.Waiting, online = false, link = ConnectionState.Unlinked)
-        rule.onNodeWithText("No saldrá: el móvil ya no está enlazado").assertIsDisplayed()
+        rule.onNodeWithText("No saldrá. El móvil ya no está enlazado").assertIsDisplayed()
     }
 
     @Test fun aMessageThePcTookHasOneTickAndTheHourItWasWritten() {

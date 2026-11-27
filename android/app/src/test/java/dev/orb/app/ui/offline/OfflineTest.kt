@@ -138,9 +138,9 @@ class ConnectionBandTextsTest {
 
     @Test fun neverPromisesTheQueueLeavesWhenItCannot() {
         val update = OfflineTexts.band(ConnectionState.UpdatePc, t0)!!
-        assertEquals(true, update.contains("no sale hasta entonces"))
+        assertEquals(true, update.contains("hasta entonces"))
         assertEquals(false, update.contains("se enviará"))
-        assertEquals(true, OfflineTexts.band(ConnectionState.UpdateApp, t0)!!.contains("actualizar la app"))
+        assertEquals(true, OfflineTexts.band(ConnectionState.UpdateApp, t0)!!.contains("Actualiza la app"))
         assertEquals(true, OfflineTexts.band(ConnectionState.Unlinked, t0)!!.contains("no saldrá"))
     }
 }
@@ -192,7 +192,7 @@ class ConnectionBandTest {
     @Test fun withoutAWayToRetryThereIsNoButton() {
         rule.setContent { OrbTheme(OrbPaletteChoice.Grafito, dark = false) { ConnectionBand(ConnectionState.UpdatePc, info = null) } }
         rule.waitForIdle()
-        rule.onNodeWithText("Hay que actualizar Orb en tu PC. Lo que escribas se queda en este móvil y no sale hasta entonces.").assertIsDisplayed()
+        rule.onNodeWithText("Actualiza Orb en tu PC. Lo que escribas se queda en este móvil hasta entonces.").assertIsDisplayed()
         assertEquals(0, rule.onAllNodesWithText("Reintentar").fetchSemanticsNodes().size)
     }
 }

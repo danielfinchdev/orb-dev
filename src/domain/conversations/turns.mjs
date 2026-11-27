@@ -68,6 +68,32 @@ async function locate(cwd) {
 // The last photo of each conversation (a numbered one or a message's own): the next message may reuse it.
 // Trailer of a photo's commit message: when the folder was read (ms), so a rewind can tell which files were already there.
 export const PHOTO_AT = 'orb-photo-at: ';
+// Trailer of the baseline photo: the files that already differed from HEAD when the chat started (base64 of a JSON list). A photo
+// is raw (line endings as on disk) and HEAD is not, so this cannot be read back from the two commits on a checkout with CRLF.
+const START_DIRTY = 'orb-start-dirty: ';
+
+// The files that differ from HEAD right now, as git itself judges them (line endings, the index): path → 'D' | 'M'.
+// Ignored and secret-looking files are left out: no photo holds them.
+export async function dirtyFiles(repo) {
+  const r = await gitAsync(repo, {}, 'status', '--porcelain=v1', '-z', '-uall');
+  const out = new Map();
+  if (r.status !== 0) return out;
+  const parts = r.stdout.split(String.fromCharCode(0));
+  for (let i = 0; i < parts.length; i++) {
+    const e = parts[i]; if (e.length < 4) continue;
+    const file = e.slice(3).split(String.fromCharCode(92)).join('/');
+    if (/^[RC]/.test(e)) i++; // the old path of a rename comes next
+    if (!isSecretPath(file)) out.set(file, e[0] === 'D' || e[1] === 'D' ? 'D' : 'M');
+  }
+  return out;
+}
+// What the baseline of a chat says about the folder at its start; null for a baseline taken before this was recorded.
+export async function startDirtyOf(repo, zeroCommit) {
+  const msg = (await gitAsync(repo, {}, 'show', '-s', '--format=%B', zeroCommit)).stdout;
+  const line = msg.split(String.fromCharCode(10)).map((l) => l.trim()).find((l) => l.startsWith(START_DIRTY));
+  if (!line) return null;
+  try { return new Set(JSON.parse(Buffer.from(line.slice(START_DIRTY.length), 'base64').toString('utf8'))); } catch { return null; }
+}
 const lastPhoto = new Map();
 
 // True when the folder is still exactly the one in `ref`'s photo, so a message does not need a new photo. Same trust as the
@@ -98,38 +124,51 @@ async function unchanged(repo, rawIndex, ref) {
   } catch { return false; } finally { fs.rmSync(tmp, { force: true }); }
 }
 
-async function take(cwd, sid, { start, alive, mark = 0 }) {
+// Every turn n keeps two photos: `pre/<n>` (the folder right before the turn starts) and `<n>` (right after it ends).
+// What turn n changed is the diff between those two, never between turn n-1 and n, which would also hold what the user
+// or another chat changed in between. A turn with no user message (automatic) takes its `pre` photo too.
+// `n` of lastPhoto is the last numbered turn this process knows; without it the fast path is skipped.
+async function take(cwd, sid, { start, alive, mark = 0, overlap = false }) {
   const where = await locate(cwd);
   if (!where) return null;
   // the chat was archived or deleted while the turn ran: nothing is left behind
   if (alive && !alive()) { dropNow(cwd, sid); return null; }
   const { repo } = where;
-  // A message's photo is the last one when nothing changed since (the usual case: the turn before ended with one).
-  const last = start && mark ? lastPhoto.get(sid) : null;
-  if (last && last.repo === repo) {
-    if (await unchanged(repo, where.rawIndex, last.ref)) {
+  const names = (next) => [`${refDir(sid)}/pre/${next}`, ...(mark ? [`${refDir(sid)}/antes/${mark}`] : [])];
+  if (start) {
+    // The last photo is this turn's when nothing changed since (the usual case: the turn before ended with one).
+    const last = lastPhoto.get(sid);
+    if (last && last.repo === repo && Number.isInteger(last.n) && await unchanged(repo, where.rawIndex, last.ref)) {
+      const refs = names(last.n + 1);
+      let ok = true;
       // the photo's ref name as the new value: git resolves it, one process less than asking for its hash first
-      const ref = `${refDir(sid)}/antes/${mark}`;
-      if ((await gitAsync(repo, {}, 'update-ref', ref, `${last.ref}^{commit}`)).status === 0) { lastPhoto.set(sid, { repo, ref }); return null; }
+      for (const ref of refs) ok = ok && (await gitAsync(repo, {}, 'update-ref', ref, `${last.ref}^{commit}`)).status === 0;
+      if (ok) { lastPhoto.set(sid, { repo, ref: refs[0], n: last.n }); return null; }
     }
   }
   const have = await listRefs(repo, sid);
-  const baseline = start && have.length > 0; // the numbered baseline is only the folder before the very first turn
-  if (baseline && !mark) return null;
+  const lastN = have.length ? have[have.length - 1].n : 0;
+  // the first photo of a chat also says which files were already changed (it is the folder before the chat touched anything)
+  const first = start && !have.length;
+  const dirty = first ? [...(await dirtyFiles(repo)).keys()].slice(0, 3000) : null;
   const snap = await snapshotCommitAsync(repo, { raw: true, always: true, message: `orb: turno ${sid}
 
-${PHOTO_AT}${Date.now()}` });
+${PHOTO_AT}${Date.now()}${dirty ? `
+${START_DIRTY}${Buffer.from(JSON.stringify(dirty)).toString('base64')}` : ''}` });
   if (!snap) return null;
-  // A message's own photo is not a turn: it carries no number, so «Cambios» never shows it.
-  if (start && mark) {
-    const ref = `${refDir(sid)}/antes/${mark}`;
-    if ((await gitAsync(repo, {}, 'update-ref', ref, snap.commit)).status === 0) lastPhoto.set(sid, { repo, ref });
+  if (start) {
+    // The folder before the very first turn is also turn 0 (the start of the numbering).
+    const refs = [...names(lastN + 1), ...(have.length ? [] : [`${refDir(sid)}/0`])];
+    let ok = true;
+    for (const ref of refs) ok = ok && (await gitAsync(repo, {}, 'update-ref', ref, snap.commit)).status === 0;
+    if (ok) lastPhoto.set(sid, { repo, ref: refs[0], n: lastN });
+    return null;
   }
-  if (baseline) return null;
-  const n = have.length ? have[have.length - 1].n + 1 : 0;
+  const n = have.length ? lastN + 1 : 0;
   const ref = `${refDir(sid)}/${n}`;
   const r = await gitAsync(repo, {}, 'update-ref', ref, snap.commit);
-  if (r.status === 0) lastPhoto.set(sid, { repo, ref });
+  if (r.status === 0) lastPhoto.set(sid, { repo, ref, n });
+  if (r.status === 0 && overlap) await gitAsync(repo, {}, 'update-ref', `${refDir(sid)}/mezcla/${n}`, snap.commit);
   return r.status === 0 ? { n, commit: snap.commit } : null;
 }
 
@@ -147,7 +186,8 @@ export async function photoBefore(cwd, sid, itemId) {
   return /^[0-9a-f]{40,64}$/.test(commit) ? { repo, commit } : null;
 }
 // When a turn ends.
-export const snapshotAfterTurn = (cwd, sid, alive) => serial(sid, () => take(cwd, sid, { start: false, alive })).catch(() => null);
+// overlap: another chat or a task was writing in the same folder during the turn, so what changed is not all this chat's.
+export const snapshotAfterTurn = (cwd, sid, alive, { overlap = false } = {}) => serial(sid, () => take(cwd, sid, { start: false, alive, overlap })).catch(() => null);
 
 // → { available, turns: [{ n, at }] }: n = 1… are turns; the baseline (0) is not listed.
 export async function listTurns(cwd, sid) {
@@ -158,6 +198,12 @@ export async function listTurns(cwd, sid) {
   await chains.get(sid);
   const refs = await listRefs(repo, sid);
   return { available: refs.length > 1, turns: refs.filter((t) => t.n > 0).map((t) => ({ n: t.n, at: t.at })) };
+}
+
+// The photo taken right before turn `t` started, when this version took it.
+async function preOf(repo, sid, t) {
+  const r = await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `${refDir(sid)}/pre/${t.n}^{commit}`);
+  return r.status === 0 && r.stdout.trim() ? { commit: r.stdout.trim() } : null;
 }
 
 // scope: 'last' | 'all' | 'turn' (with n) | 'head' (the last photo against the current HEAD commit).
@@ -174,12 +220,13 @@ export async function turnDiff(cwd, sid, { scope = 'last', n, stat = false } = {
   else if (scope === 'turn') {
     b = byN.get(Number(n)); a = b && byN.get(b.n - 1);
     if (!b || b.n < 1 || !a) return { available: false, files: [], more: 0 };
+    a = await preOf(repo, sid, b) ?? a;
     label = b.n;
   } else if (scope === 'head') {
     const head = (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', 'HEAD^{commit}')).stdout.trim();
     if (!head) return { available: false, files: [], more: 0 };
     a = { commit: head }; label = 'head';
-  } else { a = refs[refs.length - 2]; label = last.n; }
+  } else { a = refs[refs.length - 2]; label = last.n; a = await preOf(repo, sid, last) ?? a; }
   return { available: true, scope: label, ...(stat ? await statBetweenAsync(repo, a.commit, b.commit) : diffBetween(repo, a.commit, b.commit)) };
 }
 
@@ -206,4 +253,72 @@ export function commentsBlock(comments) {
   })).filter((c) => c.path && c.text);
   if (!list.length) return '';
   return ['Comentarios sobre el código:', ...list.map((c) => `- ${c.path}${c.line ? `:${c.line}` : ''}${c.side === 'old' ? ' (antes del cambio)' : ''}: ${c.text}`)].join('\n');
+}
+
+// The pairs of photos that say what a conversation's turns changed: `pre` (before) and `post` (after) of each turn, in order.
+// → { ok: true, repo, zero, turns: [{ n, pre, post }] } | { ok: false, why: 'none' | 'old' }.
+// 'old': some turn has no `pre` photo (a conversation of a version before 3.8.12), so what it changed cannot be told apart
+// from what someone else changed in between. Turn 1 falls back to the baseline (0), which is the folder before it.
+export async function turnPairs(cwd, sid) {
+  if (!cwd || !(await isGitRepoAsync(cwd))) return { ok: false, why: 'none' };
+  const repo = await repoRootAsync(cwd);
+  await chains.get(sid);
+  const refs = await listRefs(repo, sid);
+  const zero = refs.find((t) => t.n === 0);
+  const posts = refs.filter((t) => t.n > 0);
+  if (!posts.length) return { ok: false, why: 'none' };
+  const pre = new Map();
+  const r = await gitAsync(repo, {}, 'for-each-ref', '--format=%(refname) %(objectname)', `${refDir(sid)}/pre/`);
+  for (const line of r.status === 0 ? r.stdout.split('\n').filter(Boolean) : []) {
+    const [name, commit] = line.split(' ');
+    const n = Number(name.slice(`${refDir(sid)}/pre/`.length));
+    if (Number.isInteger(n) && n > 0) pre.set(n, commit);
+  }
+  const turns = [];
+  for (let i = 0; i < posts.length; i++) {
+    const t = posts[i];
+    // numbers are consecutive from 1: a hole means a photo is gone
+    if (t.n !== i + 1) return { ok: false, why: 'old' };
+    const before = pre.get(t.n) ?? (t.n === 1 ? zero?.commit : null);
+    if (!before) return { ok: false, why: 'old' };
+    turns.push({ n: t.n, pre: before, post: t.commit });
+  }
+  const mix = await gitAsync(repo, {}, 'for-each-ref', '--format=%(refname)', `${refDir(sid)}/mezcla/`);
+  const overlap = new Set((mix.status === 0 ? mix.stdout.split(String.fromCharCode(10)).filter(Boolean) : []).map((n) => Number(n.slice(`${refDir(sid)}/mezcla/`.length))));
+  for (const t of turns) t.overlap = overlap.has(t.n);
+  return { ok: true, repo, zero: zero?.commit ?? turns[0].pre, turns };
+}
+// The next message takes a new photo: used when the conversation moves to another folder.
+export const forgetPhotos = (sid) => { lastPhoto.delete(sid); };
+
+// When a conversation moves to another folder, the photos taken before each of its messages stop being a valid place to go
+// back to: they show the other folder. They are renamed (not deleted) so a rewind says why it is not available, and a
+// switch that is undone puts them back. Checked here, in the engine, so no caller can rewind across the change.
+const MOVED = (sid) => `${refDir(sid)}/antes-movidos`;
+async function renameRefs(repo, from, to, only = null) {
+  const r = await gitAsync(repo, {}, 'for-each-ref', '--format=%(refname) %(objectname)', `${from}/`);
+  let n = 0;
+  for (const line of r.status === 0 ? r.stdout.split('\n').filter(Boolean) : []) {
+    const [name, commit] = line.split(' ');
+    const tail = name.slice(from.length + 1);
+    if (only && !only.includes(tail)) continue;
+    const dest = `${to}/${tail}`;
+    if ((await gitAsync(repo, {}, 'update-ref', dest, commit)).status === 0) { await gitAsync(repo, {}, 'update-ref', '-d', name); n++; }
+  }
+  return n;
+}
+// `only`: the exact photos (message ids) to retire or to bring back; a switch that is undone returns just the ones it retired,
+// never those an earlier change of folder left retired.
+export const retirePhotos = (repo, sid, only = null) => serial(sid, () => { lastPhoto.delete(sid); return renameRefs(repo, `${refDir(sid)}/antes`, MOVED(sid), only); });
+export const restorePhotos = (repo, sid, only) => serial(sid, () => renameRefs(repo, MOVED(sid), `${refDir(sid)}/antes`, only));
+export async function photoMarks(repo, sid) {
+  const r = await gitAsync(repo, {}, 'for-each-ref', '--format=%(refname)', `${refDir(sid)}/antes/`);
+  return r.status === 0 ? r.stdout.split(String.fromCharCode(10)).filter(Boolean).map((n) => n.slice(`${refDir(sid)}/antes/`.length)) : [];
+}
+// True when the photo before that message exists but belongs to the folder the conversation left.
+export async function photoMoved(cwd, sid, itemId) {
+  const id = Number(itemId);
+  if (!Number.isInteger(id) || id < 1 || !cwd || !(await isGitRepoAsync(cwd))) return false;
+  const repo = await repoRootAsync(cwd);
+  return (await gitAsync(repo, {}, 'rev-parse', '--verify', '--quiet', `${MOVED(sid)}/${id}^{commit}`)).status === 0;
 }

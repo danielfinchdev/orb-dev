@@ -7,7 +7,7 @@ import { AgentIcon } from '@/components/agent-icon.jsx';
 import { ProjectIcon } from '@/components/project-icon.jsx';
 import { Markdown } from '@/components/markdown.jsx';
 import { useLiveTasks, liveOf, LiveTask, ProgressBar } from '@/components/live-tasks.jsx';
-import { modelsOf } from '@/components/brain-picker.jsx';
+import { modelsOf, AccountMark } from '@/components/brain-picker.jsx';
 import { confirm, form } from '@/components/dialogs.jsx';
 import { approveTask, rejectTask } from '@/components/task-approval.jsx';
 import { TaskChanges, ChangesSummary, ChangesFiles, ChangesMeta, DiffStat, useDiffStat, useTaskDiffRaw, diffOf, ChangesEmpty } from '@/components/task-changes.jsx';
@@ -42,6 +42,21 @@ const reviewers = async () => (await call('agents.status')).filter((a) => a.enab
 const ReviewerField = ({ agents, v, set }) => <Field label={t('tasks.review.reviewer')} hint={t('tasks.review.reviewerHint')}><Select className="w-full" value={v.agent || '__auto'} onValueChange={(agent) => set({ agent: agent === '__auto' ? '' : agent })} options={[{ value: '__auto', label: t('tasks.review.auto') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>;
 
 // Task Review: another model (another provider when there is one) audits the work read-only and gives a verdict.
+
+// A hand join that failed after writing part of the work: undo it (the folder goes back to before it) or try again.
+function PartialJoin({ t, tr, className }) {
+  if (t.joinState !== 'partial' || !t.joinSettleable) return null;
+  return (
+    <Note tone="warning" icon={GitMerge} className={className} data-testid="task-partial-join">
+      <div>{tr(t.joinWrote ? 'tasks.partialJoin' : 'tasks.partialJoinClean')}</div>
+      <div className="mt-2 flex gap-2">
+        {t.joinWrote ? <Button size="xs" variant="outline" onClick={() => act(call('tasks.undoJoin', { id: t.id, checkpoint: t.checkpointId }), tr('tasks.partialJoin.undone'))} data-testid="task-undo-join">{tr('tasks.undoJoin')}</Button> : null}
+        <Button size="xs" variant="outline" onClick={() => act(call('tasks.retryJoin', { id: t.id, checkpoint: t.checkpointId }), tr('tasks.partialJoin.retried'))} data-testid="task-retry-join">{tr('tasks.retryJoin')}</Button>
+      </div>
+    </Note>
+  );
+}
+
 export async function askReview({ task, project }) {
   const agents = await reviewers();
   return form(task ? t('tasks.review.titleTask', { id: task.id }) : t('tasks.review.titleProject', { project }), {
@@ -88,7 +103,7 @@ function taskActions(task, tr) {
       body: (v, set) => (<>
         <Field label={tr('tasks.agent')}><Select className="w-full" value={v.agent} onValueChange={(agent) => set({ agent, model: AUTO })} options={[{ value: 'any', label: tr('tasks.reassign.any') }, ...agents.map((a) => ({ value: a.id, label: a.label }))]} /></Field>
         <Field label={tr('tasks.reassign.model')} hint={tr('tasks.reassign.modelHint')}><Select className="w-full" value={v.agent === 'any' ? AUTO : v.model} disabled={v.agent === 'any'} onValueChange={(model) => set({ model })} options={modelOptions(v.agent)} data-testid="reassign-model" /></Field>
-        <Field label={tr('tasks.reassign.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING).filter((o) => o.value !== 'xhigh')} /></Field>
+        <Field label={tr('tasks.reassign.reasoning')}><Select className="w-full" value={v.reasoning} onValueChange={(reasoning) => set({ reasoning })} options={options(REASONING).filter((o) => ['low', 'medium', 'high'].includes(o.value))} /></Field>
       </>),
       ok: tr('tasks.reassign.ok'), onOk: (v) => call('tasks.reassign', { id: t.id, agent: v.agent, model: v.agent === 'any' || v.model === AUTO ? null : v.model, reasoning: v.reasoning })
     });
@@ -175,10 +190,11 @@ function TaskDetail({ id, live }) {
       {t.status === 'queued' && t.waiting?.kind === 'deps' ? <Note className="mx-5" data-testid="task-wait-deps">{waitText(tr, t)}</Note> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 mx-5 rounded-xl border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <Note icon={Undo2} className="mx-5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
+      <PartialJoin t={t} tr={tr} className="mx-5" />
       {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="mx-5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
       {t.review ? <div className={cn('mx-5 flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-control', t.review.verdict === 'correcto' ? 'border-success/40 bg-success/10' : t.review.verdict === 'con fallos' ? 'border-destructive/40 bg-destructive/10' : 'bg-muted/50')}><ScanSearch className="size-4" />{tr('tasks.review.line', { agent: AGENT[t.review.agent] ?? t.review.agent })} <span className="font-medium">{verdictLabel(t.review.verdict)}</span><Button size="sm" variant="ghost" className="ml-auto" onClick={() => go({ view: 'tasks', id: t.review.task })}>{tr('tasks.review.see', { id: t.review.task })}</Button></div> : null}
       <dl className="grid grid-cols-[120px_1fr] gap-x-4 gap-y-1.5 px-5 text-control">
-        <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>
+        <dt className="text-muted-foreground">{tr('tasks.agent')}</dt><dd className="inline-flex flex-wrap items-center gap-1.5"><AccountMark agent={who} id={t.account} />{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</dd>
         <dt className="text-muted-foreground">{tr('tasks.where')}</dt><dd className="break-all">{MODE[t.mode]}{t.readonly ? ` · ${tr('tasks.readonlyShort')}` : ''}{t.branch ? ` · ${tr('tasks.branchShort', { branch: t.branch })}` : ''}</dd>
         <dt className="text-muted-foreground">{tr('tasks.created')}</dt><dd>{tr('tasks.createdBy', { time: fmtTime(t.created_at), agent: AGENT[t.created_by] ?? t.created_by })}</dd>
         {t.parent_id ? <><dt className="text-muted-foreground">{tr('tasks.subOf')}</dt><dd><button className="cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.parent_id })}>#{t.parent_id}</button></dd></> : null}
@@ -370,6 +386,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
       {t.status === 'queued' && t.waiting?.kind === 'notice' && t.waiting.text ? <Note tone="warning" icon={Clock} className="my-2.5" data-testid="task-wait-notice">{t.waiting.text}</Note> : null}
       {t.status === 'running' && live ? <div className="bg-muted/50 my-2.5 rounded-card border px-3.5 py-3" data-testid="task-live"><LiveTask t={live} actions={false} /></div> : null}
       {t.undone ? <Note icon={Undo2} className="my-2.5">{tr('tasks.undoneNote', { when: fmtTime(t.undone.at) })}</Note> : null}
+      <PartialJoin t={t} tr={tr} className="my-2.5" />
       {t.status === 'limited' && t.limited_until ? <Note tone="warning" icon={Hourglass} className="my-2.5">{tr('tasks.limitedNote', { when: fmtTime(t.limited_until) })}</Note> : null}
 
       {t.status === 'done' && (t.branch || !t.review_of) ? (
@@ -410,7 +427,7 @@ function TaskPanelDetail({ t, live, diff, onChanges }) {
 
 
       <Kv>
-        <KvRow icon={Bot} label={tr('tasks.agent')}><AgentMark agent={who}>{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</AgentMark></KvRow>
+        <KvRow icon={Bot} label={tr('tasks.agent')}><AgentMark agent={who}><AccountMark agent={who} id={t.account} />{tr('tasks.agentLine', { agent: `${t.accountLabel ?? AGENT[who] ?? who}${t.model ? ` · ${t.modelLabel ?? t.model}` : ''}`, reasoning: REASONING[t.reasoning]?.toLowerCase() ?? t.reasoning })}</AgentMark></KvRow>
         <KvRow icon={t.branch ? GitBranch : Folder} label={tr('tasks.where')}><span className="break-all">{MODE[t.mode]}{t.readonly ? ` · ${tr('tasks.readonlyShort')}` : ''}{t.branch ? <> · <code className="font-mono text-caption">{t.branch}</code></> : ''}</span></KvRow>
         <KvRow icon={Calendar} label={tr('tasks.created')}>{tr('tasks.createdBy', { time: fmtTime(t.created_at), agent: AGENT[t.created_by] ?? t.created_by })}</KvRow>
         {t.parent_id ? <KvRow icon={Link} label={tr('tasks.subOf')}><button className="text-primary-text cursor-pointer underline-offset-2 hover:underline" onClick={() => go({ view: 'tasks', id: t.parent_id })}>#{t.parent_id}</button></KvRow> : null}

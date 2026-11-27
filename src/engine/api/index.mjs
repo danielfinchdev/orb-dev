@@ -6,13 +6,14 @@
 // projects, schedules, logs, whiteboard and usage; api-link.mjs, api-accounts.mjs, api-inbox.mjs and api-data.mjs the
 // rest. Window actions by topic: projects.mjs (projects, Android), chat.mjs (conversations, chat, whiteboard), work.mjs (models, tasks, sessions, schedules).
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { ctx, tr } from '../../platform/context.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { AGENT_IDS } from '../../platform/config-file.mjs';
 import { CATEGORIES } from '../../platform/paths.mjs';
 import { accountsOf, accountDir } from '../../domain/usage/accounts.mjs';
-import { usageReport, usageHistory, modelName } from '../../domain/usage/budget.mjs';
+import { usageReport, usageHistory, usageRecords, modelName } from '../../domain/usage/budget.mjs';
 import { syncProjects, projectHasWork } from '../../domain/projects/projects.mjs';
 import { guardedCore } from '../desktop-home.mjs';
 import { PRODUCT } from '../../shared/product.mjs';
@@ -41,6 +42,7 @@ import { linkMethods } from './link.mjs';
 import { accountMethods } from './accounts.mjs';
 import { historyMethods } from './history.mjs';
 import { dataApi } from './data.mjs';
+import { uninstallApi } from './uninstall.mjs';
 import { inboxMethods } from './inbox.mjs';
 import { keysMethods } from './keys.mjs';
 import { mcpExtMethods } from './mcp-ext.mjs';
@@ -53,6 +55,8 @@ import { chatMethods } from './chat.mjs';
 import { trashTools } from './trash.mjs';
 import { workMethods } from './work.mjs';
 import { ChatWorktrees } from '../chat-worktrees.mjs';
+import { ChatCopy } from '../chat-copy.mjs';
+import { createCopyProposals } from '../host/copy-proposal.mjs';
 import { readActivity, buildReport, hidePcPaths } from '../../domain/activity/activity.mjs';
 import { snapshotBefore, recordUserCall } from '../../domain/activity/record.mjs';
 import { listRecent } from '../../domain/notes/recent.mjs';
@@ -71,11 +75,18 @@ const prRef = ({ id, session, number, headRefOid }) => ({
   headRefOid: headRefOid == null ? null : str(headRefOid, 'commit', 64)
 });
 
+// An install error kept in Activity must not carry the Windows user's profile folder (their account name) with it.
+const hideUserProfile = (text) => {
+  const profile = process.env.USERPROFILE || os.homedir();
+  const out = String(text);
+  return profile ? out.split(profile).join('~').split(profile.replaceAll('\\', '/')).join('~') : out;
+};
+
 const htmlRef = ({ id, session }) => ({ id: str(id, 'página', 64), session: str(session, 'conversación', 200) });
 
-export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitRaw, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {} }) {
+export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitRaw, log, version, remoteRef = { current: null }, onUnlocked = () => {}, onLocked = () => {}, onQuiesce = async () => {} }) {
   // A deleted or trashed chat takes the HTML pages it showed with it (htmlPages is declared below; it exists by the first event).
-  const emit = (event, payload) => { emitRaw(event, payload); if (event === 'session:removed' && payload?.id != null) htmlPages.dropSession(payload.id); };
+  const emit = (event, payload) => { emitRaw(event, payload); if (event === 'session:removed' && payload?.id != null) { htmlPages.dropSession(payload.id); copyProposals.dropSession(payload.id); } };
   if (sessions.emit === emitRaw) sessions.emit = emit; // sessions.remove() emits through the engine's own emit
   const realHome = (() => { try { return fs.realpathSync(ctx.home); } catch { return ctx.home; } })();
   let catalogCache = null; // models.catalog, for a few seconds (see there)
@@ -135,7 +146,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     for (const r of board.all('SELECT conversation_id AS c, status, COUNT(*) AS n FROM tasks WHERE conversation_id IS NOT NULL GROUP BY conversation_id, status')) (counts[r.c] ??= {})[r.status] = r.n;
     const asking = new Set(board.all(`SELECT DISTINCT conversation_id AS c FROM chat WHERE conversation_id IS NOT NULL AND meta LIKE '%"kind":"question"%' AND meta LIKE '%"status":"pending"%'`).map((r) => r.c));
     const live = new Map(orchestrator.states().map((x) => [x.conversation, x]));
-    return board.conversations().map((c) => ({ id: c.id, title: c.title, project: c.project, agent: c.agent, account: c.account, model: c.model, reasoning: c.reasoning, status: c.status,
+    return board.conversations().map((c) => ({ id: c.id, title: c.title, project: c.project, agent: c.agent, account: c.account, account_fixed: Number(Boolean(c.account_fixed && c.account)), model: c.model, reasoning: c.reasoning, status: c.status,
       created_at: c.created_at, updated_at: c.updated_at, done_at: c.done_at, context: c.context ?? null, tasks: counts[c.id] ?? {}, busy: Boolean(live.get(c.id)?.busy), waiting: Boolean(live.get(c.id)?.waiting), asking: asking.has(c.id) }));
   };
   // a conversation is done when the user gave the OK to its work and none of its tasks is still open.
@@ -185,6 +196,7 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     if (method === 'secret' && session) return secrets.request(asRunning(session), args);
     if (method === 'html' && session) return htmlPages.show(asRunning(session), args);
     if (method === 'pr' && session) return prTools.run(asRunning(session), String(args.tool ?? ''), args.args);
+    if (method === 'copy' && session) return copyProposals.run(asRunning(session), args);
     if (method !== 'android' || !session) throw Object.assign(new Error(tr('msg.android.notAllowed')), { userFacing: true });
     return android.tool(asRunning(session), String(args.tool ?? ''), args.args);
   };
@@ -194,12 +206,19 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
   const mcpExt = mcpExtMethods({ board, log, version, emit });
   mcpExt.startup();
   const data = dataApi(shared); // backups
+  // «Restablecer» / «Desinstalar»: everything of Orb stops (the agents, the terminals, the servers, the phone access) before core is deleted.
+  const uninstall = uninstallApi({ board, emit, log, remoteRef, backupNow: () => data.run('manual'), quiesce: async () => { terminals.closeAll(); scheduler.closing = true; orchestrator.closing = true; sessions.stopAll(); orchestrator.stopAll(); orchestrator.closeLive(); await Promise.allSettled([android.stopServer(), mcpExt.stop(), onQuiesce()]); await scheduler.drain().catch(() => {}); } });
   let usageAskedAt = 0; // usage.refresh
 
   const trash = trashTools({ board, sessions, orchestrator, scheduler, emit, log, conversationId });
   // a deleted chat takes its worktree with it only when nothing in it would be lost; otherwise the folder stays and the user is told
   const chatTrees = new ChatWorktrees({ board, sessions, log });
-  sessions.onRemoved = (s) => chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {});
+  // a chat that goes to its own copy in the middle of the conversation, and back (chat-copy.mjs); a switch cut short is settled now
+  const chatCopy = new ChatCopy({ board, sessions, chatTrees, hold: (name) => scheduler?.hold?.(name) ?? (() => {}), held: (name) => Boolean(scheduler?.held?.(name)), log });
+  const copyProposals = createCopyProposals({ board, sessions, copy: chatCopy, emit, log });
+  sessions.onTurnEnd = (id) => { chatCopy.afterTurn(id, emit).catch((error) => log(`copia aparte ${id}: ${error.message}`)); };
+  chatCopy.recover().then(() => chatCopy.prune()).catch((error) => log(`copia aparte: ${error.message}`));
+  sessions.onRemoved = (s) => { for (const old of chatTrees.all().filter((r) => r.id.startsWith(`${s.id}-old`))) chatTrees.release(old.id).then((r) => { if (!r.removed) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: old.path }), 'warning'); }).catch(() => {}); return chatTrees.release(s.id).then((r) => { if (r.kept === 'dirty' || r.kept === 'unverified' || r.kept === 'locked' || r.kept === 'shared' || r.branchKept) board.notice(tr('msg.chatWt.kept', { title: s.title, dir: chatTrees.info(s.id)?.path ?? '' }), 'warning'); }).catch(() => {}); };
   // a chat taken out of the trash gets back the worktree that was discarded meanwhile
   const restore = trash.methods['sessions.restore'];
   trash.methods['sessions.restore'] = async (p, ...rest) => { const r = await restore(p, ...rest); try { await chatTrees.ensure(r.id); } catch (error) { board.notice(tr('msg.chatWt.restoreFailed', { title: r.title, error: error.message }), 'warning'); } return r; };
@@ -208,6 +227,8 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'app.state': () => ({
       version, home: ctx.home, paths: { core: ctx.paths.core, projects: ctx.paths.projects, logs: ctx.paths.logs, mcp: ctx.paths.mcp, categories: ctx.paths.categories }, categories: CATEGORIES,
       config: ctx.config, paused: board.setting('paused') === '1', activeProject: board.activeProject(),
+      // a reset or «Empezar de cero» left the welcome to do from its first step (the saved folder and the projects stay)
+      welcomeFresh: fs.existsSync(path.join(ctx.paths.core, 'restablecido')),
       approvals: sessions.allPendingApprovals().map((a) => ({ id: a.id, session_id: a.session_id, body: { title: a.body?.title, reason: a.body?.reason }, session: a.session })),
       counts: Object.fromEntries(board.all('SELECT status, COUNT(*) AS n FROM tasks GROUP BY status').map((r) => [r.status, r.n])),
       // what each conversation with the assistant is doing now (only the ones answering or waiting their turn).
@@ -250,17 +271,33 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     },
     'config.save': ({ patch, unlock }, _principal, { unlocked = false } = {}) => {
       // a connector's keys never reach orb.json: they go into the vault and orb.json keeps references. With the window
-      // unlocked (a change that needs it: checkUnlock), the keys are tied to the connectors' commands as they are now.
+      // unlocked by the password (a change that needs it: checkUnlock; Windows Hello's token does not count), the keys are tied to the connectors' commands as they are now.
       const p = patch ?? {};
-      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: unlocked || Boolean(ctx.master?.checkToken(unlock)) }) : null;
+      const sealed = Array.isArray(p.mcpServers) ? sealConnectors(ctx.master, p.mcpServers, { trusted: unlocked === 'password' || unlocked === 'mobile' || Boolean(ctx.master?.checkToken(unlock)) }) : null;
       const c = saveConfig(sealed ? { ...p, mcpServers: sealed } : p); emit('config:changed', c);
+      // the welcome after a reset or a fresh start is over: its mark (the restablecido file in core) goes
+      if (p.setupPending === false) fs.rmSync(path.join(ctx.paths.core, 'restablecido'), { force: true });
       if (p.backup) guardOutside(); // the chosen backups' folder, kept from the agents
       return c;
     },
 
     // Git is needed for undo with history, isolated copies and GitHub: the Agents screen warns when it is missing.
-    'installer.check': async () => (await inst()).check(),
-    'installer.start': async ({ ids }) => { if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList')); return (await inst()).start(ids, emit); },
+    // versions: true is sent when the user opens «Herramientas» by hand; the page's own load only checks that the files exist
+    'installer.check': async (p) => (await inst()).check({ versions: p?.versions === true }),
+    // Installing or updating happens only from this PC's window (permissions.mjs: 'pc') and only for ids of the fixed catalog
+    // (tool-catalog.mjs). Each step is written to Activity; a tool that is already there is never installed again.
+    'installer.start': async ({ ids, update }) => {
+      if (!Array.isArray(ids) || ids.some((x) => typeof x !== 'string')) fail(tr('msg.api.badList'));
+      const installer = await inst();
+      const upd = update === true;
+      const have = upd ? null : new Set((await installer.check()).filter((i) => i.installed).map((i) => i.id));
+      const onEvent = ({ label, state, detail }) => board.event(null, 'usuario', state === 'instalando' ? 'tools.install_start' : state === 'hecho' ? 'tools.install_done' : 'tools.install_error', `${label}${state === 'error' && detail ? `: ${hideUserProfile(detail).slice(0, 160)}` : ''}`);
+      try { return installer.start(ids, emit, { update: upd, have, onEvent }); } catch (error) { fail(error.message); }
+    },
+    // What winget says is newer for the catalog's tools: asked only when the block opens or «Comprobar» is pressed, kept 30 min.
+    'installer.updates': async ({ force }) => (await inst()).checkUpgrades({ force: force === true }),
+    // Tools a project's files ask for and this PC lacks (the project is looked up by name; no path comes from the window).
+    'installer.suggest': async ({ project: name }) => { const p = project(name); return p.path ? (await inst()).suggest(p.path) : []; },
     'installer.progress': async () => (await inst()).progress(),
     'system.check': async () => { const r = await quickRun('git', ['--version'], { timeoutMs: 8000 }); return { platform: process.platform, git: r.ok ? r.out.replace(/^git version\s*/, '') : null }; },
 
@@ -283,7 +320,9 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     'models.catalog': () => {
       // with the accounts' real usage in the key: the usage bubble reads it from here and must not see an old figure.
       const rates = board.all("SELECT key, value FROM settings WHERE key LIKE 'rate:%'").map((r) => `${r.key}=${r.value.length}:${r.value.slice(0, 40)}`);
-      const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev'), rates]);
+      // the accounts (their marks, states and folders) and their pauses show in the catalog too
+      const pauses = board.all("SELECT key, value FROM settings WHERE key LIKE 'cooldown:%'").map((r) => r.key + '=' + r.value);
+      const key = JSON.stringify([ctx.config.orchestrator, ctx.config.agentOrder, ctx.config.accounts, pauses, Object.keys(ctx.config.agents).map((a) => ctx.config.agents[a]?.enabled), board.setting('models_rev'), rates]);
       if (catalogCache && catalogCache.key === key && Date.now() - catalogCache.at < 5000) return catalogCache.value;
       const value = modelCatalog(board, { discover: true, log });
       catalogCache = { key, at: Date.now(), value };
@@ -348,7 +387,26 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
         WHERE u.day >= ? AND u.day <= ? GROUP BY 1`, out.from, out.to);
       const projects = byProject.map((p) => ({ project: p.project, tokensIn: p.tin, tokensOut: p.tout, usd: p.usd })).filter((p) => p.tokensIn + p.tokensOut || p.usd)
         .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
-      return { ...out, projects, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+      // the same rows by account, only where an agent has several (the mark says which is which)
+      const byAccount = board.all('SELECT account_id AS account, COALESCE(SUM(turns), 0) AS turns, COALESCE(SUM(tokens_in), 0) AS tin, COALESCE(SUM(tokens_out), 0) AS tout, COALESCE(SUM(usd), 0) AS usd FROM usage_ledger WHERE day >= ? AND day <= ? AND account_id IS NOT NULL GROUP BY 1', out.from, out.to)
+        .map((r) => ({ r, acc: (ctx.config.accounts ?? []).find((a) => a.id === r.account) })).filter(({ acc }) => acc && (ctx.config.accounts ?? []).filter((a) => a.agent === acc.agent).length > 1)
+        .map(({ r, acc }) => ({ account: acc.id, agent: acc.agent, label: acc.label, turns: r.turns, tokensIn: r.tin, tokensOut: r.tout, usd: r.usd })).filter((x) => x.tokensIn + x.tokensOut || x.usd)
+        .sort((a, b) => b.usd - a.usd || (b.tokensIn + b.tokensOut) - (a.tokensIn + a.tokensOut));
+      return { ...out, projects, byAccount, models: out.models.map(({ account, ...m }) => ({ ...m, label: m.model ? modelLabelOf(m.agent, account ?? m.agent, m.model) : null })) };
+    },
+    // the ledger as flat records (day, account, agent, model, project, chat or task) for the filters of the usage page,
+    // up to a year back; the page adds, filters and groups them.
+    'usage.records': ({ days }) => {
+      const n = Math.max(1, Math.min(366, Math.floor(Number(days)) || 30));
+      const out = usageRecords(board, { days: n });
+      const label = new Map((ctx.config.accounts ?? []).map((a) => [a.id, a.label]));
+      const names = new Map();
+      const records = out.records.map((r) => {
+        const k = r.model ? `${r.agent}\0${r.account}\0${r.model}` : null;
+        if (k && !names.has(k)) names.set(k, modelLabelOf(r.agent, r.account || r.agent, r.model));
+        return { ...r, modelLabel: k ? names.get(k) : '', accountLabel: r.account ? (label.get(r.account) ?? '') : '' };
+      });
+      return { ...out, records };
     },
     // the accounts working right now (the assistant's brain and the agents' running sessions), with the windows of
     // their plan the agents reported (session, weekly…), for the panel of the context ring.
@@ -418,9 +476,10 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     ...keysMethods(shared),
     ...mcpExt.methods,
     ...data.methods,
+    ...uninstall.methods,
     // Orb locked (or a new password): the grants go, and so do the secrets typed for the agents.
     // under the lock screen the user's terminals take nothing and show nothing (user-terminal.mjs).
-    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); htmlPages.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
+    ...masterMethods({ ...shared, onUnlocked, onLock: (why) => { secrets.wipe(); prTools.wipe(); copyProposals.wipe(); htmlPages.wipe(); try { onLocked(); } catch (error) { log(`bloqueo: ${error.message}`); } return grants.revokeAll(why); }, onScreen: (v) => terminals.setLocked(v) }),
     // the private card of a secret an agent asked for (this PC only; saving or using a saved one asks for
     // the master password: permissions.mjs › needsUnlock).
     'secrets.pending': () => secrets.pending(),
@@ -434,6 +493,31 @@ export function buildApi({ board, sessions, orchestrator, scheduler, emit: emitR
     // the answer names the request by id, chat, PR number and head commit, so a stale card cannot answer another one
     'prConfirm.answer': (a) => prTools.answer(prRef(a)),
     'prConfirm.decline': (a) => prTools.decline(prRef(a)),
+    // a chat in the middle of the conversation moves to its own copy and back (src/engine/chat-copy.mjs); this PC's window only
+    'copy.state': ({ id }) => chatCopy.state(str(id, 'conversación', 64)),
+    'copy.preview': ({ id }) => chatCopy.preview(str(id, 'conversación', 64)),
+    'copy.toCopy': async ({ id, fingerprint, mixed, ack, proceed }) => {
+      const sid = str(id, 'conversación', 64);
+      const out = await chatCopy.toCopy(sid, { fingerprint: typeof fingerprint === 'string' ? fingerprint.slice(0, 80) : '', mixed: mixed === 'take' || mixed === 'leave' ? mixed : null, ack: ack === true });
+      // the agent proposed it: it goes on now, told where it works
+      // (a message queued during the turn may already have started, once the move freed the queue: then this one queues behind it)
+      if (proceed === true) {
+        try { sessions.send(sid, tr('sys.copy.continue'), { asked: [] }); } catch (error) {
+          if (!sessions.running.has(sid)) throw error;
+          sessions.enqueue(sid, tr('sys.copy.continue'));
+        }
+      }
+      return out;
+    },
+    'copy.wait': ({ id }) => chatCopy.wait(str(id, 'conversación', 64), false, emit),
+    'copy.cancelWait': ({ id }) => { chatCopy.cancelWait(str(id, 'conversación', 64)); return true; },
+    'copy.merge': ({ id }) => chatCopy.merge(str(id, 'conversación', 64)),
+    'copy.undoMerge': ({ id }) => chatCopy.undoMerge(str(id, 'conversación', 64)),
+    'copy.resolve': ({ id }) => chatCopy.resolve(str(id, 'conversación', 64)),
+    'copy.discard': ({ id, confirm }) => chatCopy.discard(str(id, 'conversación', 64), { confirm: confirm === true }),
+    'copyAsk.pending': () => copyProposals.pending(),
+    'copyAsk.answer': ({ id, session }) => copyProposals.answer({ id: int(id, 'petición'), session: str(session, 'conversación', 64) }),
+    'copyAsk.decline': ({ id, session }) => copyProposals.decline({ id: int(id, 'petición'), session: str(session, 'conversación', 64) }),
     // the HTML pages of the chats: listed, closed and given internet only from this PC's window.
     'htmlPages.list': () => htmlPages.list(),
     'htmlPages.setInternet': (a) => { if (typeof a?.internet !== 'boolean') fail('internet: true o false'); return htmlPages.setInternet(htmlRef(a), a.internet); },

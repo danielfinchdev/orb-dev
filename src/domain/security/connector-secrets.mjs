@@ -22,7 +22,9 @@ const sameArgs = (a, b) => JSON.stringify((a ?? []).map(String)) === JSON.string
 // Plain values of `servers` go into the vault. → the list with references in their place, or null when nothing changed.
 // Keys of connectors (or variables) that are gone leave the vault too. trusted: the window unlocked this change (or it
 // is the first move of the keys of a 3.7 folder), so the connectors' keys are tied to their commands as they are now; otherwise
-// only a connector given new plain keys is.
+// only a connector given new plain keys is. trusted 'unbound' (the engine's start): also the connectors whose keys were never tied,
+// never one already tied to another command (that one stays held until the password approves it).
+const tied = (master, s) => { try { return master.get(bindId(s.name)) != null; } catch { return true; } };
 export function sealConnectors(master, servers = [], { trusted = false } = {}) {
   if (!master?.unlocked()) return null;
   let changed = false;
@@ -37,7 +39,7 @@ export function sealConnectors(master, servers = [], { trusted = false } = {}) {
       master.set(id, String(v ?? ''));
       env[k] = refOf(s.name, k); changed = true; fresh = true;
     }
-    if (Object.keys(env).length) { keep.add(bindId(s.name)); if (fresh || trusted) master.set(bindId(s.name), bindingOf(s)); }
+    if (Object.keys(env).length) { keep.add(bindId(s.name)); if (fresh || trusted === true || (trusted === 'unbound' && !tied(master, s))) master.set(bindId(s.name), bindingOf(s)); }
     return { ...s, env };
   });
   for (const id of [...master.ids('mcp/'), ...master.ids('mcpbind/')]) if (!keep.has(id)) master.set(id, null);

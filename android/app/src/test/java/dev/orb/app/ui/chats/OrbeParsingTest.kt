@@ -64,10 +64,33 @@ class OrbeParsingTest {
         assertEquals("Opus · alto", info.label)
         assertEquals("Claude Code · medio", OrbeParser.brain(dev.orb.app.data.json("""{"agentLabel":"Claude Code","reasoning":"medium"}"""))!!.label)
         assertEquals("Opus", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"Opus"}"""))!!.label)
-        assertEquals("GPT · extra", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"GPT","reasoning":"xhigh"}"""))!!.label)
+        assertEquals("GPT · extra alto", OrbeParser.brain(dev.orb.app.data.json("""{"modelLabel":"GPT","reasoning":"xhigh"}"""))!!.label)
         assertNull(OrbeParser.brain(dev.orb.app.data.json("""{"conversation":7}""")))
         assertNull(OrbeParser.brain(dev.orb.app.data.json("""[]""")))
         assertNull(OrbeParser.brain(null))
+    }
+
+    private val catalog = dev.orb.app.data.json("""[{"id":"claude","accounts":[{"id":"claude","tag":"PGC","color":"#7c5cff"}],"unusable":[{"id":"claude2","tag":"STA","color":"#e5484d","state":"signedOut"}]},{"id":"codex","accounts":[{"id":"codex","tag":"CDX"}],"unusable":[]}]""")
+
+    @Test fun theAccountMarkShowsOnlyWhenTheAgentHasSeveralAccounts() {
+        val fixed = OrbeParser.brain(dev.orb.app.data.json("""{"agent":"claude","agentLabel":"Claude Code","modelLabel":"Sonnet","reasoning":"medium","account":"claude","accountFixed":true}"""), catalog)!!
+        assertEquals("[PGC] Sonnet · medio", fixed.markedLabel)
+        assertEquals("#7c5cff", fixed.account!!.color)
+        val auto = OrbeParser.brain(dev.orb.app.data.json("""{"agent":"claude","modelLabel":"Sonnet","account":"claude","accountFixed":false}"""), catalog)!!
+        assertEquals("[Auto·PGC] Sonnet", auto.markedLabel)
+        val waiting = OrbeParser.brain(dev.orb.app.data.json("""{"agent":"claude","modelLabel":"Sonnet","account":"claude","accountFixed":true,"pending":{"account":"claude2"}}"""), catalog)!!
+        assertEquals("[PGC → STA] Sonnet", waiting.markedLabel)
+        // One account only, no catalog or an unknown account: the plain label, as before.
+        assertEquals("Sonnet", OrbeParser.brain(dev.orb.app.data.json("""{"agent":"codex","modelLabel":"Sonnet","account":"codex"}"""), catalog)!!.markedLabel)
+        assertEquals("Sonnet", OrbeParser.brain(dev.orb.app.data.json("""{"agent":"claude","modelLabel":"Sonnet","account":"claude"}"""))!!.markedLabel)
+        assertEquals("Sonnet", OrbeParser.brain(dev.orb.app.data.json("""{"agent":"claude","modelLabel":"Sonnet","account":"zzz"}"""), catalog)!!.markedLabel)
+    }
+
+    @Test fun anAccountNoticeKeepsItsTextAsAPlainLine() {
+        val m = OrbeParser.parse(raw(20, "system", "La cuenta PGC está al límite hasta las 17:30.", """{"kind":"account","problem":{"kind":"limit","account":"claude"}}"""))!!
+        assertEquals("La cuenta PGC está al límite hasta las 17:30.", m.body)
+        assertEquals(MsgRole.System, m.role)
+        assertEquals(MsgCard.None, m.card)
     }
 
     @Test fun liveTasksCarryWhatEachOneIsDoing() {

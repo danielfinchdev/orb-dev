@@ -180,7 +180,7 @@ class OrbeDraftScreenTest {
         val created = ArrayList<Long>()
         screen(b, created)
         rule.onNode(hasSetTextAction()).performTextInput("Haz el carrito")
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         assertEquals(listOf("orbe text=Haz el carrito setProject=true project=api-pagos brain=null"), b.calls)
         assertEquals(listOf(41L), created)
@@ -191,7 +191,7 @@ class OrbeDraftScreenTest {
         b.orbeResult = offline()
         val vm = screen(b)
         rule.onNode(hasSetTextAction()).performTextInput("Haz el carrito")
-        rule.onNodeWithContentDescription("Enviar").performClick()
+        rule.onNodeWithContentDescription("Enviar mensaje").performClick()
         rule.waitForIdle()
         rule.onNodeWithText("Haz el carrito").assertIsDisplayed()
         rule.onNodeWithText("Reintentar").assertIsDisplayed()
@@ -203,13 +203,13 @@ class OrbeDraftScreenTest {
 
     @Test fun theBoxNamesTheBrainAndKeepsTheMicrophoneOff() {
         screen(FakeNewChatBackend(), d = OrbeDraft(true, "api-pagos", Brain("claude", "opus", "high")))
-        rule.onNodeWithContentDescription("Cerebro de este chat: Opus · alto").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Agente de este chat: Opus · alto").assertIsDisplayed()
         rule.onNodeWithContentDescription("Este móvil no tiene dictado por voz").assertIsDisplayed()
     }
 
     @Test fun withoutWhatThePcSaysTheBrainReadsAsThePcs() {
         screen(FakeNewChatBackend())
-        rule.onNodeWithContentDescription("Cerebro de este chat: El del PC").assertIsDisplayed()
+        rule.onNodeWithContentDescription("Agente de este chat: El del PC").assertIsDisplayed()
     }
 
     @Test fun withoutTheLinkTheBandSaysSo() {
@@ -223,7 +223,7 @@ class OrbeDraftScreenTest {
         val b = FakeNewChatBackend()
         b.connectionState.value = ConnectionState.Offline(null, null)
         screen(b)
-        rule.onNodeWithText("Sin conexión con el PC. Para enviar el primer mensaje hace falta conexión.").assertIsDisplayed()
+        rule.onNodeWithText("Sin conexión con el PC. Necesitas conexión para enviar el primer mensaje.").assertIsDisplayed()
         assertTrue(rule.onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isEmpty())
         assertNotNull(b)
     }

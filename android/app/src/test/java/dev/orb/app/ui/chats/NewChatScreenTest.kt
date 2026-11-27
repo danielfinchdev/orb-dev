@@ -60,7 +60,7 @@ class NewChatScreenTest {
         rule.onNodeWithText("api-pagos").assertIsDisplayed()
         rule.onNodeWithText("Sin proyecto").assertIsDisplayed()
         rule.onNodeWithText("Nuevo").assertIsDisplayed()
-        rule.onNodeWithText("Cerebro").assertIsDisplayed()
+        rule.onNodeWithText("Agente y modelo").assertIsDisplayed()
         rule.onNodeWithText("El que usa el PC").assertIsDisplayed()
         rule.onNodeWithText("Cancelar").assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsEnabled()
@@ -193,7 +193,7 @@ class NewChatScreenTest {
         rule.onNodeWithText("Recomendado").assertIsDisplayed()
         rule.onNodeWithText("Opus").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
-        rule.onNodeWithText("high").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        rule.onNodeWithText("Alto").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         rule.waitForIdle()
         assertEquals("high", vm.state.value.effort)
         rule.onNodeWithText("Listo").performClick()
@@ -268,7 +268,7 @@ class NewChatScreenTest {
         val b = FakeNewChatBackend()
         b.connectionState.value = ConnectionState.Offline(null, null)
         sheet(b)
-        rule.onNodeWithText("Sin conexión con el PC. Para empezar un chat hace falta conexión.").assertIsDisplayed()
+        rule.onNodeWithText("Sin conexión con el PC. Necesitas conexión para empezar un chat.").assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsNotEnabled()
     }
 
@@ -287,7 +287,7 @@ class NewChatScreenTest {
         val b = FakeNewChatBackend()
         b.missing += "models.catalog"
         sheet(b)
-        rule.onNodeWithText("Este PC tiene una versión antigua", substring = true).assertIsDisplayed()
+        rule.onNodeWithText("Actualiza Orb en el PC", substring = true).assertIsDisplayed()
         rule.onNodeWithText("Empezar").assertIsEnabled()
     }
 

@@ -104,7 +104,7 @@ test('your own rules: create, save, pause, resume and delete with the usual 5-mi
   assert.ok(!fs.existsSync(ruleFile(id)));
   await assert.rejects(call('rules.create', { titulo: '', texto: 'x', unlock: u }), /necesita un título/);
   await assert.rejects(call('rules.save', { id: 'no-existe', titulo: 'a', para: 'ambos', texto: 'b', unlock: u }), /no existe/);
-  await assert.rejects(call('rules.create', { titulo: 'a', para: 'nadie', texto: 'b', unlock: u }), /orb, subagentes o ambos/);
+  await assert.rejects(call('rules.create', { titulo: 'a', para: 'nadie', texto: 'b', unlock: u }), /Orb, para los agentes o para ambos/);
 });
 
 test('a shipped rule: pausing and deleting ask for the password every time; resuming takes the usual unlock', async () => {
@@ -161,10 +161,10 @@ test('rails.set: switch back on, values of its own keys only, no fixed rails, no
   assert.equal(ctx.config.rails['freno-uso'].enabled, true);
   await assert.rejects(set({ id: 'freno-uso', values: { 'budget.stopAt': 5 } }), Error, 'validated like config.save');
   assert.equal(ctx.config.budget.stopAt, 0.8, 'a refused change leaves the file alone');
-  await assert.rejects(set({ id: 'freno-uso', values: { timeoutMinutes: 5 } }), /no pertenece al raíl/, 'only the keys of that rail');
+  await assert.rejects(set({ id: 'freno-uso', values: { timeoutMinutes: 5 } }), /no pertenece a la protección/, 'only the keys of that rail');
   await assert.rejects(set({ id: 'freno-uso', values: { language: 'en' } }), /no pertenece/);
   await assert.rejects(set({ id: 'freno-uso' }), /nada que cambiar/);
-  for (const r of RAILS.filter((x) => x.fixed)) await assert.rejects(set({ id: r.id, enabled: false }), /es fijo/, r.id);
+  for (const r of RAILS.filter((x) => x.fixed)) await assert.rejects(set({ id: r.id, enabled: false }), /es fija/, r.id);
   await assert.rejects(set({ id: 'inventado', enabled: false }), /no existe/);
   await assert.rejects(set({ id: '__proto__', enabled: false }), /no existe/);
   for (const r of RAILS.filter((x) => x.fixed)) assert.equal(isRailOn(r.id), true);

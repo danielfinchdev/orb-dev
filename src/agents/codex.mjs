@@ -10,6 +10,7 @@ import { IS_WIN, firstFile, inPath, npmPrefixes, appDataDirs, userHome, discover
 import { clip } from './common.mjs';
 import { Turn, Approvals, JsonRpcPeer, spawnAgent, killTree, hidingEnvValues } from './live.mjs';
 import { decide } from '../domain/security/guard.mjs';
+import { identityFromCodex } from './identity.mjs';
 import { tr } from '../platform/context.mjs';
 
 // Who connects to the app-server (def. 11: the product's version, read from Orb's own package.json).
@@ -49,15 +50,16 @@ export async function accountInfo(exe, dir, { timeoutMs = 20000 } = {}) {
     await peer.request('initialize', { clientInfo: CLIENT, capabilities: { experimentalApi: true, requestAttestation: false } }, { timeoutMs });
     peer.notify('initialized', {});
     const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs });
-    const acc = r?.account; if (!acc) return null;
-    // The e-mail and the workspace together: a personal plan and a Team one with the same e-mail are two accounts.
-    const id = acc.email || acc.accountId ? `${acc.email ?? ''}|${acc.accountId ?? ''}` : null;
-    return { plan: typeof acc.planType === 'string' ? acc.planType : null, who: id ? crypto.createHash('sha256').update(String(id).toLowerCase()).digest('hex').slice(0, 16) : null };
+    // an answer without an account (signed out) is not «no answer»: it holds no login
+    if (!r || typeof r !== 'object') return null;
+    return identityFromCodex(r.account ?? {});
   } catch { return null; } finally {
     try { peer?.close(); } catch { /* gone */ }
     try { killTree(child); } catch { /* gone */ }
   }
 }
+// The same, for the account's folder (the shape claude.mjs's accountIdentity answers).
+export const accountIdentity = (exe, _env, { dir } = {}) => accountInfo(exe, dir || codexHome());
 
 const toml = (value) => JSON.stringify(value); // JSON strings and arrays are valid TOML values
 
@@ -119,8 +121,8 @@ export function onlyNetwork(perms) {
   const keys = Object.keys(perms).filter((k) => perms[k] != null && !(Array.isArray(perms[k]) && !perms[k].length));
   return keys.length > 0 && keys.every((k) => /^network/i.test(k));
 }
-// «Extra» (xhigh) goes through as it is: Orb only offers it for the models whose model/list says they take it.
-const effort = (r) => r || 'medium';
+// Orb only offers the levels each model's model/list says it takes; «max» is Claude's, so here it runs as «xhigh».
+export const effort = (r) => (r === 'max' ? 'xhigh' : r || 'medium');
 
 const ITEM_TOOL = (item) => {
   if (item.type === 'commandExecution') return { name: tr('sys.agents.tool.execute'), input: clip(item.command, 300) };
@@ -149,7 +151,7 @@ export function collabResult(item) {
 export function codexModels(r) {
   const rows = Array.isArray(r?.data) ? r.data : Array.isArray(r?.models) ? r.models : [];
   // the reasoning levels each model takes (supportedReasoningEfforts: strings or { reasoningEffort }).
-  const effortsOf = (m) => { const list = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).map((e) => (typeof e === 'string' ? e : e?.reasoningEffort)).filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)); return list.length ? { efforts: [...new Set(list)] } : {}; };
+  const effortsOf = (m) => { const list = (Array.isArray(m.supportedReasoningEfforts) ? m.supportedReasoningEfforts : []).map((e) => (typeof e === 'string' ? e : e?.reasoningEffort)).filter((e) => ['minimal', 'low', 'medium', 'high', 'xhigh'].includes(e)); return list.length ? { efforts: [...new Set(list)] } : {}; };
   return rows.filter((m) => m && !m.hidden).map((m) => ({ id: m.model ?? m.id, label: m.displayName || m.model || m.id, ...(m.isDefault ? { default: true } : {}), ...effortsOf(m) })).filter((m) => m.id);
 }
 
@@ -361,15 +363,21 @@ export function createLive(o) {
 
   const input = (text, images = []) => [{ type: 'text', text, text_elements: [] }, ...images.map((p) => ({ type: 'localImage', path: p }))];
 
+  // The error of a start that failed (e.g. thread/resume of a thread that no longer exists), kept so the first send()
+  // reports it instead of "session closed": that error is what makes the caller drop the old id and start afresh.
+  let startError = null;
+  const startOnce = () => (started ??= start().catch((error) => { startError = error; live.close(); throw error; }));
+  const startFailedFinal = (error) => (/malformed|resume|not found/i.test(error.message) ? tr('sys.agents.resumeFailed', { name: 'Codex', error: error.message }) : `Codex: ${error.message}`);
+  live.startFailed = () => startError;
   live.send = async ({ text, images = [] }) => {
+    if (startError && (!turn || turn.done)) { turn = new Turn(); turn.finish({ isError: true, final: startFailedFinal(startError) }); return turn.promise; }
     if (closed) throw new Error(tr('sys.agents.sessionClosed', { name: 'Codex' }));
     if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn();
     const current = turn;
     try {
       // A start that fails (no reply, thread not found) closes this live: the next message gets a fresh process.
-      started ??= start().catch((error) => { live.close(); throw error; });
-      await started;
+      await startOnce();
       // The answer is only the acknowledgement of the turn; a server that never gives it would leave the turn open for ever.
       const res = await peer.request('turn/start', { threadId, input: input(text, images), ...(model ? { model } : {}), effort: effort(o.reasoning) }, { timeoutMs: 120_000 });
       // a turn that ended at once (its turn/completed read in the same piece of output as this answer, before this
@@ -377,7 +385,7 @@ export function createLive(o) {
       // never ended (the Ubuntu CI hang).
       if (!current.done) turnId = res?.turn?.id ?? null;
     } catch (error) {
-      current.finish({ isError: true, final: /malformed|resume|not found/i.test(error.message) ? tr('sys.agents.resumeFailed', { name: 'Codex', error: error.message }) : `Codex: ${error.message}` });
+      current.finish({ isError: true, final: startFailedFinal(error) });
     }
     return current.promise;
   };
@@ -397,8 +405,7 @@ export function createLive(o) {
     const current = turn;
     const timer = setTimeout(() => current.finish({ isError: true, final: tr('sys.agents.noReply', { method: 'thread/compact/start' }) }), 10 * 60_000);
     try {
-      started ??= start().catch((error) => { live.close(); throw error; });
-      await started;
+      await startOnce();
       await peer.request('thread/compact/start', { threadId }, { timeoutMs: 60000 });
     } catch (error) { current.finish({ isError: true, final: error.message }); }
     const r = await current.promise;
@@ -414,6 +421,17 @@ export function createLive(o) {
   live.refreshUsage = async () => {
     if (closed || !peer) return false;
     try { const r = await peer.request('account/rateLimits/read', {}, { timeoutMs: 8000 }); if (!r?.rateLimits) return false; onNotification('account/rateLimits/updated', { rateLimits: r.rateLimits }); return true; } catch { return false; }
+  };
+  // Who this process is signed in as (account/read never refreshes the token and is no turn): the fingerprint and the hint, or
+  // null when Codex does not say. The start runs first so a mismatch is found before the first message goes.
+  live.whoami = async () => {
+    if (closed) return null;
+    try {
+      await startOnce();
+      const r = await peer.request('account/read', { refreshToken: false }, { timeoutMs: 10_000 });
+      if (!r || typeof r !== 'object') return null;
+      return identityFromCodex(r.account ?? {});
+    } catch { return null; }
   };
   live.isClosed = () => closed;
   return live;

@@ -98,14 +98,14 @@ test('9C-a Tutoriales: the guides use the icons of the mock-up and the tour card
   assert.match(view, /text-card-title leading-\[1\.45\] font-semibold">\{t\('help\.replayTitle'\)/);
 });
 
-test('9C-a Juegos: the game dialog is 560 wide, centred, with the board scaled to 362 by CSS only', () => {
+test('9C-a Juegos: in a game the dialog is as big as the window lets it and the game is fitted, not stretched', () => {
   const src = read('src/ui/games/games.jsx');
-  assert.match(src, /w-\[min\(560px,96vw\)\]/);
-  assert.match(src, /game && 'text-center leading-\[1\.45\]'/);
-  assert.match(src, /'flex flex-col gap-3\.5 pt-1\.5', game && 'pb-1\.5'/, 'the body keeps the 18 px of the design above and below the board');
-  assert.match(src, /game \? 'justify-center' : 'justify-between'/);
-  assert.match(src, /\[&_canvas\]:h-auto! \[&_canvas\]:max-w-\[362px\]/);
-  assert.match(src, /text-2xl leading-\[1\.45\] font-semibold/, 'score cards of 82 px');
+  assert.match(src, /w-\[min\(760px,96vw\)\]/, 'the list keeps its width');
+  assert.match(src, /h-\[min\(860px,94vh\)\] w-\[min\(1180px,97vw,calc\(100vw-2\*var\(--wco-inset\)\)\)\]/);
+  assert.match(src, /className="flex flex-col gap-3\.5 pt-1\.5"/, 'the list body keeps the 18 px of the design');
+  assert.match(src, /game \? levelPicker : null/);
+  assert.match(src, /\[&_canvas\]:max-w-none!/);
+  assert.ok(!src.includes('text-2xl leading-[1.45] font-semibold'), 'no big score cards');
 });
 
 test('9C-a God mode: file search, project as plain text with its dot, panels menu of 300 px', () => {

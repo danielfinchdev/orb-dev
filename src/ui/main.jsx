@@ -44,7 +44,7 @@ import { lazyScreen } from '@/lib/lazy.js';
 import { AGENT } from '@/lib/labels.js';
 import { WindowControls, WindowControlsSlot } from '@/components/window-controls.jsx';
 import { FieldError } from '@/components/ui/primitives.jsx';
-import { useT, t as tNow } from '@/lib/i18n.js';
+import { useT, t as tNow, languageReady } from '@/lib/i18n.js';
 import { MasterCreate, MasterLocked } from '@/views/master.jsx';
 import { ChatView } from '@/views/chat.jsx';
 import { SessionView } from '@/views/session.jsx';
@@ -54,6 +54,7 @@ import { UpdateNeeded } from '@/components/update-needed.jsx';
 import { StartNotice, StartDetails, StartPath, StartProgress, startText, startHint } from '@/components/start-card.jsx';
 import { NoteOpener } from '@/lib/notes.js';
 import { RecoveryNotice } from '@/views/data.jsx';
+import { StoppedDelete, FinishUninstall } from '@/views/uninstall.jsx';
 import { AutoNotice } from '@/components/autonomy-switch.jsx';
 import { useEngineEvents } from '@/app/engine-events.js';
 import { quiet } from '@/lib/quiet.js';
@@ -79,6 +80,7 @@ const SettingsDialog = deferred(loadSettings, 'SettingsDialog');
 const GamesDialog = deferred(() => import('@/games/games.jsx'), 'GamesDialog');
 const Tour = deferred(() => import('@/components/tour.jsx'), 'Tour');
 // The start's own screens: only on a first run, a missing core or folders to review.
+const PreviousQuestion = lazy(() => import('@/views/uninstall.jsx').then((m) => ({ default: m.PreviousQuestion })));
 const Setup = lazy(() => import('@/views/setup.jsx').then((m) => ({ default: m.Setup })));
 const CoreMissing = lazy(() => import('@/views/core-missing.jsx').then((m) => ({ default: m.CoreMissing })));
 const LayoutReview = lazy(() => import('@/views/layout.jsx').then((m) => ({ default: m.LayoutReview })));
@@ -219,7 +221,7 @@ function Shell() {
       {/* The floating robot only where there is room for it: never over forms or conversations (it covered the switches of
           Ajustes and took their clicks), and those views leave room at the bottom so nothing stays under it. */}
       {/* a browser linked with an Orb gets the PC's layout, not what only the PC itself does. */}
-      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><AutoNotice /></>}
+      {bridge.mobile ? null : <><UpdateCard /><OnceOpened when={settingsOpen} onFail={closeSettingsFailed}><SettingsDialog /></OnceOpened><OnceOpened when={gamesOpen} onFail={closeGamesFailed}><GamesDialog /></OnceOpened><RecoveryNotice /><StoppedDelete /><AutoNotice /></>}
       <Notices />
       {bridge.mobile ? null : <><ActionShortcuts project={shortcutProject} /><CommandPalette /><SelectionToChat /></>}
       <div className="hidden md:contents"><Companion name={app.config.assistantName} base={mood} hidden={app.config.ui?.companion === false || !COMPANION_VIEWS.has(route.view) || bridge.mobile || Boolean(tour)} /></div>
@@ -280,6 +282,13 @@ function AppRoot() {
   const [layout, setLayout] = useState(null);
   const [masterState, setMasterState] = useState(null);
   const [resume, setResume] = useState(null); // a welcome left halfway: { step, plan }
+  // The desktop window is born hidden: it is shown when the first real screen (not the blank «loading») has been
+  // committed, so no empty black window is ever seen. Rust shows it anyway after a time limit if this never runs.
+  useEffect(() => {
+    // no wait for an animation frame: a hidden page runs none, and the window's colour already matches the theme
+    // in English it also waits (at most ~300 ms) for the English texts, so the first paint is already in English
+    if (phase !== 'loading') languageReady.then(() => bridge.windowReady?.()?.catch(quiet));
+  }, [phase]);
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -287,6 +296,8 @@ function AppRoot() {
       let info;
       try { info = await bridge.info(); } catch (e) { setError(String(e?.message ?? e)); return alive && setPhase('error'); }
       setState({ info });
+      // a workspace of an earlier install is on this PC: the question comes before the welcome (nothing is adopted in silence)
+      if (info.needsSetup && info.previous) return alive && setPhase('previous');
       if (info.needsSetup) return alive && setPhase('setup');
       if (info.needsPairing) return alive && setPhase('pair');
       // this app is older than what the Orb asks for (protocol of the link): update first.
@@ -300,7 +311,7 @@ function AppRoot() {
           // welcome left halfway, folders of an earlier Orb to decide about (lib/startup.js).
           const start = await startupPhase((method) => bridge.call(method), { mobile: bridge.mobile });
           if (start.phase !== 'app') {
-            if (start.phase === 'core') setCore(start.data);
+            if (start.phase === 'core' || start.phase === 'uninstalling' || start.phase === 'stoppedDelete') setCore(start.data);
             else if (start.phase === 'migration') setMigration(start.data);
             else if (start.phase === 'unlock' || start.phase === 'master') setMasterState(start.data);
             else if (start.phase === 'layout') setLayout(start.data);
@@ -415,6 +426,8 @@ function AppRoot() {
     if (phase !== 'app' || !ready) return;
     try { if (!performance.getEntriesByName('orb:ready').length) requestAnimationFrame(() => performance.mark('orb:ready')); } catch { /* no performance API */ }
   }, [phase, ready]);
+  // whichever the answer, the app now has a workspace: the start goes on as for any start (the welcome included, after «Empezar de cero»)
+  if (phase === 'previous') return <>{strip}<Suspense fallback={null}><PreviousQuestion previous={getState().info?.previous} onAnswered={() => window.location.reload()} /></Suspense></>;
   if (phase === 'setup') return <>{strip}<Suspense fallback={null}><Setup resume={resume} onDone={async (route) => { await refresh(); setPhase('app'); if (route) go(route); }} /></Suspense></>;
   if (phase === 'pair' && bridge.link) return <>{strip}<AppLink /></>;
   // a browser opened from the QR: the master password before linking.
@@ -433,6 +446,8 @@ function AppRoot() {
   );
   if (phase === 'update') return <>{strip}<UpdateNeeded info={getState().info} /></>;
   if (phase === 'offline') return <PcOffline info={getState().info} onRelink={() => setPhase('pair')} />;
+  if (phase === 'stoppedDelete') return <>{strip}<StoppedDelete pending={core} /></>;
+  if (phase === 'uninstalling') return <>{strip}<FinishUninstall code={core?.code} /></>;
   if (phase === 'core') return <>{strip}<Suspense fallback={null}><CoreMissing state={core} /></Suspense></>;
   if (phase === 'master') return <>{strip}<MasterCreate upgrade={Boolean(masterState?.upgraded)} onDone={() => location.reload()} /></>;
   if (phase === 'unlock') return <>{strip}<MasterLocked state={masterState} onDone={() => { if (masterState?.screenLocked && getState().ready) { setPhase('app'); refreshSoon(); } else location.reload(); }} /></>;
@@ -549,7 +564,7 @@ function PreviewSidebar() {
       <div className="px-3 pb-2">
         <div className="bg-muted text-muted-foreground flex h-[var(--ctl)] items-center gap-2 rounded-ctl px-3 text-control opacity-70"><Search className="size-4" />{t('orbchats.search')}</div>
       </div>
-      <nav className="grid grid-cols-4 gap-0.5 px-2 pb-1.5">
+      <nav className="grid grid-cols-[repeat(4,minmax(0,1fr))] gap-x-[3px] px-2 pb-1.5">
         {places.map(([Icon, label]) => (
           <div key={label} className="text-muted-foreground flex min-w-0 flex-col items-center gap-[3px] pt-[7px] pb-1.5 text-caption leading-[1.45]"><Icon className="size-5" /><span className="max-w-full truncate">{t(label)}</span></div>
         ))}

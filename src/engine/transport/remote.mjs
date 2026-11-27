@@ -17,7 +17,7 @@ import crypto from 'node:crypto';
 import { ctx, tr } from '../../platform/context.mjs';
 import { oneLine } from '../../shared/text.mjs';
 import { quickRun } from '../../agents/index.mjs';
-import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, sealBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk } from '../../shared/mobile-crypto.mjs';
+import { b64, newKeyPair, publicKeyOf, pairingKey, sessionKey, fingerprint, seal, open, sealText, openText, openBytes, sealBytes, AAD, CLOCK_SKEW_MS, shortSecret, pairKdfOk, LINK_KDF, LINK_VIAS } from '../../shared/mobile-crypto.mjs';
 import { newVapidKeys, checkSubscription, sendPush } from './webpush.mjs';
 import { streamFeed } from '../../shared/chat-stream.mjs';
 import { PROTOCOL, MIN_PROTOCOL, PAIR_PROTOCOL, versionOfProtocol, CODE_ALPHABET, shortCodeLabel } from '../../shared/link-payload.mjs';
@@ -25,10 +25,12 @@ import { SHOT_NAME, SHOT_DIR, SHOT_TTL_MS, sweepShots } from '../host/screenshot
 import { principalOf, REMOTE_METHODS } from '../../domain/security/permissions.mjs';
 import { isLegacy } from '../../domain/data/legacy/migrate-38.mjs';
 import { ownPorts } from '../host/host.mjs';
-import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
-import { guardCall, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
-import { privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, lanAddresses } from './remote-net.mjs';
+import { RENDERER, SESSION_DAYS, PAIR_MINUTES, UPLOAD_MAX, UPLOADS_TOTAL, UPLOADS_DAYS, STREAM_BACKLOG, STREAMS_PER_DEVICE, NETWORK_CHECK_MS, PING_MS, CALL_MS, now, PAIR_KINDS, PAIR_FAILS_MAX, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
+import { guardCall, withDeadline, pushPreview, IMAGE_NAME, UPLOAD_TYPES, sniffUpload, sanitizeUploadName, withoutPaths, shapeResult } from './remote-calls.mjs';
+import { viaTailscale, privateSource, orbNameOf, ipOf, kindOf, kindForPairing, localName, plainHttpBrowser, parseMeta, metaVOf, APP_CORS, appOrigin, tailscaleExe, tailscaleAddress, tailscaleAdapterUp, lanAddresses } from './remote-net.mjs';
 import { TYPES, HEADERS, SERVICE_WORKER } from './remote-web.mjs';
+import { createJournal } from './remote-events.mjs';
+import { createLinkWatcher, createRepairGate } from './remote-watch.mjs';
 
 export { PAIR_KINDS, PAIR_PASSWORD_TRIES } from './remote-common.mjs';
 export { PREVIEWS, guardCall, phoneConfig, pushPreview, shapeResult, withoutPaths } from './remote-calls.mjs';
@@ -47,11 +49,23 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   let watcher = null;
   let served = null; // the https port `tailscale serve` is forwarding for us (turned off on stop)
   let pairing = null; // { code, short, expires, route, fails }
+  // A code that links without the master password (src-tauri/vault/src/link.rs keeps the code itself; this holds only what
+  // the engine needs around it): { expires, route, device, pending: Map(sid -> exchange), waiting: null | the owner's question }.
+  let linkLive = null;
+  // The phone gives up at 2 minutes; the PC answers first (a test run may shorten it).
+  const LINK_CONFIRM_MS = (process.env.NODE_TEST_CONTEXT && Number(process.env.ORB_LINK_CONFIRM_MS)) || 100_000;
   const orbName = () => orbNameOf(ctx.config);
   const failures = new Map(); // address -> timestamps of wrong pairing attempts (one noisy device cannot lock out the others)
   const clients = new Set(); // live-event streams: { res, device, key }
+  // The approval each phone was last asked for (device -> { value, until }): a phone that opens its stream within the two minutes still gets it.
+  const asking = new Map();
   const seen = new Map(); // device id -> Map(nonce -> expiry): requests already answered (replays are refused)
   const keys = new Map(); // device id -> session key
+  // device id -> Map(nonce -> { exp, done }): the sealed answer of each call (or the one still being worked out), so a phone
+  // that resends a call it got no answer to (same nonce) gets that answer and the call never runs twice.
+  const answers = new Map();
+  const ANSWERS_PER_DEVICE = 200; const ANSWER_KEEP_MAX = 256 * 1024;
+  const journal = createJournal(); // the last events sent, for a phone that reconnects
   // The phones' pictures (a phone may only attach the ones uploaded from a linked device). Older data kept them in a
   // subfolder per person: those may still be inside, and pruneUploads clears them with the rest.
   const uploads = () => path.join(ctx.paths.internal, 'adjuntos-movil');
@@ -147,7 +161,19 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
   function openRequest(device, box, expected) {
     let msg; try { msg = open(keyOf(device), box, AAD.request(device.id)); } catch { return null; }
     if (!msg || msg.m !== expected) return null;
+    // A resent call whose first request already got through: its answer comes before the time check (the resend carries the
+    // first request's stamp, which may have aged). Only for a nonce the PC holds an answer for, so new nonces are checked as ever.
+    if (expected === 'call') {
+      const kept = answers.get(device.id)?.get(box.n);
+      if (kept && kept.exp > Date.now() && seen.get(device.id)?.has(box.n)) return { again: kept, nonce: box.n };
+    }
     const f = freshness(device.id, box.n, Number(msg.t));
+    // Same device, same nonce, still inside its window, and a call already run or running: not a new request. It only
+    // got through the device's own key and a fresh time stamp, and what it is given is sealed for that device alone.
+    if (f === 'replay' && expected === 'call') {
+      const again = answers.get(device.id)?.get(box.n);
+      if (again && again.exp > Date.now()) return { again, nonce: box.n };
+    }
     return f === 'ok' ? { body: msg.b ?? null, nonce: box.n } : f === 'clock' ? { clock: true } : null;
   }
   // The same for the requests whose envelope travels in a header (live events, pictures).
@@ -208,6 +234,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (app) { res.setHeader('Access-Control-Allow-Origin', app); for (const [k, v] of Object.entries(APP_CORS)) res.setHeader(k, v); }
     if (req.method === 'OPTIONS') { req.resume(); return send(res, app ? 204 : 403, '', 'text/plain'); }
     if (req.method === 'GET' && p === '/api/hello') return helloInfo(res);
+    // only where Tailscale looks for an Orb: on the home network it is an unknown route like any other
+    if (req.method === 'GET' && p === '/api/discover' && viaTailscale(req.socket?.localAddress)) return send(res, 200, { orb: 1, v: PROTOCOL, name: orbName() }); // only «an Orb is here»: it links nothing
     if (req.method === 'GET' && !p.startsWith('/api/')) return serveStatic(req, res, p);
     if (!originOk(req)) return send(res, 403, { error: 'origen no permitido' });
 
@@ -226,10 +254,24 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       res.writeHead(200, { ...HEADERS, 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
       res.write(': hola\n\n');
       const client = { res, device: device.id, key: keyOf(device), at: Date.now(), stream: auth.deltas ? streamFeed() : null };
+      // A phone that lost its stream says the last event it saw: what came after goes first, in order, or a `resync`
+      // (no id) tells it to reload its whole state. All written in this same tick, so no live event slips in between.
+      const lastId = req.headers['last-event-id'] ?? url.searchParams.get('since');
+      if (lastId) {
+        const back = journal.since(lastId, { notBefore: Date.parse(device.created_at) || 0 });
+        try {
+          if (back.resync) res.write(`data: ${sealText(client.key, { e: 'resync', p: null }, AAD.event(device.id))}\n\n`);
+          else for (const x of back.items) res.write(`id: ${x.id}\ndata: ${sealText(client.key, x.value, AAD.event(device.id))}\n\n`);
+        } catch { /* closed */ }
+      }
       const mine = [...clients].filter((c) => c.device === device.id);
       if (mine.length >= STREAMS_PER_DEVICE) { try { mine[0].res.end(); } catch { /* closed */ } clients.delete(mine[0]); }
       clients.add(client);
-      const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* closed */ } }, 25_000);
+      const ask = asking.get(device.id);
+      if (ask && ask.until > Date.now()) { try { res.write(`data: ${sealText(client.key, ask.value, AAD.event(device.id))}
+
+`); } catch { /* closed */ } } else asking.delete(device.id);
+      const ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* closed */ } }, PING_MS);
       req.on('close', () => { clearInterval(ping); clients.delete(client); });
       return undefined;
     }
@@ -243,6 +285,12 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const msg = openRequest(device, box, what);
     if (!msg) return send(res, 401, { error: tr('msg.remote.notLinked') });
     if (msg.clock) return clockOff(res);
+    if (msg.again) {
+      // A resent call does not count as the device being seen again (its address is not updated from it).
+      const sealed = await msg.again.done;
+      // The answer was not kept (too big, or pushed out): 410, never 401 (which unlinks the phone) or 409 (the clock).
+      return sealed ? send(res, 200, sealed) : send(res, 410, { error: tr('msg.remote.gone'), reason: 'gone' });
+    }
     touch(device, req);
 
     if (what === 'me') {
@@ -256,7 +304,9 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       if (tooOld(cv)) return reply(res, device, msg.nonce, { ok: false, status: 426, update: 'me', error: tr('msg.link.updateClient', { has: versionOfProtocol(cv), need: versionOfProtocol(MIN_PROTOCOL) }) });
       return reply(res, device, msg.nonce, { ok: true, result: { device: device.name, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint(), push: Boolean(device.push), vapid: own().vapid.publicKey,
         // what this PC accepts from a phone, so a client can offer only that
-        methods: [...REMOTE_METHODS].sort(), uploads: { max: UPLOAD_MAX, types: UPLOAD_TYPES } } });
+        methods: [...REMOTE_METHODS].sort(), uploads: { max: UPLOAD_MAX, types: UPLOAD_TYPES },
+        // how each way in is doing, so «Este móvil» can tell Wi-Fi from Tailscale (sealed to this phone only)
+        entries: Object.values(entries).filter((e) => e && ctx.config.mobile?.[e.tipo] !== false) } });
     }
     if (what === 'push') {
       // Turn notifications on (a subscription made by this phone's browser) or off (null).
@@ -269,25 +319,52 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // what === 'call'
     const method = String(msg.body?.method ?? '');
     const params = msg.body?.params && typeof msg.body.params === 'object' ? msg.body.params : {};
-    const deny = (error) => reply(res, device, msg.nonce, { ok: false, status: 403, error });
+    let mine = answers.get(device.id); if (!mine) answers.set(device.id, (mine = new Map()));
+    mine.held ??= 0; // how many answers this device has stored
+    for (const [n, a] of mine) if (a.exp < Date.now()) { if (a.held) mine.held--; mine.delete(n); }
+    // Only answers already given are pushed out, and the nonce stays as an empty mark (a resend then gets 410).
+    for (const a of mine.values()) { if (mine.held < ANSWERS_PER_DEVICE) break; if (a.held) { a.held = false; mine.held--; a.done = Promise.resolve(null); } }
+    let settle; const entry = { exp: Date.now() + 2 * CLOCK_SKEW_MS, held: false, done: new Promise((r) => { settle = r; }) };
+    mine.set(msg.nonce, entry);
+    let answered = false;
+    const answer = (dev, nonce, value) => {
+      const sealed = seal(keyOf(dev), { r: nonce, ...value }, AAD.response(dev.id));
+      answered = true;
+      settle(sealed);
+      // the ones already waiting get it; later resends of a very big one get 410
+      if (JSON.stringify(sealed).length > ANSWER_KEEP_MAX) entry.done = Promise.resolve(null); else { entry.held = true; mine.held++; }
+      send(res, 200, sealed);
+    };
+    try {
+    const deny = (error) => answer(device, msg.nonce, { ok: false, status: 403, error });
     const principal = principalOf({ device });
-    // which account the assistant spends is chosen on the PC (the brain's agent and model, also from the phone).
-    if (method === 'chat.settings' && params.account !== undefined) delete params.account;
     // A picture it uploaded comes back by the name /api/upload gave it (never a path of the PC).
     if (Array.isArray(params.images)) params.images = params.images.map((f) => (typeof f === 'string' && IMAGE_NAME.test(f) ? path.join(uploads(), f) : f));
     const why = guardCall(board, method, params, { uploadsDir: uploads() });
     if (why) return deny(why);
     try {
       // What this device may call (src/domain/security/permissions.mjs), and the settings without paths or secrets (phoneConfig).
-      const result = shapeResult(method, (await api.call(method, params, principal)) ?? null);
-      return reply(res, device, msg.nonce, { ok: true, result });
+      // A call that never ends is answered with a clear error (the work itself cannot be stopped from here). A retry of
+      // the same nonce gets that error too, and does not start the work again.
+      const raw = await withDeadline(() => api.call(method, params, principal), CALL_MS, () => Object.assign(new Error(tr('msg.remote.callTimeout')), { reason: 'timeout', status: 504 }));
+      const result = shapeResult(method, raw ?? null);
+      return answer(device, msg.nonce, { ok: true, result });
     }
-    catch (error) { return reply(res, device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
+    catch (error) { return answer(device, msg.nonce, { ok: false, error: withoutPaths(oneLine(error?.message ?? String(error), 1000)), ...(error?.reason ? { reason: error.reason, status: error.status ?? 403 } : error?.status === 403 ? { status: 403 } : {}) }); }
+    } finally {
+      // Something failed before any answer: those waiting on this nonce must not wait for ever.
+      if (!answered) { settle(null); entry.done = Promise.resolve(null); } // the nonce stays as an empty mark: a resend gets 410, not a replay's 401
+    }
   }
 
   // what a device that has only the short code needs to know (only while a code is on screen). urls: the other
   // addresses of this same PC (Wi-Fi, Tailscale, name.local).
   function helloInfo(res) {
+    if (linkLive && Date.now() <= linkLive.expires) {
+      // short 4: the code needs no password; the code's own salt is what a phone stretches the typed 8 characters with.
+      let info = null; try { info = ctx.master?.linkInfo(); } catch { info = null; }
+      if (info?.ok) return send(res, 200, { v: PROTOCOL, short: 4, salt: info.salt, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
+    }
     if (!pairing || Date.now() > pairing.expires) return send(res, 404, { error: tr('msg.link.noCode') });
     // short: 3: the short code is tied to this key (src/ui/lib/web-bridge.js refuses an Orb without it).
     return send(res, 200, { v: PROTOCOL, short: 3, pc: b64.enc(own().pub), fp: pcFingerprint(), name: orbName(), urls: (state.routes ?? []).map((r) => r.url) });
@@ -313,6 +390,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       return send(res, 401, { error: tr('msg.remote.badQr') });
     };
     let body; try { body = await readJson(req, 10_000); } catch { return fail(); }
+    if (body && LINK_VIAS.includes(body.via)) return pairByCode(req, res, body, who, recent);
     if (!pairing || Date.now() > pairing.expires || !body || typeof body.pub !== 'string') return fail();
     // a page served over the home Wi-Fi in plain http could have been changed on the way (and the master
     // password is typed in it): a browser links only over https (Tailscale), the Tailscale address or this PC itself. The
@@ -352,6 +430,85 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     return send(res, 200, { sid, box: seal(codeKey, { sid, kdf }, AAD.pairChallenge) });
   }
 
+  // Linking with a one-use code, no password (see linkLive). Same two steps as pair(), then the owner's yes at this PC: only
+  // after it does the vault hand over its MAC, and without it no device is made. A wrong try counts in the vault, which kills
+  // the code at the third.
+  // What a phone calls itself, as shown to the owner and kept: one line, no control or invisible format characters.
+  const deviceName = (raw) => oneLine((typeof raw === 'string' ? raw : '').replace(/[\p{Cc}\p{Cf}]/gu, ' '), 60).trim() || tr('msg.remote.defaultName');
+  function closeLinkCode() {
+    const live = linkLive; linkLive = null;
+    if (live?.waiting) live.waiting.answer(false);
+    try { ctx.master?.linkCancel(); } catch { /* the vault is closed: the code is gone with it */ }
+  }
+  async function pairByCode(req, res, body, who, recent) {
+    const fail = () => { recent.push(Date.now()); return send(res, 401, { error: tr('msg.remote.badQr') }); };
+    const live = linkLive;
+    const m = ctx.master;
+    if (!live || !m || Date.now() > live.expires || typeof body.pub !== 'string') return fail();
+    if (plainBrowser(req)) return send(res, 403, { error: tr('msg.link.httpBrowser') });
+    // One wrong try per address every 2 s, answered before the proof is looked at: three quick fake proofs from one device on
+    // the Wi-Fi cannot burn the code in a blink (the vault's limit of three wrong tries in total stays as it is).
+    const lastWrong = live.lastWrong ??= new Map();
+    if (Date.now() - (lastWrong.get(who) ?? 0) < 2000) return send(res, 429, { error: tr('msg.remote.tooMany') });
+    let devPub; try { devPub = b64.dec(body.pub); } catch { return fail(); }
+    if (devPub.length !== 32) return fail();
+    const wrong = () => { // one more try spent in the vault; at the third the code is gone
+      lastWrong.set(who, Date.now());
+      let r = null; try { r = m.linkFail(); } catch { r = null; }
+      if (r?.reason === 'dead' || r?.reason === 'gone') { if (linkLive === live) closeLinkCode(); log('enlace: demasiados intentos; código anulado'); board.notice(tr('msg.link.codeKilled', { ip: who }), 'warning'); return send(res, 403, { error: tr('msg.link.codeDead'), reason: 'newCode' }); }
+      return fail();
+    };
+    if (body.step === 'finish') return finishByCode(res, body, devPub, live, { fail, who });
+    let probe = null; try { probe = m.linkProbe(body.via, body.pub); } catch { probe = null; }
+    if (!probe?.ok) return fail();
+    const codeKey = b64.dec(probe.key);
+    let proof; try { proof = open(codeKey, body.proof, AAD.pair); } catch { proof = null; }
+    if (!proof || proof.pub !== body.pub) return wrong();
+    if (!(Math.abs(Date.now() - Number(proof.t)) <= CLOCK_SKEW_MS)) return clockOff(res);
+    if (!(Number(proof.v) >= PAIR_PROTOCOL) || body.step !== 'start') return send(res, 426, { error: tr('msg.link.updatePair', { need: versionOfProtocol(PAIR_PROTOCOL) }), update: 'pair' });
+    const kind = kindForPairing(live.device, typeof proof.kind === 'string' ? proof.kind : kindOf({ name: proof.name }));
+    if (!kind) return send(res, 403, { error: tr('msg.link.notForOrb') });
+    const sid = crypto.randomBytes(16).toString('base64url');
+    for (const [k, x] of live.pending) if (x.pub === body.pub) live.pending.delete(k);
+    if (live.pending.size >= 8) live.pending.delete(live.pending.keys().next().value);
+    live.pending.set(sid, { pub: body.pub, via: body.via, kind, name: proof.name, v: proof.v });
+    return send(res, 200, { sid, box: seal(codeKey, { sid, kdf: LINK_KDF }, AAD.pairChallenge) });
+  }
+  async function finishByCode(res, body, devPub, live, { fail, who }) {
+    const x = typeof body.sid === 'string' ? live.pending.get(body.sid) : null;
+    if (!x || x.pub !== body.pub || live.waiting) return fail();
+    live.pending.delete(body.sid); // one try per exchange
+    const m = ctx.master;
+    const id = crypto.randomUUID();
+    let r;
+    try { r = await m.serial(() => m.linkFinish({ via: x.via, devPub: body.pub, pcPub: b64.enc(own().pub), sid: body.sid, mac: typeof body.mac === 'string' ? body.mac : '', id })); } catch { return fail(); }
+    if (!r.ok) {
+      if (r.reason === 'dead' || r.reason === 'gone') { if (linkLive === live) closeLinkCode(); log('enlace: código anulado'); return send(res, 403, { error: tr('msg.link.codeDead'), reason: 'newCode' }); }
+      return fail();
+    }
+    const name = deviceName(x.name);
+    // The owner sees the phone's name (and where it comes from) at this PC and says yes or no; no answer is a no.
+    const yes = await new Promise((resolve) => {
+      const until = Date.now() + LINK_CONFIRM_MS;
+      const timer = setTimeout(() => resolve(false), LINK_CONFIRM_MS); timer.unref?.();
+      live.waiting = { id, name, ip: who, until, answer: (ok) => { clearTimeout(timer); resolve(ok === true); } };
+      try { emit('link:confirm', { id, name, ip: who, until }); } catch (error) { log(`enlace: ${error.message}`); }
+    });
+    live.waiting = null;
+    try { emit('link:confirm', { id: null }); } catch (error) { log(`enlace: ${error.message}`); }
+    let c = null; try { c = m.linkConfirm(id, body.pub, yes); } catch { c = null; }
+    if (linkLive === live) linkLive = null;
+    if (!c?.ok) { log(`enlace: «${name}» no enlazado (${yes ? 'caducó' : 'no confirmado'})`); return send(res, 403, { error: tr('msg.link.notConfirmed'), reason: 'declined' }); }
+    // Nothing is registered to approve here: that is a separate step with the password or the code (src/engine/api/master.mjs › approve.register).
+    board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      id, name, `clave:${id}`, now(), now(), body.pub, live.route, x.kind, who, JSON.stringify({ v: Number(x.v) || PAIR_PROTOCOL }));
+    board.event(null, 'usuario', 'device.paired', name);
+    board.notice(tr('msg.remote.deviceLinked', { name }), 'success');
+    const key = sessionKey(own().priv, devPub); keys.set(id, key);
+    linkChanged();
+    return send(res, 200, { id, mac: c.pcMac, box: seal(key, { id, name: ctx.config.assistantName, orb: orbName(), ...versions(), pc: pcFingerprint() }, AAD.paired(id)) });
+  }
+
   async function finishPair(res, body, devPub, fail, who) {
     const issued = pairing;
     const x = typeof body.sid === 'string' ? issued.pending.get(body.sid) : null;
@@ -373,7 +530,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     if (pairing !== issued || Date.now() > issued.expires) return fail(); // used or gone while the password was checked
     const { route } = pairing;
     pairing = null; // one use
-    const name = oneLine(typeof x.name === 'string' && x.name ? x.name : tr('msg.remote.defaultName'), 60);
+    const name = deviceName(x.name);
     board.run('INSERT INTO devices (id, name, token_hash, created_at, last_seen, public_key, route, kind, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       id, name, `clave:${id}`, now(), now(), body.pub, route, x.kind, who, JSON.stringify({ v: Number(x.v) || PAIR_PROTOCOL }));
     board.event(null, 'usuario', 'device.paired', name);
@@ -587,67 +744,146 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     const port = served; served = null;
     await quickRun(tailscaleExe(), ['serve', `--https=${port}`, 'off'], { timeoutMs: 15_000 }).catch(() => {});
   }
+  // Is our port still forwarded? true / false, or null when it cannot be told (the answer is cut or the command failed:
+  // nothing is touched then).
+  async function serveAlive(port) {
+    const r = await quickRun(tailscaleExe(), ['serve', 'status', '--json'], { timeoutMs: 10_000 }).catch(() => null);
+    if (!r?.ok) return null;
+    try {
+      const st = JSON.parse(r.out);
+      return Boolean(st?.TCP?.[String(port)] || Object.keys(st?.Web ?? {}).some((k) => k.endsWith(`:${port}`)));
+    } catch { return null; }
+  }
+
+  // What each way in opened ({ routes, hosts, origins, errors, … }), so one can be redone without touching the other,
+  // and what the screen and the phone show of each: { tipo, url, abierta, ultimoOk, ultimoError }.
+  const parts = { wifi: null, tailscale: null };
+  const entries = { wifi: null, tailscale: null };
+  // Only changes are logged (the watcher looks every few seconds): opened, closed, failed.
+  function note(kind, { ok = false, url, error = null } = {}) {
+    const e = (entries[kind] ??= { tipo: kind, url: null, abierta: false, ultimoOk: null, ultimoError: null });
+    const before = { open: e.abierta, error: e.ultimoError };
+    if (url !== undefined) e.url = url;
+    e.abierta = ok;
+    if (ok) e.ultimoOk = new Date().toISOString();
+    else if (error) e.ultimoError = withoutPaths(oneLine(error, 200));
+    if (ok && !before.open) log(`móvil: entrada ${kind} abierta${e.url ? ` en ${e.url}` : ''}`);
+    else if (!ok && before.open) log(`móvil: entrada ${kind} cerrada${error ? `: ${e.ultimoError}` : ''}`);
+    else if (!ok && error && e.ultimoError !== before.error) log(`móvil: entrada ${kind} no abierta: ${e.ultimoError}`);
+  }
+  function composeState() {
+    const list = [parts.wifi, parts.tailscale].filter(Boolean);
+    const routes = list.flatMap((p) => p.routes); const errors = list.flatMap((p) => p.errors);
+    state = { running: routes.length > 0, routes, hosts: list.flatMap((p) => p.hosts), origins: list.flatMap((p) => p.origins), local: parts.wifi?.local ?? null, lan: parts.wifi?.lan ?? '',
+      error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
+  }
+  const settle = (kind, part) => {
+    parts[kind] = part;
+    const r = part?.routes[0];
+    if (!part) { if (entries[kind]) note(kind, { ok: false }); } else if (r) note(kind, { ok: true, url: r.url }); else note(kind, { ok: false, url: null, error: part.errors[0] ?? tr('msg.remote.noEntry') });
+  };
+
+  // The home network: one server per local address, plus this PC's name there. → the part, or null when stop() ran meanwhile.
+  async function openWifi(port, mine) {
+    const part = { routes: [], hosts: [], origins: [], errors: [], local: null, lan: lanAddresses().join(',') };
+    const bind = async (address) => {
+      const r = await listen(address, port);
+      if (r.error) { part.errors.push(tr('msg.remote.portBusy', { address, port, error: r.error.message })); return false; }
+      r.srv.orbKind = 'wifi'; servers.push(r.srv); return true;
+    };
+    if (process.env.ORB_REMOTE_BIND === '127.0.0.1') {
+      // Tests: only loopback.
+      if (await bind('127.0.0.1')) { part.hosts.push(`127.0.0.1:${port}`); part.origins.push(`http://127.0.0.1:${port}`); part.routes.push({ kind: 'wifi', url: `http://127.0.0.1:${port}/`, secure: false, address: '127.0.0.1' }); }
+      return part;
+    }
+    const lan = lanAddresses();
+    if (!lan.length) part.errors.push(tr('msg.remote.noWifi'));
+    for (const address of lan) {
+      if (mine !== generation) return null;
+      if (await bind(address)) { part.hosts.push(`${address}:${port}`); part.origins.push(`http://${address}:${port}`); if (!part.routes.length) part.routes.push({ kind: 'wifi', url: `http://${address}:${port}/`, secure: false, address }); }
+    }
+    // this computer's name on the home network (<name>.local, answered by the system's mDNS), so a phone
+    // still finds it when the Wi-Fi address changes.
+    const local = localName();
+    if (local && part.routes.length) { part.hosts.push(`${local}:${port}`); part.origins.push(`http://${local}:${port}`); part.local = `http://${local}:${port}/`; }
+    return part;
+  }
+  // Tailscale: https through `tailscale serve` when the tailnet has it, plain http on its address otherwise. → the part, or
+  // null when stop() ran meanwhile.
+  async function openTailscale(port, mine) {
+    const part = { routes: [], hosts: [], origins: [], errors: [] };
+    const ts = await tailscaleAddress();
+    if (mine !== generation) return null;
+    const bind = async (address) => {
+      const r = await listen(address, port);
+      if (r.error) { part.errors.push(tr('msg.remote.portBusy', { address, port, error: r.error.message })); return false; }
+      r.srv.orbKind = 'tailscale'; servers.push(r.srv); return true;
+    };
+    // The loopback server is only of use while `tailscale serve` forwards https to it: otherwise plain http.
+    let https = false;
+    if (ts?.https && ts.dns && await bind('127.0.0.1')) { https = await serveHttps(port); if (!https) { try { servers.pop()?.close(); } catch { /* closed */ } } }
+    if (mine !== generation) return null;
+    if (!ts) part.errors.push(tr('msg.remote.noTailscale'));
+    else if (https) {
+      part.hosts.push(`${ts.dns}:${port}`); part.origins.push(`https://${ts.dns}:${port}`);
+      part.routes.push({ kind: 'tailscale', url: `https://${ts.dns}:${port}/`, secure: true, address: ts.address });
+    } else if (await bind(ts.address)) {
+      part.hosts.push(`${ts.address}:${port}`, ...(ts.dns ? [`${ts.dns}:${port}`] : [])); part.origins.push(`http://${ts.address}:${port}`, ...(ts.dns ? [`http://${ts.dns}:${port}`] : []));
+      part.routes.push({ kind: 'tailscale', url: `http://${ts.dns ?? ts.address}:${port}/`, secure: false, address: ts.address });
+    }
+    return part;
+  }
 
   async function startNow() {
     const mine = generation;
     const m = ctx.config.mobile ?? {};
     const port = m.port ?? 3131;
-    const routes = []; const hosts = []; const origins = []; const errors = []; let localUrl = null;
-    const bind = async (address) => {
-      const r = await listen(address, port);
-      if (r.error) { errors.push(tr('msg.remote.portBusy', { address, port, error: r.error.message })); return false; }
-      servers.push(r.srv); return true;
-    };
-    const unbind = () => { try { servers.pop()?.close(); } catch { /* closed */ } };
     const gaveUp = () => { closeAll(); return state; }; // stop() ran while we waited: what we bound goes too
-    if (process.env.ORB_REMOTE_BIND === '127.0.0.1') {
-      // Tests: only loopback.
-      if (await bind('127.0.0.1')) { hosts.push(`127.0.0.1:${port}`); origins.push(`http://127.0.0.1:${port}`); routes.push({ kind: 'wifi', url: `http://127.0.0.1:${port}/`, secure: false, address: '127.0.0.1' }); }
-    } else {
-      if (m.wifi !== false) {
-        const lan = lanAddresses();
-        if (!lan.length) errors.push(tr('msg.remote.noWifi'));
-        for (const address of lan) {
-          if (mine !== generation) return gaveUp();
-          if (await bind(address)) { hosts.push(`${address}:${port}`); origins.push(`http://${address}:${port}`); if (!routes.some((r) => r.kind === 'wifi')) routes.push({ kind: 'wifi', url: `http://${address}:${port}/`, secure: false, address }); }
-        }
-        // this computer's name on the home network (<name>.local, answered by the system's mDNS), so a phone
-        // still finds it when the Wi-Fi address changes.
-        const local = localName();
-        if (local && routes.some((r) => r.kind === 'wifi')) { hosts.push(`${local}:${port}`); origins.push(`http://${local}:${port}`); localUrl = `http://${local}:${port}/`; }
-      }
-      if (m.tailscale !== false) {
-        const ts = await tailscaleAddress();
-        if (mine !== generation) return gaveUp();
-        // The loopback server is only of use while `tailscale serve` forwards https to it: otherwise plain http.
-        let https = false;
-        if (ts?.https && ts.dns && await bind('127.0.0.1')) { https = await serveHttps(port); if (!https) unbind(); }
-        if (mine !== generation) return gaveUp();
-        if (!ts) errors.push(tr('msg.remote.noTailscale'));
-        else if (https) {
-          hosts.push(`${ts.dns}:${port}`); origins.push(`https://${ts.dns}:${port}`);
-          routes.push({ kind: 'tailscale', url: `https://${ts.dns}:${port}/`, secure: true, address: ts.address });
-        } else if (await bind(ts.address)) {
-          hosts.push(`${ts.address}:${port}`, ...(ts.dns ? [`${ts.dns}:${port}`] : [])); origins.push(`http://${ts.address}:${port}`, ...(ts.dns ? [`http://${ts.dns}:${port}`] : []));
-          routes.push({ kind: 'tailscale', url: `http://${ts.dns ?? ts.address}:${port}/`, secure: false, address: ts.address });
-        }
-      }
-    }
+    parts.wifi = parts.tailscale = null;
+    const testing = process.env.ORB_REMOTE_BIND === '127.0.0.1';
+    if (testing || m.wifi !== false) { const w = await openWifi(port, mine); if (!w) return gaveUp(); settle('wifi', w); }
+    if (!testing && m.tailscale !== false) { const t = await openTailscale(port, mine); if (!t) return gaveUp(); settle('tailscale', t); }
     if (mine !== generation) return gaveUp();
-    state = { running: routes.length > 0, routes, hosts, origins, local: localUrl, lan: lanAddresses().join(','), error: routes.length ? (errors[0] ?? null) : (errors.join(' ') || tr('msg.remote.noNetwork')) };
-    for (const r of routes) log(`acceso móvil (${r.kind}) en ${r.url}`);
+    composeState();
     pruneUploads().catch(() => {});
     sweepShots(shots()).catch(() => {});
     return state;
   }
+  // The watcher's repairs: each redoes one entry and leaves the other (and every phone connected to it) alone.
+  const repairs = createRepairGate();
+  const portOf = () => ctx.config.mobile?.port ?? 3131;
+  async function reopenWifi() {
+    const mine = generation;
+    await closeKind('wifi');
+    const w = await openWifi(portOf(), mine);
+    if (!w) return;
+    settle('wifi', w); composeState();
+  }
+  async function reopenTailscale() {
+    const mine = generation;
+    await closeKind('tailscale');
+    await unserve();
+    const t = await openTailscale(portOf(), mine);
+    if (!t) return;
+    settle('tailscale', t); composeState();
+  }
+  async function reserve(mine) {
+    if (served === null || mine !== generation) return false;
+    const ok = await serveHttps(served);
+    if (mine !== generation) { await unserve(); return false; } // stop() ran meanwhile: nothing may stay forwarded
+    note('tailscale', ok ? { ok: true } : { ok: false, error: tr('msg.remote.tailscaleServeDown') });
+    return ok;
+  }
   // closing waits until every server and its open connections are really gone (2 s at most), so a restart on the same
   // port never answers through a half-closed old one: a phone's request could hang on it for ~20 s and then fail (the
   // «reabrir el acceso» test failed now and then for that).
-  function closeAll() {
-    const closing = servers.map((s) => new Promise((resolve) => { try { s.close(() => resolve()); s.closeAllConnections?.(); } catch { resolve(); } setTimeout(resolve, 2000).unref?.(); }));
-    servers = [];
+  function closeKind(kind) {
+    const mineKind = servers.filter((s) => !kind || s.orbKind === kind);
+    servers = servers.filter((s) => !mineKind.includes(s));
+    const closing = mineKind.map((s) => new Promise((resolve) => { try { s.close(() => resolve()); s.closeAllConnections?.(); } catch { resolve(); } setTimeout(resolve, 2000).unref?.(); }));
     return Promise.all(closing);
   }
+  const closeAll = () => closeKind(null);
 
   // ---- Magic Link: the linked phones and browsers.
   const onlineIds = () => new Set([...clients].map((c) => c.device));
@@ -670,14 +906,16 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     // Engine events go to the paired phones too (only the ones the interface needs), each sealed for its phone.
     broadcast(event, payload) {
       if (event === 'chat:new') notify(payload);
-      if (!clients.size || !EVENTS.has(event)) return;
+      if (!EVENTS.has(event) || !(clients.size || state.running)) return;
       // The settings themselves never travel to a phone (the page just reloads what it is allowed to see).
       const value = { e: event, p: event === 'config:changed' ? null : withoutPaths(payload) };
+      // Kept even with no phone connected: the one that comes back asks for what it missed.
+      const id = journal.add(value, event === 'chat:state' && payload?.conversation != null ? `chat:${payload.conversation}` : null);
       for (const c of clients) {
         if (c.res.writableLength > STREAM_BACKLOG) { try { c.res.destroy(); } catch { /* gone */ } clients.delete(c); continue; }
         // the streamed answer as deltas to a client that asked for them; the whole text to the others.
         const own = c.stream && event === 'chat:state' ? { e: event, p: c.stream(value.p) } : value;
-        try { c.res.write(`data: ${sealText(c.key, own, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
+        try { c.res.write(`id: ${id}\ndata: ${sealText(c.key, own, AAD.event(c.device))}\n\n`); } catch { clients.delete(c); }
       }
     },
     start() {
@@ -687,21 +925,31 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       // and never while the vault with this PC's keys is locked (it opens with the master password).
       try { own(); } catch (error) { return Promise.reject(error); }
       starting ??= startNow().finally(() => { starting = null; });
-      // The Wi-Fi address changes with the network (or comes back after it was gone): the servers follow it.
-      watcher ??= setInterval(() => {
-        if (starting || ctx.config.mobile?.wifi === false || process.env.ORB_REMOTE_BIND) return;
-        if (lanAddresses().join(',') !== (state.lan ?? '')) { log('móvil: ha cambiado la red; vuelvo a abrir el acceso'); remote.restart().catch(() => {}); }
-      }, NETWORK_CHECK_MS);
-      watcher.unref?.();
+      // The watcher redoes only the entry that needs it: a Wi-Fi address that changed, Tailscale that was not ready when
+      // Orb started, `tailscale serve` that was lost, or whatever a suspended PC left behind.
+      if (!watcher && !process.env.ORB_REMOTE_BIND) {
+        const mine = generation;
+        const lw = createLinkWatcher({ every: NETWORK_CHECK_MS, log,
+          wifiOn: () => ctx.config.mobile?.wifi !== false, tailscaleOn: () => ctx.config.mobile?.tailscale !== false,
+          lanKey: () => lanAddresses().join(','), openedLan: () => state.lan ?? '',
+          tsOpen: () => Boolean(parts.tailscale?.routes.length), tsServed: () => served !== null, tsAdapter: tailscaleAdapterUp,
+          reopenWifi: () => repairs.run(reopenWifi), openTailscale: () => repairs.run(reopenTailscale), tsServeAlive: () => (mine === generation ? repairs.run(() => serveAlive(served)) : null), reserve: () => (mine === generation ? repairs.run(() => reserve(mine)) : false),
+          seen: (kind) => { if (entries[kind]?.abierta) note(kind, { ok: true }); } });
+        watcher = setInterval(() => { if (!starting) lw.tick(); }, NETWORK_CHECK_MS);
+        watcher.unref?.();
+      }
       return starting;
     },
     async restart() { await remote.stop(); return remote.start(); },
     async stop() {
       generation++;
       clearInterval(watcher); watcher = null;
+      await repairs.idle(); // a repair still opening a server or `serve` finishes first, so nothing is left open after this
       await starting?.catch(() => {}); // a start() still waiting for the network gives up and closes what it bound
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
-      clients.clear(); await closeAll(); pairing = null; state = { running: false, routes: [], error: null };
+      clients.clear(); await closeAll(); pairing = null; closeLinkCode(); state = { running: false, routes: [], error: null };
+      for (const kind of Object.keys(entries)) if (entries[kind]?.abierta) note(kind, { ok: false });
+      parts.wifi = parts.tailscale = null;
       await unserve();
     },
     allowDownload,
@@ -709,6 +957,8 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       let pc = null; try { pc = pcFingerprint(); } catch { /* the vault is locked */ }
       return { enabled: Boolean(ctx.config.mobile?.enabled), running: Boolean(state.running), routes: state.routes ?? [], error: state.error ?? null, pc,
         wifi: ctx.config.mobile?.wifi !== false, tailscale: ctx.config.mobile?.tailscale !== false, name: orbName(),
+        // how each way in is doing: { tipo, url, abierta, ultimoOk, ultimoError }, only for the ways that are turned on
+        entries: Object.values(entries).filter((e) => e && ctx.config.mobile?.[e.tipo] !== false),
         preview: pushPreview(ctx.config), screenshot: ctx.config.mobile?.screenshot !== false,
         devices: board.all('SELECT id, name, created_at, last_seen, route, kind, ip, push IS NOT NULL AS push FROM devices ORDER BY created_at DESC').map((d) => ({ ...d, push: Boolean(d.push) })) };
     },
@@ -723,6 +973,7 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
       const code = crypto.randomBytes(18).toString('base64url');
       const short = Array.from({ length: 8 }, () => CODE_ALPHABET[crypto.randomInt(CODE_ALPHABET.length)]).join('');
       const forKind = PAIR_KINDS.includes(device) ? device : null;
+      if (linkLive) closeLinkCode();
       pairing = { code, short, short3: shortSecret(short, b64.enc(own().pub)), expires: Date.now() + PAIR_MINUTES * 60_000, route: route.kind, fails: 0, passFails: 0, pending: new Map(),
         device: forKind };
       const others = state.routes.filter((r) => r !== route).map((r) => r.url);
@@ -735,11 +986,49 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
         device: forKind,
         browserOk: Boolean(route.secure) || route.address === '127.0.0.1' || route.kind === 'tailscale' };
     },
+    // A code that links a phone without the master password: `made` is what the vault just made (src/domain/security/master.mjs >
+    // linkNew), shown once. The QR carries the 128-bit secret; the 8 characters are for typing by hand.
+    openLinkCode(kind, made) {
+      if (!state.running) throw new Error(tr('msg.remote.enableFirst'));
+      const route = state.routes.find((r) => r.kind === kind) ?? state.routes[0];
+      pairing = null;
+      linkLive = { expires: Number(made.until), route: route.kind, device: 'phone', pending: new Map(), waiting: null };
+      const others = state.routes.filter((r) => r !== route).map((r) => r.url);
+      if (state.local && !others.includes(state.local) && route.url !== state.local) others.push(state.local);
+      const frag = new URLSearchParams({ enlace: made.secret, pc: b64.enc(own().pub), v: String(PROTOCOL), n: orbName() });
+      if (others.length) frag.set('a', others.join(','));
+      return { url: `${route.url}#${frag}`, payload: { v: PROTOCOL, urls: [route.url, ...others], pc: b64.enc(own().pub), link: made.secret, name: orbName(), expiresAt: linkLive.expires },
+        code: shortCodeLabel(made.code), address: route.url, expiresAt: linkLive.expires, kind: route.kind, secure: route.secure, pc: pcFingerprint(), name: orbName(), device: 'phone', link: true, browserOk: false };
+    },
+    // The owner's answer at this PC to the question «link <name>?». -> whether that question was the one waiting.
+    answerLinkCode(id, accept) {
+      const w = linkLive?.waiting;
+      if (!w || w.id !== String(id)) return false;
+      w.answer(accept === true);
+      return true;
+    },
+    // The question waiting for the owner, for a window that opened after it was asked.
+    waitingLinkCode() { const w = linkLive?.waiting; return w ? { id: w.id, name: w.name, ip: w.ip, until: w.until } : null; },
+    cancelLinkCode() { if (linkLive) closeLinkCode(); },
+    // One sealed event to one phone (an approval it is asked for): not journaled, because it dies with its challenge.
+    // → how many of its open streams it went to.
+    sendTo(device, value, { until }) {
+      asking.set(String(device), { value, until });
+      let n = 0;
+      for (const c of clients) if (c.device === device) { try { c.res.write(`data: ${sealText(c.key, value, AAD.event(c.device))}
+
+`); n += 1; } catch { clients.delete(c); } }
+      return n;
+    },
+    stopAsking(device) { asking.delete(String(device)); },
     revoke(id) {
       const d = board.one('SELECT * FROM devices WHERE id = ?', String(id)); if (!d) throw new Error(tr('msg.remote.noDevice'));
       board.run('DELETE FROM devices WHERE id = ?', d.id);
+      asking.delete(d.id);
+      // Its key to approve goes with it: linking again does not bring it back.
+      try { ctx.master?.approveForget(d.id); } catch (error) { log(`enlace: aprobación del móvil: ${error.message}`); }
       if (!board.one('SELECT 1 AS x FROM devices WHERE public_key IS NOT NULL')) clearNotes();
-      keys.delete(d.id); seen.delete(d.id);
+      keys.delete(d.id); seen.delete(d.id); answers.delete(d.id);
       for (const c of clients) if (c.device === d.id) { try { c.res.end(); } catch { /* closed */ } clients.delete(c); }
       board.event(null, 'usuario', 'device.revoked', d.name);
       linkChanged();
@@ -752,8 +1041,10 @@ export function createRemote({ board, api, log, emit = () => {}, version = null 
     revokeAll() {
       const list = board.all('SELECT id, name FROM devices');
       board.run('DELETE FROM devices');
+      asking.clear();
+      try { ctx.master?.approveForgetAll(); } catch (error) { log(`enlace: aprobación del móvil: ${error.message}`); }
       clearNotes();
-      keys.clear(); seen.clear(); pairing = null; ownKeys = null;
+      keys.clear(); seen.clear(); answers.clear(); pairing = null; closeLinkCode(); ownKeys = null;
       for (const c of clients) { try { c.res.end(); } catch { /* closed */ } }
       clients.clear();
       if (list.length) board.event(null, 'usuario', 'device.revokedAll', String(list.length));

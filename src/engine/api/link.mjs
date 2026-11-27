@@ -8,6 +8,7 @@ import { createScreenshot, sweepShots, SHOT_DIR } from '../host/screenshot.mjs';
 import { PermissionError } from '../../domain/security/permissions.mjs';
 import { saveConfig } from '../../platform/config.mjs';
 import { PAIR_KINDS, PREVIEWS } from '../transport/remote.mjs';
+import { tailscaleInfo, tailscaleLogin, markLinked } from '../transport/tailscale-status.mjs';
 import { str, oneOf } from './common.mjs';
 
 // Engine tests (they run with the fake agents) never touch the real screen: they copy a prepared JPEG instead. The
@@ -31,9 +32,18 @@ const fakeShot = () => {
 const STRICT = /^\d{1,6}\.\d{1,6}\.\d{1,6}$/;
 const isNewer = (a, b) => { const x = a.split('.').map(Number); const y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
 
+// Same gate as fakeShot: tests drive the capture's rate limiter by writing the fake time (ms) into this file, so they
+// do not depend on how long a loaded machine took between two calls. Without the file, the real clock is used.
+const fakeClock = () => {
+  const file = process.env.ORB_FAKE_AGENTS && process.env.ORB_FAKE_SCREENSHOT_CLOCK;
+  if (!file) return undefined;
+  return () => { try { const n = Number(fs.readFileSync(file, 'utf8')); if (Number.isFinite(n) && n > 0) return n; } catch { /* no file yet */ } return Date.now(); };
+};
+
 export function linkMethods({ emit, remoteRef, log, version }) {
   const run = fakeShot(); // the test hook stands in for the Windows capture, so it also skips the platform check
-  const capture = createScreenshot(run ? { run, platform: 'win32' } : {});
+  const now = fakeClock();
+  const capture = createScreenshot(run ? { run, platform: 'win32', ...(now && { now }) } : {});
   const shotsDir = () => path.join(ctx.paths.internal, SHOT_DIR);
   sweepShots(shotsDir()).catch(() => {}); // leftovers of an engine that stopped before they expired
   return {
@@ -77,6 +87,10 @@ export function linkMethods({ emit, remoteRef, log, version }) {
       if (c.mobile.enabled) await remoteRef.current.restart();
       return remoteRef.current.status();
     },
+    // Tailscale as the account: its state and the devices of the same account (linked phones marked), and the sign-in. Finding a
+    // device here links nothing: it still needs the pairing code and the master password.
+    'tailscale.status': async () => { const info = await tailscaleInfo(); return { ...info, devices: markLinked(info.devices, remoteRef.current?.devices?.() ?? []) }; },
+    'tailscale.login': () => tailscaleLogin(),
     'remote.pair': ({ kind }) => remoteRef.current.pair(oneOf(kind, ['wifi', 'tailscale'], 'vía', undefined)),
     'remote.revoke': ({ id }) => remoteRef.current.revoke(str(id, 'dispositivo', 64)),
     // ---- Magic Link

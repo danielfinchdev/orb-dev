@@ -286,6 +286,28 @@ class SchedulesViewModelTest {
         assertNull(vm.state.value.approval)
     }
 
+    @Test fun approvingSendsTheFingerprintItShowed() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.openApproval(schedule(5, approved = false))
+        advanceUntilIdle()
+        vm.confirmApproval()
+        advanceUntilIdle()
+        assertEquals("h5", b.patches.single().hash)
+    }
+
+    @Test fun runningAnUnapprovedScheduleSendsItsFingerprintAndAnApprovedOneNone() = runTest(dispatcher) {
+        val b = FakeSchedulesBackend(listOf(schedule(5, approved = false), schedule(6)))
+        val vm = vm(b)
+        advanceUntilIdle()
+        vm.run(schedule(5, approved = false))
+        advanceUntilIdle()
+        vm.run(schedule(6))
+        advanceUntilIdle()
+        assertEquals(listOf<String?>("h5", null), b.runHashes)
+    }
+
     @Test fun anAlreadyApprovedOrDeletedScheduleClosesTheDialog() = runTest(dispatcher) {
         val b = FakeSchedulesBackend(listOf(schedule(5, approved = false)))
         val vm = vm(b)

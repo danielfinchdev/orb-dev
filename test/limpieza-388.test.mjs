@@ -28,9 +28,9 @@ test('no CSS or code targets a theme that is not in SKINS', () => {
   assert.deepEqual(stray, []);
 });
 
-test('no scene-*.css or skin thumbnail is left behind', () => {
+test('no scene-*.css is left behind (the skin thumbnails came back on purpose)', () => {
   const names = files.map((f) => path.basename(f));
-  assert.deepEqual(names.filter((n) => /^scene-.*\.css$/.test(n) || /^skin-preview\./.test(n)), []);
+  assert.deepEqual(names.filter((n) => /^scene-.*\.css$/.test(n)), []);
 });
 
 test('every relative or @/ import of src/ui points at a file that exists', () => {

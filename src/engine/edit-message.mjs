@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { tr } from '../platform/context.mjs';
 import { AGENT_LABELS } from '../platform/config-file.mjs';
 import { permissionOfAutonomy, globalAutonomy } from '../domain/security/guard.mjs';
-import { photoBefore } from '../domain/conversations/turns.mjs';
+import { photoBefore, photoMoved } from '../domain/conversations/turns.mjs';
 import { rewindFiles, undoRewindFiles } from '../domain/conversations/rewind.mjs';
 import { buildHandoff, HANDOFF_LOOKBACK } from './handoff.mjs';
 import { isGitRepoAsync, repoRootAsync } from '../platform/git.mjs';
@@ -81,7 +81,8 @@ async function inspect(sessions, s, itemId) {
   if (!s.project) { info.rewindWhy = tr('msg.edit.noProject'); return info; }
   if (await otherRunning(sessions, s)) { info.rewindWhy = tr('msg.edit.otherRunning'); return info; }
   if (!(await isGitRepoAsync(s.cwd))) { info.rewindWhy = tr('msg.edit.noGit'); return info; }
-  if (!(await photoBefore(s.cwd, s.id, itemId))) { info.rewindWhy = tr('msg.edit.noPhoto'); return info; }
+  if ((sessions.board.settingJson(`chatmoves:${s.id}`) ?? []).some((m) => Number(m.item) >= Number(itemId))) { info.rewindWhy = tr('msg.copy.rewindMoved'); return info; }
+  if (!(await photoBefore(s.cwd, s.id, itemId))) { info.rewindWhy = (await photoMoved(s.cwd, s.id, itemId)) ? tr('msg.copy.rewindMoved') : tr('msg.edit.noPhoto'); return info; }
   info.canRewind = true;
   return info;
 }
@@ -103,7 +104,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
     // the files go first: if they cannot be put back, nothing else changes
     let rewound = null;
     if (rewind) {
-      try { rewound = await rewindFiles(s.cwd, s.id, mark, { messageAt: Date.parse(userItem(sessions, s, mark)?.at) }); }
+      try { rewound = await rewindFiles(s.cwd, s.id, mark, { messageAt: Date.parse(userItem(sessions, s, mark)?.at), moves: sessions.board.settingJson(`chatmoves:${s.id}`) ?? [] }); }
       catch (error) { fail('msg.edit.rewindFailed', { message: error.message }); }
     }
     // From here the files are already back: whatever fails below, the line that undoes the rewind must exist.
@@ -122,7 +123,7 @@ export async function editMessage(sessions, id, itemId, text, { rewind = false }
 
       // The copy holds the whole conversation as it was. It gets fresh ids in order, so its list reads top to bottom;
       // the originals from the edited message on leave this chat.
-      copy = sessions.create({ kind: 'chat', agent: s.agent, account: s.account, model: s.model, reasoning: s.reasoning,
+      copy = sessions.create({ kind: 'chat', agent: s.agent, account: s.account, accountFixed: Boolean(s.account_fixed), model: s.model, reasoning: s.reasoning,
         permission: s.permission !== 'total' ? s.permission : s.project ? permissionOfAutonomy(globalAutonomy()) : 'leer',
         project: s.project, cwd: s.cwd, title: tr('msg.edit.copyTitle', { title: s.title }), parentId: s.id });
       // parseRow turned context into an object; the raw column is what goes into the copy
@@ -180,6 +181,8 @@ export async function undoRewind(sessions, id, itemId) {
     const item = row && parse(row);
     if (!item || typeof item.body !== 'object') fail('msg.edit.noRewind');
     if (item.body.undone) fail('msg.edit.alreadyUndone');
+    // the rescue copy holds the folder the chat left: putting it back here would write another folder's files
+    if ((sessions.board.settingJson(`chatmoves:${s.id}`) ?? []).some((m) => Number(m.item) >= item.id)) fail('msg.copy.rewindMoved');
     if (sessions.running.has(id) || sessions.pendingApprovals(id).length) fail('msg.edit.busy');
     if (await otherRunning(sessions, s)) fail('msg.edit.otherRunning');
     let out;

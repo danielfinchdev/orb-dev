@@ -33,7 +33,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -123,6 +122,7 @@ fun TaskDetailScreen(
                             TaskCard(TaskTexts.WHAT_TO_DO) { BodyText(d.description) }
                         }
                         Outcome(d, state.actions, onChanges = { onOpenChanges(d.id) })
+                        PartialJoinCard(d, state.actions, enabled, onUndo = vm::undoJoin, onRetry = vm::retryJoin)
                         if (d.row.undone) TaskCard(TaskTexts.UNDONE) { BodyText(TaskTexts.UNDONE_NOTE, OrbKit.mutedForeground) }
                         Details(d, state.actions)
                     }
@@ -295,6 +295,19 @@ private fun Stopped(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, o
     }
 }
 
+/** A hand join left half-done: say so, and offer to undo what it wrote or to try again. */
+@Composable
+private fun PartialJoinCard(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onUndo: () -> Unit, onRetry: () -> Unit) {
+    val join = d.partialJoin ?: return
+    TaskCard(TaskTexts.JOIN_TITLE, OrbIcons.CircleAlert, OrbKit.warning) {
+        BodyText(if (join.wrote) TaskTexts.JOIN_BODY else TaskTexts.JOIN_BODY_CLEAN)
+        if (TaskAction.UndoJoin in actions || TaskAction.RetryJoin in actions) Buttons {
+            if (TaskAction.UndoJoin in actions) OrbButton(TaskTexts.JOIN_UNDO, onUndo, enabled = enabled)
+            if (TaskAction.RetryJoin in actions) OrbButton(TaskTexts.JOIN_RETRY, onRetry, kind = OrbButtonKind.Primary, enabled = enabled)
+        }
+    }
+}
+
 /** «Espera tu OK»: everything the OK covers, all of it, then «Rechazar» and «Aprobar». */
 @Composable
 private fun Approval(d: TaskDetail, actions: Set<TaskAction>, enabled: Boolean, onApprove: () -> Unit, onReject: () -> Unit) {
@@ -440,8 +453,8 @@ private fun ReassignSheet(agents: List<AgentChoice>?, current: String?, reasonin
         for (o in options) {
             val on = agent == o.id
             OrbSheetItem(
-                listOfNotNull(o.label, o.detail).joinToString(" · "), { agent = o.id }, Modifier.semantics { selected = on },
-                icon = if (on) OrbIcons.Check else OrbIcons.Circle, meta = if (o.id == (current ?: "any")) TaskTexts.REASSIGN_CURRENT else null,
+                listOfNotNull(o.label, o.detail).joinToString(" · "), { agent = o.id },
+                checked = on, meta = if (o.id == (current ?: "any")) TaskTexts.REASSIGN_CURRENT else null,
             )
         }
         OrbSheetLabel(TaskTexts.MORE_OPTIONS_TASK)

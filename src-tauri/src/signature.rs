@@ -12,13 +12,14 @@ pub enum Expected {
   AnyTrusted,
 }
 
-/// Signer names: VS Code was checked on a real PC; Cursor's was confirmed by Cursor's staff in their forum; JetBrains' is
-/// known but not checked on a PC. Windsurf and Zed are not checked, so no name is required yet; once one is checked it is
-/// enough to switch that editor to `Named`.
+/// Signer names: VS Code was checked on a real PC; Cursor's was confirmed by Cursor's staff in their forum; JetBrains',
+/// Windsurf's and Zed's are the makers' published legal names but not checked on a PC. An unchecked name fails closed (the
+/// editor is refused and the real signer is shown), so correcting one is a one-line edit to its list here.
 pub fn expected_signer(which: &str) -> Expected {
   match which {
     "vscode" => Expected::Named(&["Microsoft Corporation"]),
-    "windsurf" | "zed" => Expected::AnyTrusted,
+    "windsurf" => Expected::Named(&["Exafunction, Inc.", "Codeium, Inc.", "Codeium Inc.", "Windsurf, Inc."]),
+    "zed" => Expected::Named(&["Zed Industries, Inc.", "Zed Industries Inc."]),
     "jetbrains" => Expected::Named(&["JetBrains s.r.o."]),
     _ => Expected::Named(&["Anysphere, Inc."]),
   }
@@ -236,9 +237,9 @@ mod win {
       drop(ok);
       assert!(verify(&exe, &Expected::Named(&["microsoft corporation"])).is_ok());
       assert_eq!(verify(&exe, &expected_signer("cursor")).err(), Some(Failure::WrongSigner("Microsoft Corporation".into())));
-      // Windsurf and Zed ask only for a valid, trusted signature.
-      assert!(verify(&exe, &expected_signer("zed")).is_ok());
-      assert!(verify(&exe, &expected_signer("windsurf")).is_ok());
+      // Windsurf and Zed also require their own maker, not any trusted signer.
+      assert_eq!(verify(&exe, &expected_signer("zed")).err(), Some(Failure::WrongSigner("Microsoft Corporation".into())));
+      assert_eq!(verify(&exe, &expected_signer("windsurf")).err(), Some(Failure::WrongSigner("Microsoft Corporation".into())));
     }
 
     #[test]
@@ -305,7 +306,7 @@ mod tests {
     for which in ["vscode", "cursor", "windsurf", "zed", "jetbrains", "anything-else"] {
       match expected_signer(which) {
         Expected::Named(list) => assert!(!list.is_empty() && list.iter().all(|n| !n.trim().is_empty()), "{which}"),
-        Expected::AnyTrusted => assert!(matches!(which, "windsurf" | "zed"), "{which}"),
+        Expected::AnyTrusted => panic!("{which} must name its signer"),
       }
     }
   }

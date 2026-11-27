@@ -1,7 +1,7 @@
 // Ajustes › Datos (backups and the recovery code) and the Magic Link guide for using Orb outside home.
 export default {
   'settings.section.datos': 'Data',
-  'settings.sectionDesc.datos': 'Master password, backups, the core folder and Orb 3.7 data.',
+  'settings.sectionDesc.datos': 'Backups, this PC’s key and Orb data.',
   'datos.backupsTitle': 'Backups',
   'trash.title': 'Chat trash',
   'trash.desc': 'Deleted chats are kept for 7 days and can be recovered.',
@@ -82,7 +82,7 @@ export default {
   'datos.codeNoticeOpen': 'Create code',
   'link.outTitle': 'Use away from home',
   'link.out1': 'Install Tailscale on this PC and on the phone, with the same account.',
-  'link.out2': 'In Settings › Magic Link, turn on Tailscale.',
+  'link.out2': 'In Settings › Devices, turn on Tailscale.',
   'link.out3': 'Link the phone with the QR code.',
   'link.outGet': 'Download Tailscale',
   'link.outPcOn': 'The PC has to be on.',
@@ -97,7 +97,7 @@ export default {
   'layout.logs': 'Logs',
   'layout.adb': 'Android tools (adb)',
   'layout.mcp': 'MCP server',
-  'layout.mcpProject': 'You write it. It keeps working in core; to improve it, Settings › Skills and MCP › «Edit in a project».',
+  'layout.mcpProject': 'You write it. It keeps working in core. To improve it, go to Settings › Extensions › «Edit in a project».',
   'layout.logsNote': 'Recommended: move it to core. If other tools use this path, Orb will tell you the new one.',
   'layout.logsMovedTitle': 'Log moved to core',
   'layout.logsMovedIntro': 'It is here now:',

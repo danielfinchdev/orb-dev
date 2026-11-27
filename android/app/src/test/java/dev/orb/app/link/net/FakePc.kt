@@ -75,6 +75,20 @@ class FakePc(private val clock: Clock) : Interceptor {
 
     /** Hosts that take the request in and then drop the connection, so the PC may have run it. */
     val resetAfterReceive = HashSet<String>()
+
+    /** Hosts that drop the connection after receiving only the next request; the one after it is served. */
+    val resetOnce = HashSet<String>()
+
+    /** Hosts that go down for good right after the connection they reset (the phone changed network). */
+    val downAfterReset = HashSet<String>()
+
+    @Volatile var ranBeforeReset = false
+
+    /** A repeated nonce gets 410 `gone` (the PC no longer keeps the answer) instead of 401. */
+    @Volatile var goneOnReplay = false
+
+    /** What `Last-Event-ID` each stream request carried (null: none). */
+    val lastEventIds = CopyOnWriteArrayList<String?>()
     val seenNonces = HashSet<String>()
     val log = CopyOnWriteArrayList<Seen>()
 
@@ -102,7 +116,11 @@ class FakePc(private val clock: Clock) : Interceptor {
     var onEventsRequest: (() -> Unit)? = null
     private var sink: BufferedSink? = null
 
-    fun emit(e: String, p: JsonElement) = line("data: ${LinkCrypto.sealText(key, buildJsonObject { put("e", e); put("p", p) }, Aad.event(deviceId))}\n\n")
+    fun emit(e: String, p: JsonElement, id: String? = null) =
+        line((if (id != null) "id: $id\n" else "") + "data: ${LinkCrypto.sealText(key, buildJsonObject { put("e", e); put("p", p) }, Aad.event(deviceId))}\n\n")
+
+    /** A raw SSE block as the PC would write it (an unsealed `event: resync`, an id alone...). */
+    fun raw(text: String) = line(text)
     fun ping() = line(": ping\n\n")
     private fun line(text: String) {
         val s = sink ?: return
@@ -154,6 +172,15 @@ class FakePc(private val clock: Clock) : Interceptor {
             log += Seen(host, req.url.encodedPath, null, null)
             throw java.net.SocketException("Connection reset")
         }
+        if (host in resetOnce) {
+            resetOnce.remove(host)
+            if (host in downAfterReset) down += host
+            val nonce = try { (testJson.parseToJsonElement(String(readBody(req))) as? JsonObject)?.str("n") } catch (e: Exception) { null }
+            log += Seen(host, req.url.encodedPath, null, nonce)
+            // A PC that ran the request and then lost the connection (and, if old, would call its repeat a replay).
+            if (nonce != null && ranBeforeReset) seenNonces += nonce
+            throw java.net.SocketException("Connection reset")
+        }
         pairIntercept(req)?.let { return it }
         val path = req.url.encodedPath
         if (path == "/api/note-action") {
@@ -182,7 +209,7 @@ class FakePc(private val clock: Clock) : Interceptor {
         if (msg == null || msg.str("m") != kind || nonce == null) return json(req, 401, buildJsonObject { put("error", "no vinculado") })
         when (freshness(nonce, (msg["t"] as? JsonPrimitive)?.content?.toDoubleOrNull())) {
             "clock" -> return clockOff(req)
-            "replay" -> return json(req, 401, buildJsonObject { put("error", "no vinculado") })
+            "replay" -> return if (goneOnReplay) json(req, 410, buildJsonObject { put("error", "ya no"); put("reason", "gone") }) else json(req, 401, buildJsonObject { put("error", "no vinculado") })
         }
         return sealedReply(req, nonce, answer(msg["b"] as? JsonObject, nonce))
     }
@@ -215,6 +242,7 @@ class FakePc(private val clock: Clock) : Interceptor {
             "replay" -> return json(req, 401, buildJsonObject { put("error", "no vinculado") })
         }
         eventsRequests.incrementAndGet()
+        lastEventIds += req.header("Last-Event-ID")
         if (eventsMode == EventsMode.ClockOff409) return clockOff(req)
         if (eventsMode == EventsMode.BrokenBody503) {
             // The connection drops while the client reads the answer's body.
@@ -260,7 +288,13 @@ class FakePc(private val clock: Clock) : Interceptor {
     // ------------------------------------------------------------------ pairing
 
     /** The master password's verifier, kept by the PC, and the one-time secret of the QR (or the stretched short code). */
-    class PairSetup(val secret: String, val password: String, val kdf: PairKdf, val via: String)
+    class PairSetup(
+        val secret: String, val password: String, val kdf: PairKdf, val via: String,
+        /** A one-use code (via `link` / `linkcode`): no password in the exchange. */
+        val noPassword: Boolean = false,
+        /** The PC's owner says no to «¿Enlazar?». */
+        val declined: Boolean = false,
+    )
 
     var pairSetup: PairSetup? = null
     var badPcMac = false
@@ -273,7 +307,7 @@ class FakePc(private val clock: Clock) : Interceptor {
 
     fun setupPairing(setup: PairSetup, verifierOverride: KeyPair? = null) {
         pairSetup = setup
-        verifier = verifierOverride ?: LinkCrypto.verifierOf(setup.password, setup.kdf)
+        verifier = if (setup.noPassword) null else verifierOverride ?: LinkCrypto.verifierOf(setup.password, setup.kdf)
     }
 
     fun pairIntercept(req: okhttp3.Request): Response? {
@@ -295,19 +329,24 @@ class FakePc(private val clock: Clock) : Interceptor {
             if (kotlin.math.abs(pcNow - t) > LinkCrypto.CLOCK_SKEW_MS) return clockOff(req)
             val sid = "sid" + pending.size
             pending[sid] = pubB to devPub
-            val kdfJson = buildJsonObject { put("N", setup.kdf.N); put("r", setup.kdf.r); put("p", setup.kdf.p); put("salt", setup.kdf.salt) }
+            val shown = if (setup.noPassword) LinkCrypto.LINK_KDF else setup.kdf
+            val kdfJson = buildJsonObject { put("N", shown.N); put("r", shown.r); put("p", shown.p); put("salt", shown.salt) }
             val box = LinkCrypto.seal(codeKey, buildJsonObject { put("sid", sid); put("kdf", kdfJson) }, Aad.pairChallenge)
             return json(req, 200, buildJsonObject { put("sid", sid); put("box", buildJsonObject { put("n", box.n); put("c", box.c) }) })
         }
         val (pubStored, devKey) = pending.remove(body.str("sid")) ?: return json(req, 403, buildJsonObject { put("error", "codigo") })
         if (pubStored != pubB) return json(req, 403, buildJsonObject { put("error", "codigo") })
-        val transcript = LinkCrypto.pakeTranscript(setup.via, devKey, keys.pub, body.str("sid")!!, setup.kdf)
-        val k = LinkCrypto.pakeKey(setup.secret, LinkCrypto.sharedSecret(keys.priv, devKey), LinkCrypto.sharedSecret(keys.priv, verifier!!.pub), transcript)
+        // The phone says which way it links in the finish too (the PC reads it there).
+        if (setup.noPassword && body.str("via") != setup.via) return json(req, 401, buildJsonObject { put("error", "codigo") })
+        val transcript = LinkCrypto.pakeTranscript(setup.via, devKey, keys.pub, body.str("sid")!!, if (setup.noPassword) LinkCrypto.LINK_KDF else setup.kdf)
+        val dhPassword = if (setup.noPassword) ByteArray(0) else LinkCrypto.sharedSecret(keys.priv, verifier!!.pub)
+        val k = LinkCrypto.pakeKey(setup.secret, LinkCrypto.sharedSecret(keys.priv, devKey), dhPassword, transcript)
         val phoneMac = try { B64.dec(body.str("mac").orEmpty()) } catch (e: LinkCryptoException) { null }
         if (!LinkCrypto.sameBytes(phoneMac, LinkCrypto.pakeMac(k, LinkCrypto.MAC_PHONE))) {
             passwordTriesLeft--
             return json(req, 403, buildJsonObject { put("error", "contrasena incorrecta"); put("reason", "password"); put("left", passwordTriesLeft) })
         }
+        if (setup.declined) return json(req, 403, buildJsonObject { put("error", "no confirmado"); put("reason", "declined") })
         val id = "aaaaaaaa-0000-4000-8000-" + (pairedIds.size + 1).toString().padStart(12, '0')
         pairedIds += id
         deviceId = id

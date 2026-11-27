@@ -11,9 +11,9 @@ export default {
   'nav.chats': 'Chats',
   'nav.more': 'More',
   'nav.darkMode': 'Dark mode',
-  'nav.expert': 'God mode',
+  'nav.expert': 'Expert mode',
   'nav.newChat': 'New chat',
-  'nav.backToChat': 'Back to the conversation with {name}',
+  'nav.backToChat': 'Back to the chat with {name}',
   'nav.loose': 'No project',
   // sidebar foot
   'nav.feedback': 'Send feedback',

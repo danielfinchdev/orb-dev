@@ -10,7 +10,11 @@ import { clip, describeInput, mcpEnvByRef } from './common.mjs';
 import { Turn, Approvals } from './live.mjs';
 import { decide, describeAction } from '../domain/security/guard.mjs';
 import { tr } from '../platform/context.mjs';
+import { identityFromClaude } from './identity.mjs';
 import { logJson } from '../platform/log.mjs';
+
+// Claude Code takes low, medium, high, xhigh and max; «minimal» is Codex's, so it runs as the closest one, «low».
+export const claudeEffort = (r) => (r === 'minimal' ? 'low' : r || 'medium');
 
 export const id = 'claude';
 export const label = 'Claude Code';
@@ -136,10 +140,24 @@ export async function discoverModels(exe, cfg = {}, env = {}) {
     return rows.filter((m) => m?.value && m.value !== 'default').map((m) => {
       const isDefault = !marked && usual && (m.resolvedModel ?? m.value) === usual;
       if (isDefault) marked = true;
-      // the reasoning levels the model takes (Orb offers low, medium, high and, when the model has it, xhigh).
-      const efforts = Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e) => ['low', 'medium', 'high', 'xhigh'].includes(e)) : null;
+      // the reasoning levels the model takes (low, medium, high and, when the model has them, xhigh and max).
+      const efforts = Array.isArray(m.supportedEffortLevels) ? m.supportedEffortLevels.filter((e) => ['low', 'medium', 'high', 'xhigh', 'max'].includes(e)) : null;
       return { id: m.value, label: m.displayName || m.value, ...(m.resolvedModel && m.resolvedModel !== m.value ? { resolved: m.resolvedModel } : {}), ...(isDefault ? { default: true } : {}), ...(efforts?.length ? { efforts } : {}) };
     });
+  } catch { return null; } finally { release?.(); try { q?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } }
+}
+
+// Who is signed in to a folder (CLAUDE_CONFIG_DIR), asked like discoverModels asks: a process whose input never sends a
+// message, so nothing is spent. → { who, hint, viaKey, external, plan } or null when it does not answer in time.
+export async function accountIdentity(exe, env = {}, { timeoutMs = 15000 } = {}) {
+  const { query: sdkQuery } = await import('@anthropic-ai/claude-agent-sdk');
+  const abort = new AbortController();
+  let release = null;
+  const silent = { async *[Symbol.asyncIterator]() { await new Promise((r) => { release = r; }); } };
+  let q = null;
+  try {
+    q = sdkQuery({ prompt: silent, options: { cwd: discoverDir(), pathToClaudeCodeExecutable: exe.cmd, env: cleanEnv(env), settingSources: [], extraArgs: { 'strict-mcp-config': null }, mcpServers: {}, abortController: abort, stderr: () => {} } });
+    return identityFromClaude(await within(q.accountInfo(), timeoutMs));
   } catch { return null; } finally { release?.(); try { q?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } }
 }
 
@@ -181,7 +199,7 @@ export function createLive(o) {
   let permission = o.permission ?? 'editar';
   const background = new Set(); // the subagents the user let go on without the turn
   const subTasks = new Map(); // a subagent's tool call id -> its task id (what stopTask asks for)
-  let turn = null; let query = null; let closed = false; let started = null; let child = null; let compactResult = null;
+  let startError = null; let turn = null; let query = null; let closed = false; let started = null; let child = null; let compactResult = null;
   const live = {
     sessionId: o.resumeId ?? o.newSessionId ?? null,
     caps: { steer: true, approvals: true, fork: true, interrupt: true, context: true, models: true, compact: true },
@@ -290,7 +308,7 @@ export function createLive(o) {
       pathToClaudeCodeExecutable: o.exe.cmd,
       env: cleanEnv({ ...(o.env ?? {}), ...mcp.env }),
       model: o.model || undefined,
-      effort: o.reasoning || 'medium',
+      effort: claudeEffort(o.reasoning),
       includePartialMessages: true,
       settingSources: risky.length ? [] : LEAN_SOURCES,
       extraArgs: { 'strict-mcp-config': null },
@@ -354,8 +372,9 @@ export function createLive(o) {
     if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn();
     const current = turn;
-    started ??= start().catch((error) => { closed = true; current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: error.message }) }); });
+    started ??= start().catch((error) => { closed = true; startError = error; });
     await started;
+    if (startError) current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: startError.message }) });
     if (!closed) input.push(userMessage(text, images));
     return current.promise;
   };
@@ -369,8 +388,9 @@ export function createLive(o) {
     if (turn && !turn.done) throw new Error(tr('sys.agents.busy'));
     turn = new Turn(); compactResult = null;
     const current = turn;
-    started ??= start().catch((error) => { closed = true; current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: error.message }) }); });
+    started ??= start().catch((error) => { closed = true; startError = error; });
     await started;
+    if (startError) current.finish({ isError: true, final: tr('sys.agents.startFailed', { name: label, error: startError.message }) });
     if (!closed) input.push(userMessage(instructions ? `/compact ${instructions}` : '/compact'));
     const r = await current.promise;
     const ok = !r.isError && compactResult?.ok !== false;
@@ -390,6 +410,18 @@ export function createLive(o) {
   live.setModel = async (model) => { o.model = model; try { await query?.setModel(model || undefined); } catch { /* next start */ } };
   live.setPermission = async (p) => { permission = p; try { await query?.setPermissionMode(permissionModeOf(p)); } catch { /* next start */ } };
   live.close = () => { if (closed && !query) return; closed = true; approvals.clear(); input.close(); try { query?.close(); } catch { /* gone */ } try { abort.abort(); } catch { /* gone */ } try { killTree(child); } catch { /* gone */ } };
+  // Who this process is signed in as. The SDK's input is held back until the first send(), so asking now is no turn and
+  // spends nothing; the answer is null when Claude Code does not say within 10 s (an old version without accountInfo).
+  live.startFailed = () => startError;
+  live.whoami = async () => {
+    if (closed) return null;
+    try {
+      started ??= start().catch((error) => { closed = true; startError = error; });
+      await started;
+      if (startError) return null;
+      return identityFromClaude(await within(query.accountInfo(), 10_000));
+    } catch { return null; }
+  };
   live.refreshUsage = () => (closed ? Promise.resolve(false) : planUsage({ force: true }));
   live.isClosed = () => closed;
   return live;

@@ -1,6 +1,6 @@
 [package]
 name = "orb-vault"
-version = "3.8.8"
+version = "3.8.12"
 description = "Orb's master password and secrets, kept out of the engine (src/domain/security/master.mjs talks to it)"
 authors = ["Orb"]
 license = "MIT"
@@ -28,9 +28,16 @@ sha2 = "=0.10.9"
 scrypt = { version = "=0.11.0", default-features = false }
 zeroize = "=1.9.1"
 subtle = "=2.6.1"
+# Only verifies Hello's signatures (hello.rs); the fake Hello (fake_hello.rs) signs with it for the tests.
+rsa = { version = "=0.9.10", default-features = false, features = ["std", "sha2"] }
+# Only verifies the phones' approval signatures (approve.rs); the tests' fake phone signs with it.
+p256 = { version = "=0.13.2", default-features = false, features = ["ecdsa", "std"] }
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "=0.62.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Threading"] }
+windows = { version = "=0.62.2", features = ["Foundation", "Security_Credentials", "Security_Cryptography_Core", "Storage_Streams", "Win32_System_TpmBaseServices", "Win32_System_WinRT", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_Threading"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+rand_core = { version = "0.6", features = ["getrandom"] }

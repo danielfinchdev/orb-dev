@@ -21,7 +21,6 @@ export default {
   'tabs.empty.new': 'New chat',
   'tabs.empty.recent': 'Open recent',
   'keys.title': 'Keyboard shortcuts',
-  'keys.hint': 'Press «Record» and the combination you want. They are saved in keybindings.json, inside your core folder.',
   'keys.record': 'Record',
   'keys.recording': 'Press the combination… Esc cancels, Backspace removes it.',
   'keys.reset': 'Reset',

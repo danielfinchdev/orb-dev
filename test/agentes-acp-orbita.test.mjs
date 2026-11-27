@@ -20,6 +20,7 @@ test('selectors only offer enabled agents', () => {
 });
 test('Agents view shows the disabled state, an activate button for Hermes and its permission note', () => {
   assert.ok(agents.includes("t('agents.disabled')"));
-  assert.ok(agents.includes('agent-enable-${a.id}') && agents.includes("OFF_AGENTS.includes(a.id)") && agents.includes("save(a.id, { enabled: true })"));
-  assert.ok(agents.includes("t('agents.hermesNote')"));
+  // turned on from the «⋯» or installed from its ficha, always through its warning, read whole once
+  assert.ok(agents.includes('agent-toggle-${a.id}') && agents.includes("OFF_AGENTS.includes(a.id)") && agents.includes("save(id, { enabled: true })"));
+  assert.ok(agents.includes("note: 'agents.hermesNote'") && agents.includes('acceptWarnings(a'));
 });

@@ -44,10 +44,11 @@ export function trashTools({ board, sessions, orchestrator, scheduler, emit, log
     'chat.answer': (p) => board.chatRow(Number(p.id))?.conversation_id,
     'chat.accept': (p) => board.chatRow(Number(p.id))?.conversation_id,
     'chat.compact': (p) => p.conversation,
+    'chat.holdWait': (p) => p.conversation,
     'chat.settings': (p) => p.conversation,
     'conversations.update': (p) => p.id,
   };
-  const SESSION_WRITES = new Set(['sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.fork', 'sessions.handoff', 'sessions.edit', 'sessions.editRewind', 'sessions.rewindUndo', 'sessions.update', 'sessions.settle', 'sessions.compact']);
+  const SESSION_WRITES = new Set(['sessions.queue', 'sessions.editQueued', 'sessions.approve', 'sessions.fork', 'sessions.handoff', 'sessions.edit', 'sessions.editRewind', 'sessions.rewindUndo', 'sessions.update', 'sessions.holdWait', 'sessions.settle', 'sessions.compact']);
   function guard(method, params) {
     try {
       if (Object.hasOwn(WRITES, method)) {

@@ -4,9 +4,11 @@
 // up work: while its last task is still open, the next run waits.
 // «once» runs a single time at a date and time (at_time holds its local 'YYYY-MM-DDTHH:mm') and then turns
 // itself off; «same_chat» sends every run to one chat, so its results and the talk about them stay together.
+import { createHash } from 'node:crypto';
 import { oneLine } from '../../shared/text.mjs';
 import { ctx, tr } from '../../platform/context.mjs';
 import { AGENT_IDS as AGENTS } from '../../platform/config-file.mjs';
+import { brainAccount, configuredAccount } from '../usage/accounts.mjs';
 import { nextLocalRun, systemTz, ownerTz, isValidTz } from '../../shared/tz.mjs';
 
 export const EVERY = ['once', 'hourly', 'every_hours', 'daily', 'weekly', 'monthly'];
@@ -46,6 +48,9 @@ export function describe(s) {
 export function listSchedules(board) {
   return board.all('SELECT * FROM schedules ORDER BY id').map(parseRow);
 }
+// The fingerprint of what approving a schedule lets run on its own: whoever approves sends the one they saw, so an edit made
+// after the list was loaded is refused instead of approved unseen.
+export const scheduleHash = (s) => createHash('sha256').update(JSON.stringify([s.id, s.project, s.title, s.description, s.agent, s.model ?? null, Boolean(s.readonly), s.every, s.at_time, s.month_day ?? null, s.tz ?? null, [...(s.weekdays ?? [])], s.autonomy ?? null, Boolean(s.same_chat), Boolean(s.notify_mobile)])).digest('hex').slice(0, 32);
 export const getSchedule = (board, id) => parseRow(board.one('SELECT * FROM schedules WHERE id = ?', Number(id)));
 
 // `only` (an update) limits the checks to what the patch changes, so editing the title of a schedule whose agent is
@@ -110,7 +115,13 @@ export function updateSchedule(board, id, patch, { desktop = false } = {}) {
   const s = getSchedule(board, id); if (!s) throw new Error(tr('msg.schedules.noSchedule'));
   const fields = {};
   if (patch.enabled !== undefined) fields.enabled = Number(Boolean(patch.enabled));
-  if (patch.approved) fields.approved = 1;
+  if (patch.approved) {
+    // The fingerprint covers the stored schedule, so an approval that also edits it would approve text nobody saw.
+    if (patch.enabled !== undefined || patch.title !== undefined || patch.description !== undefined || EDITABLE.some((k) => given(patch, k))) throw new Error(tr('msg.schedules.approveAlone'));
+    if (typeof patch.hash !== 'string' || !patch.hash) throw new Error(tr('msg.schedules.needsHash'));
+    if (patch.hash !== scheduleHash(s)) throw new Error(tr('msg.schedules.changedSince'));
+    fields.approved = 1;
+  }
   if (patch.title !== undefined) fields.title = oneLine(patch.title, 120);
   if (patch.description !== undefined) fields.description = String(patch.description).slice(0, 8000);
   const edits = EDITABLE.filter((k) => given(patch, k));
@@ -148,7 +159,7 @@ function chatOf(board, s) {
   if (!s.same_chat) return null;
   if (s.conversation_id != null && board.conversation(s.conversation_id)) return s.conversation_id;
   const o = ctx.config?.orchestrator ?? {};
-  const c = board.createConversation({ title: s.title, project: s.project, agent: o.agent || 'claude', account: o.account || null, model: o.model || null, reasoning: o.reasoning || 'medium' });
+  const c = board.createConversation({ title: s.title, project: s.project, agent: o.agent || 'claude', ...brainAccount(configuredAccount(o, o.agent || 'claude'), o.agent || 'claude'), model: o.model || null, reasoning: o.reasoning || 'medium' });
   board.updateConversation(c.id, { titled: true });
   board.run('UPDATE schedules SET conversation_id = ? WHERE id = ?', c.id, s.id);
   return c.id;

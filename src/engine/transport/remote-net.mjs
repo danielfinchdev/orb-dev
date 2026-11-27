@@ -34,6 +34,14 @@ export function kindForPairing(issued, claimed) {
 }
 // «<computer>.local» when the computer's name is a valid host name (letters, digits and dashes).
 export const localName = (host = os.hostname()) => { const h = String(host ?? '').toLowerCase().replace(/\.local$/, ''); return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(h) ? `${h}.local` : null; };
+// whether a request came in through Tailscale (this PC's 100.64.0.0/10 or fd7a:115c:a1e0::/48 address) or through loopback,
+// where `tailscale serve` hands the https ones over. The home network never qualifies.
+export function viaTailscale(localAddress) {
+  const ip = String(localAddress ?? '').toLowerCase().replace(/^::ffff:/, '');
+  if (ip === '::1' || /^127\./.test(ip) || /^fd7a:115c:a1e0:/.test(ip)) return true;
+  const m = /^100\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(ip);
+  return Boolean(m && Number(m[1]) >= 64 && Number(m[1]) <= 127);
+}
 const isLoopback = (ip) => /^(127\.|::1$)/.test(String(ip ?? '').replace(/^::ffff:/, ''));
 // whether a pairing comes from a browser's page over plain http on the home network: not a program (no Origin: another
 // Orb), not the Android app, not this PC (or Tailscale's https, which arrives through loopback), not the
@@ -83,6 +91,15 @@ export async function tailscaleAddress() {
     if (a) return { address: a.address, dns: null, https: false };
   }
   return null;
+}
+
+// Whether a Tailscale network adapter with its address is up: an in-process look, with no command run, so the watcher can
+// ask it every few seconds.
+export function tailscaleAdapterUp() {
+  for (const [name, list] of Object.entries(os.networkInterfaces())) {
+    if (/tailscale/i.test(name) && (list ?? []).some((x) => x.family === 'IPv4' && !x.internal && inCgnat(x.address))) return true;
+  }
+  return false;
 }
 
 // This PC's addresses on the local network (home Wi-Fi or cable): private IPv4 only, without virtual adapters (WSL,

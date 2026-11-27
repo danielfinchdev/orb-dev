@@ -40,3 +40,38 @@ launched hidden, with its output read by Orb, and it stores the session in the a
 - `src/engine/host/installer.mjs`: `ITEMS`, `check()` and the PowerShell script.
 - Each adapter's `detect()` and `loginState()` (for example, the Codex session is in `~/.codex/auth.json`).
 - `src/domain/usage/accounts.mjs`: several accounts per agent; each one has its login folder and its usage.
+
+**Developer tools from a fixed list (3.8.11).** `src/engine/host/tool-catalog.mjs` is the only source of what Orb can
+install: a fixed list of winget ids (plus fixed commands for the few that winget does not cover, e.g. Playwright pinned to
+a version). Nothing the user or an agent types reaches a shell. `installer.updates` (looks for newer versions, only when
+asked, cached for 30 minutes) and `installer.suggest` (tools that fit the open project) are accepted only from `'pc'`.
+Installs and failures are written to Activity.
+
+## Uninstall, reset and old data (3.8.12)
+
+Settings › Data ends with «Restablecer y desinstalar» (`src/ui/views/uninstall.jsx`). It is PC-only: the new methods
+(`src/engine/api/uninstall.mjs`) are not in `REMOTE_METHODS`, so an agent or the phone cannot call them, and they need a
+recent unlock.
+
+- **Plan.** `src/domain/data/uninstall.mjs` turns the ticked boxes (`src/shared/uninstall-boxes.mjs`) into a plan of
+  paths and database tables, applying dependencies (keeping MCP keys, the phone link or backups keeps the vault; the PC
+  key stays while anything encrypted stays). The window shows that plan as it is, with sizes. Every path must be in the
+  allowed list or be a project folder carrying both marks (`created_by_orb` in `orb.db` and the `.orb-creada` token file,
+  `src/domain/projects/created-marks.mjs`); anything else is skipped. Links and junctions are never followed, and the
+  backup folder the user chose is never touched.
+- **Signed journal.** Before deleting, the engine writes the plan to a signed journal and stops the engine and agents.
+  Order: projects to the Recycle Bin (a folder too big for it is deleted for good, after asking), data, vault and its
+  replica, the PC key last. Each step is recorded; at the next start a cut-short run is finished or reported, and a
+  journal whose signature does not match is not followed. A reported failure stops the run and the installer is not
+  launched. Reset keeps `ubicacion.json`, marks core `restablecido` and writes a fresh core before restarting so nothing
+  is restored.
+- **NSIS hooks** (`src-tauri/nsis/hooks.nsh`, `src-tauri/src/uninstall.rs`). Uninstall writes
+  `%APPDATA%\Orb.dev\desinstalado.json` with a one-hour one-time code and runs `uninstall.exe /P /ORBPURGE=<code>`.
+  `NSIS_HOOK_POSTUNINSTALL` purges `Orb.dev` and `dev.orb.app` only with a valid, unexpired code and never on an update
+  (`$UpdateMode`), respecting `claves\` when encrypted data was kept. `NSIS_HOOK_PREUNINSTALL` writes the marker (no code)
+  when the uninstall did not come from Orb; `NSIS_HOOK_POSTINSTALL` removes one written during its own run.
+- **Old data on reinstall** (`src/engine/previous.mjs`). With a marker, or with no `ubicacion.json` but an existing home,
+  Orb asks to recover or start from scratch. Starting from scratch moves the old data into `core\anterior-<date>\`
+  (replica of the vault included) and repairs the moved worktrees; nothing is deleted and «Datos de antes» can remove it.
+- **Survey** (`src/shared/uninstall-survey.mjs`). An optional line of up to 280 characters; if written, Orb shows it and
+  opens a prefilled new issue in the browser (no shell). The user sends it.

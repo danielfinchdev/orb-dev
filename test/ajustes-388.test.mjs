@@ -16,11 +16,11 @@ const SECTIONS = ['magic-link', 'extensions', 'data', 'master'].map((f) => view(
 const ALL = [...SETTINGS, ...SECTIONS].join('\n');
 const general = view('settings', 'general.jsx');
 
-test('the eight sections of the menu, as the mock-up names and orders them', () => {
+test('the ten sections of the menu, as the mock-up names and orders them', () => {
   const index = view('settings', 'index.jsx');
   const ids = [...index.matchAll(/^\s*\{ id: '(\w+)', icon: (\w+)/gm)].map((m) => [m[1], m[2]]);
-  assert.deepEqual(ids, [['general', 'Settings'], ['magiclink', 'Smartphone'], ['agentes', 'Bot'], ['permisos', 'ShieldCheck'], ['extensiones', 'Puzzle'], ['datos', 'Database'], ['avanzado', 'SlidersHorizontal'], ['acerca', 'Info']]);
-  assert.deepEqual(['general', 'magiclink', 'agentes', 'permisos', 'extensiones', 'datos', 'avanzado', 'acerca'].map((id) => es[`settings.section.${id}`]), ['General', 'Dispositivos', 'Agentes y uso', 'Permisos', 'Skills y MCP', 'Datos', 'Avanzado', 'Acerca de']);
+  assert.deepEqual(ids, [['general', 'Settings'], ['apariencia', 'Palette'], ['agentes', 'Bot'], ['permisos', 'ShieldCheck'], ['magiclink', 'Smartphone'], ['extensiones', 'Puzzle'], ['atajos', 'Keyboard'], ['datos', 'Database'], ['avanzado', 'SlidersHorizontal'], ['acerca', 'Info']]);
+  assert.deepEqual(['general', 'apariencia', 'agentes', 'permisos', 'magiclink', 'extensiones', 'atajos', 'datos', 'avanzado', 'acerca'].map((id) => es[`settings.section.${id}`]), ['General', 'Apariencia', 'Agentes y cuentas', 'Permisos y seguridad', 'Dispositivos', 'Extensiones', 'Atajos de teclado', 'Datos', 'Avanzado', 'Acerca de']);
   assert.match(index, /data-testid="settings-dialog"/);
   assert.match(index, /h-\[min\(780px,90vh\)\] w-\[min\(1080px,94vw\)\]/, 'the mock-up\'s 1080 × 780 dialog');
   assert.match(index, /w-\[220px\]/, 'the 220 px menu');
@@ -39,7 +39,7 @@ test('the six themes, each with the sentence of the mock-up, in both languages',
     assert.ok(en[`appearance.skinDesc.${skin}`], `${skin} in English`);
   }
   assert.match(general, /t\(`appearance\.skinDesc\.\$\{skin\}`\)/);
-  assert.doesNotMatch(general, /SkinPreview/, 'icon, name and sentence: no thumbnail');
+  assert.match(general, /<SkinPreview skin=\{skin\} palette=\{ui\.palette\} \/>/, 'thumbnail, icon, name and sentence');
   assert.match(general, /const SKIN_ICON = \{ predeterminado: LayoutDashboard, cristal: Gem, orb: Bot, vaporwave: Waves, candy: Candy, retro: Terminal \}/);
   assert.match(general, /data-testid=\{`skin-\$\{skin\}`\}/);
 });
@@ -56,16 +56,16 @@ test('«La del tema» for the default letter, «Sistema» for the system\'s, and
   assert.equal(es['appearance.font.outfit'], 'La del tema');
   assert.equal(es['appearance.font.system'], 'Sistema');
   assert.match(general, /options=\{opts\(FONTS, 'appearance\.font'\)\}/);
-  assert.deepEqual(FONTS, ['outfit', 'system', 'outfit-fija']);
+  assert.deepEqual(FONTS, ['outfit', 'system', 'outfit-fija', 'inter', 'geist', 'ibm-plex-sans']);
   assert.equal(es['appearance.font.outfit-fija'], 'Outfit');
   for (const f of FONTS) assert.ok(es[`appearance.font.${f}`], f);
 });
 
 test('the robot\'s note, the reply line and the music with its volume', () => {
   assert.equal(es['appearance.noRobot'], 'Solo el tema Orb muestra el robot y sus animaciones.');
-  assert.match(general, /<Block title=\{t\('appearance\.robotTitle'\)\} note=\{t\('appearance\.noRobot'\)\}>/);
-  assert.equal(es['appearance.robotTitle'], 'Robot y sonidos');
-  assert.equal(es['appearance.repliesTitle'], 'Respuestas de los agentes');
+  assert.match(general, /<Block title=\{t\('settings\.soundTitle'\)\} note=\{t\('appearance\.noRobot'\)\}/);
+  assert.equal(es['settings.soundTitle'], 'Sonido');
+  assert.equal(es['settings.chatsTitle'], 'Chats');
   assert.equal(es['appearance.musicHint'], 'El reproductor está al pie de la barra lateral.');
   // Orb's own music is the only one: no source to choose
   assert.doesNotMatch(general, /music-mode|MUSIC_MODES|setMusicMode/);
@@ -87,13 +87,13 @@ test('the shared pieces (Range, Select, Switch) and no control of the system', (
 
 test('every test id of before is still there', () => {
   const ids = ['about-github', 'about-music', 'android-card', 'android-emulators', 'android-pair', 'android-pair-address', 'android-pair-code', 'android-pair-manual', 'android-pair-qr', 'android-pair-state', 'android-phones',
-    'approval-wait', 'approval-wait-save', 'auto-model', 'backup-code', 'backup-folder', 'backup-folder-change', 'backup-last', 'backup-list', 'backup-now', 'backups-card', 'connector-keys', 'contribute-paypal', 'core-card', 'core-open', 'dev-tool', 'dev-tools',
+    'approval-wait', 'auto-model', 'backup-code', 'backup-folder', 'backup-folder-change', 'backup-last', 'backup-list', 'backup-now', 'backups-card', 'connector-keys', 'contribute-paypal', 'core-card', 'core-open', 'dev-tool', 'dev-tools',
     'expert-switch', 'ext-adopt', 'ext-approve', 'ext-editing', 'ext-files', 'ext-files-more', 'ext-import', 'ext-menu', 'ext-note', 'ext-pending', 'ext-project', 'ext-reject', 'ext-toggle', 'extensions',
     'feedback-capture', 'feedback-message', 'feedback-send', 'legacy-backups', 'legacy-card', 'legacy-delete', 'legacy-keys', 'link-again', 'link-device', 'link-devices', 'link-make', 'link-pair', 'link-pair-dialog', 'link-qr', 'link-relink', 'link-revoke', 'magic-link',
     'master-card', 'master-change', 'master-forgot', 'master-lock-minutes', 'master-lock-now', 'mcp-keys', 'mcpext-card', 'mcpext-create', 'mcpext-switch', 'mcpext-token', 'mcpext-url', 'mobile-card', 'mobile-preview', 'mobile-screenshot',
     'music-intensity', 'music-reactive', 'music-settings', 'music-theme', 'music-volume', 'one-at-a-time', 'palette-picker', 'palette-settings', 'parallel-chats', 'phone-card', 'previous-key', 'previous-key-more', 'previous-key-use',
     'protected-card', 'protected-defaults', 'protected-input', 'protected-item', 'protected-remove', 'settings-about', 'settings-dialog', 'settings-foot', 'settings-foot-github', 'settings-foot-version', 'settings-test', 'shortcuts-card', 'skin-picker',
-    'spend-advanced', 'spend-profile', 'spend-save', 'spend-slider', 'suggest-next', 'tabs-switch', 'trash-card', 'trash-empty', 'trash-restore', 'updates-card', 'usage-line-switch', 'worktree-remove', 'worktrees-card'];
+    'spend-advanced', 'spend-profile', 'spend-slider', 'suggest-next', 'tabs-switch', 'trash-card', 'trash-empty', 'trash-restore', 'updates-card', 'usage-line-switch', 'worktree-remove', 'worktrees-card'];
   const missing = ids.filter((id) => !ALL.includes(`data-testid="${id}"`) && !ALL.includes(`'data-testid': '${id}'`) && !ALL.includes(`triggerTestid="${id}"`));
   assert.deepEqual(missing, []);
   for (const dynamic of ['settings-nav-${id}', 'settings-group-${id}', 'mobile-${kind}', 'app-${a.id}', 'shortcut-${cmd.id}']) assert.ok(ALL.includes(`data-testid={\`${dynamic}\`}`), dynamic);
@@ -105,8 +105,9 @@ test('what asks for a confirmation or the master password still does, with the s
   assert.match(rows, /unlockCore\('rails'\)/, 'a rail\'s value asks every time');
   assert.match(general, /confirm\(t\('settings\.protectedRemoveTitle', \{ name: x \}\), t\('settings\.protectedRemoveBody'\)/);
   assert.match(general, /confirm\(t\('settings\.switchTitle'\)/);
-  assert.match(data, /unlockCore\('restore'\)[\s\S]*call\('backup\.verify'[\s\S]*call\('backup\.restore'/);
-  assert.match(data, /unlockCore\('recovery'\)/); assert.match(data, /unlockCore\('backupFolder'\)/); assert.match(data, /unlockCore\('previousKey'\)/);
+  assert.match(data, /unlockCore\('restore', \{ request: \{ method: 'backup\.restore'[\s\S]*call\('backup\.verify'[\s\S]*call\('backup\.restore'/);
+  assert.doesNotMatch(data, /unlockCore\('recovery'\)/);
+  assert.match(data, /unlockCore\('backupFolder'\)/); assert.match(data, /unlockCore\('previousKey'\)/);
   assert.match(data, /confirm\(t\('datos\.legacyConfirmTitle'\)[\s\S]*unlockCore\('legacy'\)[\s\S]*call\('legacy\.delete', \{ unlock \}\)/);
   assert.match(data, /unlockCore\('open'\)/);
   assert.match(link, /confirm\(t\('link\.revokeTitle'[\s\S]*unlockCore\('unlink'\)[\s\S]*call\('link\.revoke', \{ id: d\.id, unlock \}\)/);
@@ -132,17 +133,17 @@ test('«Agentes y uso» has the two tabs of the mock-up, kept in memory only', (
   assert.match(index, /\{tab === 'tareas' \? <TasksCard c=\{c\} \/> : <><UsageAccounts c=\{c\} \/><ChatCard c=\{c\} \/><BrakesCard c=\{c\} \/><BrakeRails c=\{c\} \/><\/>\}/);
   assert.match(index, /^let agentsTab = 'tareas';/m);
   assert.doesNotMatch(index, /localStorage/);
-  assert.equal(es['settings.tabUsage'], 'Uso y agentes');
+  assert.equal(es['settings.tabUsage'], 'Cuentas y límites');
 });
 
 test('«Datos de Orb 3.7» is its own card, not a child of the backups, with its warning colour', () => {
   const data = view('data.jsx');
-  assert.match(data, /<LegacyCard \/><BackupsCard \/>/);
+  assert.match(data, /<KeyCard \/><LegacyCard \/>/);
   assert.doesNotMatch(data, /between/);
   assert.match(data, /className="text-warning-ink" data-testid="legacy-keys"/);
 });
 
-test('the menu of Ajustes only has its eight sections: no entries of a block under the open one', () => {
+test('the menu of Ajustes only has its ten sections: no entries of a block under the open one', () => {
   const index = view('settings', 'index.jsx');
   assert.doesNotMatch(index, /settings-sub-/);
   // a link to a block (from the welcome, a notice, a tutorial) still lands on it
@@ -151,10 +152,8 @@ test('the menu of Ajustes only has its eight sections: no entries of a block und
 
 test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing it lacks is lost', () => {
   const index = view('settings', 'index.jsx');
-  // General: Asistente, Carpeta, Interfaz, Apariencia (with Respuestas and Robot), then what the mock-up lacks, Actualizaciones
-  assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><InterfaceCard c=\{c\} \/><SubSection id="apariencia"/);
-  // the chat tabs and the shortcuts are Orb's, not the mock-up's: «Más opciones», after Actualizaciones
-  assert.ok(index.indexOf('<TabsCard') > index.indexOf('<UpdatesCard') && index.indexOf('<ShortcutsCard') > index.indexOf('<UpdatesCard'));
+  // General: Asistente, Carpeta, Terminal, Git, Actualizaciones
+  assert.match(index, /<AssistantCard c=\{c\} \/><FolderCard c=\{c\} home=\{app\.home\} \/><TerminalCard c=\{c\} \/><DictationCard c=\{c\} \/><GitCard c=\{c\} \/><SubSection id="actualizaciones"/);
   // Apariencia: only the mock-up's rows (no density, chat width or text size)
   for (const gone of ['appearance.density', 'appearance.chatWidth', 'appearance.fontSize']) assert.ok(!general.includes(`'${gone}'`), gone);
   // Robot y sonidos: on and volume of the music first, its style and reactivity after
@@ -163,10 +162,10 @@ test('8C-a: Ajustes follows the mock-up where it was out of order, and nothing i
   assert.ok(music.indexOf("'appearance.musicTheme'") < music.indexOf("'appearance.musicReactive'") && music.indexOf("'appearance.musicReactive'") < music.indexOf("'appearance.musicVolume'"));
   for (const id of ['music-theme', 'music-reactive', 'music-intensity', 'music-volume', 'music-on']) assert.ok(music.includes(`data-testid="${id}"`), id);
   // Permisos: Auto / Preguntar, waiting, protected paths; the two buttons make the same call
-  assert.match(index, /<PermissionsCard c=\{c\} \/><ApprovalWaitCard c=\{c\} \/><ProtectedCard c=\{c\} \/>/);
+  assert.match(index, /<PermissionsCard c=\{c\} \/><ApprovalWaitCard c=\{c\} \/><ProtectedCard c=\{c\} \/><MasterCard \/>/);
   assert.match(general, /<Segmented value=\{mode\} data-testid="settings-autonomy"[^\n]*call\('permissions\.setMode', \{ mode: p === 'auto' \? 'auto' : 'preguntar' \}\)/);
-  // Datos: the core folder before the extras
-  assert.match(view('data.jsx'), /<LegacyCard \/><BackupsCard \/><CoreCard \/><MoreOptions testid="more-options-datos"><TrashCard \/><WorktreesCard \/><\/MoreOptions>/);
+  // Datos: the copies first and the core folder last
+  assert.match(view('data.jsx'), /<BackupsCard \/><KeyCard \/><LegacyCard \/><TrashCard \/><WorktreesCard \/><CoreCard \/>/);
 });
 
 test('8C-a: «Ahorro o potencia» is three buttons (levels 0, 2, 4); levels 1 and 3 stay in the advanced options', () => {
