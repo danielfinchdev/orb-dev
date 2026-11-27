@@ -16,6 +16,8 @@ import en from '../src/shared/locales/en.mjs';
 
 tempHome();
 const installer = await import('../src/engine/host/installer.mjs');
+// The installer and winget exist on Windows only; its behaviour is not reachable (or meaningful) elsewhere.
+const WIN_ONLY = { skip: process.platform !== 'win32' && 'Windows only' };
 const read = (p) => fs.readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
 const EXPECTED = {
@@ -110,7 +112,7 @@ function fakeSpawn() {
 }
 const logOf = (call) => /\$log = '([^']+)'/.exec(Buffer.from(call.args.at(-1), 'base64').toString('utf16le'))[1];
 
-test('an install runs hidden, without a shell, with the script as its encoded argument, and writes each step to Activity', async () => {
+test('an install runs hidden, without a shell, with the script as its encoded argument, and writes each step to Activity', WIN_ONLY, async () => {
   const spawnFn = fakeSpawn();
   const events = [];
   const emitted = [];
@@ -134,7 +136,7 @@ test('an install runs hidden, without a shell, with the script as its encoded ar
   assert.ok(emitted.some(([e]) => e === 'installer:progress'));
 });
 
-test('a failure and a step cut short are written as errors', async () => {
+test('a failure and a step cut short are written as errors', WIN_ONLY, async () => {
   const spawnFn = fakeSpawn();
   const events = [];
   installer.start(['jq'], () => {}, { spawnFn, onEvent: (e) => events.push(e) });
@@ -154,7 +156,7 @@ test('a failure and a step cut short are written as errors', async () => {
   assert.deepEqual(more.map((e) => e.state), ['instalando', 'error']);
 });
 
-test('what is already installed is never installed again, and an update asks for winget tools only', () => {
+test('what is already installed is never installed again, and an update asks for winget tools only', WIN_ONLY, () => {
   const spawnFn = fakeSpawn();
   assert.throws(() => installer.start(['uv', 'git'], () => {}, { spawnFn, have: new Set(['uv', 'git']) }), /elige al menos|choose/i);
   assert.equal(spawnFn.calls.length, 0, 'nothing started');
@@ -190,7 +192,7 @@ test('winget upgrade output is read for the listed tools only', () => {
   assert.deepEqual(parseUpgrades('No se encontraron actualizaciones'), {});
 });
 
-test('newer versions are asked once and kept; «Comprobar» asks again; no winget answer changes nothing', async () => {
+test('newer versions are asked once and kept; «Comprobar» asks again; no winget answer changes nothing', WIN_ONLY, async () => {
   installer.forgetUpgrades();
   let n = 0;
   const run = async (cmd, args) => { n++; assert.equal(cmd, 'winget'); assert.deepEqual(args.slice(0, 2), ['upgrade', '--source']); return { ok: true, out: 'jq   jqlang.jq   1.7.1   1.8.2   winget' }; };
@@ -237,7 +239,7 @@ test('the playwright version is pinned to the repo dependency and only chromium 
   assert.equal(EXTRA_ITEMS.find((x) => x.id === 'playwright').install, `npx --yes playwright@${PLAYWRIGHT_VERSION} install chromium`);
 });
 
-test('an install that outlives its time limit leaves no step open in Activity', async () => {
+test('an install that outlives its time limit leaves no step open in Activity', WIN_ONLY, async () => {
   const spawnFn = fakeSpawn();
   const events = [];
   installer.start(['bun'], () => {}, { spawnFn, onEvent: (e) => events.push(e), maxMs: 1000 });
@@ -269,7 +271,7 @@ test('winget upgrade rows are read by tokens: one space after the longest Id, Bu
   assert.deepEqual(parseUpgrades(many.join('\n')), { pwsh: { current: '7.4.0', latest: '7.4.6' } });
 });
 
-test('winget upgrade is asked without the 2000-character cap of quickRun', async () => {
+test('winget upgrade is asked without the 2000-character cap of quickRun', WIN_ONLY, async () => {
   installer.forgetUpgrades();
   let seen;
   await installer.checkUpgrades({ force: true, run: async (cmd, args, opts) => { seen = opts; return { ok: true, out: '' }; } });
@@ -280,7 +282,7 @@ test('winget upgrade is asked without the 2000-character cap of quickRun', async
   assert.equal((await quickRun(process.execPath, ['-e', "process.stdout.write('x'.repeat(5000))"])).out.length, 2000, 'the default stays');
 });
 
-test('a newly installed Microsoft OpenJDK is found without a PATH entry', async () => {
+test('a newly installed Microsoft OpenJDK is found without a PATH entry', WIN_ONLY, async () => {
   const { checkDevTools } = await import('../src/platform/dev-tools.mjs');
   const pf = fs.mkdtempSync(path.join(os.tmpdir(), 'orb-pf-'));
   try {

@@ -36,7 +36,8 @@ const junctionReplica = (w) => {
   fs.rmSync(replicaOf(w), { recursive: true, force: true });
   fs.symlinkSync(bait, replicaOf(w), 'junction');
 };
-const unjunction = (w) => fs.rmdirSync(replicaOf(w));
+// A junction exists on Windows only (elsewhere it is a plain symlink, which rmdir refuses with ENOTDIR).
+const unjunction = (w) => (process.platform === 'win32' ? fs.rmdirSync(replicaOf(w)) : fs.unlinkSync(replicaOf(w)));
 
 for (const stage of ['data', 'vault']) {
   test(`a delete that failed in the ${stage} stage: the next start restores nothing and says it is stopped`, async () => {

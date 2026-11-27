@@ -43,8 +43,11 @@ function finishedTask() {
   fs.writeFileSync(path.join(repo, 'same.txt'), 'agent\n');
   fs.rmSync(path.join(repo, 'gone.txt'));
   const end = snapshotCommit(repo, { always: true, message: 'after' });
+  // The task is said to have ended a second ago: file systems stamp mtimes from a coarser clock than Date.now(), so an edit
+  // made right after would otherwise fall inside missedBy's slack and count as hidden task work instead of the user's.
+  const at = Date.now() - 1000;
   const task = board.createTask({ project: 'prev', title: 'Edit', description: 'x' }, 'usuario');
-  board.settingJson(`checkpoint:${task.id}`, { before: cp, after: { kind: 'git', repo, commit: end.commit, at: Date.now() }, head: null, remotes: null });
+  board.settingJson(`checkpoint:${task.id}`, { before: cp, after: { kind: 'git', repo, commit: end.commit, at }, head: null, remotes: null });
   return task;
 }
 

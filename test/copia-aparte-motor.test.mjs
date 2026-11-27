@@ -431,7 +431,9 @@ test('the agent’s proposal: the card is answered on this PC; yes waits for the
   const no = props.run(live, { reason: 'x' }); props.decline({ id: props.pending()[0].id, session: s.id });
   assert.match((await no).text, /prefiere seguir en su carpeta/);
   // silence
-  const none = await props.run(live, { reason: 'x' });
+  // the proposal's own timer is unref'd (it must not hold the engine open), so the test keeps the loop alive while it waits
+  const keepAlive = setInterval(() => {}, 50);
+  const none = await props.run(live, { reason: 'x' }).finally(() => clearInterval(keepAlive));
   assert.match(none.text, /Sin respuesta/);
   assert.equal(copy.where(s.id), 'local');
   // a chat that only reads, or one already in a copy, is not asked

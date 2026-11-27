@@ -91,9 +91,11 @@ test('eventos numerados: reanuda sin hueco, avisa con resync si no puede y manda
   // the phone loses its stream; two more things happen on the PC
   await call('projects.create', { name: 'evento-2' });
   await call('projects.create', { name: 'evento-3' });
+  // wait for the events themselves: a fixed pause is too short on a slow runner
+  const after = () => { const sent = live.items.filter((x) => x.id).map((x) => x.id); return sent.slice(sent.indexOf(first) + 1); };
+  await until(() => after().length >= 2, 'hubo eventos después');
   await wait(300);
-  const sent = live.items.filter((x) => x.id).map((x) => x.id);
-  const missed = sent.slice(sent.indexOf(first) + 1);
+  const missed = after();
   assert.ok(missed.length >= 2, 'hubo eventos después');
   const back = await p.stream({ 'Last-Event-ID': first });
   await until(() => back.items.filter((x) => x.id).length >= missed.length, 'los eventos perdidos');
