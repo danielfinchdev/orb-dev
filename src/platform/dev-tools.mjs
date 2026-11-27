@@ -97,8 +97,10 @@ const versionIn = (text) => String(text ?? '').match(/\d+(?:\.\d+)+/)?.[0] ?? nu
 const maxVersion = (names) => names.map((n) => versionIn(n)).filter(Boolean).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).at(-1) ?? null;
 const listDir = (d) => { try { return fs.readdirSync(d); } catch { return []; } };
 
+// Without a `run` nothing is started: only devToolsReport, opened by hand, may ask a program for its version.
+const noRun = () => '';
 // The version of a tool found at `where` (a folder from checkDevTools), or null when it cannot be read without running it.
-export function toolVersion(id, where, { run = defaultRun, platform = process.platform, core = ctx.paths?.core ?? null } = {}) {
+export function toolVersion(id, where, { run = noRun, platform = process.platform, core = ctx.paths?.core ?? null } = {}) {
   if (!where) return null;
   const p = platform === 'win32' ? path.win32 : path.posix;
   if (id === 'flutter') {
